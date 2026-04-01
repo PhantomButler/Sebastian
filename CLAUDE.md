@@ -151,7 +151,7 @@ SEBASTIAN_JWT_SECRET=...
 - 必须确保方案的逻辑正确，必须经过全链路的逻辑验证
 
 ### 其他
-- 使用 Read/Edit/Write 内置工具编辑文件，不使用 echo/cat heredoc/sed 等 shell命令写文件
+- 使用 Read/Edit/Write 等内置工具编辑文件，不使用 echo/cat heredoc/sed 等 shell命令写文件
 - 在修改过程中如果发现某个文件内容过多，记得提醒用户规划拆分计划
 - 在针对某部分做修改时优先根据 README 了解对应模块上下文
 - 写代码过程中尽量遵循模块化可扩展原则，推荐 500 行以下，不超过 800 行
