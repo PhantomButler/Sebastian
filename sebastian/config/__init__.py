@@ -44,10 +44,15 @@ class Settings(BaseSettings):
         if self.sebastian_db_url:
             return self.sebastian_db_url
         data_path = Path(self.sebastian_data_dir)
-        data_path.mkdir(parents=True, exist_ok=True)
         return f"sqlite+aiosqlite:///{data_path}/sebastian.db"
 
 
 settings = Settings()
 
-__all__ = ["Settings", "settings"]
+
+def ensure_data_dir() -> None:
+    """Create the data directory. Call once at application startup."""
+    Path(settings.sebastian_data_dir).mkdir(parents=True, exist_ok=True)
+
+
+__all__ = ["Settings", "settings", "ensure_data_dir"]

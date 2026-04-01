@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -35,7 +35,7 @@ class Checkpoint(BaseModel):
     task_id: str
     step: int
     data: dict[str, Any]
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ResourceBudget(BaseModel):
@@ -64,6 +64,6 @@ class Task(BaseModel):
     parent_task_id: str | None = None
     checkpoints: list[Checkpoint] = Field(default_factory=list)
     resource_budget: ResourceBudget = Field(default_factory=ResourceBudget)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
