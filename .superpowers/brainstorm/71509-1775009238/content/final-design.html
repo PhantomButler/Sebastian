@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Jarvis 完整设计方案</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0d1117; color: #e6edf3; padding: 20px;
+}
+h1 { font-size: 18px; color: #58a6ff; margin-bottom: 4px; }
+.subtitle { font-size: 12px; color: #8b949e; margin-bottom: 18px; }
+
+.section-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: #8b949e; margin: 14px 0 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.sl-line { flex: 1; height: 1px; background: #21262d; }
+
+/* ===== TECH STACK BAR ===== */
+.tech-bar {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px;
+  align-items: center;
+}
+.tech-label { font-size: 11px; font-weight: 700; color: #8b949e; margin-right: 4px; }
+.tech-chip {
+  font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600;
+  border: 1px solid;
+}
+.tc-py { background: #1a2a10; border-color: #3fb950; color: #3fb950; }
+.tc-fa { background: #0d1f35; border-color: #58a6ff; color: #58a6ff; }
+.tc-db { background: #2a1a4a; border-color: #a371f7; color: #a371f7; }
+.tc-ml { background: #1a1500; border-color: #d29922; color: #d29922; }
+.tc-inf { background: #1a0d0d; border-color: #f78166; color: #f78166; }
+
+/* ===== FULL ARCHITECTURE ===== */
+.arch-full {
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  gap: 8px;
+}
+
+.arch-row { display: grid; gap: 8px; }
+.row-1 { grid-template-columns: 1fr; }
+.row-2 { grid-template-columns: 1fr 1fr; }
+.row-3 { grid-template-columns: 1fr 1fr 1fr; }
+.row-4 { grid-template-columns: repeat(4, 1fr); }
+.row-5 { grid-template-columns: repeat(5, 1fr); }
+.row-6 { grid-template-columns: repeat(6, 1fr); }
+
+.arch-block {
+  border-radius: 8px; padding: 10px 12px; border: 1px solid #30363d;
+  background: #161b22; font-size: 11px;
+}
+.ab-title { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+.ab-icon { font-size: 14px; }
+.ab-desc { font-size: 10px; color: #8b949e; line-height: 1.4; }
+.ab-tech { font-size: 9px; margin-top: 4px; color: #30363d; font-weight: 600; }
+
+/* Color variants */
+.ab-blue { border-top: 2px solid #58a6ff; }
+.ab-blue .ab-title { color: #79c0ff; }
+.ab-blue .ab-tech { color: #1c3a5a; background: #0d1f35; display: inline-block; padding: 1px 5px; border-radius: 3px; }
+
+.ab-green { border-top: 2px solid #3fb950; }
+.ab-green .ab-title { color: #3fb950; }
+.ab-green .ab-tech { color: #1a4a2e; background: #0d2818; display: inline-block; padding: 1px 5px; border-radius: 3px; }
+
+.ab-purple { border-top: 2px solid #a371f7; }
+.ab-purple .ab-title { color: #a371f7; }
+.ab-purple .ab-tech { color: #2a1a4a; background: #1a0d35; display: inline-block; padding: 1px 5px; border-radius: 3px; }
+
+.ab-yellow { border-top: 2px solid #d29922; }
+.ab-yellow .ab-title { color: #d29922; }
+.ab-yellow .ab-tech { color: #3a2800; background: #1a1500; display: inline-block; padding: 1px 5px; border-radius: 3px; }
+
+.ab-red { border-top: 2px solid #f78166; }
+.ab-red .ab-title { color: #f78166; }
+.ab-red .ab-tech { color: #3a1a1a; background: #1a0d0d; display: inline-block; padding: 1px 5px; border-radius: 3px; }
+
+.ab-teal { border-top: 2px solid #39d3c4; }
+.ab-teal .ab-title { color: #39d3c4; }
+
+.ab-highlight {
+  background: linear-gradient(135deg, #0d1f35, #1a0d35);
+  border: 2px solid #58a6ff;
+}
+
+/* Protocol indicators */
+.proto-row {
+  display: flex; gap: 6px; justify-content: center; align-items: center; padding: 4px;
+}
+.proto-pill {
+  font-size: 9px; font-weight: 700; padding: 3px 10px; border-radius: 10px;
+  border: 1px solid;
+}
+.pp-a2a { background: #0d1f35; border-color: #58a6ff; color: #58a6ff; }
+.pp-mcp { background: #1a1500; border-color: #d29922; color: #d29922; }
+.pp-sse { background: #0d2818; border-color: #3fb950; color: #3fb950; }
+.pp-push { background: #1a0d35; border-color: #a371f7; color: #a371f7; }
+.proto-arrow { color: #30363d; font-size: 14px; }
+
+/* ===== DIR TREE ===== */
+.dir-tree {
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  padding: 12px 14px; font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace;
+  margin-bottom: 12px;
+}
+.dt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.dt-line { padding: 1px 0; line-height: 1.6; }
+.dt-dir { color: #58a6ff; font-weight: 600; }
+.dt-file { color: #8b949e; }
+.dt-comment { color: #3fb950; }
+.dt-indent { display: inline-block; width: 16px; }
+.dt-indent2 { display: inline-block; width: 32px; }
+
+/* ===== EXTENSION POINTS ===== */
+.ext-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.ext-box {
+  background: #0d2818; border: 1px solid #1a4a2e; border-radius: 8px; padding: 10px 12px;
+}
+.ext-title { font-size: 12px; font-weight: 700; color: #3fb950; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+.ext-step { font-size: 10px; color: #8b949e; padding: 2px 0; display: flex; align-items: flex-start; gap: 5px; line-height: 1.4; }
+.ext-num { color: #3fb950; font-weight: 700; flex-shrink: 0; }
+
+/* ===== DESIGN DECISIONS ===== */
+.decisions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.decision-item {
+  background: #161b22; border: 1px solid #30363d; border-radius: 7px; padding: 8px 10px; font-size: 11px;
+}
+.di-q { color: #8b949e; font-size: 10px; margin-bottom: 3px; }
+.di-a { color: #e6edf3; font-weight: 600; display: flex; align-items: flex-start; gap: 5px; }
+.di-a::before { content: '✓'; color: #3fb950; flex-shrink: 0; }
+
+/* approval box */
+.approval-box {
+  background: linear-gradient(135deg, #0d2818, #0d1f35);
+  border: 1px solid #58a6ff; border-radius: 10px; padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.ap-icon { font-size: 24px; flex-shrink: 0; }
+.ap-title { font-size: 14px; font-weight: 700; color: #58a6ff; margin-bottom: 6px; }
+.ap-desc { font-size: 12px; color: #8b949e; line-height: 1.6; }
+.ap-desc strong { color: #e6edf3; }
+</style>
+</head>
+<body>
+
+<h1>🤖 Jarvis 完整设计方案（待确认）</h1>
+<p class="subtitle">脑暴结论汇总 · 确认后写入 Spec 文档</p>
+
+<!-- TECH STACK -->
+<div class="tech-bar">
+  <span class="tech-label">技术栈：</span>
+  <span class="tech-chip tc-py">Python 3.12+（主语言）</span>
+  <span class="tech-chip tc-fa">FastAPI + asyncio（Gateway）</span>
+  <span class="tech-chip tc-fa">Pydantic v2（数据模型）</span>
+  <span class="tech-chip tc-db">SQLite + SQLAlchemy（持久化）</span>
+  <span class="tech-chip tc-db">ChromaDB（向量记忆）</span>
+  <span class="tech-chip tc-ml">MCP Python SDK（工具接入）</span>
+  <span class="tech-chip tc-ml">Google A2A（Agent 通信）</span>
+  <span class="tech-chip tc-ml">Anthropic / OpenAI SDK</span>
+  <span class="tech-chip tc-inf">Docker（部署分发）</span>
+  <span class="tech-chip tc-inf">React + React Native（UI）</span>
+</div>
+
+<!-- FULL ARCHITECTURE -->
+<div class="section-label"><span class="sl-line"></span>完整架构层次<span class="sl-line"></span></div>
+<div class="arch-full">
+
+  <!-- 接入层 -->
+  <div class="arch-row row-4">
+    <div class="arch-block ab-blue">
+      <div class="ab-title"><span class="ab-icon">🌐</span>Web UI</div>
+      <div class="ab-desc">React · SSE 实时流 · 对话+任务监控</div>
+      <div class="ab-tech">TypeScript</div>
+    </div>
+    <div class="arch-block ab-purple">
+      <div class="ab-title"><span class="ab-icon">📱</span>Mobile App</div>
+      <div class="ab-desc">React Native · Push 通知 · 随时监看控制</div>
+      <div class="ab-tech">React Native</div>
+    </div>
+    <div class="arch-block ab-yellow">
+      <div class="ab-title"><span class="ab-icon">🎙️</span>Voice Interface</div>
+      <div class="ab-desc">STT(Whisper) → 声纹识别 → TTS 回复</div>
+      <div class="ab-tech">faster-whisper · resemblyzer</div>
+    </div>
+    <div class="arch-block ab-red">
+      <div class="ab-title"><span class="ab-icon">👤</span>Identity</div>
+      <div class="ab-desc">声纹 + 人脸 · 权限分级 · 抗 AI 仿冒</div>
+      <div class="ab-tech">deepface · pyannote</div>
+    </div>
+  </div>
+
+  <!-- 协议层 -->
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:6px;">
+    <div class="proto-row">
+      <span class="proto-pill pp-sse">SSE / WebSocket</span>
+      <span class="proto-arrow">←</span>
+      <span style="font-size:10px; color:#8b949e;">Gateway (FastAPI)</span>
+      <span class="proto-arrow">→</span>
+      <span class="proto-pill pp-push">APNs / FCM Push</span>
+      <span class="proto-arrow">·</span>
+      <span class="proto-pill pp-mcp">MCP（工具接入）</span>
+      <span class="proto-arrow">·</span>
+      <span class="proto-pill pp-a2a">A2A（Agent 通信）</span>
+    </div>
+  </div>
+
+  <!-- 对话平面 + 任务平面 -->
+  <div class="arch-row row-2">
+    <div class="arch-block ab-blue" style="border:2px solid #58a6ff;">
+      <div class="ab-title" style="font-size:13px;"><span class="ab-icon">💬</span>对话平面（同步 · 实时响应）</div>
+      <div class="ab-desc" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px;">
+        <span>Conversation Manager · 永不阻塞</span>
+        <span>Intent Classifier · 识别指令类型</span>
+        <span>Notification Broker · 桥接任务通知</span>
+        <span>Context Switcher · 打断/恢复</span>
+      </div>
+    </div>
+    <div class="arch-block ab-purple" style="border:2px solid #a371f7;">
+      <div class="ab-title" style="font-size:13px;"><span class="ab-icon">⚙️</span>任务平面（异步 · 持久执行）</div>
+      <div class="ab-desc" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px;">
+        <span>Task Planner · 目标→DAG</span>
+        <span>Task Executor · 并行执行</span>
+        <span>Task Store · 检查点持久化</span>
+        <span>Concurrency Governor · 资源管控</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Jarvis + Sub-agents -->
+  <div class="arch-row row-5">
+    <div class="arch-block ab-highlight" style="grid-column: span 1;">
+      <div class="ab-title" style="font-size:13px; color:#58a6ff;"><span class="ab-icon">👑</span>Jarvis Core</div>
+      <div class="ab-desc">统筹调度 · 用户交互 · 任务委派 · Agent Router</div>
+      <div class="ab-tech" style="background:#0d1f35; color:#79c0ff; display:inline-block; padding:1px 5px; border-radius:3px; margin-top:4px;">BaseAgent + Orchestrator</div>
+    </div>
+    <div class="arch-block ab-green">
+      <div class="ab-title"><span class="ab-icon">📈</span>Stock Agent</div>
+      <div class="ab-desc">量化分析 · 行情 · 技术指标 · 金融知识库</div>
+      <div class="ab-tech">BaseAgent + manifest.toml</div>
+    </div>
+    <div class="arch-block ab-purple">
+      <div class="ab-title"><span class="ab-icon">💻</span>Code Agent</div>
+      <div class="ab-desc">代码生成 · 沙箱执行 · Dynamic Tool Factory</div>
+      <div class="ab-tech">BaseAgent + sandbox</div>
+    </div>
+    <div class="arch-block ab-yellow">
+      <div class="ab-title"><span class="ab-icon">🏠</span>Life Agent</div>
+      <div class="ab-desc">日程 · 家居 · 访客接待 · 生活偏好记忆</div>
+      <div class="ab-tech">BaseAgent + manifest.toml</div>
+    </div>
+    <div class="arch-block" style="border:1px dashed #30363d; background:#0d1117; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;">
+      <span style="font-size:20px; color:#30363d;">＋</span>
+      <span style="font-size:10px; color:#30363d; text-align:center;">新 Agent<br>= manifest.toml<br>+ 可选新工具</span>
+    </div>
+  </div>
+
+  <!-- 共享基础层 -->
+  <div class="arch-row row-6">
+    <div class="arch-block ab-green">
+      <div class="ab-title"><span class="ab-icon">🧠</span>Memory System</div>
+      <div class="ab-desc">工作/情景/语义记忆 · RAG · 跨 Agent 共享</div>
+      <div class="ab-tech">ChromaDB · SQLite</div>
+    </div>
+    <div class="arch-block ab-blue">
+      <div class="ab-title"><span class="ab-icon">🔌</span>Capability Bus</div>
+      <div class="ab-desc">内置工具 + MCP 接入 + Skill Registry + 动态注册</div>
+      <div class="ab-tech">MCP Python SDK</div>
+    </div>
+    <div class="arch-block ab-yellow">
+      <div class="ab-title"><span class="ab-icon">⏰</span>Trigger Engine</div>
+      <div class="ab-desc">Cron · 事件驱动 · 条件触发 · 主动唤醒</div>
+      <div class="ab-tech">APScheduler</div>
+    </div>
+    <div class="arch-block ab-red">
+      <div class="ab-title"><span class="ab-icon">📦</span>Sandbox Runtime</div>
+      <div class="ab-desc">动态代码执行 · 资源隔离 · 审计日志</div>
+      <div class="ab-tech">Docker / subprocess</div>
+    </div>
+    <div class="arch-block ab-teal">
+      <div class="ab-title"><span class="ab-icon">📡</span>Event Bus</div>
+      <div class="ab-desc">两平面解耦 · 打断信号 · 任务通知</div>
+      <div class="ab-tech">asyncio · SQLite log</div>
+    </div>
+    <div class="arch-block">
+      <div class="ab-title"><span class="ab-icon">🗄️</span>Persistent Store</div>
+      <div class="ab-desc">Task 状态 · 事件日志 · 工具注册表</div>
+      <div class="ab-tech" style="background:#21262d; color:#8b949e; display:inline-block; padding:1px 5px; border-radius:3px; margin-top:4px;">SQLite + SQLAlchemy</div>
+    </div>
+  </div>
+</div>
+
+<!-- DIR STRUCTURE -->
+<div class="section-label"><span class="sl-line"></span>项目目录结构<span class="sl-line"></span></div>
+<div class="dir-tree">
+  <div class="dt-grid">
+    <div>
+      <div class="dt-line"><span class="dt-dir">jarvis/</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">core/</span> <span class="dt-comment"># BaseAgent 引擎</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">base_agent.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">agent_loop.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">task_manager.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">planner.py</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">orchestrator/</span> <span class="dt-comment"># Jarvis 主体</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">jarvis.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">conversation.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">agent_router.py</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">agents/</span> <span class="dt-comment"># Sub-Agent 插件目录</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-dir">stock/</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">  manifest.toml</span> <span class="dt-comment"># ← 只需这个就能注册</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">  agent.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">  tools/</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-dir">code/</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-dir">life/</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-dir">_new_agent_/</span> <span class="dt-comment"># 新增位置</span></div>
+    </div>
+    <div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">memory/</span> <span class="dt-comment"># 记忆系统</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">working_memory.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">episodic_memory.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">semantic_memory.py</span> <span class="dt-comment"># RAG</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">protocol/</span> <span class="dt-comment"># 通信协议</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">a2a/</span> <span class="dt-comment"># Agent-to-Agent</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">mcp/</span> <span class="dt-comment"># 工具接入</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">gateway/</span> <span class="dt-comment"># HTTP/SSE 网关</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">api.py</span> <span class="dt-comment"># FastAPI</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">sse.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">push.py</span> <span class="dt-comment"># Mobile 推送</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">identity/</span> <span class="dt-comment"># 身份认证</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">voiceprint.py</span></div>
+      <div class="dt-line"><span class="dt-indent2"></span><span class="dt-file">faceprint.py</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">trigger/</span> <span class="dt-comment"># 主动触发</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">sandbox/</span> <span class="dt-comment"># 代码执行隔离</span></div>
+      <div class="dt-line"><span class="dt-indent"></span><span class="dt-dir">store/</span> <span class="dt-comment"># 持久化层</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- EXTENSION POINTS -->
+<div class="section-label"><span class="sl-line"></span>三大扩展点（新能力 = 新文件，不改核心）<span class="sl-line"></span></div>
+<div class="ext-grid">
+  <div class="ext-box">
+    <div class="ext-title">🔧 新增工具</div>
+    <div class="ext-step"><span class="ext-num">1</span>在 capabilities/tools/ 创建 my_tool.py</div>
+    <div class="ext-step"><span class="ext-num">2</span>实现 @tool 装饰器接口</div>
+    <div class="ext-step"><span class="ext-num">3</span>启动时 Capability Bus 自动扫描注册</div>
+    <div class="ext-step"><span class="ext-num">4</span>所有 Agent 立即可用</div>
+  </div>
+  <div class="ext-box">
+    <div class="ext-title">🤖 新增 Sub-Agent</div>
+    <div class="ext-step"><span class="ext-num">1</span>在 agents/ 创建新目录</div>
+    <div class="ext-step"><span class="ext-num">2</span>写 manifest.toml（能力声明 + 专属工具 + 知识库 + Prompt）</div>
+    <div class="ext-step"><span class="ext-num">3</span>可选：写 agent.py 覆盖特定行为</div>
+    <div class="ext-step"><span class="ext-num">4</span>Jarvis 启动扫描，A2A 自动可达</div>
+  </div>
+  <div class="ext-box">
+    <div class="ext-title">⏰ 新增触发器</div>
+    <div class="ext-step"><span class="ext-num">1</span>在 trigger/ 创建 trigger 配置</div>
+    <div class="ext-step"><span class="ext-num">2</span>声明触发条件（cron / 事件 / 条件）</div>
+    <div class="ext-step"><span class="ext-num">3</span>绑定目标 Agent 和任务模板</div>
+    <div class="ext-step"><span class="ext-num">4</span>Trigger Engine 自动调度执行</div>
+  </div>
+</div>
+
+<!-- KEY DECISIONS -->
+<div class="section-label"><span class="sl-line"></span>关键设计决策<span class="sl-line"></span></div>
+<div class="decisions">
+  <div class="decision-item"><div class="di-q">主语言？</div><div class="di-a">Python 3.12+，生态最适合 AI + ML + 生物识别</div></div>
+  <div class="decision-item"><div class="di-q">Agent 通信协议？</div><div class="di-a">A2A（Google 开放规范），任务委派/上报/升级</div></div>
+  <div class="decision-item"><div class="di-q">工具接入协议？</div><div class="di-a">MCP（Anthropic），所有 Agent 共用 MCP Client</div></div>
+  <div class="decision-item"><div class="di-q">Sub-Agent 扩展方式？</div><div class="di-a">manifest.toml + 目录扫描，不改核心代码</div></div>
+  <div class="decision-item"><div class="di-q">任务 vs 会话？</div><div class="di-a">Task 是一等公民，跨 turn/跨会话，有检查点</div></div>
+  <div class="decision-item"><div class="di-q">双平面设计？</div><div class="di-a">对话平面永不阻塞，任务平面异步持久运行</div></div>
+  <div class="decision-item"><div class="di-q">动态工具创建？</div><div class="di-a">Code Agent 写代码 → 沙箱测试 → 注册到 Capability Bus</div></div>
+  <div class="decision-item"><div class="di-q">部署方式？</div><div class="di-a">Docker（解决 Python 单二进制问题）+ docker-compose 一键启动</div></div>
+  <div class="decision-item"><div class="di-q">记忆系统？</div><div class="di-a">工作记忆(内存) + 情景记忆(SQLite) + 语义记忆(ChromaDB RAG)</div></div>
+  <div class="decision-item"><div class="di-q">现有 openjax？</div><div class="di-a">保留参考，新项目独立 repo，从 0 开始 Python 实现</div></div>
+</div>
+
+<!-- APPROVAL -->
+<div class="approval-box">
+  <span class="ap-icon">📋</span>
+  <div>
+    <div class="ap-title">确认后写入 Spec 文档</div>
+    <div class="ap-desc">
+      以上是脑暴得出的完整设计方案。如果你认可这个方向，我会把它整理成正式的 Spec 文档保存到
+      <strong>docs/superpowers/specs/2026-04-01-jarvis-architecture-design.md</strong>，
+      然后基于 Spec 生成详细的实施计划。<br><br>
+      如果有任何想调整的地方（比如某个模块的边界、某个技术选型），现在是最好的时机。
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

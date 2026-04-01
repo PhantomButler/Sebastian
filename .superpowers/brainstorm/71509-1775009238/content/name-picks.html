@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>项目命名</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0d1117; color: #e6edf3; padding: 24px;
+}
+h1 { font-size: 18px; color: #58a6ff; margin-bottom: 4px; }
+.subtitle { font-size: 12px; color: #8b949e; margin-bottom: 22px; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.card {
+  border-radius: 12px;
+  border: 2px solid #30363d;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #161b22;
+  position: relative;
+}
+.card:hover { transform: translateY(-2px); }
+.card.selected { border-color: #58a6ff; }
+.card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 10px; right: 12px;
+  font-size: 16px; color: #58a6ff; font-weight: 700;
+}
+
+/* Card themes */
+.card-sebastian { border-top: 4px solid #a371f7; }
+.card-sebastian:hover { border-color: #a371f7; box-shadow: 0 0 20px rgba(163,113,247,0.2); }
+.card-sebastian.selected { border-color: #a371f7; }
+
+.card-jeeves { border-top: 4px solid #d29922; }
+.card-jeeves:hover { border-color: #d29922; box-shadow: 0 0 20px rgba(210,153,34,0.2); }
+.card-jeeves.selected { border-color: #d29922; }
+
+.card-alfred { border-top: 4px solid #58a6ff; }
+.card-alfred:hover { border-color: #58a6ff; box-shadow: 0 0 20px rgba(88,166,255,0.2); }
+.card-alfred.selected { border-color: #58a6ff; }
+
+.card-hayate { border-top: 4px solid #3fb950; }
+.card-hayate:hover { border-color: #3fb950; box-shadow: 0 0 20px rgba(63,185,80,0.2); }
+.card-hayate.selected { border-color: #3fb950; }
+
+.card-walter { border-top: 4px solid #f78166; }
+.card-walter:hover { border-color: #f78166; box-shadow: 0 0 20px rgba(247,129,102,0.2); }
+.card-walter.selected { border-color: #f78166; }
+
+.card-aether { border-top: 4px solid #39d3c4; }
+.card-aether:hover { border-color: #39d3c4; box-shadow: 0 0 20px rgba(57,211,196,0.2); }
+.card-aether.selected { border-color: #39d3c4; }
+
+.card-header {
+  padding: 16px 16px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.card-emblem {
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.em-purple { background: #2a1a4a; }
+.em-yellow { background: #3a2800; }
+.em-blue { background: #0d1f35; }
+.em-green { background: #0d2818; }
+.em-red { background: #2a0d0d; }
+.em-teal { background: #0d2a28; }
+
+.card-name { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+.cn-purple { color: #a371f7; }
+.cn-yellow { color: #d29922; }
+.cn-blue { color: #58a6ff; }
+.cn-green { color: #3fb950; }
+.cn-red { color: #f78166; }
+.cn-teal { color: #39d3c4; }
+
+.card-origin { font-size: 11px; color: #8b949e; margin-top: 2px; }
+
+.card-body { padding: 0 16px 14px; }
+
+.card-quote {
+  font-size: 12px;
+  font-style: italic;
+  color: #8b949e;
+  border-left: 2px solid #30363d;
+  padding-left: 10px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.card-sebastian .card-quote { border-color: #a371f7; color: #c084fc; }
+.card-jeeves .card-quote { border-color: #d29922; color: #fbbf24; }
+.card-alfred .card-quote { border-color: #58a6ff; color: #93c5fd; }
+.card-hayate .card-quote { border-color: #3fb950; }
+.card-walter .card-quote { border-color: #f78166; }
+.card-aether .card-quote { border-color: #39d3c4; }
+
+.card-desc {
+  font-size: 11px; color: #8b949e; line-height: 1.6; margin-bottom: 10px;
+}
+
+.card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.card-tag {
+  font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px;
+}
+.tag-p { background: #2a1a4a; color: #a371f7; }
+.tag-y { background: #3a2800; color: #d29922; }
+.tag-b { background: #0d1f35; color: #58a6ff; }
+.tag-g { background: #0d2818; color: #3fb950; }
+.tag-r { background: #2a0d0d; color: #f78166; }
+.tag-t { background: #0d2a28; color: #39d3c4; }
+
+.my-pick {
+  position: absolute;
+  top: 8px; left: 12px;
+  font-size: 9px; font-weight: 700;
+  background: #58a6ff; color: #0d1117;
+  padding: 2px 7px; border-radius: 3px;
+}
+
+.bottom-note {
+  background: #161b22; border: 1px dashed #30363d; border-radius: 8px;
+  padding: 12px 14px; font-size: 12px; color: #8b949e; line-height: 1.6;
+}
+.bottom-note strong { color: #e6edf3; }
+</style>
+</head>
+<body>
+
+<h1>🎩 项目命名候选</h1>
+<p class="subtitle">经典管家/仆从形象 · 点击选择你的偏好</p>
+
+<div class="cards">
+
+  <!-- Sebastian -->
+  <div class="card card-sebastian" data-choice="sebastian" onclick="toggleSelect(this)">
+    <div class="my-pick">我的首选</div>
+    <div class="card-header">
+      <div class="card-emblem em-purple">🦇</div>
+      <div>
+        <div class="card-name cn-purple">Sebastian</div>
+        <div class="card-origin">黑执事 · Black Butler（2008年 日漫）</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-quote">「我只不过是一名恶魔管家。」<br>"I am simply one hell of a butler."</div>
+      <div class="card-desc">恶魔出身的完美管家塞巴斯蒂安，能力无上限，忠诚于主人，任何任务都能以近乎超自然的效率完成。冷静、优雅、全能——和 Jarvis 愿景高度重合，但更有"渐进强大"的成长感。</div>
+      <div class="card-tags">
+        <span class="card-tag tag-p">日漫经典</span>
+        <span class="card-tag tag-p">全能管家</span>
+        <span class="card-tag tag-p">暗黑酷感</span>
+        <span class="card-tag tag-p">能力无上限</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Jeeves -->
+  <div class="card card-jeeves" data-choice="jeeves" onclick="toggleSelect(this)">
+    <div class="card-header">
+      <div class="card-emblem em-yellow">🎩</div>
+      <div>
+        <div class="card-name cn-yellow">Jeeves</div>
+        <div class="card-origin">P.G. Wodehouse 小说（1915年起）</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-quote">"Jeeves" 已成为英语中"完美私人助理"的代名词</div>
+      <div class="card-desc">文学史上最著名的贴身男仆，博学多识、思维敏锐、永远比主人聪明一步，总能在最复杂的局面里找到优雅解法。Ask Jeeves 曾是最著名的搜索引擎名字。极具文化分量。</div>
+      <div class="card-tags">
+        <span class="card-tag tag-y">文学经典</span>
+        <span class="card-tag tag-y">极聪明</span>
+        <span class="card-tag tag-y">知名度最高</span>
+        <span class="card-tag tag-y">英式绅士</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alfred -->
+  <div class="card card-alfred" data-choice="alfred" onclick="toggleSelect(this)">
+    <div class="card-header">
+      <div class="card-emblem em-blue">🦇</div>
+      <div>
+        <div class="card-name cn-blue">Alfred</div>
+        <div class="card-origin">蝙蝠侠 · Batman（DC漫画）</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-quote">"Some men aren't looking for anything logical. They can't be bought, bullied, or negotiated with."</div>
+      <div class="card-desc">阿福·潘尼沃斯，韦恩家族的忠实管家，不只是仆人，更是智囊、训练师、父亲形象。技术精湛、心理稳定、始终支持主人走向更强。温暖与力量并存的管家形象。</div>
+      <div class="card-tags">
+        <span class="card-tag tag-b">DC经典</span>
+        <span class="card-tag tag-b">温暖忠诚</span>
+        <span class="card-tag tag-b">智囊形象</span>
+        <span class="card-tag tag-b">广为人知</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hayate -->
+  <div class="card card-hayate" data-choice="hayate" onclick="toggleSelect(this)">
+    <div class="card-header">
+      <div class="card-emblem em-green">⚡</div>
+      <div>
+        <div class="card-name cn-green">Hayate</div>
+        <div class="card-origin">旋风管家 · ハヤテのごとく（2004 日漫）</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-quote">「我要用超出想象的速度，完成所有任务。」</div>
+      <div class="card-desc">漫天债务压身却仍全力服务主人的少年管家，以超人的行动力解决各种危机，边成长边扩展能力边界。名字本身就是"疾风"的意思——快速、主动、不断突破上限。</div>
+      <div class="card-tags">
+        <span class="card-tag tag-g">日漫</span>
+        <span class="card-tag tag-g">快速行动</span>
+        <span class="card-tag tag-g">成长型</span>
+        <span class="card-tag tag-g">名字有含义</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Walter -->
+  <div class="card card-walter" data-choice="walter" onclick="toggleSelect(this)">
+    <div class="card-header">
+      <div class="card-emblem em-red">🕸️</div>
+      <div>
+        <div class="card-name cn-red">Walter</div>
+        <div class="card-origin">HELLSING（平野耕太 1997 日漫）</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-quote">「死神的锁链师」——用钢丝操控一切的完美管家</div>
+      <div class="card-desc">赫尔辛家族的管家沃尔特，前吸血鬼猎人，用单丝钢线能切断一切。表面优雅，内藏恐怖力量。是"隐藏着巨大潜能的低调管家"这一形象的极致代表。有点小众，有品味。</div>
+      <div class="card-tags">
+        <span class="card-tag tag-r">日漫小众</span>
+        <span class="card-tag tag-r">隐藏力量</span>
+        <span class="card-tag tag-r">极致优雅</span>
+        <span class="card-tag tag-r">有品味感</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Aether (original) -->
+  <div class="card card-aether" data-choice="aether" onclick="toggleSelect(this)">
+    <div class="card-header">
+      <div class="card-emblem em-teal">✨</div>
+      <div>
+        <div class="card-name cn-teal">Aether</div>
+        <div class="card-origin">原创 · 希腊神话第五元素</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-quote">Αἰθήρ — 弥漫天地之间、无处不在的神明元素</div>
+      <div class="card-desc">如果不想借用已有 IP，可以自己造。Aether（以太）是希腊神话中弥漫宇宙的第五元素，代表"无处不在的智慧存在"。简洁、好听、无版权问题、有哲学感。缩写 A.I.ther 也自然。</div>
+      <div class="card-tags">
+        <span class="card-tag tag-t">原创</span>
+        <span class="card-tag tag-t">无版权</span>
+        <span class="card-tag tag-t">有哲学感</span>
+        <span class="card-tag tag-t">全球可用</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="bottom-note">
+  💬 <strong>我的推荐是 Sebastian</strong> —— "一名完美的恶魔管家"这个形象和你描述的 Jarvis 高度契合：能力无上限、始终比你预期的更强、逐渐扩展边界。而且黑执事在国内外知名度都很高，名字本身有辨识度。<br>
+  当然如果你想要原创无版权顾虑的，<strong>Aether</strong> 是个很有质感的选择。你来定。
+</div>
+
+</body>
+</html>

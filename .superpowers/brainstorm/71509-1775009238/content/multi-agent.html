@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Multi-Agent Architecture</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  padding: 20px;
+}
+h1 { font-size: 18px; color: #58a6ff; margin-bottom: 4px; }
+.subtitle { font-size: 12px; color: #8b949e; margin-bottom: 18px; }
+
+/* ===== JARVIS CORE ===== */
+.jarvis-core {
+  background: linear-gradient(135deg, #0d1f35, #1a0d35);
+  border: 2px solid #58a6ff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 10px;
+  position: relative;
+}
+.jarvis-label {
+  position: absolute;
+  top: -10px; left: 16px;
+  background: #58a6ff;
+  color: #0d1117;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.08em;
+}
+.core-block {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 11px;
+}
+.core-block-title { font-weight: 600; color: #79c0ff; margin-bottom: 3px; display: flex; align-items: center; gap: 5px; }
+.core-block-desc { font-size: 10px; color: #8b949e; line-height: 1.4; }
+
+/* ===== CAPABILITY BUS ===== */
+.capability-bus {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-top: 3px solid #3fb950;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bus-label { font-size: 11px; font-weight: 700; color: #3fb950; white-space: nowrap; }
+.bus-items { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.bus-item {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #30363d;
+  color: #8b949e;
+  background: #0d1117;
+}
+.bus-item.active { border-color: #3fb950; color: #3fb950; }
+.bus-item.mcp { border-color: #d29922; color: #d29922; }
+
+/* ===== MCP PROTOCOL BAR ===== */
+.protocol-bar {
+  text-align: center;
+  padding: 6px;
+  font-size: 10px;
+  color: #d29922;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  border: 1px dashed #d29922;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background: #1a1500;
+}
+
+/* ===== SUB-AGENTS GRID ===== */
+.subagents-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #8b949e;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plug-badge {
+  background: #1a3a1a;
+  color: #3fb950;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.subagents-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.subagent {
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #161b22;
+  position: relative;
+}
+.subagent-header {
+  padding: 10px 12px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.subagent-icon { font-size: 16px; }
+.subagent-name { flex: 1; }
+.mcp-tag {
+  font-size: 9px;
+  background: #3a2800;
+  color: #d29922;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.subagent-body { padding: 0 12px 10px; }
+.sa-section { margin-bottom: 6px; }
+.sa-section-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8b949e;
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+.sa-items { display: flex; flex-wrap: wrap; gap: 3px; }
+.sa-item {
+  font-size: 9px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: #21262d;
+  color: #8b949e;
+}
+.sa-item.tool { background: #0d2818; color: #3fb950; }
+.sa-item.mem { background: #0d1f35; color: #58a6ff; }
+.sa-item.skill { background: #2a1a4a; color: #a371f7; }
+
+/* Agent colors */
+.sa-stock { border-top: 3px solid #3fb950; }
+.sa-stock .subagent-header { background: #0d2818; }
+.sa-news { border-top: 3px solid #58a6ff; }
+.sa-news .subagent-header { background: #0d1f35; }
+.sa-code { border-top: 3px solid #a371f7; }
+.sa-code .subagent-header { background: #1a0d35; }
+.sa-life { border-top: 3px solid #d29922; }
+.sa-life .subagent-header { background: #1a1500; }
+
+/* Plus agent - extensible */
+.subagent-add {
+  border: 1px dashed #30363d;
+  border-radius: 10px;
+  background: #0d1117;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 10px;
+  color: #30363d;
+}
+.subagent-add:hover { border-color: #3fb950; color: #3fb950; cursor: pointer; }
+.add-icon { font-size: 24px; }
+.add-text { font-size: 10px; font-weight: 600; text-align: center; line-height: 1.4; }
+
+/* Running state indicator */
+.running-dot {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #3fb950;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ===== TASK GRAPH ===== */
+.task-graph-section { margin-top: 6px; }
+.tg-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #8b949e;
+  margin-bottom: 10px;
+}
+.task-graph {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+/* DAG visualization */
+.dag {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  min-width: 700px;
+}
+
+.dag-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.dag-node {
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  width: 130px;
+  position: relative;
+}
+.dn-jarvis { background: #0d1f35; border: 1px solid #58a6ff; color: #79c0ff; }
+.dn-stock { background: #0d2818; border: 1px solid #3fb950; color: #3fb950; }
+.dn-news { background: #0d2030; border: 1px solid #58a6ff; color: #58a6ff; }
+.dn-code { background: #1a0d35; border: 1px solid #a371f7; color: #a371f7; }
+.dn-done { background: #21262d; border: 1px solid #30363d; color: #8b949e; }
+.dn-pending { background: #0d1117; border: 1px dashed #30363d; color: #30363d; }
+
+.dn-label { font-size: 9px; font-weight: 400; margin-top: 2px; color: #8b949e; }
+.dn-agent { font-size: 9px; margin-top: 3px; }
+.dn-parallel {
+  position: absolute;
+  top: -8px; right: -4px;
+  background: #d29922;
+  color: #0d1117;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.dag-arrow {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  color: #30363d;
+  font-size: 18px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.dag-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* parallel band */
+.parallel-band {
+  background: #1a1500;
+  border: 1px dashed #d29922;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+.parallel-label {
+  position: absolute;
+  top: -8px; left: 10px;
+  font-size: 9px;
+  background: #d29922;
+  color: #0d1117;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+/* Insight box */
+.insight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.insight-box {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.ib-green { background: #0d2818; border: 1px solid #1a4a2e; }
+.ib-blue { background: #0d1f35; border: 1px solid #1c3a5a; }
+.ib-title { font-weight: 700; margin-bottom: 4px; }
+.ib-green .ib-title { color: #3fb950; }
+.ib-blue .ib-title { color: #58a6ff; }
+.ib-desc { color: #8b949e; }
+</style>
+</head>
+<body>
+
+<h1>🤖 Jarvis 多 Agent 编排架构</h1>
+<p class="subtitle">Sub-Agent 即 MCP Server · 插件化扩展 · 并行任务图</p>
+
+<!-- JARVIS CORE -->
+<div class="jarvis-core">
+  <span class="jarvis-label">JARVIS ORCHESTRATOR</span>
+  <div class="core-block">
+    <div class="core-block-title">🎯 Goal Decomposer</div>
+    <div class="core-block-desc">将高层目标拆解为 Task DAG，决定哪些节点交给哪个 Sub-Agent</div>
+  </div>
+  <div class="core-block">
+    <div class="core-block-title">📋 Task Scheduler</div>
+    <div class="core-block-desc">管理并行任务队列，控制并发度，协调资源（API 限速、成本）</div>
+  </div>
+  <div class="core-block">
+    <div class="core-block-title">🔀 Agent Router</div>
+    <div class="core-block-desc">根据任务类型选择最合适的 Sub-Agent，或直接自己处理</div>
+  </div>
+  <div class="core-block">
+    <div class="core-block-title">💬 Conversation Manager</div>
+    <div class="core-block-desc">始终响应用户，不被任何后台任务阻塞，处理打断和上下文切换</div>
+  </div>
+</div>
+
+<!-- CAPABILITY BUS -->
+<div class="capability-bus">
+  <div class="bus-label">⚡ Capability Bus</div>
+  <div class="bus-items">
+    <span class="bus-item active">内置工具</span>
+    <span class="bus-item active">Skill Registry</span>
+    <span class="bus-item mcp">MCP: 文件系统</span>
+    <span class="bus-item mcp">MCP: 浏览器</span>
+    <span class="bus-item mcp">MCP: 日历</span>
+    <span class="bus-item mcp">MCP: Sub-Agent A ←</span>
+    <span class="bus-item mcp">MCP: Sub-Agent B ←</span>
+    <span class="bus-item mcp">MCP: Sub-Agent N ←</span>
+  </div>
+</div>
+
+<!-- PROTOCOL BAR -->
+<div class="protocol-bar">
+  ↑↓ &nbsp; MCP PROTOCOL (Model Context Protocol) &nbsp; — &nbsp; Sub-Agent 即 MCP Server，Jarvis 是 MCP Client，新增 Sub-Agent = 接入一个 MCP Server &nbsp; ↑↓
+</div>
+
+<!-- SUB-AGENTS -->
+<div class="subagents-title">
+  Sub-Agent 层（插件化扩展）
+  <span class="plug-badge">📦 新增 Sub-Agent = 创建一个 MCP Server 目录即可</span>
+</div>
+<div class="subagents-grid">
+
+  <!-- Stock Agent -->
+  <div class="subagent sa-stock">
+    <div class="running-dot"></div>
+    <div class="subagent-header">
+      <span class="subagent-icon">📈</span>
+      <span class="subagent-name">Stock Agent</span>
+      <span class="mcp-tag">MCP Server</span>
+    </div>
+    <div class="subagent-body">
+      <div class="sa-section">
+        <div class="sa-section-label">专属工具</div>
+        <div class="sa-items">
+          <span class="sa-item tool">行情API</span>
+          <span class="sa-item tool">技术指标</span>
+          <span class="sa-item tool">回测引擎</span>
+          <span class="sa-item tool">新闻爬虫</span>
+        </div>
+      </div>
+      <div class="sa-section">
+        <div class="sa-section-label">专属知识库</div>
+        <div class="sa-items">
+          <span class="sa-item mem">历史行情RAG</span>
+          <span class="sa-item mem">分析框架</span>
+          <span class="sa-item mem">持仓历史</span>
+        </div>
+      </div>
+      <div class="sa-section">
+        <div class="sa-section-label">并行任务</div>
+        <div class="sa-items">
+          <span class="sa-item skill">Task A: A股分析</span>
+          <span class="sa-item skill">Task B: 美股扫描</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- News Agent -->
+  <div class="subagent sa-news">
+    <div class="subagent-header">
+      <span class="subagent-icon">📰</span>
+      <span class="subagent-name">News Agent</span>
+      <span class="mcp-tag">MCP Server</span>
+    </div>
+    <div class="subagent-body">
+      <div class="sa-section">
+        <div class="sa-section-label">专属工具</div>
+        <div class="sa-items">
+          <span class="sa-item tool">RSS聚合</span>
+          <span class="sa-item tool">情感分析</span>
+          <span class="sa-item tool">摘要生成</span>
+        </div>
+      </div>
+      <div class="sa-section">
+        <div class="sa-section-label">专属知识库</div>
+        <div class="sa-items">
+          <span class="sa-item mem">新闻源配置</span>
+          <span class="sa-item mem">热点追踪</span>
+        </div>
+      </div>
+      <div class="sa-section">
+        <div class="sa-section-label">MCP 暴露</div>
+        <div class="sa-items">
+          <span class="sa-item skill">tools: 3个</span>
+          <span class="sa-item skill">resources: 2个</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Code Agent -->
+  <div class="subagent sa-code">
+    <div class="subagent-header">
+      <span class="subagent-icon">💻</span>
+      <span class="subagent-name">Code Agent</span>
+      <span class="mcp-tag">MCP Server</span>
+    </div>
+    <div class="subagent-body">
+      <div class="sa-section">
+        <div class="sa-section-label">专属工具</div>
+        <div class="sa-items">
+          <span class="sa-item tool">代码生成</span>
+          <span class="sa-item tool">沙箱执行</span>
+          <span class="sa-item tool">单测生成</span>
+          <span class="sa-item tool">工具注册</span>
+        </div>
+      </div>
+      <div class="sa-section">
+        <div class="sa-section-label">核心职责</div>
+        <div class="sa-items">
+          <span class="sa-item mem">Dynamic Tool Factory</span>
+          <span class="sa-item mem">脚本持久化</span>
+        </div>
+      </div>
+      <div class="sa-section">
+        <div class="sa-section-label">写新工具后</div>
+        <div class="sa-items">
+          <span class="sa-item skill">→ 注册到 Capability Bus</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Life Agent -->
+  <div class="subagent sa-life">
+    <div class="subagent-header">
+      <span class="subagent-icon">🏠</span>
+      <span class="subagent-name">Life Agent</span>
+      <span class="mcp-tag">MCP Server</span>
+    </div>
+    <div class="subagent-body">
+      <div class="sa-section">
+        <div class="sa-section-label">专属工具</div>
+        <div class="sa-items">
+          <span class="sa-item tool">日历管理</span>
+          <span class="sa-item tool">智能家居</span>
+          <span class="sa-item tool">外卖/预订</span>
+        </div>
+      </div>
+      <div class="sa-section">
+        <div class="sa-section-label">专属知识库</div>
+        <div class="sa-items">
+          <span class="sa-item mem">偏好记忆</span>
+          <span class="sa-item mem">家庭成员</span>
+          <span class="sa-item mem">常用地点</span>
+        </div>
+      </div>
+      <div class="sa-section">
+        <div class="sa-section-label">权限级别</div>
+        <div class="sa-items">
+          <span class="sa-item skill">访客可用(部分)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Agent -->
+  <div class="subagent-add">
+    <div class="add-icon">＋</div>
+    <div class="add-text">新增 Sub-Agent<br><span style="color:#8b949e; font-weight:400">创建 MCP Server 目录<br>Jarvis 自动发现注册</span></div>
+  </div>
+
+</div>
+
+<!-- TASK DAG -->
+<div class="task-graph-section">
+  <div class="tg-title">📊 并行 Task DAG 示例：「研究最近股票 + 整理今日日程」（两个并行顶层任务）</div>
+  <div class="task-graph">
+    <div class="dag">
+      <!-- Col 1: Start -->
+      <div class="dag-col">
+        <div class="dag-node dn-jarvis">
+          用户指令
+          <div class="dn-label">Jarvis 接收 · 分解</div>
+        </div>
+      </div>
+      <div class="dag-arrow">→</div>
+
+      <!-- Col 2: Two top-level tasks -->
+      <div class="dag-branch" style="gap:8px">
+        <div class="dag-node dn-stock" style="position:relative">
+          <span class="dn-parallel">并行</span>
+          任务A: 股票研究
+          <div class="dn-agent" style="color:#3fb950">→ Stock Agent</div>
+        </div>
+        <div class="dag-node dn-jarvis">
+          任务B: 整理日程
+          <div class="dn-agent" style="color:#79c0ff">→ Life Agent</div>
+        </div>
+      </div>
+      <div class="dag-arrow">→</div>
+
+      <!-- Col 3: Sub-tasks (parallel within task A) -->
+      <div class="dag-branch">
+        <div class="parallel-band">
+          <span class="parallel-label">Stock Agent 内部并行</span>
+          <div class="dag-node dn-stock">获取A股行情</div>
+          <div class="dag-node dn-news">获取相关新闻
+            <div class="dn-agent" style="color:#58a6ff">→ News Agent</div>
+          </div>
+          <div class="dag-node dn-code">写爬虫脚本(如缺工具)
+            <div class="dn-agent" style="color:#a371f7">→ Code Agent</div>
+          </div>
+        </div>
+        <div class="dag-node dn-done" style="margin-top:8px">日程整理完成 ✓</div>
+      </div>
+      <div class="dag-arrow">→</div>
+
+      <!-- Col 4: Merge -->
+      <div class="dag-col">
+        <div class="dag-node dn-stock">
+          技术指标分析
+          <div class="dn-label">等待行情+新闻完成</div>
+        </div>
+        <div class="dag-node dn-pending" style="margin-top:8px">等待股票任务...</div>
+      </div>
+      <div class="dag-arrow">→</div>
+
+      <!-- Col 5: Final -->
+      <div class="dag-col">
+        <div class="dag-node dn-jarvis">
+          Jarvis 汇总报告
+          <div class="dn-label">Push → 手机通知</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Key Insights -->
+<div class="insight-grid">
+  <div class="insight-box ib-green">
+    <div class="ib-title">💡 Sub-Agent 即 MCP Server 的好处</div>
+    <div class="ib-desc">
+      新增一个 Sub-Agent = 创建一个 MCP Server 项目，声明它的 tools/resources/prompts。Jarvis 启动时自动扫描注册，无需修改核心代码。<br><br>
+      不同 Sub-Agent 可以用不同语言实现（Stock Agent 用 Python，因为有量化库；Life Agent 用 Go，因为需要稳定运行）。MCP 协议是语言无关的。
+    </div>
+  </div>
+  <div class="insight-box ib-blue">
+    <div class="ib-title">⚡ 并行任务的关键约束</div>
+    <div class="ib-desc">
+      并行不是无限的。需要一个 <strong>Resource Budget</strong>：同时最多跑几个 LLM 调用？API 成本控制在哪里？哪些任务优先级更高？<br><br>
+      建议：Jarvis 维护一个全局 <strong>Concurrency Governor</strong>，各 Sub-Agent 也有自己的内部并发上限，互不干扰但受全局管控。
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Sub-Agent 正确模型</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0d1117; color: #e6edf3; padding: 20px;
+}
+h1 { font-size: 18px; color: #58a6ff; margin-bottom: 4px; }
+.subtitle { font-size: 12px; color: #8b949e; margin-bottom: 18px; }
+
+/* ===== CORRECTION BANNER ===== */
+.correction {
+  background: #1a0d0d; border: 1px solid #f78166; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 16px; font-size: 12px;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.correction-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.correction-text { color: #f78166; line-height: 1.5; }
+.correction-text strong { color: #ff9580; }
+
+/* ===== PROTOCOL EXPLANATION ===== */
+.proto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.proto-box {
+  border-radius: 8px; padding: 12px 14px; font-size: 12px;
+}
+.proto-mcp { background: #1a1500; border: 1px solid #d29922; }
+.proto-a2a { background: #0d1f35; border: 1px solid #58a6ff; }
+.proto-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+.proto-mcp .proto-title { color: #d29922; }
+.proto-a2a .proto-title { color: #58a6ff; }
+.proto-desc { color: #8b949e; line-height: 1.5; }
+.proto-examples { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.proto-tag {
+  font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600;
+}
+.tag-yellow { background: #3a2800; color: #d29922; }
+.tag-blue { background: #0d2038; color: #58a6ff; }
+
+/* ===== MAIN ARCHITECTURE ===== */
+.arch { margin-bottom: 16px; }
+
+/* Jarvis box */
+.jarvis-box {
+  background: linear-gradient(135deg, #0d1f35, #1a0835);
+  border: 2px solid #58a6ff; border-radius: 12px; padding: 0; margin-bottom: 0;
+  overflow: hidden;
+}
+.jarvis-header {
+  background: #58a6ff; color: #0d1117; padding: 8px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.jarvis-header-title { font-weight: 800; font-size: 13px; }
+.jarvis-header-sub { font-size: 11px; opacity: 0.8; }
+.jarvis-inner { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 12px; }
+.j-block {
+  background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+  padding: 8px 10px; font-size: 10px;
+}
+.j-block-title { font-weight: 700; color: #79c0ff; margin-bottom: 3px; font-size: 11px; }
+.j-block-desc { color: #8b949e; line-height: 1.4; }
+
+/* A2A arrows zone */
+.a2a-zone {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 6px 0; position: relative;
+}
+.a2a-line {
+  flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #58a6ff, transparent);
+  position: relative;
+}
+.a2a-label {
+  background: #0d1f35; border: 1px solid #58a6ff; border-radius: 12px;
+  padding: 4px 12px; font-size: 10px; color: #58a6ff; font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ===== BASE AGENT CONCEPT ===== */
+.base-agent-concept {
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 12px;
+}
+.bac-title { font-size: 11px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+.bac-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; }
+.base-box {
+  background: #21262d; border: 2px solid #58a6ff; border-radius: 8px; padding: 10px 12px;
+}
+.base-box-title { font-size: 12px; font-weight: 700; color: #58a6ff; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.base-item { font-size: 10px; color: #8b949e; padding: 2px 0; display: flex; align-items: center; gap: 5px; }
+.base-item::before { content: '▸'; color: #58a6ff; }
+
+.extends-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.extends-box {
+  border-radius: 8px; padding: 10px 12px; border: 1px solid #30363d;
+  position: relative;
+}
+.ext-stock { background: #0d2818; border-color: #3fb950; }
+.ext-code { background: #1a0d35; border-color: #a371f7; }
+.ext-life { background: #1a1500; border-color: #d29922; }
+
+.extends-arrow {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 3px;
+}
+.ea-stock { background: #3fb950; color: #0d1117; }
+.ea-code { background: #a371f7; color: #0d1117; }
+.ea-life { background: #d29922; color: #0d1117; }
+
+.ext-title { font-size: 12px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+.ext-stock .ext-title { color: #3fb950; }
+.ext-code .ext-title { color: #a371f7; }
+.ext-life .ext-title { color: #d29922; }
+.ext-add { margin-top: 6px; border-top: 1px solid #30363d; padding-top: 6px; }
+.ext-add-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #8b949e; margin-bottom: 3px; }
+.ext-tag {
+  display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin: 2px 2px 0 0;
+}
+.etag-stock { background: #1a4a2e; color: #3fb950; }
+.etag-code { background: #2a1a4a; color: #a371f7; }
+.etag-life { background: #3a2800; color: #d29922; }
+
+/* ===== SUBAGENT FULL VIEW ===== */
+.subagent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.subagent-full {
+  border-radius: 10px; overflow: hidden; border: 1px solid #30363d;
+}
+.saf-header {
+  padding: 10px 12px; display: flex; align-items: center; gap: 8px;
+}
+.saf-icon { font-size: 18px; }
+.saf-name { font-weight: 700; font-size: 13px; flex: 1; }
+.saf-status {
+  font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: 600;
+}
+.status-running { background: #1a4a2e; color: #3fb950; }
+.status-idle { background: #21262d; color: #8b949e; }
+
+.sa-stock-full { border-top: 3px solid #3fb950; }
+.sa-stock-full .saf-header { background: #0d2818; }
+.sa-code-full { border-top: 3px solid #a371f7; }
+.sa-code-full .saf-header { background: #1a0d35; }
+.sa-life-full { border-top: 3px solid #d29922; }
+.sa-life-full .saf-header { background: #1a1500; }
+
+.saf-body { padding: 10px 12px; background: #161b22; }
+.saf-section { margin-bottom: 8px; }
+.saf-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #8b949e; font-weight: 700; margin-bottom: 4px; }
+
+/* Loop visualization */
+.agent-loop {
+  background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+  padding: 6px 8px; font-size: 10px; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+}
+.loop-step {
+  padding: 2px 6px; border-radius: 3px; font-weight: 600;
+  font-size: 9px;
+}
+.ls-plan { background: #0d2038; color: #58a6ff; }
+.ls-tool { background: #0d2818; color: #3fb950; }
+.ls-exec { background: #2a1a4a; color: #a371f7; }
+.ls-report { background: #3a2800; color: #d29922; }
+.loop-arrow { color: #30363d; font-size: 12px; }
+
+.tag-row { display: flex; flex-wrap: wrap; gap: 3px; }
+.small-tag {
+  font-size: 9px; padding: 2px 5px; border-radius: 3px;
+}
+.t-green { background: #0d2818; color: #3fb950; }
+.t-blue { background: #0d2038; color: #58a6ff; }
+.t-purple { background: #1a0d35; color: #a371f7; }
+.t-yellow { background: #1a1500; color: #d29922; }
+.t-gray { background: #21262d; color: #8b949e; }
+
+/* ===== ANALOGY ===== */
+.analogy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.analogy-box {
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px 14px;
+}
+.analogy-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; font-size: 11px; }
+.analogy-left { color: #8b949e; width: 80px; flex-shrink: 0; font-style: italic; }
+.analogy-arrow { color: #30363d; }
+.analogy-right { color: #e6edf3; flex: 1; line-height: 1.4; }
+.analogy-title { font-size: 12px; font-weight: 700; color: #58a6ff; margin-bottom: 8px; }
+
+.key-insight {
+  background: linear-gradient(135deg, #0d2818, #0d1f35);
+  border: 1px solid #3fb950; border-radius: 8px; padding: 12px 14px;
+  font-size: 12px; line-height: 1.6; margin-top: 12px;
+}
+.ki-title { font-weight: 700; color: #3fb950; margin-bottom: 6px; font-size: 13px; }
+.ki-desc { color: #8b949e; }
+.ki-desc strong { color: #e6edf3; }
+</style>
+</head>
+<body>
+
+<h1>🤖 Sub-Agent 正确模型</h1>
+<p class="subtitle">有自主推理能力的"下属员工"，不是工具包装器</p>
+
+<!-- CORRECTION -->
+<div class="correction">
+  <span class="correction-icon">⚠️</span>
+  <div class="correction-text">
+    <strong>修正之前的理解：</strong>MCP Server 只是暴露工具，没有推理能力。你要的 Sub-Agent 是有自己完整 Agent Loop（计划→执行→报告）的自治实体。
+    MCP 仍然有用，但用于 <strong>所有 Agent 调用外部工具</strong>，不是 Jarvis 和 Sub-Agent 之间的通信协议。
+  </div>
+</div>
+
+<!-- TWO PROTOCOLS -->
+<div class="proto-grid">
+  <div class="proto-box proto-mcp">
+    <div class="proto-title">🔌 MCP（工具接入层）</div>
+    <div class="proto-desc">Jarvis 和所有 Sub-Agent 都作为 MCP Client，通过 MCP 访问外部工具和资源。</div>
+    <div class="proto-examples">
+      <span class="proto-tag tag-yellow">MCP: 浏览器</span>
+      <span class="proto-tag tag-yellow">MCP: 文件系统</span>
+      <span class="proto-tag tag-yellow">MCP: 日历</span>
+      <span class="proto-tag tag-yellow">MCP: 行情API</span>
+    </div>
+  </div>
+  <div class="proto-box proto-a2a">
+    <div class="proto-title">🤝 A2A（Agent 间通信层）</div>
+    <div class="proto-desc">Jarvis 与 Sub-Agent 之间的协议：任务委派、进度上报、结果返回、升级请求。Google 已开放 A2A spec。</div>
+    <div class="proto-examples">
+      <span class="proto-tag tag-blue">委派任务</span>
+      <span class="proto-tag tag-blue">进度上报</span>
+      <span class="proto-tag tag-blue">遇阻升级</span>
+      <span class="proto-tag tag-blue">结果交付</span>
+    </div>
+  </div>
+</div>
+
+<!-- BASE AGENT CONCEPT -->
+<div class="base-agent-concept">
+  <div class="bac-title">🧬 继承模型：Sub-Agent = BaseAgent + 领域专业化</div>
+  <div class="bac-grid">
+    <div class="base-box">
+      <div class="base-box-title">📦 BaseAgent（共享基础）</div>
+      <div class="base-item">完整 Agent Loop（计划→工具→执行→上报）</div>
+      <div class="base-item">所有基础工具（Shell、文件、Web）</div>
+      <div class="base-item">MCP Client（接入外部能力）</div>
+      <div class="base-item">Memory 接入（共享全局记忆）</div>
+      <div class="base-item">Task Queue（并行任务管理）</div>
+      <div class="base-item">A2A 接口（接收/上报）</div>
+      <div class="base-item">Approval 机制（敏感操作审批）</div>
+    </div>
+    <div class="extends-grid">
+      <div class="extends-box ext-stock">
+        <span class="extends-arrow ea-stock">extends</span>
+        <div class="ext-title">📈 StockAgent</div>
+        <div class="ext-add">
+          <div class="ext-add-label">额外工具</div>
+          <span class="ext-tag etag-stock">行情API</span>
+          <span class="ext-tag etag-stock">技术指标</span>
+          <span class="ext-tag etag-stock">回测引擎</span>
+        </div>
+        <div class="ext-add">
+          <div class="ext-add-label">专属知识库</div>
+          <span class="ext-tag etag-stock">金融分析框架</span>
+          <span class="ext-tag etag-stock">持仓历史</span>
+        </div>
+        <div class="ext-add">
+          <div class="ext-add-label">专属 Prompt</div>
+          <span class="ext-tag etag-stock">金融分析师人格</span>
+        </div>
+      </div>
+      <div class="extends-box ext-code">
+        <span class="extends-arrow ea-code">extends</span>
+        <div class="ext-title">💻 CodeAgent</div>
+        <div class="ext-add">
+          <div class="ext-add-label">额外工具</div>
+          <span class="ext-tag etag-code">沙箱执行</span>
+          <span class="ext-tag etag-code">单测生成</span>
+          <span class="ext-tag etag-code">工具注册</span>
+        </div>
+        <div class="ext-add">
+          <div class="ext-add-label">专属知识库</div>
+          <span class="ext-tag etag-code">代码库RAG</span>
+          <span class="ext-tag etag-code">常用模式</span>
+        </div>
+        <div class="ext-add">
+          <div class="ext-add-label">特殊角色</div>
+          <span class="ext-tag etag-code">= Dynamic Tool Factory</span>
+        </div>
+      </div>
+      <div class="extends-box ext-life">
+        <span class="extends-arrow ea-life">extends</span>
+        <div class="ext-title">🏠 LifeAgent</div>
+        <div class="ext-add">
+          <div class="ext-add-label">额外工具</div>
+          <span class="ext-tag etag-life">日历管理</span>
+          <span class="ext-tag etag-life">智能家居</span>
+          <span class="ext-tag etag-life">外卖预订</span>
+        </div>
+        <div class="ext-add">
+          <div class="ext-add-label">专属知识库</div>
+          <span class="ext-tag etag-life">家庭成员档案</span>
+          <span class="ext-tag etag-life">偏好记忆</span>
+        </div>
+        <div class="ext-add">
+          <div class="ext-add-label">权限</div>
+          <span class="ext-tag etag-life">访客部分可用</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUBAGENT INTERNAL VIEW -->
+<div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#8b949e; margin-bottom:10px;">
+  Sub-Agent 内部结构（每个都是完整自治体）
+</div>
+<div class="subagent-grid">
+
+  <div class="subagent-full sa-stock-full">
+    <div class="saf-header">
+      <span class="saf-icon">📈</span>
+      <span class="saf-name">Stock Agent</span>
+      <span class="saf-status status-running">运行中 2任务</span>
+    </div>
+    <div class="saf-body">
+      <div class="saf-section">
+        <div class="saf-label">自主 Agent Loop</div>
+        <div class="agent-loop">
+          <span class="loop-step ls-plan">分析目标</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step ls-tool">调用工具</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step ls-exec">执行判断</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step ls-report">上报/继续</span>
+        </div>
+      </div>
+      <div class="saf-section">
+        <div class="saf-label">当前并行任务</div>
+        <div class="tag-row">
+          <span class="small-tag t-green">Task A: A股行情分析</span>
+          <span class="small-tag t-green">Task B: 港股扫描</span>
+        </div>
+      </div>
+      <div class="saf-section">
+        <div class="saf-label">遇阻时</div>
+        <div class="tag-row">
+          <span class="small-tag t-blue">→ A2A 升级给 Jarvis</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="subagent-full sa-code-full">
+    <div class="saf-header">
+      <span class="saf-icon">💻</span>
+      <span class="saf-name">Code Agent</span>
+      <span class="saf-status status-running">运行中 1任务</span>
+    </div>
+    <div class="saf-body">
+      <div class="saf-section">
+        <div class="saf-label">自主 Agent Loop</div>
+        <div class="agent-loop">
+          <span class="loop-step ls-plan">理解需求</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step ls-tool">生成代码</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step ls-exec">沙箱测试</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step ls-report">注册工具</span>
+        </div>
+      </div>
+      <div class="saf-section">
+        <div class="saf-label">当前任务</div>
+        <div class="tag-row">
+          <span class="small-tag t-purple">为 Stock Agent 写新闻爬虫</span>
+        </div>
+      </div>
+      <div class="saf-section">
+        <div class="saf-label">完成后</div>
+        <div class="tag-row">
+          <span class="small-tag t-purple">→ 自动注册到 Capability Bus</span>
+          <span class="small-tag t-purple">→ 通知 Stock Agent 可用</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="subagent-full sa-life-full">
+    <div class="saf-header">
+      <span class="saf-icon">🏠</span>
+      <span class="saf-name">Life Agent</span>
+      <span class="saf-status status-idle">空闲</span>
+    </div>
+    <div class="saf-body">
+      <div class="saf-section">
+        <div class="saf-label">自主 Agent Loop</div>
+        <div class="agent-loop">
+          <span class="loop-step ls-plan">理解生活需求</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step ls-tool">安排执行</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step ls-report">完成上报</span>
+        </div>
+      </div>
+      <div class="saf-section">
+        <div class="saf-label">访客可见能力</div>
+        <div class="tag-row">
+          <span class="small-tag t-yellow">天气查询</span>
+          <span class="small-tag t-yellow">基础问答</span>
+          <span class="small-tag t-gray">日历(主人授权后)</span>
+        </div>
+      </div>
+      <div class="saf-section">
+        <div class="saf-label">身份识别接入</div>
+        <div class="tag-row">
+          <span class="small-tag t-yellow">→ Identity 层决策权限</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ANALOGY -->
+<div class="analogy-grid">
+  <div class="analogy-box">
+    <div class="analogy-title">🏰 管家-仆人 类比映射</div>
+    <div class="analogy-row">
+      <span class="analogy-left">管家(Jarvis)</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">统筹全局，接收主人指令，分配任务给下属，汇总结果</span>
+    </div>
+    <div class="analogy-row">
+      <span class="analogy-left">理财顾问</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">StockAgent：主动分析，遇到不确定的事情才上报管家</span>
+    </div>
+    <div class="analogy-row">
+      <span class="analogy-left">工程师</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">CodeAgent：接到需求自己搞定，做完告诉管家可以用了</span>
+    </div>
+    <div class="analogy-row">
+      <span class="analogy-left">生活管家</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">LifeAgent：处理日常琐事，访客进门也由它负责接待判断</span>
+    </div>
+    <div class="analogy-row">
+      <span class="analogy-left">新仆人</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">新 Sub-Agent = 写 manifest 配置 + 可选新工具，系统自动纳编</span>
+    </div>
+  </div>
+  <div class="analogy-box">
+    <div class="analogy-title">⚡ 关键设计原则</div>
+    <div class="analogy-row">
+      <span class="analogy-left">下属自治</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">Sub-Agent 默认自己解决问题，Jarvis 不微管理每一步</span>
+    </div>
+    <div class="analogy-row">
+      <span class="analogy-left">遇阻上报</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">Sub-Agent 卡住才通过 A2A 升级，不是每步都问 Jarvis</span>
+    </div>
+    <div class="analogy-row">
+      <span class="analogy-left">能力共享</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">所有 Agent 共享基础工具集，专业化是叠加而非替换</span>
+    </div>
+    <div class="analogy-row">
+      <span class="analogy-left">并行协作</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">多个 Sub-Agent 同时工作，互相可通过 A2A 协作</span>
+    </div>
+    <div class="analogy-row">
+      <span class="analogy-left">渐进自主</span>
+      <span class="analogy-arrow">→</span>
+      <span class="analogy-right">工具/知识越丰富，需要上报的次数越来越少</span>
+    </div>
+  </div>
+</div>
+
+<div class="key-insight">
+  <div class="ki-title">💡 架构核心：三层协议栈</div>
+  <div class="ki-desc">
+    <strong>MCP</strong>（工具层）：所有 Agent 都用，接入外部工具和资源，语言无关。<br>
+    <strong>A2A</strong>（Agent 通信层）：Jarvis ↔ Sub-Agent 之间的任务委派和结果交付协议。Google 已开放规范，可以直接采用。<br>
+    <strong>内部 Agent Loop</strong>：每个 Agent 自己的推理-执行-上报循环，这是自主智能的核心，也是和 openjax 现有代码最直接相关的部分。<br><br>
+    新增 Sub-Agent = 写一个 <strong>Agent Manifest</strong>（能力声明 + 专属工具 + 知识库配置 + 系统 Prompt），Jarvis 启动时扫描注册，A2A 自动可达。
+  </div>
+</div>
+
+</body>
+</html>
