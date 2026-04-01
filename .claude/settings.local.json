@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-expo-app:*)",
+      "Bash(npx expo:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(cp:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm list:*)",
+      "Bash(git show:*)",
+      "Bash(npm run:*)",
+      "Bash(ruff check:*)",
+      "Bash(uvicorn sebastian.gateway.app:app:*)",
+      "Bash(curl -s http://127.0.0.1:8000/health)",
+      "Bash(curl:*)"
+    ]
+  }
+}
