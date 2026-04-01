@@ -39,10 +39,10 @@ Sebastian Android App 是 Phase 1 的主要交互入口。定位为**纯展示 +
 底部 Tab 三项，顺序固定：
 
 ```
-[ 任务 ]  [ 对话 ]  [ 设置 ]
-  左        中        右
-            ↑
-          默认启动页
+[ SubAgents ]  [ 对话 ]  [ 设置 ]
+     左           中        右
+                  ↑
+               默认启动页
 ```
 
 ---
@@ -54,10 +54,9 @@ ui/mobile/
 ├── app/
 │   ├── _layout.tsx                 # 底部 Tab 导航配置
 │   └── (tabs)/
-│       ├── tasks/
+│       ├── subagents/
 │       │   ├── _layout.tsx
-│       │   ├── index.tsx           # 任务列表页
-│       │   └── [agentId].tsx       # Agent 任务详情页
+│       │   └── index.tsx           # SubAgents 页（Agent 输出流 + 输入框）
 │       ├── chat/
 │       │   ├── _layout.tsx
 │       │   └── index.tsx           # 对话页
@@ -92,13 +91,9 @@ ui/mobile/
 │       │   ├── MessageBubble.tsx   # 单条消息气泡
 │       │   ├── StreamingBubble.tsx # 流式输出气泡
 │       │   └── MessageInput.tsx    # 悬浮输入框
-│       ├── tasks/
-│       │   ├── TaskSidebar.tsx     # Sub-Agent 列表侧边栏
-│       │   ├── TaskList.tsx        # 任务卡片列表
-│       │   ├── TaskCard.tsx        # 单个任务卡片
-│       │   ├── AgentHeader.tsx     # Agent 名称与状态
-│       │   ├── TaskTimeline.tsx    # 任务事件流
-│       │   └── TaskStepCard.tsx    # 单个执行步骤
+│       ├── subagents/
+│       │   ├── AgentSidebar.tsx    # Sub-Agent 列表侧边栏
+│       │   └── AgentStatusBadge.tsx # Agent 状态标签
 │       └── settings/
 │           ├── ServerConfig.tsx    # Server URL + 连接测试
 │           ├── LLMProviderConfig.tsx  # LLM Provider + API Key
@@ -120,23 +115,27 @@ ui/mobile/
 **ChatSidebar**：
 - 显示最近 20 条 Session（本地索引，仅存 id/title/时间）
 - 超出 20 条自动删除最旧索引（服务端数据不删）
-- "新对话"按钮：
-  - 当前无 Session → 不显示（页面本身是空白状态）
-  - 当前有 Session → 点击创建草稿 Session（`draftSession=true`，未持久化）
-  - 当前已是草稿 → Toast 提示"请先发送消息"，不重复创建
+- "新对话"按钮仅在当前有实际内容的 Session 时显示：
+  - 点击 → 创建草稿 Session（`draftSession=true`，未持久化），按钮随即消失
+- 无 Session 或当前是草稿时：不显示"新对话"按钮
 
 **Session 生命周期**：
 ```
 无 Session：空白页 → 发消息 → 自动创建并持久化 Session
-有 Session：点"新对话" → 草稿 → 发消息 → 持久化
-已是草稿：再点"新对话" → Toast 提示，不创建
+有 Session：点"新对话" → 草稿（按钮消失）→ 发消息 → 持久化
 ```
 
-### 5.2 任务页
+### 5.2 SubAgents 页
 
-- 展示所有 Task 列表（状态、目标、耗时）
-- 左滑拉出 `TaskSidebar`，显示正在工作的 Sub-Agent 列表
-- 点击 Sub-Agent → 进入 `tasks/[agentId].tsx` 查看该 Agent 的任务详情与事件流
+与对话页结构镜像，共用大部分组件：
+
+- 内容区全屏，流式显示当前选中 Sub-Agent 的输出内容和工作进度（SSE delta）
+- 底部悬浮输入框，发送内容直接指令给该 Sub-Agent（绕过 Sebastian）
+- 左滑拉出 `AgentSidebar`，显示 Sebastian 已安排的、正在工作的 Sub-Agent 列表
+- 点击侧边栏中的 Agent → 切换主区域显示该 Agent 的输出流
+
+**两页共用组件**：`Sidebar`、`MessageList`、`MessageBubble`、`StreamingBubble`、`MessageInput`
+**数据源区别**：对话页连接 Session 消息流，SubAgents 页连接 Agent 输出流（`GET /api/v1/agents/{id}/stream`）
 
 ### 5.3 设置页
 
@@ -164,9 +163,10 @@ session.ts
 ├── draftSession: boolean
 └── streamingMessage: string      # 当前流式输出内容
 
-tasks.ts
-├── tasks: Task[]                 # React Query 拉取后写入，SSE 增量 patch
-└── activeAgents: Agent[]
+agents.ts
+├── activeAgents: Agent[]         # 正在工作的 Sub-Agent 列表
+├── currentAgentId: string | null # 当前查看的 Agent
+└── streamingOutput: string       # 当前 Agent 流式输出内容
 
 settings.ts
 ├── serverUrl: string
@@ -240,6 +240,8 @@ POST /api/v1/devices
 - Session 消息历史完整持久化（App 回前台后可拉取补齐）
 - FCM 推送发送逻辑（approval、task 完成/失败事件触发）
 - `GET /api/v1/turns/{session_id}` 支持分页
+- `GET /api/v1/agents/{id}/stream`：单个 Sub-Agent 的输出流（SSE）
+- Sub-Agent 接收直接指令的 API（绕过 Sebastian 直接下命令）
 
 ---
 
