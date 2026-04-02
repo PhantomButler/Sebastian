@@ -12,6 +12,10 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 **关系说明**：OpenJax（`/Users/ericw/work/code/ai/openJax`）是前驱技术探索，Sebastian 继承其设计经验，不继承代码。
 
+**目录 README 索引**：
+- `sebastian/README.md`：后端主包结构、模块职责、常见开发入口
+- `ui/mobile/README.md`：移动端目录结构、页面导航、前端模块说明
+
 ## 1) 项目概览
 
 - 主语言：Python 3.12+
@@ -39,6 +43,8 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 ### 模块 README 导航
 
 在针对某模块工作前，优先读对应 README（若存在）以快速获取上下文，避免全量搜索引入无关内容：
+- `sebastian/README.md`
+- `ui/mobile/README.md`
 - `sebastian/core/README.md`
 - `sebastian/gateway/README.md`
 - `sebastian/agents/README.md`
