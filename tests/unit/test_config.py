@@ -9,7 +9,7 @@ def test_settings_defaults():
     os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
     from sebastian.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.sebastian_gateway_port == 8000
     assert s.sebastian_jwt_algorithm == "HS256"
     assert s.sebastian_owner_name == "Owner"
