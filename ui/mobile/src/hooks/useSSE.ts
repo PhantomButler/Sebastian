@@ -5,7 +5,8 @@ import { createSSEConnection } from '../api/sse';
 import { useSessionStore } from '../store/session';
 import { useAgentsStore } from '../store/agents';
 import { useSettingsStore } from '../store/settings';
-import type { SSEEvent, TurnDeltaData, AgentDeltaData } from '../types';
+import type { SSEEvent, TurnDeltaData, AgentDeltaData, ApprovalRequiredData } from '../types';
+import { useApprovalStore } from '../store/approval';
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
@@ -31,6 +32,9 @@ export function useSSE() {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
     } else if (event.type.startsWith('task.')) {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    } else if (event.type === 'approval.required') {
+      const d = event.data as ApprovalRequiredData;
+      useApprovalStore.getState().setPending(d.approval);
     }
   }
 
