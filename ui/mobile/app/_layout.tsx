@@ -1,16 +1,15 @@
-import { Stack } from 'expo-router';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StyleSheet } from 'react-native';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
-import { useSettingsStore } from '@/src/store/settings';
-import { registerDevice, grantApproval, denyApproval } from '@/src/api/approvals';
+import { router, Stack } from 'expo-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { registerDevice } from '@/src/api/approvals';
+import { ApprovalModal } from '@/src/components/common/ApprovalModal';
 import { useSSE } from '@/src/hooks/useSSE';
 import { useApprovalStore } from '@/src/store/approval';
-import { ApprovalModal } from '@/src/components/common/ApprovalModal';
+import { useSettingsStore } from '@/src/store/settings';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 2, staleTime: 30_000 } },
@@ -26,16 +25,21 @@ Notifications.setNotificationHandler({
   }),
 });
 
-function AppInit({ children }: { children: React.ReactNode }) {
+function AppInit({ children }: { children: ReactNode }) {
   const { load, jwtToken } = useSettingsStore();
-  const { pending, setPending } = useApprovalStore();
-  useSSE();
+  const { pending, grant, deny, setPending } = useApprovalStore();
 
-  useEffect(() => { load(); }, [load]);
+  useSSE({
+    onApprovalRequired: (approval) => setPending(approval),
+  });
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     if (!jwtToken) return;
-    (async () => {
+    void (async () => {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') return;
       const token = (await Notifications.getDevicePushTokenAsync()).data;
@@ -44,30 +48,23 @@ function AppInit({ children }: { children: React.ReactNode }) {
   }, [jwtToken]);
 
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as Record<string, string>;
-      if (data?.type === 'approval.required') router.push('/(tabs)/chat');
-      else if (data?.type?.startsWith('task.')) router.push('/(tabs)/subagents');
-    });
-    return () => sub.remove();
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data = response.notification.request.content.data as Record<string, string>;
+        if (data?.type === 'approval.required') {
+          router.push('/(tabs)/chat');
+        } else if (data?.type?.startsWith('task.')) {
+          router.push('/(tabs)/subagents');
+        }
+      },
+    );
+    return () => subscription.remove();
   }, []);
-
-  async function handleGrant() {
-    if (!pending) return;
-    await grantApproval(pending.id).catch(() => {});
-    setPending(null);
-  }
-
-  async function handleDeny() {
-    if (!pending) return;
-    await denyApproval(pending.id).catch(() => {});
-    setPending(null);
-  }
 
   return (
     <>
       {children}
-      <ApprovalModal approval={pending} onGrant={handleGrant} onDeny={handleDeny} />
+      <ApprovalModal approval={pending} onGrant={grant} onDeny={deny} />
     </>
   );
 }

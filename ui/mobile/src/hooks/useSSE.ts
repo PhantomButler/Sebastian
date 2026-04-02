@@ -2,46 +2,59 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { createSSEConnection } from '../api/sse';
-import { useSessionStore } from '../store/session';
 import { useAgentsStore } from '../store/agents';
+import { useSessionStore } from '../store/session';
 import { useSettingsStore } from '../store/settings';
-import type { SSEEvent, TurnDeltaData, AgentDeltaData, ApprovalRequiredData } from '../types';
-import { useApprovalStore } from '../store/approval';
+import type {
+  AgentDeltaData,
+  Approval,
+  ApprovalRequiredData,
+  SSEEvent,
+  TurnDeltaData,
+} from '../types';
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
 
-export function useSSE() {
-  const jwtToken = useSettingsStore((s) => s.jwtToken);
+interface UseSSEOptions {
+  onApprovalRequired?: (approval: Approval) => void;
+}
+
+export function useSSE(options?: UseSSEOptions) {
+  const jwtToken = useSettingsStore((state) => state.jwtToken);
   const queryClient = useQueryClient();
   const retryCount = useRef(0);
   const disconnectRef = useRef<(() => void) | null>(null);
+  const approvalHandler = options?.onApprovalRequired;
 
   function handleEvent(event: SSEEvent) {
     retryCount.current = 0;
+
     if (event.type === 'turn.delta') {
-      const d = event.data as TurnDeltaData;
-      useSessionStore.getState().appendStreamingDelta(d.delta);
+      const data = event.data as TurnDeltaData;
+      useSessionStore.getState().appendStreamingDelta(data.delta);
     } else if (event.type === 'turn.done') {
       useSessionStore.getState().clearStreaming();
       queryClient.invalidateQueries({ queryKey: ['messages'] });
     } else if (event.type === 'agent.delta') {
-      const d = event.data as AgentDeltaData;
-      useAgentsStore.getState().appendAgentDelta(d.agentId, d.delta);
+      const data = event.data as AgentDeltaData;
+      useAgentsStore.getState().appendAgentDelta(data.agentId, data.delta);
     } else if (event.type === 'agent.done') {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
     } else if (event.type.startsWith('task.')) {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['session-tasks'] });
     } else if (event.type === 'approval.required') {
-      const d = event.data as ApprovalRequiredData;
-      useApprovalStore.getState().setPending(d.approval);
+      const data = event.data as ApprovalRequiredData;
+      approvalHandler?.(data.approval);
     }
   }
 
   function connect() {
     disconnectRef.current?.();
-    disconnectRef.current = createSSEConnection(handleEvent, (err) => {
-      console.warn('SSE error:', err);
+    disconnectRef.current = createSSEConnection(handleEvent, (error) => {
+      console.warn('SSE error:', error);
       if (retryCount.current < MAX_RETRIES) {
         const delay = BASE_DELAY * 2 ** retryCount.current;
         retryCount.current += 1;
@@ -52,9 +65,10 @@ export function useSSE() {
 
   useEffect(() => {
     if (!jwtToken) return;
+
     connect();
 
-    const sub = AppState.addEventListener('change', (state) => {
+    const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         connect();
         queryClient.invalidateQueries();
@@ -66,7 +80,7 @@ export function useSSE() {
 
     return () => {
       disconnectRef.current?.();
-      sub.remove();
+      subscription.remove();
     };
-  }, [jwtToken]);
+  }, [approvalHandler, jwtToken, queryClient]);
 }
