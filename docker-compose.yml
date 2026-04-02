@@ -15,6 +15,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
 
   # Phase 2+: uncomment when ChromaDB semantic memory is wired
   # chromadb:
