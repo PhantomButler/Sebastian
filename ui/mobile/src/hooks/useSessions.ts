@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getSessions } from '../api/turns';
+import { getSessions } from '../api/sessions';
 import { useSettingsStore } from '../store/settings';
 
 export function useSessions() {

@@ -25,7 +25,15 @@ export default function ChatScreen() {
     try {
       const { sessionId } = await sendTurn(currentSessionId, text);
       if (!currentSessionId) {
-        persistSession({ id: sessionId, title: text.slice(0, 30), createdAt: new Date().toISOString() });
+        persistSession({
+          id: sessionId,
+          agent: 'sebastian',
+          title: text.slice(0, 40),
+          status: 'active',
+          updated_at: new Date().toISOString(),
+          task_count: 0,
+          active_task_count: 0,
+        });
       }
       queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
     } catch {

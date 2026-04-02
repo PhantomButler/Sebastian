@@ -28,7 +28,9 @@ export function ChatSidebar({ sessions, currentSessionId, draftSession, onSelect
             onPress={() => onSelect(item.id)}
           >
             <Text style={styles.itemTitle} numberOfLines={1}>{item.title || '新对话'}</Text>
-            <Text style={styles.itemDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+            <Text style={styles.itemDate}>
+              {new Date(item.updated_at).toLocaleDateString()}
+            </Text>
           </TouchableOpacity>
         )}
       />

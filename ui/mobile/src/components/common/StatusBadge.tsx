@@ -7,8 +7,10 @@ const COLOR: Record<string, string> = {
   waiting_approval: '#FF9500',
   completed: '#34C759',
   failed: '#FF3B30',
-  pending: '#999',
+  created: '#999',
+  planning: '#5AC8FA',
   running: '#007AFF',
+  paused: '#FF9500',
   cancelled: '#999',
 };
 

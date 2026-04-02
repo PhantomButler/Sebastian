@@ -10,8 +10,12 @@ export interface Message {
 
 export interface SessionMeta {
   id: string;
+  agent: string;
   title: string;
-  createdAt: string;
+  status: 'active' | 'idle' | 'archived';
+  updated_at: string;
+  task_count: number;
+  active_task_count: number;
 }
 
 export type AgentStatus = 'idle' | 'working' | 'waiting_approval' | 'completed' | 'failed';
@@ -24,7 +28,14 @@ export interface Agent {
   createdAt: string;
 }
 
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TaskStatus =
+  | 'created'
+  | 'planning'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 export interface Task {
   id: string;
@@ -33,6 +44,16 @@ export interface Task {
   agentId: string | null;
   createdAt: string;
   completedAt: string | null;
+}
+
+export interface TaskDetail {
+  id: string;
+  session_id: string;
+  goal: string;
+  status: TaskStatus;
+  assigned_agent: string;
+  created_at: string;
+  completed_at: string | null;
 }
 
 export interface Approval {
