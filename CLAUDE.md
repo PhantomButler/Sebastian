@@ -60,6 +60,91 @@ docker compose up
 # Gateway: http://127.0.0.1:8000
 ```
 
+## 3.1) Android App 开发（macOS）
+
+### 前置条件
+
+- Android Studio 已安装，SDK 路径：`~/Library/Android/sdk`
+- AVD 已创建（推荐 `Medium_Phone_API_36.1`）
+- Node.js 已安装
+
+### 初次安装依赖
+
+```bash
+cd ui/mobile
+npm install --legacy-peer-deps   # react-query-devtools 有 peer conflict，必须加此 flag
+```
+
+> **注意**：`@tanstack/react-query-devtools` 是 Web-only 包，**不能** import 进 React Native 代码，否则 crash。
+
+### 启动 Android 模拟器
+
+```bash
+# 列出可用 AVD
+~/Library/Android/sdk/emulator/emulator -list-avds
+
+# 启动（-no-snapshot-load 跳过快照，避免状态污染）
+~/Library/Android/sdk/emulator/emulator -avd Medium_Phone_API_36.1 -no-snapshot-load &
+
+# 等待启动完成（返回 "1" 即 ready）
+~/Library/Android/sdk/platform-tools/adb wait-for-device shell getprop sys.boot_completed
+
+# 确认设备在线
+~/Library/Android/sdk/platform-tools/adb devices
+```
+
+### 首次构建并安装 APK
+
+```bash
+cd ui/mobile
+
+# 配置 Android SDK 路径（仅首次，不提交）
+echo "sdk.dir=$HOME/Library/Android/sdk" > android/local.properties
+
+# 构建 + 安装到已连接设备
+npx expo run:android
+```
+
+### 日常开发（APK 已装，只改 JS）
+
+```bash
+cd ui/mobile
+npx expo start          # 启动 Metro，App 内自动热更新
+```
+
+> Expo Router 默认路由：`app/index.tsx` 用 `<Redirect>` 控制落地页，**不要**在 `_layout.tsx` 用 `initialRouteName`（此版本不支持）。
+
+### 启动 Gateway 供 App 联调
+
+```bash
+# 根目录执行，确保 .env 已配置
+uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
+
+# App 内 Settings 页填写 Server URL：http://10.0.2.2:8000（模拟器访问宿主机）
+# 真机用局域网 IP：http://192.168.x.x:8000
+```
+
+> 模拟器内访问宿主机 localhost 需用 `10.0.2.2`，不是 `127.0.0.1`。
+
+### 生成测试用密码 Hash
+
+```bash
+python3 -c "from sebastian.gateway.auth import hash_password; print(hash_password('你的密码'))"
+# 将输出写入 .env：SEBASTIAN_OWNER_PASSWORD_HASH=<输出值>
+```
+
+### .env 最小配置（本地开发）
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+SEBASTIAN_OWNER_NAME=Eric
+SEBASTIAN_DATA_DIR=./data
+SEBASTIAN_JWT_SECRET=local-dev-secret
+SEBASTIAN_OWNER_PASSWORD_HASH=<用上面命令生成>
+SEBASTIAN_GATEWAY_HOST=127.0.0.1
+SEBASTIAN_GATEWAY_PORT=8000
+```
+
 ## 4) Lint 与格式化
 
 ```bash
