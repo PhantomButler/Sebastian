@@ -39,10 +39,10 @@ Sebastian Android App 是 Phase 1 的主要交互入口。定位为**纯展示 +
 底部 Tab 三项，顺序固定：
 
 ```
-[ SubAgents ]  [ 对话 ]  [ 设置 ]
-     左           中        右
-                  ↑
-               默认启动页
+[ Sebastian ]  [ SubAgents ]  [ 设置 ]
+      左             中           右
+       ↑
+    默认启动页
 ```
 
 ---
@@ -54,15 +54,19 @@ ui/mobile/
 ├── app/
 │   ├── _layout.tsx                 # 底部 Tab 导航配置
 │   └── (tabs)/
-│       ├── subagents/
-│       │   ├── _layout.tsx
-│       │   └── index.tsx           # SubAgents 页（Agent 输出流 + 输入框）
 │       ├── chat/
 │       │   ├── _layout.tsx
-│       │   └── index.tsx           # 对话页
+│       │   └── index.tsx           # Sebastian 主对话页
+│       ├── subagents/
+│       │   ├── _layout.tsx
+│       │   └── index.tsx           # Sub-Agent 列表页
 │       └── settings/
 │           ├── _layout.tsx
 │           └── index.tsx           # 设置页
+│   └── subagents/
+│       ├── [agentId].tsx           # 某个 Sub-Agent 的会话列表页
+│       └── session/
+│           └── [id].tsx            # 某个会话的详情页
 ├── src/
 │   ├── api/
 │   │   ├── client.ts               # axios 实例（动态读 serverUrl）
@@ -82,7 +86,7 @@ ui/mobile/
 │   │   └── useSSE.ts               # SSE → Zustand 桥接
 │   └── components/
 │       ├── common/
-│       │   ├── Sidebar.tsx         # 手势侧边栏容器（对话页、任务页复用）
+│       │   ├── Sidebar.tsx         # 手势侧边栏容器（仅对话页使用）
 │       │   ├── EmptyState.tsx      # 空状态占位
 │       │   └── StatusBadge.tsx     # 任务状态标签
 │       ├── chat/
@@ -92,7 +96,8 @@ ui/mobile/
 │       │   ├── StreamingBubble.tsx # 流式输出气泡
 │       │   └── MessageInput.tsx    # 悬浮输入框
 │       ├── subagents/
-│       │   ├── AgentSidebar.tsx    # Sub-Agent 列表侧边栏
+│       │   ├── AgentList.tsx       # Sub-Agent 列表
+│       │   ├── SessionList.tsx     # 某个 Sub-Agent 的会话列表
 │       │   └── AgentStatusBadge.tsx # Agent 状态标签
 │       └── settings/
 │           ├── ServerConfig.tsx    # Server URL + 连接测试
@@ -110,6 +115,7 @@ ui/mobile/
 
 - 内容区全屏（顶到底），底部留 padding 避免被输入框遮挡
 - 输入框悬浮在内容区上层（absolute bottom）
+- 页面标题与底部 Tab 文案统一为 `Sebastian`
 - 左滑手势拉出 `ChatSidebar`
 
 **ChatSidebar**：
@@ -127,17 +133,27 @@ ui/mobile/
 
 ### 5.2 SubAgents 页
 
-与对话页结构镜像，共用大部分组件：
+`SubAgents` 页不再镜像对话页，而是作为 Sub-Agent 浏览入口：
 
-- 内容区全屏，流式显示当前选中 Sub-Agent 的输出内容和工作进度（SSE delta）
-- 底部悬浮输入框，发送内容直接指令给该 Sub-Agent（绕过 Sebastian）
-- 左滑拉出 `AgentSidebar`，显示 Sebastian 已安排的、正在工作的 Sub-Agent 列表
-- 点击侧边栏中的 Agent → 切换主区域显示该 Agent 的输出流
+- 顶部展示固定标题 `Sub-Agents`
+- 主区域直接显示 Sub-Agent 列表，不使用侧边栏
+- 点击某个 Sub-Agent → 进入该 Agent 的二级页面，查看它的 Session 列表
+- 再点击某个 Session → 进入三级详情页，查看消息与任务
 
-**两页共用组件**：`Sidebar`、`MessageList`、`MessageBubble`、`StreamingBubble`、`MessageInput`
-**数据源区别**：对话页连接 Session 消息流，SubAgents 页连接 Agent 输出流（`GET /api/v1/agents/{id}/stream`）
+**二级页面（某个 Sub-Agent 的 Session 列表）**：
+- 顶部返回按钮 + Agent 名称
+- 主区域显示该 Agent 的 Session 列表
+- 无真实数据时允许展示 mock 数据，方便验证导航链路
 
-### 5.4 输入框状态（对话页 & SubAgents 页通用）
+**三级页面（Session 详情）**：
+- 顶部返回按钮 + Session 标题
+- `消息 / 任务` 双 tab 切换
+- 底部保留输入框，可继续向该 Session 发送内容
+
+**组件复用**：`SessionList`、`MessageList`、`MessageInput`、`SessionDetailView`
+**数据流区别**：`Sebastian` 页连接主会话消息流；`SubAgents` 页只负责 Agent → Session → 详情的导航入口
+
+### 5.4 输入框状态（Sebastian 页 & Session 详情页通用）
 
 `MessageInput` 有两种状态，由 `isWorking` prop 控制：
 
@@ -237,7 +253,7 @@ POST /api/v1/devices
 
 | 场景 | 处理方式 |
 |------|----------|
-| 未配置 Server URL | 对话页/任务页显示引导，跳转设置页 |
+| 未配置 Server URL | `Sebastian` 页或 `SubAgents` 页显示引导，跳转设置页 |
 | JWT 过期（401） | 清除 token，跳转设置页 |
 | SSE 断连 | 指数退避自动重连（最多 3 次），失败显示离线 banner |
 | 发消息失败 | 输入框保留内容，Toast 提示，用户手动重试 |
@@ -252,8 +268,9 @@ POST /api/v1/devices
 - Session 消息历史完整持久化（App 回前台后可拉取补齐）
 - FCM 推送发送逻辑（approval、task 完成/失败事件触发）
 - `GET /api/v1/turns/{session_id}` 支持分页
-- `GET /api/v1/agents/{id}/stream`：单个 Sub-Agent 的输出流（SSE）
-- Sub-Agent 接收直接指令的 API（绕过 Sebastian 直接下命令）
+- `GET /api/v1/agents`：返回 Sub-Agent 列表，供 `SubAgents` 页展示
+- `GET /api/v1/agents/{id}/sessions`：返回某个 Sub-Agent 的 Session 列表
+- `GET /api/v1/agents/{id}/sessions/{session_id}`：返回某个 Session 的详情与消息历史
 
 ---
 

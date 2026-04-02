@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -7,12 +7,83 @@ import {
   getSessionDetail,
   getSessionTasks,
   sendTurnToSession,
-} from '../../../../src/api/sessions';
-import { MessageInput } from '../../../../src/components/chat/MessageInput';
-import { MessageList } from '../../../../src/components/chat/MessageList';
-import { SessionDetailView } from '../../../../src/components/subagents/SessionDetailView';
+} from '../../../src/api/sessions';
+import { MessageInput } from '../../../src/components/chat/MessageInput';
+import { MessageList } from '../../../src/components/chat/MessageList';
+import { SessionDetailView } from '../../../src/components/subagents/SessionDetailView';
+import type { TaskDetail } from '../../../src/types';
 
 type Tab = 'messages' | 'tasks';
+
+const MOCK_MESSAGES = [
+  {
+    id: 'mock-message-1',
+    sessionId: 'mock-session',
+    role: 'user' as const,
+    content: '帮我复盘一下今天的持仓波动。',
+    createdAt: '2026-04-02T10:00:00Z',
+  },
+  {
+    id: 'mock-message-2',
+    sessionId: 'mock-session',
+    role: 'assistant' as const,
+    content: '我已经把盘中异动拆成了两条任务，一条看新闻，一条看技术面。',
+    createdAt: '2026-04-02T10:00:12Z',
+  },
+];
+
+const MOCK_TASKS: TaskDetail[] = [
+  {
+    id: 'mock-task-1',
+    session_id: 'mock-session',
+    goal: '收集盘前新闻并标记影响仓位的事件',
+    status: 'running',
+    assigned_agent: 'stock',
+    created_at: '2026-04-02T10:00:15Z',
+    completed_at: null,
+  },
+  {
+    id: 'mock-task-2',
+    session_id: 'mock-session',
+    goal: '对比昨日与今日的成交量结构',
+    status: 'completed',
+    assigned_agent: 'stock',
+    created_at: '2026-04-02T10:00:20Z',
+    completed_at: '2026-04-02T10:02:00Z',
+  },
+];
+
+type MockDetail = {
+  session: {
+    id: string;
+    agent: string;
+    title: string;
+    status: 'active' | 'idle' | 'archived';
+    updated_at: string;
+    task_count: number;
+    active_task_count: number;
+  };
+  messages: Array<{ role: 'user' | 'assistant'; content: string; ts?: string }>;
+};
+
+function buildMockDetail(sessionId: string, agentName: string): MockDetail {
+  return {
+    session: {
+      id: sessionId,
+      agent: agentName,
+      title: '模拟 Supervision 会话',
+      status: 'active',
+      updated_at: '2026-04-02T10:03:00Z',
+      task_count: MOCK_TASKS.length,
+      active_task_count: 1,
+    },
+    messages: MOCK_MESSAGES.map((message) => ({
+      role: message.role,
+      content: message.content,
+      ts: message.createdAt,
+    })),
+  };
+}
 
 export default function SessionDetailScreen() {
   const { id, agent = 'sebastian' } = useLocalSearchParams<{
@@ -21,27 +92,38 @@ export default function SessionDetailScreen() {
   }>();
   const sessionId = (Array.isArray(id) ? id[0] : id) ?? '';
   const agentName = (Array.isArray(agent) ? agent[0] : agent) ?? 'sebastian';
+  const isMockSession = sessionId.startsWith('mock-');
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('messages');
   const [sending, setSending] = useState(false);
 
-  const { data: detail } = useQuery({
+  const { data: remoteDetail } = useQuery({
     queryKey: ['session-detail', sessionId, agentName],
     queryFn: () => getSessionDetail(sessionId, agentName),
-    enabled: !!sessionId,
+    enabled: !!sessionId && !isMockSession,
   });
 
-  const { data: tasks = [] } = useQuery({
+  const { data: remoteTasks = [] } = useQuery({
     queryKey: ['session-tasks', sessionId, agentName],
     queryFn: () => getSessionTasks(sessionId, agentName),
-    enabled: !!sessionId,
+    enabled: !!sessionId && !isMockSession,
   });
+
+  const detail = useMemo(
+    () => (isMockSession ? buildMockDetail(sessionId, agentName) : remoteDetail),
+    [agentName, isMockSession, remoteDetail, sessionId],
+  );
+  const tasks = isMockSession ? MOCK_TASKS : remoteTasks;
 
   const handleSend = useCallback(
     async (text: string) => {
-      if (!id) return;
+      if (!sessionId) return;
+      if (isMockSession) {
+        Alert.alert('模拟会话', '这是用于导航测试的假数据页面。');
+        return;
+      }
       setSending(true);
       try {
         await sendTurnToSession(sessionId, text, agentName);
@@ -54,12 +136,12 @@ export default function SessionDetailScreen() {
         setSending(false);
       }
     },
-    [agentName, queryClient, sessionId],
+    [agentName, isMockSession, queryClient, sessionId],
   );
 
   const messages =
     detail?.messages.map((message, index) => ({
-      id: String(index),
+      id: `${sessionId}-${index}`,
       sessionId,
       role: message.role,
       content: message.content,

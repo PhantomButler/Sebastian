@@ -53,10 +53,10 @@ export default function ChatScreen() {
         <TouchableOpacity style={styles.menuButton} onPress={() => setSidebarOpen(true)}>
           <Text style={styles.menuIcon}>☰</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>对话</Text>
+        <Text style={styles.headerTitle}>Sebastian</Text>
       </View>
       {isEmpty ? (
-        <EmptyState message="发送消息开始对话" />
+        <EmptyState message="向 Sebastian 发送消息开始对话" />
       ) : (
         <MessageList messages={messages} streamingContent={streamingMessage} />
       )}
