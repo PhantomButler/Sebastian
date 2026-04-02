@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { router } from 'expo-router';
 import { useSettingsStore } from '../store/settings';
 
 export const apiClient = axios.create({
@@ -18,6 +19,7 @@ apiClient.interceptors.response.use(
   async (error: unknown) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       await useSettingsStore.getState().setJwtToken(null);
+      router.push('/(tabs)/settings');
     }
     return Promise.reject(error);
   },

@@ -1,4 +1,5 @@
-import { FlatList, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { FlatList, StyleSheet } from 'react-native';
 import type { Message } from '../../types';
 import { MessageBubble } from './MessageBubble';
 import { StreamingBubble } from './StreamingBubble';
@@ -9,8 +10,11 @@ interface Props {
 }
 
 export function MessageList({ messages, streamingContent }: Props) {
+  const flatListRef = useRef<FlatList>(null);
+
   return (
     <FlatList
+      ref={flatListRef}
       data={messages}
       keyExtractor={(m) => m.id}
       renderItem={({ item }) => <MessageBubble message={item} />}
@@ -18,8 +22,7 @@ export function MessageList({ messages, streamingContent }: Props) {
         streamingContent ? <StreamingBubble content={streamingContent} /> : null
       }
       contentContainerStyle={styles.content}
-      onContentSizeChange={() => {}}
-      maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+      onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
     />
   );
 }

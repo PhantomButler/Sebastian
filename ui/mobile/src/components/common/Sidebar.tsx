@@ -1,6 +1,5 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { Animated, Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
 const SIDEBAR_WIDTH = Dimensions.get('window').width * 0.75;
 
@@ -13,17 +12,21 @@ interface Props {
 export function Sidebar({ visible, onClose, children }: Props) {
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
 
-  Animated.timing(translateX, {
-    toValue: visible ? 0 : -SIDEBAR_WIDTH,
-    duration: 250,
-    useNativeDriver: true,
-  }).start();
-
-  if (!visible) return null;
+  useEffect(() => {
+    Animated.timing(translateX, {
+      toValue: visible ? 0 : -SIDEBAR_WIDTH,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [visible]);
 
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose} />
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: visible ? 'auto' : 'none' }]}>
+      <TouchableOpacity
+        style={[styles.overlay, { display: visible ? 'flex' : 'none' }]}
+        activeOpacity={1}
+        onPress={onClose}
+      />
       <Animated.View style={[styles.sidebar, { transform: [{ translateX }] }]}>
         {children}
       </Animated.View>
