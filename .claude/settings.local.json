@@ -14,7 +14,20 @@
       "Bash(ruff check:*)",
       "Bash(uvicorn sebastian.gateway.app:app:*)",
       "Bash(curl -s http://127.0.0.1:8000/health)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(echo \"Gateway PID: $!\")",
+      "Bash(emulator -list-avds)",
+      "Bash(adb devices:*)",
+      "Bash(~/Library/Android/sdk/emulator/emulator -avd Medium_Phone_API_36.1 -no-snapshot-load)",
+      "Bash(echo \"Emulator started, PID: $!\")",
+      "Bash(./gradlew app:assembleDebug)",
+      "Bash(node /Users/ericw/work/code/ai/sebastian/ui/mobile/node_modules/react-native-reanimated/scripts/reanimated_utils.js)",
+      "Bash(node --print \"require.resolve\\('react-native-worklets/package.json'\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('peerDependencies',{}\\), indent=2\\)\\)\")",
+      "Bash(echo \"Metro PID: $!\")",
+      "Bash(~/Library/Android/sdk/platform-tools/adb shell:*)",
+      "Bash(python3 -c ':*)",
+      "Bash(pkill -f \"uvicorn sebastian\")"
     ]
   }
 }
