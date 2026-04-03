@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sebastian Core Runtime</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="shell topbar-inner">
+        <a class="brand" href="./index.html">
+          <div class="brand-mark"></div>
+          <div class="brand-copy">
+            <strong>Sebastian Architecture Atlas</strong>
+            <span>Core Runtime 聚焦</span>
+          </div>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link" data-nav href="index.html">架构脑图</a>
+          <a class="nav-link" data-nav href="vertical-bus.html">纵向总线图</a>
+          <a class="nav-link" data-nav href="runtime.html">数据流与工作流</a>
+          <a class="nav-link" data-nav href="control-deck.html">Core Runtime</a>
+          <a class="nav-link" data-nav href="roadmap.html">Reality Map</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="shell workspace">
+      <section class="toolbar">
+        <div class="toolbar-title">
+          <strong>Core Runtime Focus</strong>
+          <span>这一页只回答一件事：当前仓库里的运行时核心边界到底怎么切。</span>
+        </div>
+      </section>
+
+      <section class="section-grid">
+        <article class="flow-panel">
+          <h2>Boundary Matrix</h2>
+          <p>先把每个核心模块的一句话职责钉死，再去读它们的代码细节。</p>
+          <div class="matrix">
+            <div class="matrix-row">
+              <div class="matrix-key">BaseAgent</div>
+              <div class="matrix-val">副作用边界。处理历史、publish、工具执行、partial 保存与 turn 收口。</div>
+            </div>
+            <div class="matrix-row">
+              <div class="matrix-key">AgentLoop</div>
+              <div class="matrix-val">纯流式生成边界。负责把 LLM 输出统一成结构化事件，不做持久化和 EventBus 发布。</div>
+            </div>
+            <div class="matrix-row">
+              <div class="matrix-key">stream_events</div>
+              <div class="matrix-val">BaseAgent 与 AgentLoop 之间的类型契约，也是 block 级 UI 的语义基础。</div>
+            </div>
+            <div class="matrix-row">
+              <div class="matrix-key">TaskManager</div>
+              <div class="matrix-val">后台 task 生命周期和合法状态转换的集中入口。</div>
+            </div>
+            <div class="matrix-row">
+              <div class="matrix-key">AgentPool</div>
+              <div class="matrix-val">worker 身份与并发槽位管理，不是通用任务队列替代品。</div>
+            </div>
+            <div class="matrix-row">
+              <div class="matrix-key">SessionStore</div>
+              <div class="matrix-val">当前文件系统真相来源，Session / Task / Checkpoint 都要回到这里。</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="flow-panel">
+          <h2>Current Runtime Dependency Shape</h2>
+          <p>这不是完整类图，而是最值得记住的依赖方向。</p>
+          <div class="diagram">
+            <div class="diagram-row long">
+              <div class="step is-focus">
+                <strong>Sebastian</strong>
+                <span>继承 BaseAgent，站在 orchestrator 层调用 runtime。</span>
+              </div>
+              <div class="step is-focus">
+                <strong>BaseAgent</strong>
+                <span>持有 <code>AgentLoop</code>、<code>SessionStore</code>、<code>EventBus</code>、<code>CapabilityRegistry</code>。</span>
+              </div>
+              <div class="step is-focus">
+                <strong>AgentLoop</strong>
+                <span>向上产出 <code>LLMStreamEvent</code>，向下依赖 LLM stream 和 tool specs。</span>
+              </div>
+              <div class="step is-focus">
+                <strong>CapabilityRegistry</strong>
+                <span>承接原生工具和 MCP 工具调用。</span>
+              </div>
+              <div class="step is-focus">
+                <strong>SessionStore</strong>
+                <span>承接消息、任务与 checkpoint 持久化。</span>
+              </div>
+              <div class="step is-focus">
+                <strong>EventBus → SSE</strong>
+                <span>把 runtime 事件送出到 App 观察面。</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="flow-panel">
+          <h2>直接看这些文件</h2>
+          <p>如果你要从代码里恢复 runtime 全貌，优先顺着这个顺序读。</p>
+          <div class="file-list">
+            <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/orchestrator/sebas.py">
+              <strong>sebastian/orchestrator/sebas.py</strong>
+              <span>Sebastian 如何站在 orchestrator 层调 runtime</span>
+              <code>/Users/ericw/work/code/ai/sebastian/sebastian/orchestrator/sebas.py</code>
+            </a>
+            <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/core/base_agent.py">
+              <strong>sebastian/core/base_agent.py</strong>
+              <span>最核心的 runtime 边界</span>
+              <code>/Users/ericw/work/code/ai/sebastian/sebastian/core/base_agent.py</code>
+            </a>
+            <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/core/agent_loop.py">
+              <strong>sebastian/core/agent_loop.py</strong>
+              <span>LLMStreamEvent 生成逻辑</span>
+              <code>/Users/ericw/work/code/ai/sebastian/sebastian/core/agent_loop.py</code>
+            </a>
+            <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/core/task_manager.py">
+              <strong>sebastian/core/task_manager.py</strong>
+              <span>Task 状态机与后台执行</span>
+              <code>/Users/ericw/work/code/ai/sebastian/sebastian/core/task_manager.py</code>
+            </a>
+            <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/core/agent_pool.py">
+              <strong>sebastian/core/agent_pool.py</strong>
+              <span>worker 身份与队列</span>
+              <code>/Users/ericw/work/code/ai/sebastian/sebastian/core/agent_pool.py</code>
+            </a>
+            <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/store/session_store.py">
+              <strong>sebastian/store/session_store.py</strong>
+              <span>Session / Task / Checkpoint 文件真相</span>
+              <code>/Users/ericw/work/code/ai/sebastian/sebastian/store/session_store.py</code>
+            </a>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

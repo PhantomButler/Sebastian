@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sebastian 纵向总线图</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="shell topbar-inner">
+        <a class="brand" href="./index.html">
+          <div class="brand-mark"></div>
+          <div class="brand-copy">
+            <strong>Sebastian Architecture Atlas</strong>
+            <span>纵向总线架构图</span>
+          </div>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link" data-nav href="index.html">架构脑图</a>
+          <a class="nav-link" data-nav href="vertical-bus.html">纵向总线图</a>
+          <a class="nav-link" data-nav href="runtime.html">数据流与工作流</a>
+          <a class="nav-link" data-nav href="control-deck.html">Core Runtime</a>
+          <a class="nav-link" data-nav href="roadmap.html">Reality Map</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="shell workspace">
+      <section class="toolbar">
+        <div class="toolbar-title">
+          <strong>纵向主总线</strong>
+          <span>点击总线两侧模块展开子节点。左侧模块向左展开，右侧模块向右展开。</span>
+        </div>
+        <div class="pill-group">
+          <span class="pill is-green">点击一级模块展开/折叠</span>
+          <span class="pill is-soft">点击任意节点更新下方详情</span>
+        </div>
+      </section>
+
+      <section class="flow-panel bus-page">
+        <div class="bus-root-wrap">
+          <button class="bus-root group-root" type="button" data-bus-root>
+            <strong>Sebastian System</strong>
+            <span>主总线入口</span>
+          </button>
+        </div>
+        <div class="bus-diagram" data-bus-diagram></div>
+      </section>
+
+      <section class="flow-panel" data-bus-detail-panel>
+        <div class="detail-header">
+          <h2>Bus Detail</h2>
+          <p>当前选中节点的职责、依赖和关键文件。</p>
+        </div>
+        <div data-bus-detail></div>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

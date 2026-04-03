@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sebastian 数据流与工作流</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="shell topbar-inner">
+        <a class="brand" href="./index.html">
+          <div class="brand-mark"></div>
+          <div class="brand-copy">
+            <strong>Sebastian Architecture Atlas</strong>
+            <span>数据流与工作流</span>
+          </div>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link" data-nav href="index.html">架构脑图</a>
+          <a class="nav-link" data-nav href="vertical-bus.html">纵向总线图</a>
+          <a class="nav-link" data-nav href="runtime.html">数据流与工作流</a>
+          <a class="nav-link" data-nav href="control-deck.html">Core Runtime</a>
+          <a class="nav-link" data-nav href="roadmap.html">Reality Map</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="shell workspace">
+      <section class="toolbar">
+        <div class="toolbar-title">
+          <strong>Flow-first 页面</strong>
+          <span>这里不再讲“是什么”，只讲“消息、状态和 worker 怎么流动”。</span>
+        </div>
+        <div class="mini-pills">
+          <span class="pill is-soft">Turn</span>
+          <span class="pill is-soft">Interrupt</span>
+          <span class="pill is-soft">Task</span>
+          <span class="pill is-soft">Worker</span>
+        </div>
+      </section>
+
+      <section class="flow-layout">
+        <div class="flow-stack">
+          <article class="flow-panel">
+            <h2>Turn Data Flow</h2>
+            <p>当前仓库里最核心的主路径。理解这条线后，很多局部代码会自动归位。</p>
+            <div class="diagram">
+              <div class="diagram-row long">
+                <div class="step is-focus">
+                  <strong>1. Mobile</strong>
+                  <span>发送用户消息，命中 <code>POST /api/v1/turns</code>。</span>
+                  <code>ui/mobile → turns API</code>
+                </div>
+                <div class="step is-focus">
+                  <strong>2. Gateway</strong>
+                  <span>立即返回 <code>session_id</code>，不等待 LLM 完成。</span>
+                  <code>gateway routes</code>
+                </div>
+                <div class="step is-focus">
+                  <strong>3. Sebastian / BaseAgent</strong>
+                  <span>发布 <code>turn.received</code>，加载历史，启动 streaming task。</span>
+                  <code>base_agent.py</code>
+                </div>
+                <div class="step is-focus">
+                  <strong>4. AgentLoop</strong>
+                  <span>生成 thinking / text / tool 的结构化事件流。</span>
+                  <code>agent_loop.py</code>
+                </div>
+                <div class="step is-focus">
+                  <strong>5. Event + Store</strong>
+                  <span>partial / final 内容落盘，事件进入 EventBus。</span>
+                  <code>session_store.py</code>
+                </div>
+                <div class="step is-focus">
+                  <strong>6. SSE → App</strong>
+                  <span>前端根据 block 级事件恢复界面与状态。</span>
+                  <code>sse.py</code>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="flow-panel">
+            <h2>Interrupt Workflow</h2>
+            <p>当前设计不是 fork，也不是 ghost branch，而是明确的 cancel + partial + 新上下文继续。</p>
+            <div class="diagram">
+              <div class="diagram-row">
+                <div class="step">
+                  <strong>旧 stream 正在输出</strong>
+                  <span><code>_active_stream</code> 尚未结束。</span>
+                </div>
+                <div class="step">
+                  <strong>新消息到达</strong>
+                  <span>BaseAgent 取消当前 stream task。</span>
+                </div>
+                <div class="step">
+                  <strong>保存 partial</strong>
+                  <span>写入 assistant partial，并发出 <code>turn.interrupted</code>。</span>
+                </div>
+                <div class="step">
+                  <strong>重新开始</strong>
+                  <span>用新的上下文发起下一个 turn。</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="flow-panel">
+            <h2>Task Workflow</h2>
+            <p>Task 不是“聊天的附属物”，而是 Session 里的持久执行单元。</p>
+            <div class="diagram">
+              <div class="diagram-row">
+                <div class="step">
+                  <strong>CREATED</strong>
+                  <span>提交到 <code>TaskManager.submit()</code>。</span>
+                </div>
+                <div class="step">
+                  <strong>PLANNING</strong>
+                  <span>Phase 1 中主要作为预留态，当前大多直通 RUNNING。</span>
+                </div>
+                <div class="step">
+                  <strong>RUNNING</strong>
+                  <span>后台执行，伴随 task.* 事件和 Session 计数变化。</span>
+                </div>
+                <div class="step">
+                  <strong>TERMINAL</strong>
+                  <span>进入 COMPLETED / FAILED / CANCELLED 之一。</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="flow-panel">
+            <h2>Worker Acquire / Release</h2>
+            <p>AgentPool 的意义不是“多开”本身，而是稳定 worker 身份与并发槽位。</p>
+            <div class="diagram">
+              <div class="diagram-row">
+                <div class="step">
+                  <strong>Acquire</strong>
+                  <span>优先拿空闲 worker，例如 <code>stock_03</code>。</span>
+                </div>
+                <div class="step">
+                  <strong>No idle worker</strong>
+                  <span>创建 waiter，进入 queue。</span>
+                </div>
+                <div class="step">
+                  <strong>Release</strong>
+                  <span>有 waiter 时，优先直接转交，而不是先回 idle。</span>
+                </div>
+                <div class="step">
+                  <strong>Status visible</strong>
+                  <span>Gateway / App 可以观察具体 worker 状态。</span>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <aside class="panel detail-panel">
+          <div class="detail-header">
+            <h2>代码锚点</h2>
+            <p>这一页对应的最关键真实代码位置。</p>
+          </div>
+
+          <div class="detail-card">
+            <h3>Turn Flow</h3>
+            <div class="file-list">
+              <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/core/base_agent.py">
+                <strong>sebastian/core/base_agent.py</strong>
+                <span>run_streaming()、_stream_inner()</span>
+                <code>/Users/ericw/work/code/ai/sebastian/sebastian/core/base_agent.py</code>
+              </a>
+              <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/core/agent_loop.py">
+                <strong>sebastian/core/agent_loop.py</strong>
+                <span>stream() 生成结构化事件</span>
+                <code>/Users/ericw/work/code/ai/sebastian/sebastian/core/agent_loop.py</code>
+              </a>
+              <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/gateway/sse.py">
+                <strong>sebastian/gateway/sse.py</strong>
+                <span>事件重放和 session 过滤</span>
+                <code>/Users/ericw/work/code/ai/sebastian/sebastian/gateway/sse.py</code>
+              </a>
+            </div>
+          </div>
+
+          <div class="detail-card">
+            <h3>Task & Worker</h3>
+            <div class="file-list">
+              <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/core/task_manager.py">
+                <strong>sebastian/core/task_manager.py</strong>
+                <span>状态机与后台执行</span>
+                <code>/Users/ericw/work/code/ai/sebastian/sebastian/core/task_manager.py</code>
+              </a>
+              <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/core/agent_pool.py">
+                <strong>sebastian/core/agent_pool.py</strong>
+                <span>worker acquire / release / queue</span>
+                <code>/Users/ericw/work/code/ai/sebastian/sebastian/core/agent_pool.py</code>
+              </a>
+              <a class="file-item" href="file:///Users/ericw/work/code/ai/sebastian/sebastian/store/session_store.py">
+                <strong>sebastian/store/session_store.py</strong>
+                <span>Session / Task / Checkpoint 文件真相</span>
+                <code>/Users/ericw/work/code/ai/sebastian/sebastian/store/session_store.py</code>
+              </a>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sebastian Reality Map</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="shell topbar-inner">
+        <a class="brand" href="./index.html">
+          <div class="brand-mark"></div>
+          <div class="brand-copy">
+            <strong>Sebastian Architecture Atlas</strong>
+            <span>Reality Map</span>
+          </div>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link" data-nav href="index.html">架构脑图</a>
+          <a class="nav-link" data-nav href="vertical-bus.html">纵向总线图</a>
+          <a class="nav-link" data-nav href="runtime.html">数据流与工作流</a>
+          <a class="nav-link" data-nav href="control-deck.html">Core Runtime</a>
+          <a class="nav-link" data-nav href="roadmap.html">Reality Map</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="shell workspace">
+      <section class="toolbar">
+        <div class="toolbar-title">
+          <strong>Reality vs Future</strong>
+          <span>当你连续看 spec、README 和代码时，这页用来把“已实现”和“未来设计”重新切开。</span>
+        </div>
+        <div class="pill-group">
+          <button class="filter-chip is-active" data-filter="all">全部</button>
+          <button class="filter-chip" data-filter="phase1">Phase 1</button>
+          <button class="filter-chip" data-filter="phase2">Phase 2</button>
+          <button class="filter-chip" data-filter="phase3plus">Phase 3-5</button>
+        </div>
+      </section>
+
+      <section class="roadmap-layout">
+        <article class="phase-card" data-phase="phase1">
+          <h3>Phase 1 已经是现实的部分</h3>
+          <ul>
+            <li>Gateway：REST、JWT、SSEManager、session 级 stream。</li>
+            <li>Core Runtime：BaseAgent streaming、AgentLoop generator、AgentPool、TaskManager。</li>
+            <li>Store：Session agent_type/agent_id、文件系统 Session / Task / Checkpoint 真相。</li>
+            <li>App 骨架：Chat / SubAgents / Settings，基础联调链路可用。</li>
+          </ul>
+        </article>
+
+        <article class="phase-card" data-phase="phase1">
+          <h3>Phase 1 仍可继续完善</h3>
+          <ul>
+            <li>App 端更强的 block 级呈现和督导视图。</li>
+            <li>Task 细节可视化与 approval 体验打磨。</li>
+            <li>围绕现有 runtime 契约继续产品化，而不是重写基础边界。</li>
+          </ul>
+        </article>
+
+        <article class="phase-card" data-phase="phase2">
+          <h3>Phase 2 才应真正进入的系统</h3>
+          <ul>
+            <li>A2A 同进程协作、多 Agent 自动注册。</li>
+            <li>working / episodic / semantic memory 主干。</li>
+            <li>Code Agent 与 Dynamic Tool Factory。</li>
+          </ul>
+        </article>
+
+        <article class="phase-card" data-phase="phase3plus">
+          <h3>Phase 3-4 的体验与主动性扩展</h3>
+          <ul>
+            <li>语音链路、iOS、通知体系增强。</li>
+            <li>Trigger Engine 让 Sebastian 开始主动运行。</li>
+            <li>更多 Sub-Agent 与更强 Web 管理界面。</li>
+          </ul>
+        </article>
+
+        <article class="phase-card" data-phase="phase3plus">
+          <h3>Phase 5 的真正安全边界</h3>
+          <ul>
+            <li>声纹、人脸、活体检测、多因素身份。</li>
+            <li>Owner / Family / Guest 权限与抗仿冒。</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

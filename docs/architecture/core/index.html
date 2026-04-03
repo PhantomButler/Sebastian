@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sebastian 架构脑图</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="shell topbar-inner">
+        <a class="brand" href="./index.html">
+          <div class="brand-mark"></div>
+          <div class="brand-copy">
+            <strong>Sebastian Architecture Atlas</strong>
+            <span>交互式架构脑图</span>
+          </div>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link" data-nav href="index.html">架构脑图</a>
+          <a class="nav-link" data-nav href="vertical-bus.html">纵向总线图</a>
+          <a class="nav-link" data-nav href="runtime.html">数据流与工作流</a>
+          <a class="nav-link" data-nav href="control-deck.html">Core Runtime</a>
+          <a class="nav-link" data-nav href="roadmap.html">Reality Map</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="shell workspace">
+      <section class="toolbar">
+        <div class="toolbar-title">
+          <strong>单屏脑图优先</strong>
+          <span>拖动画布、滚轮缩放，点击一级模块展开真实代码子模块，右侧只保留当前节点的必要信息。</span>
+        </div>
+        <div class="pill-group">
+          <span class="pill is-green">已实现</span>
+          <span class="pill is-amber">Phase 1 待补</span>
+          <span class="pill is-soft">未来占位</span>
+          <button class="pill is-soft" type="button" data-zoom-in>放大</button>
+          <button class="pill is-soft" type="button" data-zoom-out>缩小</button>
+          <button class="pill is-soft" type="button" data-reset-view>重置视图</button>
+        </div>
+      </section>
+
+      <section class="atlas-grid" data-atlas-grid>
+        <article class="map-panel">
+          <div class="map-viewport" data-map-viewport>
+            <div class="map-world" data-map-world>
+              <div class="map-canvas" data-map>
+                <svg class="map-svg" data-map-svg viewBox="0 0 1800 1300" preserveAspectRatio="none"></svg>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel detail-panel" data-detail-panel>
+          <div class="detail-panel-head">
+            <div>
+              <strong>信息栏</strong>
+              <span>当前节点详情</span>
+            </div>
+            <button class="pill is-soft" type="button" data-toggle-inspector>收起</button>
+          </div>
+          <div data-inspector></div>
+        </aside>
+      </section>
+
+      <p class="footer-note">
+        脑图用于恢复全局坐标。看清一条请求怎么跑，再去
+        <a href="./runtime.html">数据流与工作流</a>。
+      </p>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
