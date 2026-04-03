@@ -32,6 +32,22 @@ class EventType(StrEnum):
     USER_APPROVAL_GRANTED = "user.approval_granted"
     USER_APPROVAL_DENIED = "user.approval_denied"
 
+    # Approval and turn lifecycle
+    APPROVAL_REQUESTED = "approval.requested"
+    APPROVAL_GRANTED = "approval.granted"
+    APPROVAL_DENIED = "approval.denied"
+    TURN_DELTA = "turn.delta"
+    TURN_THINKING_DELTA = "turn.thinking_delta"
+    TURN_INTERRUPTED = "turn.interrupted"
+
+    # Block-level conversation events
+    THINKING_BLOCK_START = "thinking_block.start"
+    THINKING_BLOCK_STOP = "thinking_block.stop"
+    TEXT_BLOCK_START = "text_block.start"
+    TEXT_BLOCK_STOP = "text_block.stop"
+    TOOL_BLOCK_START = "tool_block.start"
+    TOOL_BLOCK_STOP = "tool_block.stop"
+
     # Tool lifecycle
     TOOL_REGISTERED = "tool.registered"
     TOOL_RUNNING = "tool.running"

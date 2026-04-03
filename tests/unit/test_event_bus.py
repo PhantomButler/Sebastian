@@ -3,6 +3,23 @@ import asyncio
 import pytest
 
 
+def test_event_types_added_for_block_level_events():
+    from sebastian.protocol.events.types import EventType
+
+    assert EventType.APPROVAL_REQUESTED == "approval.requested"
+    assert EventType.APPROVAL_GRANTED == "approval.granted"
+    assert EventType.APPROVAL_DENIED == "approval.denied"
+    assert EventType.TURN_DELTA == "turn.delta"
+    assert EventType.TURN_THINKING_DELTA == "turn.thinking_delta"
+    assert EventType.TURN_INTERRUPTED == "turn.interrupted"
+    assert EventType.THINKING_BLOCK_START == "thinking_block.start"
+    assert EventType.THINKING_BLOCK_STOP == "thinking_block.stop"
+    assert EventType.TEXT_BLOCK_START == "text_block.start"
+    assert EventType.TEXT_BLOCK_STOP == "text_block.stop"
+    assert EventType.TOOL_BLOCK_START == "tool_block.start"
+    assert EventType.TOOL_BLOCK_STOP == "tool_block.stop"
+
+
 @pytest.mark.asyncio
 async def test_subscribe_and_publish():
     from sebastian.protocol.events.bus import EventBus
