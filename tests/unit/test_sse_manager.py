@@ -60,7 +60,7 @@ async def test_sse_session_stream_filters_other_sessions() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sse_reconnect_replays_from_last_event_id() -> None:
+async def test_sse_fresh_stream_does_not_replay_buffered_events_without_last_event_id() -> None:
     from sebastian.gateway.sse import SSEManager
     from sebastian.protocol.events.bus import EventBus
     from sebastian.protocol.events.types import Event, EventType
@@ -68,23 +68,20 @@ async def test_sse_reconnect_replays_from_last_event_id() -> None:
     bus = EventBus()
     manager = SSEManager(bus)
 
-    live_stream = manager.stream()
-    live_first_task = asyncio.create_task(anext(live_stream))
-    await asyncio.sleep(0)
     await bus.publish(Event(type=EventType.TURN_RESPONSE, data={"session_id": "abc", "step": 1}))
-    first_chunk = await live_first_task
-    first_event_id, first_payload = _parse_sse_chunk(first_chunk)
-    assert first_event_id == 1
-    assert first_payload["data"]["step"] == 1
-
-    second_task = asyncio.create_task(anext(live_stream))
-    await asyncio.sleep(0)
     await bus.publish(Event(type=EventType.TURN_RESPONSE, data={"session_id": "abc", "step": 2}))
-    second_chunk = await second_task
-    second_event_id, second_payload = _parse_sse_chunk(second_chunk)
-    assert second_event_id == 2
-    assert second_payload["data"]["step"] == 2
-    await live_stream.aclose()
+
+    stream = manager.stream()
+    chunk_task = asyncio.create_task(anext(stream))
+    await asyncio.sleep(0)
+    assert not chunk_task.done()
+
+    await bus.publish(Event(type=EventType.TURN_RESPONSE, data={"session_id": "abc", "step": 3}))
+    chunk = await chunk_task
+    event_id, payload = _parse_sse_chunk(chunk)
+    assert event_id == 3
+    assert payload["data"]["step"] == 3
+    await stream.aclose()
 
     replay_stream = manager.stream(last_event_id=1)
     replay_chunk = await anext(replay_stream)

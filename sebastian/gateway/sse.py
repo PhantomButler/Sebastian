@@ -75,15 +75,17 @@ class SSEManager:
         )
         async with self._lock:
             self._queues.append(subscription)
-            replay_events = [
-                buffered_event
-                for buffered_event in self._buffer
-                if (last_event_id is None or buffered_event.event_id > last_event_id)
-                and (
-                    session_id is None
-                    or buffered_event.event.data.get("session_id") == session_id
-                )
-            ]
+            replay_events: list[_BufferedEvent] = []
+            if last_event_id is not None:
+                replay_events = [
+                    buffered_event
+                    for buffered_event in self._buffer
+                    if buffered_event.event_id > last_event_id
+                    and (
+                        session_id is None
+                        or buffered_event.event.data.get("session_id") == session_id
+                    )
+                ]
         try:
             for buffered_event in replay_events:
                 yield self._format_chunk(buffered_event)
