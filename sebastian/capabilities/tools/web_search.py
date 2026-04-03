@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import Any
 
 import httpx
@@ -9,7 +10,10 @@ from sebastian.core.types import ToolResult
 
 @tool(
     name="web_search",
-    description="Search the web using DuckDuckGo and return a list of results with titles and snippets.",
+    description=(
+        "Search the web using DuckDuckGo and return a list of results "
+        "with titles and snippets."
+    ),
     requires_approval=False,
     permission_level="owner",
 )

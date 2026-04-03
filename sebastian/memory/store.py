@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from sebastian.memory.episodic_memory import EpisodicMemory
 from sebastian.memory.working_memory import WorkingMemory
 

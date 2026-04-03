@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -29,6 +30,7 @@ class MCPClient:
         """Start the MCP server process and initialize the session."""
         try:
             import asyncio
+
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
 

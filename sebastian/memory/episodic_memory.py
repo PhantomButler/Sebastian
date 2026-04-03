@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sebastian.store.session_store import SessionStore
 
@@ -45,7 +45,7 @@ class EpisodicMemory:
         return TurnEntry(
             role=role,
             content=content,
-            ts=datetime.now(timezone.utc).isoformat(),
+            ts=datetime.now(UTC).isoformat(),
         )
 
     async def get_turns(
