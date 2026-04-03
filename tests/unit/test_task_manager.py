@@ -1,0 +1,270 @@
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from sebastian.core.task_manager import TaskManager
+from sebastian.core.types import InvalidTaskTransitionError, Session, Task, TaskStatus
+from sebastian.protocol.events.bus import EventBus
+from sebastian.protocol.events.types import Event, EventType
+from sebastian.store.index_store import IndexStore
+from sebastian.store.session_store import SessionStore
+
+
+@pytest.fixture
+def manager_context(
+    tmp_path: Path,
+) -> tuple[TaskManager, SessionStore, EventBus, IndexStore]:
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir()
+    store = SessionStore(sessions_dir)
+    bus = EventBus()
+    index_store = IndexStore(sessions_dir)
+    return TaskManager(store, bus, index_store=index_store), store, bus, index_store
+
+
+async def _await_background_task(manager: TaskManager, task_id: str) -> None:
+    future = manager._running[task_id]
+    await future
+
+
+@pytest.mark.asyncio
+async def test_transition_rejects_created_to_running(
+    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+) -> None:
+    manager, store, _, _ = manager_context
+    session = Session(agent_type="sebastian", agent_id="sebastian_01", title="test")
+    await store.create_session(session)
+    task = Task(session_id=session.id, goal="test transition", assigned_agent="sebastian")
+    await store.create_task(task, "sebastian", "sebastian_01")
+
+    with pytest.raises(InvalidTaskTransitionError):
+        await manager._transition(task, TaskStatus.RUNNING)
+
+
+@pytest.mark.asyncio
+async def test_transition_rejects_completed_to_running(
+    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+) -> None:
+    manager, store, _, _ = manager_context
+    session = Session(agent_type="sebastian", agent_id="sebastian_01", title="test")
+    await store.create_session(session)
+    task = Task(
+        session_id=session.id,
+        goal="test transition",
+        status=TaskStatus.COMPLETED,
+        assigned_agent="sebastian",
+    )
+    await store.create_task(task, "sebastian", "sebastian_01")
+
+    with pytest.raises(InvalidTaskTransitionError):
+        await manager._transition(task, TaskStatus.RUNNING)
+
+
+@pytest.mark.asyncio
+async def test_transition_persists_and_publishes_events_in_order(
+    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+) -> None:
+    manager, store, bus, index_store = manager_context
+    session = Session(agent_type="sebastian", agent_id="sebastian_01", title="test")
+    await store.create_session(session)
+
+    received: list[Event] = []
+
+    async def handler(event: Event) -> None:
+        received.append(event)
+
+    bus.subscribe(handler)
+
+    task = Task(session_id=session.id, goal="complete task", assigned_agent="sebastian")
+    await store.create_task(task, "sebastian", "sebastian_01")
+
+    await manager._transition(task, TaskStatus.PLANNING)
+    planning_updated_at = task.updated_at
+    assert task.completed_at is None
+
+    await manager._transition(task, TaskStatus.RUNNING)
+    assert task.updated_at >= planning_updated_at
+    assert task.completed_at is None
+
+    await manager._transition(task, TaskStatus.COMPLETED)
+
+    loaded = await store.get_task(session.id, task.id, "sebastian", "sebastian_01")
+    assert loaded is not None
+    assert loaded.status == TaskStatus.COMPLETED
+    assert loaded.completed_at is not None
+    assert loaded.updated_at >= planning_updated_at
+
+    index_entries = await index_store.list_all()
+    assert len(index_entries) == 1
+    assert index_entries[0]["id"] == session.id
+    assert index_entries[0]["agent_type"] == "sebastian"
+    assert index_entries[0]["agent_id"] == "sebastian_01"
+    assert index_entries[0]["task_count"] == 1
+    assert index_entries[0]["active_task_count"] == 0
+
+    assert [event.type for event in received] == [
+        EventType.TASK_PLANNING_STARTED,
+        EventType.TASK_STARTED,
+        EventType.TASK_COMPLETED,
+    ]
+    assert all(
+        event.data["task_id"] == task.id and event.data["session_id"] == session.id
+        for event in received
+    )
+
+
+@pytest.mark.asyncio
+async def test_submit_runs_to_completion_and_resolves_worker_id(
+    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+) -> None:
+    manager, store, bus, index_store = manager_context
+    session = Session(agent_type="stock", agent_id="stock_02", title="worker session")
+    await store.create_session(session)
+
+    received: list[Event] = []
+
+    async def handler(event: Event) -> None:
+        received.append(event)
+
+    bus.subscribe(handler)
+
+    seen_statuses: list[TaskStatus] = []
+
+    async def fn(task: Task) -> None:
+        seen_statuses.append(task.status)
+
+    task = Task(session_id=session.id, goal="worker task", assigned_agent="stock_02")
+    await manager.submit(task, fn)
+    await _await_background_task(manager, task.id)
+
+    loaded = await store.get_task(session.id, task.id, "stock", "stock_02")
+    assert loaded is not None
+    assert loaded.status == TaskStatus.COMPLETED
+    assert loaded.completed_at is not None
+    assert seen_statuses == [TaskStatus.RUNNING]
+
+    index_entries = await index_store.list_by_worker("stock", "stock_02")
+    assert len(index_entries) == 1
+    assert index_entries[0]["id"] == session.id
+
+    assert [event.type for event in received] == [
+        EventType.TASK_CREATED,
+        EventType.TASK_PLANNING_STARTED,
+        EventType.TASK_STARTED,
+        EventType.TASK_COMPLETED,
+    ]
+    assert received[0].data["assigned_agent"] == "stock_02"
+
+
+@pytest.mark.asyncio
+async def test_cancel_returns_false_before_task_reaches_running(
+    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+) -> None:
+    manager, store, _, _ = manager_context
+    session = Session(agent_type="sebastian", agent_id="sebastian_01", title="test")
+    await store.create_session(session)
+
+    original_transition = manager._transition
+    planning_done = asyncio.Event()
+    allow_run_to_continue = asyncio.Event()
+
+    async def gated_transition(
+        task: Task,
+        new_status: TaskStatus,
+        error: str | None = None,
+    ) -> None:
+        await original_transition(task, new_status, error)
+        if new_status == TaskStatus.PLANNING:
+            planning_done.set()
+            await allow_run_to_continue.wait()
+
+    manager._transition = gated_transition  # type: ignore[method-assign]
+
+    async def fn(task: Task) -> None:
+        return None
+
+    task = Task(session_id=session.id, goal="gated task", assigned_agent="sebastian")
+    await manager.submit(task, fn)
+
+    await planning_done.wait()
+    assert task.status == TaskStatus.PLANNING
+    assert await manager.cancel(task.id) is False
+
+    allow_run_to_continue.set()
+    await _await_background_task(manager, task.id)
+
+    loaded = await store.get_task(session.id, task.id, "sebastian", "sebastian_01")
+    assert loaded is not None
+    assert loaded.status == TaskStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_submit_cancels_running_task_with_legal_transition(
+    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+) -> None:
+    manager, store, bus, _ = manager_context
+    session = Session(agent_type="sebastian", agent_id="sebastian_01", title="test")
+    await store.create_session(session)
+
+    received: list[Event] = []
+    started = asyncio.Event()
+
+    async def handler(event: Event) -> None:
+        received.append(event)
+
+    bus.subscribe(handler)
+
+    async def fn(task: Task) -> None:
+        started.set()
+        await asyncio.Future()
+
+    task = Task(session_id=session.id, goal="cancel task", assigned_agent="sebastian_01")
+    await manager.submit(task, fn)
+
+    await started.wait()
+    assert task.status == TaskStatus.RUNNING
+    assert await manager.cancel(task.id) is True
+
+    await _await_background_task(manager, task.id)
+
+    loaded = await store.get_task(session.id, task.id, "sebastian", "sebastian_01")
+    assert loaded is not None
+    assert loaded.status == TaskStatus.CANCELLED
+    assert loaded.completed_at is not None
+    assert [event.type for event in received] == [
+        EventType.TASK_CREATED,
+        EventType.TASK_PLANNING_STARTED,
+        EventType.TASK_STARTED,
+        EventType.TASK_CANCELLED,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_transition_rolls_back_local_state_when_persist_fails(
+    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, store, _, _ = manager_context
+    session = Session(agent_type="sebastian", agent_id="sebastian_01", title="test")
+    await store.create_session(session)
+    task = Task(session_id=session.id, goal="rollback task", assigned_agent="sebastian")
+    await store.create_task(task, "sebastian", "sebastian_01")
+
+    previous_status = task.status
+    previous_updated_at = task.updated_at
+    previous_completed_at = task.completed_at
+
+    async def fail_update(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("store unavailable")
+
+    monkeypatch.setattr(store, "update_task_status", fail_update)
+
+    with pytest.raises(RuntimeError, match="store unavailable"):
+        await manager._transition(task, TaskStatus.PLANNING)
+
+    assert task.status == previous_status
+    assert task.updated_at == previous_updated_at
+    assert task.completed_at == previous_completed_at
