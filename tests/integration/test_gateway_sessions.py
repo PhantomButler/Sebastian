@@ -66,6 +66,12 @@ def _store_session(session) -> None:
     asyncio.run(state.index_store.upsert(session))
 
 
+def _store_task(task, agent_type: str, agent_id: str) -> None:
+    import sebastian.gateway.state as state
+
+    asyncio.run(state.session_store.create_task(task, agent_type, agent_id))
+
+
 def _capture_background_task(scheduled_coroutines: list[object]):
     def inner(coroutine):
         scheduled_coroutines.append(coroutine)
@@ -200,13 +206,12 @@ def test_session_task_routes_resolve_stored_agent_metadata(client):
     http_client, _, _ = client
     token = _login(http_client)
 
-    import sebastian.gateway.state as state
     from sebastian.core.types import Session, Task
 
     session = Session(agent_type="stock", agent_id="stock_03", title="Task session")
     task = Task(session_id=session.id, goal="Review the investment thesis")
     _store_session(session)
-    asyncio.run(state.session_store.create_task(task, "stock", "stock_03"))
+    _store_task(task, "stock", "stock_03")
 
     list_response = http_client.get(
         f"/api/v1/sessions/{session.id}/tasks",
@@ -222,3 +227,92 @@ def test_session_task_routes_resolve_stored_agent_metadata(client):
     )
     assert detail_response.status_code == 200, detail_response.text
     assert detail_response.json()["task"]["id"] == task.id
+
+
+@pytest.mark.parametrize(
+    ("method", "route_suffix", "result_key"),
+    [
+        ("post", "pause", "paused"),
+        ("delete", "", "cancelled"),
+    ],
+)
+def test_task_mutation_routes_require_task_to_belong_to_resolved_session(
+    client,
+    method: str,
+    route_suffix: str,
+    result_key: str,
+):
+    http_client, _, _ = client
+    token = _login(http_client)
+
+    import sebastian.gateway.state as state
+    from sebastian.core.types import Session, Task
+
+    session = Session(agent_type="stock", agent_id="stock_02", title="Owned task session")
+    task = Task(session_id=session.id, goal="Pause or cancel this task")
+    _store_session(session)
+    _store_task(task, "stock", "stock_02")
+
+    route = f"/api/v1/sessions/{session.id}/tasks/{task.id}"
+    if route_suffix:
+        route = f"{route}/{route_suffix}"
+
+    with patch.object(
+        state.sebastian._task_manager,
+        "cancel",
+        new_callable=AsyncMock,
+        return_value=True,
+    ) as mock_cancel:
+        response = getattr(http_client, method)(
+            route,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"task_id": task.id, result_key: True}
+    mock_cancel.assert_awaited_once_with(task.id)
+
+
+@pytest.mark.parametrize(
+    ("method", "route_suffix"),
+    [
+        ("post", "pause"),
+        ("delete", ""),
+    ],
+)
+def test_task_mutation_routes_return_404_for_task_outside_resolved_session(
+    client,
+    method: str,
+    route_suffix: str,
+):
+    http_client, _, _ = client
+    token = _login(http_client)
+
+    import sebastian.gateway.state as state
+    from sebastian.core.types import Session, Task
+
+    owning_session = Session(agent_type="stock", agent_id="stock_01", title="Owning session")
+    other_session = Session(agent_type="stock", agent_id="stock_02", title="Other session")
+    task = Task(session_id=owning_session.id, goal="Do not mutate via the wrong session")
+    _store_session(owning_session)
+    _store_session(other_session)
+    _store_task(task, "stock", "stock_01")
+
+    route = f"/api/v1/sessions/{other_session.id}/tasks/{task.id}"
+    if route_suffix:
+        route = f"{route}/{route_suffix}"
+
+    with patch.object(
+        state.sebastian._task_manager,
+        "cancel",
+        new_callable=AsyncMock,
+        return_value=True,
+    ) as mock_cancel:
+        response = getattr(http_client, method)(
+            route,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"] == "Task not found"
+    mock_cancel.assert_not_awaited()

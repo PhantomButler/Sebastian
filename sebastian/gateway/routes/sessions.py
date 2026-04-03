@@ -101,6 +101,19 @@ async def _touch_session(state, session) -> datetime:
     return now
 
 
+async def _resolve_session_task(state, session_id: str, task_id: str):
+    session = await _resolve_session(state, session_id)
+    task = await state.session_store.get_task(
+        session_id,
+        task_id,
+        session.agent_type,
+        session.agent_id,
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return session, task
+
+
 def _schedule_session_turn(state, session, content: str) -> None:
     if session.agent_type == "sebastian":
         task = asyncio.create_task(state.sebastian.run_streaming(content, session.id))
@@ -170,15 +183,7 @@ async def get_session_task(
 ) -> dict:
     import sebastian.gateway.state as state
 
-    session = await _resolve_session(state, session_id)
-    task = await state.session_store.get_task(
-        session_id,
-        task_id,
-        session.agent_type,
-        session.agent_id,
-    )
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+    _, task = await _resolve_session_task(state, session_id, task_id)
     return {"task": task.model_dump(mode="json")}
 
 
@@ -190,6 +195,7 @@ async def pause_task(
 ) -> dict:
     import sebastian.gateway.state as state
 
+    await _resolve_session_task(state, session_id, task_id)
     cancelled = await state.sebastian._task_manager.cancel(task_id)
     return {"task_id": task_id, "paused": cancelled}
 
@@ -202,5 +208,6 @@ async def cancel_task(
 ) -> dict:
     import sebastian.gateway.state as state
 
+    await _resolve_session_task(state, session_id, task_id)
     cancelled = await state.sebastian._task_manager.cancel(task_id)
     return {"task_id": task_id, "cancelled": cancelled}
