@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import importlib
 import os
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
+from starlette.testclient import TestClient
 
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-not-real")
 os.environ.setdefault("SEBASTIAN_JWT_SECRET", "test-secret-key")
@@ -12,7 +15,7 @@ os.environ.setdefault("SEBASTIAN_DATA_DIR", "/tmp/sebastian_test")
 
 
 @pytest.fixture
-def client(tmp_path):
+def client(tmp_path: Path) -> Iterator[TestClient]:
     from sebastian.gateway.auth import hash_password
 
     password_hash = hash_password("testpass")
@@ -32,21 +35,28 @@ def client(tmp_path):
             password_hash,
         )
 
-        from sebastian.gateway.app import create_app
         from starlette.testclient import TestClient
+
+        from sebastian.gateway.app import create_app
 
         app = create_app()
         with TestClient(app, raise_server_exceptions=True) as test_client:
             yield test_client
 
 
-def _login(client) -> str:
+def _login(client: TestClient) -> str:
     response = client.post("/api/v1/auth/login", json={"password": "testpass"})
     assert response.status_code == 200, response.text
-    return response.json()["access_token"]
+    payload = response.json()
+    assert isinstance(payload, dict)
+    token = payload["access_token"]
+    assert isinstance(token, str)
+    return token
 
 
-def test_list_approvals_uses_db_factory_and_returns_description(client) -> None:
+def test_list_approvals_uses_db_factory_and_returns_description(
+    client: TestClient,
+) -> None:
     import asyncio
 
     import sebastian.gateway.state as state
@@ -62,7 +72,7 @@ def test_list_approvals_uses_db_factory_and_returns_description(client) -> None:
                     tool_name="shell",
                     tool_input={"cmd": "ls"},
                     status="pending",
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                     resolved_at=None,
                 )
             )
@@ -79,4 +89,3 @@ def test_list_approvals_uses_db_factory_and_returns_description(client) -> None:
     approval = response.json()["approvals"][0]
     assert approval["id"] == "approval-1"
     assert approval["description"]
-

@@ -1,14 +1,15 @@
 from __future__ import annotations
+
 import pytest
 
 
 @pytest.mark.asyncio
-async def test_tool_registers_and_is_callable():
+async def test_tool_registers_and_is_callable() -> None:
     from sebastian.core import tool as tool_module
-    tool_module._tools.clear()
-
     from sebastian.core.tool import tool
     from sebastian.core.types import ToolResult
+
+    tool_module._tools.clear()
 
     @tool(name="test_echo", description="Echo input back")
     async def echo(message: str) -> ToolResult:
@@ -21,12 +22,12 @@ async def test_tool_registers_and_is_callable():
 
 
 @pytest.mark.asyncio
-async def test_tool_spec_infers_schema():
+async def test_tool_spec_infers_schema() -> None:
     from sebastian.core import tool as tool_module
-    tool_module._tools.clear()
-
-    from sebastian.core.tool import tool, list_tool_specs
+    from sebastian.core.tool import list_tool_specs, tool
     from sebastian.core.types import ToolResult
+
+    tool_module._tools.clear()
 
     @tool(name="add_numbers", description="Add two numbers")
     async def add(a: int, b: int) -> ToolResult:
@@ -42,8 +43,10 @@ async def test_tool_spec_infers_schema():
 
 
 @pytest.mark.asyncio
-async def test_call_tool_unknown_returns_error():
+async def test_call_tool_unknown_returns_error() -> None:
     from sebastian.core.tool import call_tool
+
     result = await call_tool("nonexistent_tool")
     assert not result.ok
+    assert result.error is not None
     assert "nonexistent_tool" in result.error

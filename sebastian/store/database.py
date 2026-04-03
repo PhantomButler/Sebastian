@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -16,11 +17,11 @@ class Base(DeclarativeBase):
     pass
 
 
-_engine = None
+_engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def get_engine():
+def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         from sebastian.config import settings

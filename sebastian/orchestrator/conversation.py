@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import asyncio
 import logging
+from typing import Any
 
 from sebastian.protocol.events.bus import EventBus
 from sebastian.protocol.events.types import Event, EventType
@@ -22,7 +24,7 @@ class ConversationManager:
         approval_id: str,
         task_id: str,
         tool_name: str,
-        tool_input: dict,
+        tool_input: dict[str, Any],
         timeout: float = 300.0,
     ) -> bool:
         """Suspend execution until the user approves or denies, or timeout (→ deny)."""
@@ -42,7 +44,7 @@ class ConversationManager:
 
         try:
             return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Approval %s timed out", approval_id)
             self._pending.pop(approval_id, None)
             return False

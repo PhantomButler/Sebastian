@@ -1,4 +1,7 @@
+# mypy: disable-error-code=import-untyped
+
 from __future__ import annotations
+
 from pathlib import Path
 
 import aiofiles

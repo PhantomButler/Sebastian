@@ -1,15 +1,16 @@
 from __future__ import annotations
+
 import pytest
 
 
 @pytest.mark.asyncio
-async def test_registry_wraps_native_tool():
+async def test_registry_wraps_native_tool() -> None:
+    from sebastian.capabilities.registry import CapabilityRegistry
     from sebastian.core import tool as tool_module
-    tool_module._tools.clear()
-
     from sebastian.core.tool import tool
     from sebastian.core.types import ToolResult
-    from sebastian.capabilities.registry import CapabilityRegistry
+
+    tool_module._tools.clear()
 
     @tool(name="greet", description="Say hello")
     async def greet(name: str) -> ToolResult:
@@ -26,8 +27,9 @@ async def test_registry_wraps_native_tool():
 
 
 @pytest.mark.asyncio
-async def test_registry_unknown_tool_returns_error():
+async def test_registry_unknown_tool_returns_error() -> None:
     from sebastian.capabilities.registry import CapabilityRegistry
+
     reg = CapabilityRegistry()
     result = await reg.call(tool_name="ghost_tool")
     assert not result.ok

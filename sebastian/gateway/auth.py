@@ -1,7 +1,9 @@
+# mypy: disable-error-code=import-untyped
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,32 +17,38 @@ _bearer = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
-    return _pwd_context.hash(password)
+    return cast(str, _pwd_context.hash(password))
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    return cast(bool, _pwd_context.verify(plain, hashed))
 
 
 def create_access_token(data: dict[str, Any]) -> str:
     payload = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(
+    expire = datetime.now(UTC) + timedelta(
         minutes=settings.sebastian_jwt_expire_minutes
     )
     payload["exp"] = expire
-    return jwt.encode(
-        payload,
-        settings.sebastian_jwt_secret,
-        algorithm=settings.sebastian_jwt_algorithm,
+    return cast(
+        str,
+        jwt.encode(
+            payload,
+            settings.sebastian_jwt_secret,
+            algorithm=settings.sebastian_jwt_algorithm,
+        ),
     )
 
 
 def decode_token(token: str) -> dict[str, Any]:
     try:
-        return jwt.decode(
-            token,
-            settings.sebastian_jwt_secret,
-            algorithms=[settings.sebastian_jwt_algorithm],
+        return cast(
+            dict[str, Any],
+            jwt.decode(
+                token,
+                settings.sebastian_jwt_secret,
+                algorithms=[settings.sebastian_jwt_algorithm],
+            ),
         )
     except JWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired token") from exc

@@ -1,10 +1,12 @@
+# mypy: disable-error-code=import-untyped
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import aiofiles
@@ -28,7 +30,16 @@ class IndexStore:
         async with aiofiles.open(self._path) as file:
             raw = await file.read()
         data = json.loads(raw)
-        return data.get("sessions", [])
+        if not isinstance(data, dict):
+            return []
+        sessions = data.get("sessions")
+        if not isinstance(sessions, list):
+            return []
+        return [
+            cast(dict[str, Any], session)
+            for session in sessions
+            if isinstance(session, dict)
+        ]
 
     async def _write(self, sessions: list[dict[str, Any]]) -> None:
         payload = json.dumps({"version": 1, "sessions": sessions}, default=str)

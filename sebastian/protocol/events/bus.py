@@ -1,8 +1,9 @@
 from __future__ import annotations
+
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 
 from sebastian.protocol.events.types import Event, EventType
 

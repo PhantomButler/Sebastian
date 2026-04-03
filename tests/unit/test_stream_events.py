@@ -6,17 +6,17 @@ from typing import get_args
 
 def test_stream_event_types_are_dataclasses() -> None:
     from sebastian.core.stream_events import (
-        ThinkingBlockStart,
-        ThinkingBlockStop,
-        ThinkingDelta,
+        LLMStreamEvent,
         TextBlockStart,
         TextBlockStop,
         TextDelta,
+        ThinkingBlockStart,
+        ThinkingBlockStop,
+        ThinkingDelta,
         ToolCallBlockStart,
         ToolCallReady,
         ToolResult,
         TurnDone,
-        LLMStreamEvent,
     )
 
     thinking_start = ThinkingBlockStart(block_id="b0_0")

@@ -1,9 +1,11 @@
+# mypy: disable-error-code=import-untyped
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -57,7 +59,7 @@ class SessionStore:
         self._dir = sessions_dir
 
     async def create_session(self, session: Session) -> Session:
-        directory = _session_dir(self._dir, session)
+        _session_dir(self._dir, session)
         async with self._session_lock(session.id, session.agent_type, session.agent_id):
             await self._write_session_meta(session)
         return session
@@ -120,7 +122,7 @@ class SessionStore:
             {
                 "role": role,
                 "content": content,
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
             }
         )
         async with aiofiles.open(directory / "messages.jsonl", "a") as file:
@@ -214,13 +216,13 @@ class SessionStore:
             if task is None:
                 return
             task.status = status
-            task.updated_at = datetime.now(timezone.utc)
+            task.updated_at = datetime.now(UTC)
             if status in (
                 TaskStatus.COMPLETED,
                 TaskStatus.FAILED,
                 TaskStatus.CANCELLED,
             ):
-                task.completed_at = datetime.now(timezone.utc)
+                task.completed_at = datetime.now(UTC)
             directory = _session_dir_by_id(
                 self._dir,
                 session_id,
@@ -321,7 +323,7 @@ class SessionStore:
         session.active_task_count = sum(
             1 for task in tasks if task.status not in terminal_statuses
         )
-        session.updated_at = datetime.now(timezone.utc)
+        session.updated_at = datetime.now(UTC)
         await self._write_session_meta(session)
 
 

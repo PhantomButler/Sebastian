@@ -1,18 +1,22 @@
 from __future__ import annotations
+
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from sebastian.core.tool import get_tool, list_tool_specs
+from sebastian.core.tool import ToolFn, get_tool, list_tool_specs
 from sebastian.core.types import ToolResult
 
 logger = logging.getLogger(__name__)
+
+McpToolFn = Callable[..., Awaitable[ToolResult]]
 
 
 class CapabilityRegistry:
     """Unified access point for native tools and MCP-sourced tools."""
 
     def __init__(self) -> None:
-        self._mcp_tools: dict[str, tuple[dict[str, Any], Any]] = {}
+        self._mcp_tools: dict[str, tuple[dict[str, Any], McpToolFn]] = {}
 
     def get_all_tool_specs(self) -> list[dict[str, Any]]:
         """Return all tool specs in Anthropic API `tools` format."""
@@ -43,7 +47,7 @@ class CapabilityRegistry:
         self,
         name: str,
         spec: dict[str, Any],
-        fn: Any,
+        fn: ToolFn,
     ) -> None:
         """Register a tool sourced from MCP."""
         self._mcp_tools[name] = (spec, fn)

@@ -19,6 +19,7 @@ class TaskStore:
         """Create and persist a task."""
         record = TaskRecord(
             id=task.id,
+            session_id=task.session_id,
             goal=task.goal,
             status=task.status.value,
             assigned_agent=task.assigned_agent,
@@ -102,6 +103,7 @@ class TaskStore:
         """Convert a TaskRecord to a Task domain object."""
         return Task(
             id=r.id,
+            session_id=r.session_id,
             goal=r.goal,
             status=TaskStatus(r.status),
             assigned_agent=r.assigned_agent,

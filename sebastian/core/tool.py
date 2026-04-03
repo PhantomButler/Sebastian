@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import functools
 import inspect
 import logging
-from typing import Any, Callable, Awaitable, get_type_hints
+from collections.abc import Awaitable, Callable
+from typing import Any, get_type_hints
 
 from sebastian.core.types import ToolResult
 
@@ -59,7 +61,11 @@ def _infer_json_schema(fn: Callable[..., Any]) -> dict[str, Any]:
             },
         )
     except Exception as e:
-        logger.debug(f"get_type_hints failed for {fn.__name__}: {e}, falling back to raw annotations")
+        logger.debug(
+            "get_type_hints failed for %s: %s, falling back to raw annotations",
+            fn.__name__,
+            e,
+        )
         # Fall back to raw annotations if hints cannot be resolved
         hints = {}
 

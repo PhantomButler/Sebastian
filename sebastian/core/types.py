@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -47,7 +47,7 @@ class Checkpoint(BaseModel):
     task_id: str
     step: int
     data: dict[str, Any]
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class ResourceBudget(BaseModel):
@@ -76,8 +76,8 @@ class Task(BaseModel):
     assigned_agent: str = "sebastian"
     parent_task_id: str | None = None
     resource_budget: ResourceBudget = Field(default_factory=ResourceBudget)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
 
 
@@ -86,7 +86,7 @@ class Session(BaseModel):
 
     id: str = Field(
         default_factory=lambda: (
-            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+            datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
             + "_"
             + uuid.uuid4().hex[:6]
         )
@@ -95,7 +95,7 @@ class Session(BaseModel):
     agent_id: str
     title: str
     status: SessionStatus = SessionStatus.ACTIVE
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     task_count: int = 0
     active_task_count: int = 0

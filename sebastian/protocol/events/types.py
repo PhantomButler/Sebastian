@@ -1,6 +1,7 @@
 from __future__ import annotations
+
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -63,4 +64,4 @@ class Event(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     type: EventType
     data: dict[str, Any] = Field(default_factory=dict)
-    ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ts: datetime = Field(default_factory=lambda: datetime.now(UTC))
