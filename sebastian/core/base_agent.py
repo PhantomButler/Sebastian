@@ -65,7 +65,7 @@ class BaseAgent(ABC):
         self._event_bus = event_bus
         self._episodic = EpisodicMemory(session_store)
         self.working_memory = WorkingMemory()
-        self._active_stream: asyncio.Task | None = None
+        self._active_stream: asyncio.Task[str] | None = None
 
         from sebastian.config import settings
 

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 
 from sebastian.gateway.auth import require_auth
 
 router = APIRouter(tags=["agents"])
 
+AuthPayload = dict[str, Any]
+JSONDict = dict[str, Any]
+
 
 @router.get("/agents")
-async def list_agents(_auth: dict = Depends(require_auth)) -> dict:
+async def list_agents(_auth: AuthPayload = Depends(require_auth)) -> JSONDict:
     import sebastian.gateway.state as state
 
     agents = []
@@ -36,5 +41,5 @@ async def list_agents(_auth: dict = Depends(require_auth)) -> dict:
 
 
 @router.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, str]:
     return {"status": "ok"}

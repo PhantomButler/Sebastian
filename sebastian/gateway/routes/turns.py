@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -11,6 +12,9 @@ from sebastian.gateway.auth import create_access_token, require_auth, verify_pas
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["turns"])
+
+AuthPayload = dict[str, Any]
+JSONDict = dict[str, Any]
 
 
 class LoginRequest(BaseModel):
@@ -49,8 +53,8 @@ async def login(body: LoginRequest) -> TokenResponse:
 @router.post("/turns")
 async def send_turn(
     body: SendTurnRequest,
-    _auth: dict = Depends(require_auth),
-) -> dict:
+    _auth: AuthPayload = Depends(require_auth),
+) -> JSONDict:
     import sebastian.gateway.state as state
 
     session = await state.sebastian.get_or_create_session(body.session_id, body.content)

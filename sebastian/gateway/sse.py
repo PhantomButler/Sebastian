@@ -90,10 +90,10 @@ class SSEManager:
             for buffered_event in replay_events:
                 yield self._format_chunk(buffered_event)
             while True:
-                buffered_event = await subscription.queue.get()
-                if buffered_event is None:
+                queued_event = await subscription.queue.get()
+                if queued_event is None:
                     break
-                yield self._format_chunk(buffered_event)
+                yield self._format_chunk(queued_event)
         finally:
             async with self._lock:
                 if subscription in self._queues:

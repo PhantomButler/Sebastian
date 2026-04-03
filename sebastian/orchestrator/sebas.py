@@ -9,7 +9,7 @@ from sebastian.core.task_manager import TaskManager
 from sebastian.core.types import Session, Task
 from sebastian.orchestrator.conversation import ConversationManager
 from sebastian.protocol.events.bus import EventBus
-from sebastian.protocol.events.types import Event, EventType
+from sebastian.protocol.events.types import EventType
 from sebastian.store.index_store import IndexStore
 from sebastian.store.session_store import SessionStore
 
@@ -36,11 +36,10 @@ class Sebastian(BaseAgent):
         conversation: ConversationManager,
         event_bus: EventBus,
     ) -> None:
-        super().__init__(registry, session_store)
+        super().__init__(registry, session_store, event_bus=event_bus)
         self._index = index_store
         self._task_manager = task_manager
         self._conversation = conversation
-        self._event_bus = event_bus
 
     async def chat(self, user_message: str, session_id: str) -> str:
         return await self.run_streaming(user_message, session_id)
@@ -71,15 +70,13 @@ class Sebastian(BaseAgent):
 
     async def intervene(self, agent_name: str, session_id: str, message: str) -> str:
         response = await self.run(message, session_id, agent_name=agent_name)
-        await self._event_bus.publish(
-            Event(
-                type=EventType.USER_INTERVENED,
-                data={
-                    "agent": agent_name,
-                    "session_id": session_id,
-                    "message": message[:200],
-                },
-            )
+        await self._publish(
+            session_id,
+            EventType.USER_INTERVENED,
+            {
+                "agent": agent_name,
+                "message": message[:200],
+            },
         )
         return response
 

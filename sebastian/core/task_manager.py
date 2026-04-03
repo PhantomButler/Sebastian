@@ -48,7 +48,7 @@ class TaskManager:
         self._store = session_store
         self._bus = event_bus
         self._index = index_store
-        self._running: dict[str, asyncio.Task] = {}
+        self._running: dict[str, asyncio.Task[None]] = {}
         self._tasks: dict[str, Task] = {}
 
     async def submit(self, task: Task, fn: TaskFn) -> None:
