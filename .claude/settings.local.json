@@ -36,7 +36,23 @@
       "Bash(ruff format:*)",
       "Bash(python -m pytest tests/unit/ -q)",
       "mcp__pycharm__search_in_files_by_text",
-      "Bash(pytest tests/ -q --tb=short)"
+      "Bash(pytest tests/ -q --tb=short)",
+      "Bash(python -m pytest tests/unit/test_stream_events.py::test_thinking_block_stop_has_thinking_field -v)",
+      "Bash(python -m pytest tests/unit/test_stream_events.py::test_thinking_block_stop_has_thinking_field tests/unit/test_stream_events.py::test_text_block_stop_has_text_field tests/unit/test_stream_events.py::test_provider_call_end_has_stop_reason tests/unit/test_stream_events.py::test_provider_call_end_is_in_llm_stream_event_union -v)",
+      "Bash(python -m pytest tests/unit/test_stream_events.py::test_stream_event_types_are_dataclasses -v)",
+      "Bash(python -m ruff check sebastian/core/stream_events.py)",
+      "Bash(python -m ruff check tests/unit/test_stream_events.py)",
+      "Bash(pytest tests/unit/test_stream_events.py -v)",
+      "Bash(pytest tests/unit/test_agent_loop.py -v)",
+      "Bash(pytest tests/unit/test_agent_loop.py::test_agent_loop_streams_thinking_and_text_blocks_then_turn_done -v)",
+      "Bash(python -m pytest tests/unit/test_stream_events.py -v)",
+      "mcp__pycharm__create_new_file",
+      "mcp__pycharm__execute_terminal_command",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest tests/unit/test_llm_provider.py -v)",
+      "Bash(python -m pytest:*)",
+      "Bash(python -m ruff:*)",
+      "Bash(python -c:*)"
     ]
   }
 }
