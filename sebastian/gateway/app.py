@@ -212,7 +212,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    from sebastian.gateway.routes import agents, approvals, sessions, stream, turns
+    from sebastian.gateway.routes import agents, approvals, llm_providers, sessions, stream, turns
 
     app = FastAPI(title="Sebastian Gateway", version="0.1.0", lifespan=lifespan)
     app.include_router(turns.router, prefix="/api/v1")
@@ -220,6 +220,7 @@ def create_app() -> FastAPI:
     app.include_router(approvals.router, prefix="/api/v1")
     app.include_router(stream.router, prefix="/api/v1")
     app.include_router(agents.router, prefix="/api/v1")
+    app.include_router(llm_providers.router, prefix="/api/v1")
     return app
 
 
