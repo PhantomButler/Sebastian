@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # LLM max tokens per request (spec: 16000)
     llm_max_tokens: int = 16000
 
+    # Logging toggles (initial state; can be changed at runtime via API)
+    sebastian_log_llm_stream: bool = False
+    sebastian_log_sse: bool = False
+
     @property
     def database_url(self) -> str:
         if self.sebastian_db_url:

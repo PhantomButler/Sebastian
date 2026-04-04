@@ -63,3 +63,23 @@ def test_sessions_dir_derived_from_data_dir() -> None:
     from sebastian.config import settings
 
     assert settings.sessions_dir == Path(settings.sebastian_data_dir) / "sessions"
+
+
+def test_log_settings_defaults() -> None:
+    """日志开关默认值应为 False。"""
+    from sebastian.config import Settings
+
+    s = Settings()
+    assert s.sebastian_log_llm_stream is False
+    assert s.sebastian_log_sse is False
+
+
+def test_log_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """环境变量应能覆盖日志开关默认值。"""
+    monkeypatch.setenv("SEBASTIAN_LOG_LLM_STREAM", "true")
+    monkeypatch.setenv("SEBASTIAN_LOG_SSE", "true")
+    from sebastian.config import Settings
+
+    s = Settings()
+    assert s.sebastian_log_llm_stream is True
+    assert s.sebastian_log_sse is True
