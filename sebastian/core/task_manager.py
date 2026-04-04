@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from sebastian.core.types import InvalidTaskTransitionError, Task, TaskStatus
 from sebastian.protocol.events.bus import EventBus
@@ -112,23 +113,33 @@ class TaskManager:
             )
 
         agent_type, agent_id = self._resolve_agent_path(task.assigned_agent)
-        await self._store.update_task_status(
-            task.session_id,
-            task.id,
-            new_status,
-            agent_type,
-            agent_id,
-        )
-        persisted_task = await self._store.get_task(
-            task.session_id,
-            task.id,
-            agent_type,
-            agent_id,
-        )
-        if persisted_task is not None:
-            task.status = persisted_task.status
-            task.updated_at = persisted_task.updated_at
-            task.completed_at = persisted_task.completed_at
+
+        # Update in-memory state first; roll back if the store write fails (M4).
+        old_status = task.status
+        old_updated_at = task.updated_at
+        old_completed_at = task.completed_at
+
+        now = datetime.now(UTC)
+        task.status = new_status
+        task.updated_at = now
+        if new_status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+            task.completed_at = now
+
+        try:
+            await self._store.update_task_status(
+                task.session_id,
+                task.id,
+                new_status,
+                agent_type,
+                agent_id,
+            )
+        except Exception:
+            # Roll back in-memory state so callers see consistent data (M4).
+            task.status = old_status
+            task.updated_at = old_updated_at
+            task.completed_at = old_completed_at
+            raise
+
         await self._sync_index(task.session_id, task.assigned_agent)
 
         event_type = _STATUS_TO_EVENT.get(new_status)

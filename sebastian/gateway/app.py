@@ -65,10 +65,8 @@ def _register_runtime_agent_state_handlers() -> list[tuple[EventType, EventHandl
                 logger.debug("Ignoring turn event for unknown worker %s", worker_id)
                 return
 
-            if (
-                state.worker_sessions.get(worker_id) == session_id
-                and pool.status().get(worker_id) == WorkerStatus.BUSY
-            ):
+            if pool.status().get(worker_id) == WorkerStatus.BUSY:
+                # Worker already busy; skip to avoid ValueError from mark_busy (C2).
                 return
 
             pool.mark_busy(worker_id)
