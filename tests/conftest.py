@@ -13,6 +13,7 @@ def anyio_backend():
 @pytest_asyncio.fixture
 async def db_session():
     """In-memory SQLite session for unit tests."""
+    from sebastian.store import models  # noqa: F401
     from sebastian.store.database import Base
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
