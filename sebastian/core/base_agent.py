@@ -103,7 +103,9 @@ class BaseAgent(ABC):
     ) -> str:
         try:
             import sebastian.gateway.state as _state
-            self._loop._provider = await _state.llm_registry.get_default()
+            provider, model = await _state.llm_registry.get_default_with_model()
+            self._loop._provider = provider
+            self._loop._model = model
         except AttributeError:
             pass  # state not initialised (unit tests) — keep existing provider
 

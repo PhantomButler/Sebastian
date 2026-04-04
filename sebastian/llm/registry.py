@@ -19,6 +19,10 @@ class LLMProviderRegistry:
         self._db_factory = db_factory
 
     async def get_default(self) -> LLMProvider:
+        provider, _ = await self.get_default_with_model()
+        return provider
+
+    async def get_default_with_model(self) -> tuple[LLMProvider, str]:
         async with self._db_factory() as session:
             result = await session.execute(
                 select(LLMProviderRecord)
@@ -31,9 +35,9 @@ class LLMProviderRegistry:
             from sebastian.config import settings
             from sebastian.llm.anthropic import AnthropicProvider
 
-            return AnthropicProvider(api_key=settings.anthropic_api_key)
+            return AnthropicProvider(api_key=settings.anthropic_api_key), settings.sebastian_model
 
-        return self._instantiate(record)
+        return self._instantiate(record), record.model
 
     async def get_by_id(self, provider_id: str) -> LLMProvider | None:
         async with self._db_factory() as session:

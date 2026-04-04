@@ -79,7 +79,7 @@ class AnthropicProvider(LLMProvider):
                 if raw.type != "content_block_stop":
                     continue
 
-                block = stream.current_message.content[block_index]
+                block = stream.current_message_snapshot.content[block_index]
                 if block.type == "thinking":
                     yield ThinkingBlockStop(block_id=block_id, thinking=block.thinking)
                 elif block.type == "text":
