@@ -102,3 +102,66 @@ async def test_anthropic_provider_streams_text_and_ends() -> None:
         TextBlockStop(block_id="b0_0", text="Hello world"),
         ProviderCallEnd(stop_reason="end_turn"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_openai_compat_provider_streams_text_and_ends() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.core.stream_events import (
+        ProviderCallEnd,
+        TextBlockStart,
+        TextBlockStop,
+        TextDelta,
+    )
+    from sebastian.llm.openai_compat import OpenAICompatProvider
+
+    def _chunk(content: str | None = None, finish_reason: str | None = None) -> MagicMock:
+        chunk = MagicMock()
+        choice = MagicMock()
+        choice.finish_reason = finish_reason
+        delta = MagicMock()
+        delta.content = content
+        delta.tool_calls = None
+        choice.delta = delta
+        chunk.choices = [choice]
+        return chunk
+
+    chunks = [
+        _chunk(content="Hello"),
+        _chunk(content=" world"),
+        _chunk(finish_reason="stop"),
+    ]
+
+    async def _aiter_chunks():
+        for c in chunks:
+            yield c
+
+    mock_completion = MagicMock()
+    mock_completion.__aiter__ = lambda self: _aiter_chunks()
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
+
+    provider = OpenAICompatProvider.__new__(OpenAICompatProvider)
+    provider._client = mock_client
+    provider._thinking_format = None
+
+    events = []
+    async for event in provider.stream(
+        system="sys",
+        messages=[{"role": "user", "content": "hi"}],
+        tools=[],
+        model="gpt-4o",
+        max_tokens=1000,
+        block_id_prefix="b0_",
+    ):
+        events.append(event)
+
+    assert events == [
+        TextBlockStart(block_id="b0_0"),
+        TextDelta(block_id="b0_0", delta="Hello"),
+        TextDelta(block_id="b0_0", delta=" world"),
+        TextBlockStop(block_id="b0_0", text="Hello world"),
+        ProviderCallEnd(stop_reason="end_turn"),
+    ]
