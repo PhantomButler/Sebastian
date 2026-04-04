@@ -123,6 +123,12 @@ npx expo start          # 启动 Metro，App 内自动热更新
 
 > Expo Router 默认路由：`app/index.tsx` 用 `<Redirect>` 控制落地页，**不要**在 `_layout.tsx` 用 `initialRouteName`（此版本不支持）。
 
+> **Metro 热更新注意**：热更新依赖 app 连上 Metro；不确定改动是否生效时，用 `npx expo run:android` 重新 build 更可靠。
+
+> **React Native SSE**：RN 原生 `fetch` streaming 不支持 SSE 长连接，需用 `react-native-sse` 包实现 EventSource。
+
+> **Anthropic SDK 0.87+**：`AsyncMessageStream.current_message` 已改名为 `current_message_snapshot`。
+
 ### 启动 Gateway 供 App 联调
 
 ```bash
