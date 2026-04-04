@@ -30,3 +30,75 @@ def test_llm_provider_stream_signature_accepted_by_subclass() -> None:
 
     p = ConcreteProvider()
     assert hasattr(p, "stream")
+
+
+@pytest.mark.asyncio
+async def test_anthropic_provider_streams_text_and_ends() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.core.stream_events import (
+        ProviderCallEnd,
+        TextBlockStart,
+        TextBlockStop,
+        TextDelta,
+    )
+    from sebastian.llm.anthropic import AnthropicProvider
+
+    # Build mock Anthropic SDK stream
+    def _make_raw(type_: str, **kwargs: object) -> MagicMock:
+        m = MagicMock()
+        m.type = type_
+        for k, v in kwargs.items():
+            setattr(m, k, v)
+        return m
+
+    text_block = MagicMock()
+    text_block.type = "text"
+    text_block.text = "Hello world"
+
+    final_msg = MagicMock()
+    final_msg.stop_reason = "end_turn"
+
+    raw_events = [
+        _make_raw("content_block_start", index=0,
+                  content_block=MagicMock(type="text")),
+        _make_raw("content_block_delta", index=0,
+                  delta=MagicMock(type="text_delta", text="Hello world")),
+        _make_raw("content_block_stop", index=0),
+    ]
+
+    stream_ctx = MagicMock()
+    stream_ctx.__aenter__ = AsyncMock(return_value=stream_ctx)
+    stream_ctx.__aexit__ = AsyncMock(return_value=False)
+    stream_ctx.current_message = MagicMock(content=[text_block])
+    stream_ctx.get_final_message = AsyncMock(return_value=final_msg)
+
+    async def _iter():
+        for e in raw_events:
+            yield e
+
+    stream_ctx.__aiter__ = lambda self: _iter()
+
+    mock_client = MagicMock()
+    mock_client.messages.stream.return_value = stream_ctx
+
+    provider = AnthropicProvider.__new__(AnthropicProvider)
+    provider._client = mock_client
+
+    events = []
+    async for event in provider.stream(
+        system="sys",
+        messages=[{"role": "user", "content": "hi"}],
+        tools=[],
+        model="claude-opus-4-6",
+        max_tokens=1000,
+        block_id_prefix="b0_",
+    ):
+        events.append(event)
+
+    assert events == [
+        TextBlockStart(block_id="b0_0"),
+        TextDelta(block_id="b0_0", delta="Hello world"),
+        TextBlockStop(block_id="b0_0", text="Hello world"),
+        ProviderCallEnd(stop_reason="end_turn"),
+    ]
