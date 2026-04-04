@@ -5,7 +5,10 @@ import dataclasses
 import logging
 from abc import ABC
 
-import anthropic
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sebastian.llm.provider import LLMProvider
 
 from sebastian.capabilities.registry import CapabilityRegistry
 from sebastian.core.agent_loop import AgentLoop
@@ -57,6 +60,7 @@ class BaseAgent(ABC):
         registry: CapabilityRegistry,
         session_store: SessionStore,
         event_bus: EventBus | None = None,
+        provider: LLMProvider | None = None,
         model: str | None = None,
     ) -> None:
         self._registry = registry
@@ -67,10 +71,13 @@ class BaseAgent(ABC):
         self._active_stream: asyncio.Task[str] | None = None
 
         from sebastian.config import settings
-
         resolved_model = model or settings.sebastian_model
-        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self._loop = AgentLoop(self._client, registry, resolved_model)
+
+        if provider is None:
+            from sebastian.llm.anthropic import AnthropicProvider
+            provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+
+        self._loop = AgentLoop(provider, registry, resolved_model)
 
     async def run(
         self,
