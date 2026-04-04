@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -200,6 +201,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("Sebastian gateway started")
     yield
+    for pool in state.agent_pools.values():
+        for task in pool._worker_tasks:
+            task.cancel()
+    if worker_tasks_to_cancel := [t for p in state.agent_pools.values() for t in p._worker_tasks]:
+        await asyncio.gather(*worker_tasks_to_cancel, return_exceptions=True)
     for event_type, handler in runtime_subscriptions:
         state.event_bus.unsubscribe(handler, event_type)
     logger.info("Sebastian gateway shutdown")
