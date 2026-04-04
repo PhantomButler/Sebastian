@@ -103,7 +103,7 @@ class BaseAgent(ABC):
         self.system_prompt = self.build_system_prompt(registry)
 
     def _persona_section(self) -> str:
-        return self.persona.format(owner_name=settings.sebastian_owner_name)
+        return self.persona.replace("{owner_name}", settings.sebastian_owner_name)
 
     def _tools_section(self, registry: CapabilityRegistry) -> str:
         allowed = set(self.allowed_tools) if self.allowed_tools is not None else None
