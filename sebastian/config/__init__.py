@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # LLM model selection
     sebastian_model: str = "claude-opus-4-6"
 
+    # LLM max tokens per request (spec: 16000)
+    llm_max_tokens: int = 16000
+
     @property
     def database_url(self) -> str:
         if self.sebastian_db_url:

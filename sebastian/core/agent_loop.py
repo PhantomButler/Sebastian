@@ -37,9 +37,7 @@ def _validate_injected_tool_result(
     result: ToolResult | None,
 ) -> ToolResult:
     if result is None:
-        raise RuntimeError(
-            f"Tool call {tool_name} ({tool_id}) requires an injected ToolResult"
-        )
+        raise RuntimeError(f"Tool call {tool_name} ({tool_id}) requires an injected ToolResult")
     if result.tool_id != tool_id or result.name != tool_name:
         raise RuntimeError(
             f"Injected ToolResult does not match current tool call {tool_name} ({tool_id})"
@@ -55,10 +53,17 @@ class AgentLoop:
         client: Any,  # anthropic.AsyncAnthropic
         registry: CapabilityRegistry,
         model: str = "claude-opus-4-6",
+        max_tokens: int | None = None,
     ) -> None:
         self._client = client
         self._registry = registry
         self._model = model
+        if max_tokens is not None:
+            self._max_tokens = max_tokens
+        else:
+            from sebastian.config import settings
+
+            self._max_tokens = settings.llm_max_tokens
 
     async def stream(
         self,
@@ -74,7 +79,7 @@ class AgentLoop:
         for iteration in range(MAX_ITERATIONS):
             kwargs: dict[str, Any] = {
                 "model": self._model,
-                "max_tokens": 4096,
+                "max_tokens": self._max_tokens,
                 "system": system_prompt,
                 "messages": working,
             }
@@ -123,24 +128,30 @@ class AgentLoop:
 
                     block = stream.current_message.content[block_index]
                     if block.type == "thinking":
-                        assistant_content.append({
-                            "type": "thinking",
-                            "thinking": block.thinking,
-                        })
+                        assistant_content.append(
+                            {
+                                "type": "thinking",
+                                "thinking": block.thinking,
+                            }
+                        )
                         yield ThinkingBlockStop(block_id=block_id)
                     elif block.type == "text":
-                        assistant_content.append({
-                            "type": "text",
-                            "text": block.text,
-                        })
+                        assistant_content.append(
+                            {
+                                "type": "text",
+                                "text": block.text,
+                            }
+                        )
                         yield TextBlockStop(block_id=block_id)
                     elif block.type == "tool_use":
-                        assistant_content.append({
-                            "type": "tool_use",
-                            "id": block.id,
-                            "name": block.name,
-                            "input": block.input,
-                        })
+                        assistant_content.append(
+                            {
+                                "type": "tool_use",
+                                "id": block.id,
+                                "name": block.name,
+                                "input": block.input,
+                            }
+                        )
                         injected = yield ToolCallReady(
                             block_id=block_id,
                             tool_id=block.id,
@@ -152,11 +163,13 @@ class AgentLoop:
                             tool_name=block.name,
                             result=injected,
                         )
-                        tool_results_for_next.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": _tool_result_content(validated_result),
-                        })
+                        tool_results_for_next.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": _tool_result_content(validated_result),
+                            }
+                        )
 
                 final_message = await stream.get_final_message()
 

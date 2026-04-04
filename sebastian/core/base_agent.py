@@ -4,7 +4,6 @@ import asyncio
 import dataclasses
 import logging
 from abc import ABC
-from contextlib import suppress
 
 import anthropic
 
@@ -97,8 +96,10 @@ class BaseAgent(ABC):
         agent_context = agent_name or self.name
         if self._active_stream is not None and not self._active_stream.done():
             self._active_stream.cancel()
-            with suppress(asyncio.CancelledError):
+            try:
                 await self._active_stream
+            except (asyncio.CancelledError, Exception):
+                pass  # Previous stream has ended; ignore its result (M5).
 
         worker_session = await self._session_store.get_session_for_agent_type(
             session_id,
