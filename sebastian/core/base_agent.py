@@ -101,6 +101,12 @@ class BaseAgent(ABC):
         task_id: str | None = None,
         agent_name: str | None = None,
     ) -> str:
+        try:
+            import sebastian.gateway.state as _state
+            self._loop._provider = await _state.llm_registry.get_default()
+        except AttributeError:
+            pass  # state not initialised (unit tests) — keep existing provider
+
         agent_context = agent_name or self.name
         if self._active_stream is not None and not self._active_stream.done():
             self._active_stream.cancel()
