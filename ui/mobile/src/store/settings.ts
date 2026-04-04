@@ -1,22 +1,28 @@
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
-import type { LLMProvider } from '../types';
+import type { LLMProviderType } from '../types';
 
 const KEYS = {
   serverUrl: 'settings_server_url',
   jwtToken: 'settings_jwt_token',
-  llmProvider: 'settings_llm_provider',
+  llmProviderType: 'settings_llm_provider_type',
+  llmApiKey: 'settings_llm_api_key',
 } as const;
+
+interface LocalLLMConfig {
+  providerType: LLMProviderType;
+  apiKey: string;
+}
 
 interface SettingsState {
   serverUrl: string;
   jwtToken: string | null;
-  llmProvider: LLMProvider | null;
+  llmProvider: LocalLLMConfig | null;
   isLoaded: boolean;
   load: () => Promise<void>;
   setServerUrl: (url: string) => Promise<void>;
   setJwtToken: (token: string | null) => Promise<void>;
-  setLlmProvider: (provider: LLMProvider) => Promise<void>;
+  setLlmProvider: (provider: LocalLLMConfig) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -26,15 +32,20 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   isLoaded: false,
 
   load: async () => {
-    const [serverUrl, jwtToken, raw] = await Promise.all([
+    const [serverUrl, jwtToken, providerType, apiKey] = await Promise.all([
       SecureStore.getItemAsync(KEYS.serverUrl),
       SecureStore.getItemAsync(KEYS.jwtToken),
-      SecureStore.getItemAsync(KEYS.llmProvider),
+      SecureStore.getItemAsync(KEYS.llmProviderType),
+      SecureStore.getItemAsync(KEYS.llmApiKey),
     ]);
+    const llmProvider =
+      providerType && apiKey
+        ? { providerType: providerType as LLMProviderType, apiKey }
+        : null;
     set({
       serverUrl: serverUrl ?? '',
       jwtToken: jwtToken ?? null,
-      llmProvider: raw ? (JSON.parse(raw) as LLMProvider) : null,
+      llmProvider,
       isLoaded: true,
     });
   },
@@ -51,7 +62,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   setLlmProvider: async (provider) => {
-    await SecureStore.setItemAsync(KEYS.llmProvider, JSON.stringify(provider));
+    await Promise.all([
+      SecureStore.setItemAsync(KEYS.llmProviderType, provider.providerType),
+      SecureStore.setItemAsync(KEYS.llmApiKey, provider.apiKey),
+    ]);
     set({ llmProvider: provider });
   },
 }));

@@ -98,8 +98,31 @@ export interface TurnDeltaData { sessionId: string; delta: string; }
 export interface AgentDeltaData { agentId: string; delta: string; }
 export interface ApprovalRequiredData { approval: Approval; }
 
-export type LLMProviderName = 'anthropic' | 'openai';
-export interface LLMProvider { name: LLMProviderName; apiKey: string; }
+export type LLMProviderType = 'anthropic' | 'openai';
+export type ThinkingFormat = 'reasoning_content' | 'think_tags' | null;
+
+export interface LLMProvider {
+  id: string;
+  name: string;
+  provider_type: LLMProviderType;
+  base_url: string | null;
+  api_key: string;
+  model: string;
+  thinking_format: ThinkingFormat;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LLMProviderCreate {
+  name: string;
+  provider_type: LLMProviderType;
+  api_key: string;
+  model: string;
+  base_url?: string | null;
+  thinking_format?: ThinkingFormat;
+  is_default?: boolean;
+}
 
 export interface AuthResponse { token: string; }
 export interface PaginatedMessages { items: Message[]; nextCursor: string | null; }

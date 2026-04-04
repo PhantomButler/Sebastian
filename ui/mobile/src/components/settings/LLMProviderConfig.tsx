@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSettingsStore } from '../../store/settings';
-import type { LLMProviderName } from '../../types';
+import type { LLMProviderType } from '../../types';
 
-const PROVIDERS: LLMProviderName[] = ['anthropic', 'openai'];
+const PROVIDERS: LLMProviderType[] = ['anthropic', 'openai'];
 
 export function LLMProviderConfig() {
   const { llmProvider, setLlmProvider } = useSettingsStore();
-  const [name, setName] = useState<LLMProviderName>(llmProvider?.name ?? 'anthropic');
+  const [providerType, setProviderType] = useState<LLMProviderType>(
+    llmProvider?.providerType ?? 'anthropic',
+  );
   const [apiKey, setApiKey] = useState(llmProvider?.apiKey ?? '');
 
   async function handleSave() {
-    await setLlmProvider({ name, apiKey: apiKey.trim() });
+    await setLlmProvider({ providerType, apiKey: apiKey.trim() });
   }
 
   return (
@@ -20,7 +22,7 @@ export function LLMProviderConfig() {
       <View style={styles.card}>
         <View style={styles.row}>
           <Text style={styles.rowTitle}>LLM Provider</Text>
-          <Text style={styles.rowValue}>{name}</Text>
+          <Text style={styles.rowValue}>{providerType}</Text>
         </View>
         <View style={styles.segmented}>
           {PROVIDERS.map((provider) => (
@@ -28,14 +30,14 @@ export function LLMProviderConfig() {
               key={provider}
               style={[
                 styles.segment,
-                name === provider && styles.segmentActive,
+                providerType === provider && styles.segmentActive,
               ]}
-              onPress={() => setName(provider)}
+              onPress={() => setProviderType(provider)}
             >
               <Text
                 style={[
                   styles.segmentText,
-                  name === provider && styles.segmentTextActive,
+                  providerType === provider && styles.segmentTextActive,
                 ]}
               >
                 {provider}

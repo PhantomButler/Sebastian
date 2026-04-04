@@ -5,10 +5,13 @@ interface BackendAgentWorker {
   agent_id: string;
   status: 'idle' | 'busy';
   session_id: string | null;
+  current_goal: string | null;
 }
 
 interface BackendAgentSummary {
   agent_type: string;
+  name: string;
+  description: string;
   workers: BackendAgentWorker[];
   queue_depth: number;
 }
@@ -18,17 +21,18 @@ interface BackendAgentsResponse {
 }
 
 function mapAgentSummary(agent: BackendAgentSummary): Agent {
-  const busyWorkers = agent.workers.filter((worker) => worker.status === 'busy').length;
+  const busyWorker = agent.workers.find((w) => w.status === 'busy' && w.current_goal);
+  const busyCount = agent.workers.filter((w) => w.status === 'busy').length;
   const hasQueuedWork = agent.queue_depth > 0;
-  const status = busyWorkers > 0 || hasQueuedWork ? 'working' : 'idle';
-  const workerCount = agent.workers.length;
+  const status = busyCount > 0 || hasQueuedWork ? 'working' : 'idle';
   const queueSuffix = hasQueuedWork ? `，队列 ${agent.queue_depth}` : '';
+  const goalText = busyWorker?.current_goal ?? '';
 
   return {
     id: agent.agent_type,
-    name: agent.agent_type,
+    name: agent.name || agent.agent_type,
     status,
-    goal: `${workerCount} 个 worker，${busyWorkers} 个忙碌${queueSuffix}`,
+    goal: goalText || `${agent.workers.length} 个 worker，${busyCount} 个忙碌${queueSuffix}`,
     createdAt: '1970-01-01T00:00:00.000Z',
   };
 }
