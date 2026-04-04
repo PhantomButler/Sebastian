@@ -32,7 +32,7 @@ async def test_sse_stream_emits_event_id_and_preserves_payload_shape() -> None:
     event_id, payload = _parse_sse_chunk(chunk)
     assert event_id == 1
     assert payload["type"] == "turn.response"
-    assert payload["event"] == "turn.response"
+    assert "event" not in payload
     assert payload["data"]["session_id"] == "abc"
 
 

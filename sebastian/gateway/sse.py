@@ -56,11 +56,12 @@ class SSEManager:
 
     @staticmethod
     def _format_chunk(buffered_event: _BufferedEvent) -> str:
-        payload = json.dumps({
-            "type": buffered_event.event.type.value,
-            "event": buffered_event.event.type.value,
-            "data": buffered_event.event.data | {"ts": buffered_event.event.ts.isoformat()},
-        })
+        payload = json.dumps(
+            {
+                "type": buffered_event.event.type.value,
+                "data": buffered_event.event.data | {"ts": buffered_event.event.ts.isoformat()},
+            }
+        )
         return f"id: {buffered_event.event_id}\ndata: {payload}\n\n"
 
     async def stream(

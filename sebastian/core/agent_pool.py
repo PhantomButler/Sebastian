@@ -21,8 +21,7 @@ class AgentPool:
 
         self._agent_type = agent_type
         self._workers: dict[str, WorkerStatus] = {
-            f"{agent_type}_{index:02d}": WorkerStatus.IDLE
-            for index in range(1, worker_count + 1)
+            f"{agent_type}_{index:02d}": WorkerStatus.IDLE for index in range(1, worker_count + 1)
         }
         self._waiters: deque[asyncio.Future[str]] = deque()
 
@@ -37,7 +36,16 @@ class AgentPool:
         future: asyncio.Future[str] = loop.create_future()
         self._waiters.append(future)
 
-        return await future
+        try:
+            return await future
+        except asyncio.CancelledError:
+            # Remove this future from the waiters deque so it does not grow
+            # unboundedly when many callers cancel their acquire() (m1).
+            try:
+                self._waiters.remove(future)
+            except ValueError:
+                pass  # Already removed by release().
+            raise
 
     def release(self, worker_id: str) -> None:
         """Return a worker to the next waiter or mark it idle."""

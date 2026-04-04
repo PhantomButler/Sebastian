@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import weakref
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,10 @@ from sebastian.core.types import (
     TaskStatus,
 )
 
-_SESSION_LOCKS_BY_PATH: dict[Path, asyncio.Lock] = {}
+# WeakValueDictionary lets unreferenced locks be GC'd, preventing unbounded growth (m2).
+_SESSION_LOCKS_BY_PATH: weakref.WeakValueDictionary[Path, asyncio.Lock] = (
+    weakref.WeakValueDictionary()
+)
 
 
 def _session_dir(sessions_dir: Path, session: Session) -> Path:
@@ -29,13 +33,7 @@ def _session_dir(sessions_dir: Path, session: Session) -> Path:
     if session.agent_type == "sebastian":
         directory = sessions_dir / "sebastian" / session.id
     else:
-        directory = (
-            sessions_dir
-            / "subagents"
-            / session.agent_type
-            / session.agent_id
-            / session.id
-        )
+        directory = sessions_dir / "subagents" / session.agent_type / session.agent_id / session.id
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "tasks").mkdir(exist_ok=True)
     return directory
@@ -86,9 +84,7 @@ class SessionStore:
         if agent_type == "sebastian":
             return await self.get_session(session_id, "sebastian", "sebastian_01")
 
-        matches = sorted(
-            (self._dir / "subagents" / agent_type).glob(f"*/{session_id}/meta.json")
-        )
+        matches = sorted((self._dir / "subagents" / agent_type).glob(f"*/{session_id}/meta.json"))
         if not matches:
             return None
         if len(matches) > 1:
@@ -293,7 +289,11 @@ class SessionStore:
         meta_path = (
             _session_dir_by_id(self._dir, session_id, agent_type, agent_id) / "meta.json"
         ).resolve()
-        return _SESSION_LOCKS_BY_PATH.setdefault(meta_path, asyncio.Lock())
+        lock = _SESSION_LOCKS_BY_PATH.get(meta_path)
+        if lock is None:
+            lock = asyncio.Lock()
+            _SESSION_LOCKS_BY_PATH[meta_path] = lock
+        return lock
 
     async def _write_session_meta(self, session: Session) -> None:
         directory = _session_dir_by_id(
@@ -320,9 +320,7 @@ class SessionStore:
             TaskStatus.CANCELLED,
         }
         session.task_count = len(tasks)
-        session.active_task_count = sum(
-            1 for task in tasks if task.status not in terminal_statuses
-        )
+        session.active_task_count = sum(1 for task in tasks if task.status not in terminal_statuses)
         session.updated_at = datetime.now(UTC)
         await self._write_session_meta(session)
 
@@ -340,8 +338,6 @@ def _task_from_dict(data: dict[str, Any]) -> Task:
         created_at=datetime.fromisoformat(data["created_at"]),
         updated_at=datetime.fromisoformat(data["updated_at"]),
         completed_at=(
-            datetime.fromisoformat(data["completed_at"])
-            if data.get("completed_at")
-            else None
+            datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
         ),
     )

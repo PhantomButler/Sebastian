@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import weakref
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -14,7 +15,8 @@ import aiofiles
 from sebastian.core.types import Session
 
 INDEX_FILE = "index.json"
-_LOCKS_BY_PATH: dict[Path, asyncio.Lock] = {}
+# WeakValueDictionary lets unreferenced locks be GC'd, preventing unbounded growth (m2).
+_LOCKS_BY_PATH: weakref.WeakValueDictionary[Path, asyncio.Lock] = weakref.WeakValueDictionary()
 
 
 class IndexStore:
@@ -22,7 +24,12 @@ class IndexStore:
 
     def __init__(self, sessions_dir: Path) -> None:
         self._path = sessions_dir / INDEX_FILE
-        self._lock = _LOCKS_BY_PATH.setdefault(self._path.resolve(), asyncio.Lock())
+        resolved = self._path.resolve()
+        lock = _LOCKS_BY_PATH.get(resolved)
+        if lock is None:
+            lock = asyncio.Lock()
+            _LOCKS_BY_PATH[resolved] = lock
+        self._lock = lock
 
     async def _read(self) -> list[dict[str, Any]]:
         if not self._path.exists():
@@ -35,11 +42,7 @@ class IndexStore:
         sessions = data.get("sessions")
         if not isinstance(sessions, list):
             return []
-        return [
-            cast(dict[str, Any], session)
-            for session in sessions
-            if isinstance(session, dict)
-        ]
+        return [cast(dict[str, Any], session) for session in sessions if isinstance(session, dict)]
 
     async def _write(self, sessions: list[dict[str, Any]]) -> None:
         payload = json.dumps({"version": 1, "sessions": sessions}, default=str)
@@ -70,9 +73,7 @@ class IndexStore:
 
     async def list_by_agent_type(self, agent_type: str) -> list[dict[str, Any]]:
         return [
-            session
-            for session in await self._read()
-            if session.get("agent_type") == agent_type
+            session for session in await self._read() if session.get("agent_type") == agent_type
         ]
 
     async def list_by_worker(
@@ -83,8 +84,7 @@ class IndexStore:
         return [
             session
             for session in await self._read()
-            if session.get("agent_type") == agent_type
-            and session.get("agent_id") == agent_id
+            if session.get("agent_type") == agent_type and session.get("agent_id") == agent_id
         ]
 
     async def remove(self, session_id: str) -> None:

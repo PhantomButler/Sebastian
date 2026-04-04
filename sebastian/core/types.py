@@ -14,6 +14,7 @@ class TaskStatus(StrEnum):
     CREATED = "created"
     PLANNING = "planning"
     RUNNING = "running"
+    # Phase 2+: PAUSED state not yet in state machine
     PAUSED = "paused"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -86,9 +87,7 @@ class Session(BaseModel):
 
     id: str = Field(
         default_factory=lambda: (
-            datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
-            + "_"
-            + uuid.uuid4().hex[:6]
+            datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S") + "_" + uuid.uuid4().hex[:6]
         )
     )
     agent_type: str
