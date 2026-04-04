@@ -30,6 +30,8 @@ class OpenAICompatProvider(LLMProvider):
       "think_tags"        — llama.cpp style: <think>...</think> in text content
     """
 
+    message_format = "openai"
+
     def __init__(
         self,
         api_key: str,

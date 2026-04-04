@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
@@ -73,9 +74,14 @@ class AgentLoop:
         working = list(messages)
         tools = self._registry.get_all_tool_specs()
         full_text_parts: list[str] = []
+        is_openai = self._provider.message_format == "openai"
 
         for iteration in range(MAX_ITERATIONS):
-            assistant_content: list[dict[str, Any]] = []
+            # Anthropic: list of content blocks; OpenAI: list of tool_calls entries
+            assistant_blocks: list[dict[str, Any]] = []
+            tool_calls_openai: list[dict[str, Any]] = []
+            text_parts: list[str] = []
+            # Anthropic: list of tool_result blocks; OpenAI: list of role:tool messages
             tool_results_for_next: list[dict[str, Any]] = []
             stop_reason = "end_turn"
 
@@ -92,49 +98,89 @@ class AgentLoop:
                     continue
 
                 if isinstance(event, ThinkingBlockStop):
-                    assistant_content.append(
-                        {"type": "thinking", "thinking": event.thinking}
-                    )
+                    if not is_openai:
+                        assistant_blocks.append(
+                            {"type": "thinking", "thinking": event.thinking}
+                        )
                     yield event
 
                 elif isinstance(event, TextBlockStop):
                     full_text_parts.append(event.text)
-                    assistant_content.append({"type": "text", "text": event.text})
+                    text_parts.append(event.text)
+                    if not is_openai:
+                        assistant_blocks.append({"type": "text", "text": event.text})
                     yield event
 
                 elif isinstance(event, ToolCallReady):
-                    assistant_content.append(
-                        {
-                            "type": "tool_use",
+                    if is_openai:
+                        tool_calls_openai.append({
                             "id": event.tool_id,
-                            "name": event.name,
-                            "input": event.inputs,
-                        }
-                    )
+                            "type": "function",
+                            "function": {
+                                "name": event.name,
+                                "arguments": json.dumps(event.inputs),
+                            },
+                        })
+                    else:
+                        assistant_blocks.append(
+                            {
+                                "type": "tool_use",
+                                "id": event.tool_id,
+                                "name": event.name,
+                                "input": event.inputs,
+                            }
+                        )
+
                     injected = yield event
                     validated = _validate_injected_tool_result(
                         tool_id=event.tool_id,
                         tool_name=event.name,
                         result=injected,
                     )
-                    tool_results_for_next.append(
-                        {
+
+                    if is_openai:
+                        tool_results_for_next.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": event.tool_id,
+                                "content": _tool_result_content(validated),
+                            }
+                        )
+                    else:
+                        block: dict[str, Any] = {
                             "type": "tool_result",
                             "tool_use_id": event.tool_id,
                             "content": _tool_result_content(validated),
                         }
-                    )
+                        if not validated.ok:
+                            block["is_error"] = True
+                        tool_results_for_next.append(block)
 
                 else:
                     yield event
 
-            working.append({"role": "assistant", "content": assistant_content})
+            # Append assistant turn in provider-appropriate format
+            if is_openai:
+                text = "".join(text_parts)
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": text or None,
+                }
+                if tool_calls_openai:
+                    assistant_msg["tool_calls"] = tool_calls_openai
+                working.append(assistant_msg)
+            else:
+                working.append({"role": "assistant", "content": assistant_blocks})
 
             if stop_reason != "tool_use":
                 yield TurnDone(full_text="".join(full_text_parts))
                 return
 
-            working.append({"role": "user", "content": tool_results_for_next})
+            # Append tool results in provider-appropriate format
+            if is_openai:
+                working.extend(tool_results_for_next)
+            else:
+                working.append({"role": "user", "content": tool_results_for_next})
 
         logger.warning("Reached MAX_ITERATIONS (%d) for task_id=%s", MAX_ITERATIONS, task_id)
         yield TurnDone(full_text="".join(full_text_parts))

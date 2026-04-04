@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, Literal
 
 from sebastian.core.stream_events import LLMStreamEvent
 
@@ -12,7 +12,13 @@ class LLMProvider(ABC):
 
     Implementations map SDK-specific streaming events to LLMStreamEvent and
     emit ProviderCallEnd as the final event with the stop_reason.
+
+    message_format controls how AgentLoop builds conversation history:
+      "anthropic" — assistant content as block list, tool results in user message
+      "openai"    — assistant with tool_calls field, tool results as role:tool messages
     """
+
+    message_format: Literal["anthropic", "openai"] = "anthropic"
 
     @abstractmethod
     async def stream(

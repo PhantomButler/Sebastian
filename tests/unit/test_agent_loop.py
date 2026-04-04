@@ -279,5 +279,5 @@ async def test_agent_loop_formats_failed_tool_result_for_next_turn() -> None:
     last_messages = provider.last_messages
     assert last_messages[-1] == {
         "role": "user",
-        "content": [{"type": "tool_result", "tool_use_id": "toolu_1", "content": "Error: network down"}],
+        "content": [{"type": "tool_result", "tool_use_id": "toolu_1", "content": "Error: network down", "is_error": True}],
     }
