@@ -73,6 +73,7 @@ class AnthropicProvider(LLMProvider):
                         yield ThinkingDelta(block_id=block_id, delta=raw.delta.thinking)
                     elif delta_type == "text_delta":
                         yield TextDelta(block_id=block_id, delta=raw.delta.text)
+                    # input_json_delta for tool_use: accumulated by SDK, read at content_block_stop
                     continue
 
                 if raw.type != "content_block_stop":
