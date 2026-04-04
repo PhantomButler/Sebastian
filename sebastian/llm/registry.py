@@ -22,7 +22,7 @@ class LLMProviderRegistry:
         async with self._db_factory() as session:
             result = await session.execute(
                 select(LLMProviderRecord)
-                .where(LLMProviderRecord.is_default)  # noqa: E712
+                .where(LLMProviderRecord.is_default.is_(True))
                 .limit(1)
             )
             record = result.scalar_one_or_none()

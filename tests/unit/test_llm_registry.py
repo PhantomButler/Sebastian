@@ -62,6 +62,7 @@ async def test_registry_get_default_uses_db_record(registry_with_db) -> None:
     await registry_with_db.create(record)
     provider = await registry_with_db.get_default()
     assert isinstance(provider, AnthropicProvider)
+    assert provider._client.api_key == "sk-ant-db"
 
 
 @pytest.mark.asyncio
