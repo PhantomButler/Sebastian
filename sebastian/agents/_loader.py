@@ -17,15 +17,22 @@ class AgentConfig:
     description: str
     worker_count: int
     agent_class: type[BaseAgent]
+    allowed_tools: list[str] | None = None
+    allowed_skills: list[str] | None = None
 
 
 def load_agents(extra_dirs: list[Path] | None = None) -> list[AgentConfig]:
     """Scan built-in agents dir and optional extra dirs for manifest.toml files.
 
-    Later entries with the same agent_type override earlier ones (user extensions win).
+    When extra_dirs is provided, only those directories are scanned (builtin is skipped).
+    This allows tests and user extensions to load agents in isolation.
+    When extra_dirs is None, the built-in agents directory is scanned.
     """
-    builtin_dir = Path(__file__).parent
-    dirs: list[tuple[Path, bool]] = [(builtin_dir, True), *((d, False) for d in (extra_dirs or []))]
+    if extra_dirs is not None:
+        dirs: list[tuple[Path, bool]] = [(d, False) for d in extra_dirs]
+    else:
+        builtin_dir = Path(__file__).parent
+        dirs = [(builtin_dir, True)]
 
     configs: dict[str, AgentConfig] = {}
 
@@ -64,12 +71,18 @@ def load_agents(extra_dirs: list[Path] | None = None) -> list[AgentConfig]:
                 logging.getLogger(__name__).warning("Failed to load agent %r: %s", agent_type, exc)
                 continue
 
+            # allowed_tools / allowed_skills: None if not declared, list if declared
+            raw_tools = agent_section.get("allowed_tools")
+            raw_skills = agent_section.get("allowed_skills")
+
             configs[agent_type] = AgentConfig(
                 agent_type=agent_type,
                 name=agent_section.get("name", agent_type),
                 description=agent_section.get("description", ""),
                 worker_count=int(agent_section.get("worker_count", 3)),
                 agent_class=agent_class,
+                allowed_tools=list(raw_tools) if raw_tools is not None else None,
+                allowed_skills=list(raw_skills) if raw_skills is not None else None,
             )
 
     return list(configs.values())

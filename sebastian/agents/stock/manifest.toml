@@ -3,3 +3,5 @@ name = "Stock Agent"
 description = "Performs stock and investment research: price lookup, financial analysis, market summaries"
 worker_count = 3
 class_name = "StockAgent"
+allowed_tools = ["web_search"]
+allowed_skills = []

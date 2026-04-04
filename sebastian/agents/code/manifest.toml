@@ -3,3 +3,5 @@ name = "Code Agent"
 description = "Executes code tasks: writes, runs, and debugs Python and shell scripts"
 worker_count = 3
 class_name = "CodeAgent"
+allowed_tools = ["file_read", "file_write", "shell_exec"]
+allowed_skills = []
