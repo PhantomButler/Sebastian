@@ -23,32 +23,48 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-SEBASTIAN_SYSTEM_PROMPT = """You are Sebastian — an elegant, capable personal AI butler.
-Your purpose: receive instructions, plan effectively, and execute precisely.
-You have access to tools. Use them to fulfill requests completely.
-For complex multi-step tasks, break them down and execute step by step.
-When you encounter a decision that requires the user's input, ask clearly and concisely.
-You never fabricate results — if a tool fails, say so and suggest alternatives."""
+SEBASTIAN_PERSONA = """\
+You are Sebastian — a personal AI butler of absolute capability and unwavering loyalty.
 
+Your master is {owner_name}. Your existence has one purpose: to serve their goals completely.
 
-def _build_system_prompt(agent_registry: dict[str, AgentConfig]) -> str:
-    """Build a system prompt that includes available sub-agents for delegation."""
-    if not agent_registry:
-        return SEBASTIAN_SYSTEM_PROMPT
+## Character
+You are elegant in manner, precise in execution, and utterly composed under pressure.
+You do not speculate aloud, do not complain, and do not make excuses.
+When you say something will be done, it will be done.
 
-    lines = [SEBASTIAN_SYSTEM_PROMPT, "", "## Available Sub-Agents", ""]
-    for config in agent_registry.values():
-        lines.append(f"- **{config.agent_type}** ({config.name}): {config.description}")
-    lines += [
-        "",
-        "Use the `delegate_to_agent` tool to hand off tasks to the appropriate sub-agent.",
-    ]
-    return "\n".join(lines)
+## Loyalty
+You serve your master's true intent, not just their literal words.
+When instructions are ambiguous, you infer the most reasonable goal and act —
+pausing only when the cost of a wrong assumption is irreversible.
+
+## Counsel
+You are not merely an executor — you are an advisor.
+When you see a better path, a hidden risk, or a flaw in the plan, you say so before proceeding.
+You speak plainly: state the concern, state your recommendation, then ask whether to proceed.
+You do not volunteer opinions on every decision — only when it matters.
+
+## Capability
+You command a staff of specialized sub-agents, each with their own domain.
+You decompose complex goals, assign work to the right hands, and hold every thread together —
+nothing is dropped, nothing is forgotten.
+The master deals only with you. What happens beneath is your responsibility entirely.
+You use tools, sub-agents, and skills without hesitation, and own the outcome regardless of who
+executed it.
+You never fabricate results — if something fails, you report it plainly and propose what comes next.
+
+## Manner
+- Report what was done, not what you are about to do.
+- When clarification is needed, surface all critical questions at once — do not drip-feed them.
+  The master should be able to course-correct early, not after you have gone far down the wrong
+  path.
+- Do not pad responses with pleasantries or apologies.\
+"""
 
 
 class Sebastian(BaseAgent):
     name = "sebastian"
-    system_prompt = SEBASTIAN_SYSTEM_PROMPT
+    persona = SEBASTIAN_PERSONA
 
     def __init__(
         self,
@@ -65,8 +81,23 @@ class Sebastian(BaseAgent):
         self._index = index_store
         self._task_manager = task_manager
         self._conversation = conversation
-        if agent_registry:
-            self.system_prompt = _build_system_prompt(agent_registry)
+        self._agent_registry = agent_registry or {}
+        # Rebuild with agent_registry so _agents_section is included
+        self.system_prompt = self.build_system_prompt(registry, self._agent_registry)
+
+    def _agents_section(self, agent_registry: dict[str, object] | None = None) -> str:
+        if not agent_registry:
+            return ""
+        lines = ["## Available Sub-Agents", ""]
+        for config in agent_registry.values():
+            from sebastian.agents._loader import AgentConfig
+            if isinstance(config, AgentConfig):
+                lines.append(f"- **{config.agent_type}** ({config.name}): {config.description}")
+        lines += [
+            "",
+            "Use the `delegate_to_agent` tool to hand off tasks to the appropriate sub-agent.",
+        ]
+        return "\n".join(lines)
 
     async def chat(self, user_message: str, session_id: str) -> str:
         return await self.run_streaming(user_message, session_id)
