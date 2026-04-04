@@ -41,6 +41,12 @@ class SSEManager:
             buffered_event = _BufferedEvent(self._next_event_id, event)
             self._next_event_id += 1
             self._buffer.append(buffered_event)
+            logger.debug(
+                "sse_event id=%d type=%s session=%s",
+                buffered_event.event_id,
+                buffered_event.event.type.value,
+                buffered_event.event.data.get("session_id", "-"),
+            )
             subscriptions = list(self._queues)
 
         for subscription in subscriptions:
