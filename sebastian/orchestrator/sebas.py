@@ -5,18 +5,21 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sebastian.capabilities.registry import CapabilityRegistry
-
-if TYPE_CHECKING:
-    from sebastian.agents._loader import AgentConfig
-    from sebastian.llm.provider import LLMProvider
 from sebastian.core.base_agent import BaseAgent
 from sebastian.core.task_manager import TaskManager
 from sebastian.core.types import Session, Task
 from sebastian.orchestrator.conversation import ConversationManager
+from sebastian.orchestrator.tools import (
+    delegate as _delegate_tools,  # noqa: F401  # registers delegate_to_agent tool
+)
 from sebastian.protocol.events.bus import EventBus
 from sebastian.protocol.events.types import EventType
 from sebastian.store.index_store import IndexStore
 from sebastian.store.session_store import SessionStore
+
+if TYPE_CHECKING:
+    from sebastian.agents._loader import AgentConfig
+    from sebastian.llm.provider import LLMProvider
 
 logger = logging.getLogger(__name__)
 
