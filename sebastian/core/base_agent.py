@@ -4,11 +4,12 @@ import asyncio
 import dataclasses
 import logging
 from abc import ABC
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sebastian.llm.provider import LLMProvider
+    from sebastian.protocol.a2a.types import DelegateTask
+    from sebastian.protocol.a2a.types import TaskResult as A2ATaskResult
 
 from sebastian.capabilities.registry import CapabilityRegistry
 from sebastian.core.agent_loop import AgentLoop
@@ -281,6 +282,38 @@ class BaseAgent(ABC):
                 },
             )
             raise
+
+    async def execute_delegated_task(self, task: DelegateTask) -> A2ATaskResult:
+        """Execute a delegated task from Sebastian. Creates an isolated session per task."""
+        from sebastian.core.types import Session
+        from sebastian.protocol.a2a.types import TaskResult as A2ATaskResult
+
+        session = Session(
+            id=f"a2a_{task.task_id}",
+            agent_type=self.name,
+            agent_id=f"{self.name}_01",
+            title=task.goal[:40],
+        )
+        await self._session_store.create_session(session)
+
+        try:
+            result_text = await self.run_streaming(
+                task.goal,
+                session.id,
+                task_id=task.task_id,
+                agent_name=self.name,
+            )
+            return A2ATaskResult(
+                task_id=task.task_id,
+                ok=True,
+                output={"summary": result_text},
+            )
+        except Exception as exc:
+            return A2ATaskResult(
+                task_id=task.task_id,
+                ok=False,
+                error=str(exc),
+            )
 
     async def _publish(
         self,
