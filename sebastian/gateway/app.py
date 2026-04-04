@@ -137,7 +137,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sebastian.store.index_store import IndexStore
     from sebastian.store.session_store import SessionStore
 
+    from pathlib import Path
+    from sebastian.log import setup_logging
+
     ensure_data_dir()
+    setup_logging(
+        data_dir=Path(settings.sebastian_data_dir),
+        llm_stream=settings.sebastian_log_llm_stream,
+        sse=settings.sebastian_log_sse,
+    )
     await init_db()
     db_factory = get_session_factory()
     session_store = SessionStore(settings.sessions_dir)
@@ -219,7 +227,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    from sebastian.gateway.routes import agents, approvals, llm_providers, sessions, stream, turns
+    from sebastian.gateway.routes import agents, approvals, debug, llm_providers, sessions, stream, turns
 
     app = FastAPI(title="Sebastian Gateway", version="0.1.0", lifespan=lifespan)
     app.include_router(turns.router, prefix="/api/v1")
@@ -228,6 +236,7 @@ def create_app() -> FastAPI:
     app.include_router(stream.router, prefix="/api/v1")
     app.include_router(agents.router, prefix="/api/v1")
     app.include_router(llm_providers.router, prefix="/api/v1")
+    app.include_router(debug.router, prefix="/api/v1")
     return app
 
 
