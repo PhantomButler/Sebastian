@@ -68,6 +68,12 @@ export type SSEEventType =
   | 'task.planning_failed'
   | 'turn.received'
   | 'turn.response'
+  | 'turn.delta'
+  | 'turn.thinking_delta'
+  | 'thinking_block.start'
+  | 'thinking_block.stop'
+  | 'text_block.start'
+  | 'text_block.stop'
   | 'task.created'
   | 'task.started'
   | 'task.paused'
@@ -127,3 +133,29 @@ export interface LLMProviderCreate {
 export interface AuthResponse { access_token: string; token_type: string; }
 export interface PaginatedMessages { items: Message[]; nextCursor: string | null; }
 export interface PaginatedSessions { items: SessionMeta[]; nextCursor: string | null; }
+
+// ── Conversation rendering types ──────────────────────────────────────────
+
+export type RenderBlock =
+  | { type: 'thinking'; blockId: string; text: string; done: boolean }
+  | { type: 'text';     blockId: string; text: string; done: boolean }
+  | { type: 'tool';     toolId: string;  name: string; input: string;
+      status: 'running' | 'done' | 'failed'; result?: string };
+
+export interface ActiveTurn {
+  blocks: RenderBlock[];
+  blockMap: Map<string, RenderBlock>;
+}
+
+export interface ConvMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+export interface ConvSessionState {
+  status: 'idle' | 'loading' | 'live' | 'paused';
+  messages: ConvMessage[];
+  activeTurn: ActiveTurn | null;
+}
