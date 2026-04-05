@@ -190,7 +190,7 @@ def invalidate(path: str) -> None:
 | 参数 | 类型 | 必须 | 说明 |
 |------|------|------|------|
 | `command` | `str` | 是 | Shell 命令 |
-| `timeout` | `int \| None` | 否 | 超时秒数，默认 120 |
+| `timeout` | `int \| None` | 否 | 超时秒数，默认 600 |
 
 **行为：**
 - 使用 `asyncio.create_subprocess_shell` 异步执行
@@ -198,6 +198,8 @@ def invalidate(path: str) -> None:
 - 超时后调用 `proc.kill()` 并返回错误
 - stdout + stderr 超过 10000 字符时截断，注明已截断
 - 返回格式：`{"stdout": str, "stderr": str, "returncode": int, "truncated": bool}`
+
+**超时说明：** 默认 600 秒，覆盖大多数测试/构建场景。LLM 调用耗时更长的命令时可显式传参（如 `timeout=1800`）。服务端不设无限等待以防命令卡死挂起 session。
 
 **错误处理：**
 - 超时 → `ToolResult(ok=False, error="Command timed out after <timeout>s")`
