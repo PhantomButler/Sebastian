@@ -28,15 +28,44 @@ function emptySession(): ConvSessionState {
   return { status: 'idle', messages: [], activeTurn: null };
 }
 
-function getActiveTurn(state: ConvSessionState): ActiveTurn {
-  if (state.activeTurn) return state.activeTurn;
-  return { blocks: [], blockMap: new Map() };
+/** Produces a new ActiveTurn with the block appended. Does not mutate input. */
+function appendBlock(turn: ActiveTurn | null, block: RenderBlock): ActiveTurn {
+  const key = block.type === 'tool' ? block.toolId : block.blockId;
+  const newMap = new Map(turn?.blockMap ?? []);
+  newMap.set(key, block);
+  return {
+    blocks: [...(turn?.blocks ?? []), block],
+    blockMap: newMap,
+  };
 }
 
-function pushBlock(turn: ActiveTurn, block: RenderBlock): void {
-  const key = block.type === 'tool' ? block.toolId : block.blockId;
-  turn.blocks.push(block);
-  turn.blockMap.set(key, block);
+/** Produces a new ActiveTurn with the block at blockId replaced by updater(block). */
+function updateBlock(
+  turn: ActiveTurn,
+  key: string,
+  updater: (b: RenderBlock) => RenderBlock,
+): ActiveTurn {
+  const existing = turn.blockMap.get(key);
+  if (!existing) return turn;
+  const updated = updater(existing);
+  const newMap = new Map(turn.blockMap);
+  newMap.set(key, updated);
+  const newBlocks = turn.blocks.map((b) => {
+    const k = b.type === 'tool' ? b.toolId : b.blockId;
+    return k === key ? updated : b;
+  });
+  return { blocks: newBlocks, blockMap: newMap };
+}
+
+function updateSession(
+  sessions: Record<string, ConvSessionState>,
+  sessionId: string,
+  patch: Partial<ConvSessionState>,
+): Record<string, ConvSessionState> {
+  return {
+    ...sessions,
+    [sessionId]: { ...(sessions[sessionId] ?? emptySession()), ...patch },
+  };
 }
 
 export const useConversationStore = create<ConversationStore>((set, get) => ({
@@ -47,21 +76,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
   },
 
   setStatus(sessionId, status) {
-    set((s) => ({
-      sessions: {
-        ...s.sessions,
-        [sessionId]: { ...(s.sessions[sessionId] ?? emptySession()), status },
-      },
-    }));
+    set((s) => ({ sessions: updateSession(s.sessions, sessionId, { status }) }));
   },
 
   setMessages(sessionId, messages) {
-    set((s) => ({
-      sessions: {
-        ...s.sessions,
-        [sessionId]: { ...(s.sessions[sessionId] ?? emptySession()), messages },
-      },
-    }));
+    set((s) => ({ sessions: updateSession(s.sessions, sessionId, { messages }) }));
   },
 
   pauseSession(sessionId) {
@@ -72,7 +91,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
         ([id, sess]) => id !== sessionId && sess.status === 'paused',
       );
       const toEvict = paused.slice(MAX_PAUSED - 1);
-      const next = { ...s.sessions, [sessionId]: { ...session, status: 'paused' as const } };
+      const next = updateSession(s.sessions, sessionId, { status: 'paused' });
       for (const [id] of toEvict) delete next[id];
       return { sessions: next };
     });
@@ -88,12 +107,10 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
 
   onThinkingBlockStart(sessionId, blockId) {
     set((s) => {
-      const session = { ...(s.sessions[sessionId] ?? emptySession()) };
-      const turn = getActiveTurn(session);
+      const session = s.sessions[sessionId] ?? emptySession();
       const block: RenderBlock = { type: 'thinking', blockId, text: '', done: false };
-      pushBlock(turn, block);
-      session.activeTurn = turn;
-      return { sessions: { ...s.sessions, [sessionId]: session } };
+      const activeTurn = appendBlock(session.activeTurn, block);
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
@@ -101,10 +118,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     set((s) => {
       const session = s.sessions[sessionId];
       if (!session?.activeTurn) return s;
-      const block = session.activeTurn.blockMap.get(blockId);
-      if (!block || block.type !== 'thinking') return s;
-      block.text += delta;
-      return { sessions: { ...s.sessions, [sessionId]: { ...session } } };
+      const activeTurn = updateBlock(session.activeTurn, blockId, (b) => {
+        if (b.type !== 'thinking') return b;
+        return { ...b, text: b.text + delta };
+      });
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
@@ -112,21 +130,20 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     set((s) => {
       const session = s.sessions[sessionId];
       if (!session?.activeTurn) return s;
-      const block = session.activeTurn.blockMap.get(blockId);
-      if (!block || block.type !== 'thinking') return s;
-      block.done = true;
-      return { sessions: { ...s.sessions, [sessionId]: { ...session } } };
+      const activeTurn = updateBlock(session.activeTurn, blockId, (b) => {
+        if (b.type !== 'thinking') return b;
+        return { ...b, done: true };
+      });
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
   onTextBlockStart(sessionId, blockId) {
     set((s) => {
-      const session = { ...(s.sessions[sessionId] ?? emptySession()) };
-      const turn = getActiveTurn(session);
+      const session = s.sessions[sessionId] ?? emptySession();
       const block: RenderBlock = { type: 'text', blockId, text: '', done: false };
-      pushBlock(turn, block);
-      session.activeTurn = turn;
-      return { sessions: { ...s.sessions, [sessionId]: session } };
+      const activeTurn = appendBlock(session.activeTurn, block);
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
@@ -134,10 +151,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     set((s) => {
       const session = s.sessions[sessionId];
       if (!session?.activeTurn) return s;
-      const block = session.activeTurn.blockMap.get(blockId);
-      if (!block || block.type !== 'text') return s;
-      block.text += delta;
-      return { sessions: { ...s.sessions, [sessionId]: { ...session } } };
+      const activeTurn = updateBlock(session.activeTurn, blockId, (b) => {
+        if (b.type !== 'text') return b;
+        return { ...b, text: b.text + delta };
+      });
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
@@ -145,21 +163,20 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     set((s) => {
       const session = s.sessions[sessionId];
       if (!session?.activeTurn) return s;
-      const block = session.activeTurn.blockMap.get(blockId);
-      if (!block || block.type !== 'text') return s;
-      block.done = true;
-      return { sessions: { ...s.sessions, [sessionId]: { ...session } } };
+      const activeTurn = updateBlock(session.activeTurn, blockId, (b) => {
+        if (b.type !== 'text') return b;
+        return { ...b, done: true };
+      });
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
   onToolRunning(sessionId, toolId, name, input) {
     set((s) => {
-      const session = { ...(s.sessions[sessionId] ?? emptySession()) };
-      const turn = getActiveTurn(session);
+      const session = s.sessions[sessionId] ?? emptySession();
       const block: RenderBlock = { type: 'tool', toolId, name, input, status: 'running' };
-      pushBlock(turn, block);
-      session.activeTurn = turn;
-      return { sessions: { ...s.sessions, [sessionId]: session } };
+      const activeTurn = appendBlock(session.activeTurn, block);
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
@@ -167,11 +184,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     set((s) => {
       const session = s.sessions[sessionId];
       if (!session?.activeTurn) return s;
-      const block = session.activeTurn.blockMap.get(toolId);
-      if (!block || block.type !== 'tool') return s;
-      block.status = 'done';
-      block.result = result;
-      return { sessions: { ...s.sessions, [sessionId]: { ...session } } };
+      const activeTurn = updateBlock(session.activeTurn, toolId, (b) => {
+        if (b.type !== 'tool') return b;
+        return { ...b, status: 'done' as const, result };
+      });
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
@@ -179,24 +196,15 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     set((s) => {
       const session = s.sessions[sessionId];
       if (!session?.activeTurn) return s;
-      const block = session.activeTurn.blockMap.get(toolId);
-      if (!block || block.type !== 'tool') return s;
-      block.status = 'failed';
-      block.result = error;
-      return { sessions: { ...s.sessions, [sessionId]: { ...session } } };
+      const activeTurn = updateBlock(session.activeTurn, toolId, (b) => {
+        if (b.type !== 'tool') return b;
+        return { ...b, status: 'failed' as const, result: error };
+      });
+      return { sessions: updateSession(s.sessions, sessionId, { activeTurn }) };
     });
   },
 
   onTurnComplete(sessionId) {
-    set((s) => {
-      const session = s.sessions[sessionId];
-      if (!session) return s;
-      return {
-        sessions: {
-          ...s.sessions,
-          [sessionId]: { ...session, activeTurn: null },
-        },
-      };
-    });
+    set((s) => ({ sessions: updateSession(s.sessions, sessionId, { activeTurn: null }) }));
   },
 }));
