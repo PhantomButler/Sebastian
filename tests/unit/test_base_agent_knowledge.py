@@ -62,6 +62,25 @@ def test_knowledge_section_reads_multiple_files_alphabetically(tmp_path: Path) -
     assert section.index("A content") < section.index("B content")
 
 
+def test_code_agent_loads_real_knowledge_file() -> None:
+    """CodeAgent 的真实 knowledge 文件被正确加载进系统提示词。"""
+    from unittest.mock import MagicMock
+    from sebastian.agents.code import CodeAgent
+    from sebastian.store.session_store import SessionStore
+
+    gate = MagicMock()
+    gate.get_tool_specs.return_value = []
+    gate.get_skill_specs.return_value = []
+    agent = CodeAgent(gate, MagicMock(spec=SessionStore))
+    prompt = agent.system_prompt
+
+    assert "## Knowledge" in prompt
+    assert "Workflow" in prompt
+    assert "senior software engineer" in prompt
+    # knowledge 节在 persona 之后
+    assert prompt.index("## Knowledge") > prompt.index("senior software engineer")
+
+
 def test_build_system_prompt_includes_knowledge(tmp_path: Path) -> None:
     """build_system_prompt 将 knowledge 节追加在最后。"""
     kdir = tmp_path / "knowledge"
