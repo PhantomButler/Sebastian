@@ -27,7 +27,7 @@ async def edit(
 ) -> ToolResult:
     path = os.path.abspath(file_path)
     try:
-        _file_state.require_read(path)
+        _file_state.check_write(path)
     except ValueError as e:
         return ToolResult(ok=False, error=str(e))
     if not os.path.exists(path):

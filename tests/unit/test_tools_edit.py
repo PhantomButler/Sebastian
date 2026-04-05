@@ -141,14 +141,13 @@ async def test_edit_existing_file_requires_read_first(tmp_path, isolated_registr
 
 @pytest.mark.asyncio
 async def test_edit_after_read_succeeds(tmp_path, isolated_registry) -> None:
-    """Read 过之后，即使 mtime 未变化，Edit 应该成功。"""
+    """Read 过且 mtime 未变，Edit 应该成功。"""
     from sebastian.capabilities.tools._file_state import record_read
     from sebastian.core.tool import call_tool
 
     target = tmp_path / "code.py"
     target.write_text("def hello():\n    return 'world'\n")
 
-    # Simulate having read the file
     record_read(str(target))
 
     result = await call_tool(
@@ -159,3 +158,25 @@ async def test_edit_after_read_succeeds(tmp_path, isolated_registry) -> None:
     )
     assert result.ok
     assert result.output["replacements"] == 1
+
+
+@pytest.mark.asyncio
+async def test_edit_rejects_stale_mtime(tmp_path, isolated_registry) -> None:
+    """Read 过但文件被外部修改（mtime 变化），Edit 应被拒绝。"""
+    from sebastian.capabilities.tools import _file_state
+    from sebastian.core.tool import call_tool
+
+    target = tmp_path / "code.py"
+    target.write_text("def hello():\n    return 'world'\n")
+
+    # Simulate "read long ago" with a stale mtime
+    _file_state._file_mtimes[str(target)] = 0.0
+
+    result = await call_tool(
+        "Edit",
+        file_path=str(target),
+        old_string="return 'world'",
+        new_string="return 'hacked'",
+    )
+    assert not result.ok
+    assert "modified externally" in result.error

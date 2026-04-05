@@ -36,21 +36,6 @@ def check_write(path: str) -> None:
             f"Call Read again before writing: {path}"
         )
 
-
-def require_read(path: str) -> None:
-    """
-    Edit 前调用。规则：
-    - 文件不存在 → 允许（Edit 自己会报文件不存在）
-    - 文件存在但从未 Read → 拒绝，提示先 Read
-    - 文件存在且 Read 过 → 允许（不检查 mtime，那是另外一回事）
-    抛出 ValueError，由调用方转为 ToolResult(ok=False)。
-    """
-    if not os.path.exists(path):
-        return  # 文件不存在，Edit 自己会处理
-    if path not in _file_mtimes:
-        raise ValueError(f"File has not been read yet. Call Read first before editing: {path}")
-
-
 def invalidate(path: str) -> None:
     """Write/Edit 成功后调用，更新缓存 mtime。"""
     try:
