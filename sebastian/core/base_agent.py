@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import inspect
 import logging
 from abc import ABC
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -126,6 +128,21 @@ class BaseAgent(ABC):
     def _agents_section(self, agent_registry: dict[str, object] | None = None) -> str:  # noqa: ARG002
         return ""
 
+    def _knowledge_dir(self) -> Path:
+        module_file = inspect.getfile(type(self))
+        return Path(module_file).parent / "knowledge"
+
+    def _knowledge_section(self) -> str:
+        kdir = self._knowledge_dir()
+        if not kdir.is_dir():
+            return ""
+        md_files = sorted(kdir.glob("*.md"))
+        if not md_files:
+            return ""
+        parts = [f.read_text(encoding="utf-8") for f in md_files]
+        body = "\n\n---\n\n".join(parts)
+        return f"## Knowledge\n\n{body}"
+
     def build_system_prompt(
         self,
         gate: PolicyGate,
@@ -136,6 +153,7 @@ class BaseAgent(ABC):
             self._tools_section(gate),
             self._skills_section(gate),
             self._agents_section(agent_registry),
+            self._knowledge_section(),
         ]
         return "\n\n".join(s for s in sections if s)
 
