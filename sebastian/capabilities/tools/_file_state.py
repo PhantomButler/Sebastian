@@ -21,13 +21,15 @@ def check_write(path: str) -> None:
     - 文件存在且 Read 过但 mtime 变更 → 拒绝
     抛出 ValueError。
     """
-    if not os.path.exists(path):
-        return
+    try:
+        current_mtime = os.path.getmtime(path)
+    except OSError:
+        return  # file does not exist — allow creation
+
     if path not in _file_mtimes:
         raise ValueError(
             f"File has not been read yet. Call Read first before writing: {path}"
         )
-    current_mtime = os.path.getmtime(path)
     if current_mtime != _file_mtimes[path]:
         raise ValueError(
             f"File has been modified externally since last read. "

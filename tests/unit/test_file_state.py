@@ -63,3 +63,21 @@ def test_invalidate_updates_cache(tmp_path):
     f.write_text("v2")
     _file_state.invalidate(str(f))
     assert _file_state._file_mtimes[str(f)] != old_mtime
+
+
+def test_record_read_nonexistent_path_does_not_raise():
+    _clear()
+    from sebastian.capabilities.tools import _file_state
+    _file_state.record_read("/nonexistent/path/that/does/not/exist.txt")
+    # Should not raise; path should not be in cache
+    assert "/nonexistent/path/that/does/not/exist.txt" not in _file_state._file_mtimes
+
+
+def test_invalidate_nonexistent_path_removes_key():
+    _clear()
+    from sebastian.capabilities.tools import _file_state
+    # Pre-populate cache with a stale entry for a path that no longer exists
+    _file_state._file_mtimes["/gone/file.txt"] = 1234.0
+    _file_state.invalidate("/gone/file.txt")
+    # Key should be removed since the file doesn't exist (OSError branch)
+    assert "/gone/file.txt" not in _file_state._file_mtimes
