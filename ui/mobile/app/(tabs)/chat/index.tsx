@@ -37,6 +37,7 @@ export default function ChatScreen() {
           active_task_count: 0,
         });
       }
+      useConversationStore.getState().appendUserMessage(sessionId, text);
       queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
     } catch {
       Alert.alert('发送失败，请重试');
@@ -98,7 +99,7 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#0d0d0d' },
   header: {
     minHeight: 48,
     backgroundColor: '#ffffff',

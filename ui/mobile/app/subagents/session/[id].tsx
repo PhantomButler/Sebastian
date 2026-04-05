@@ -8,6 +8,7 @@ import {
   getSessionTasks,
   sendTurnToSession,
 } from '../../../src/api/sessions';
+import { useConversationStore } from '../../../src/store/conversation';
 import { MessageInput } from '../../../src/components/chat/MessageInput';
 import { ConversationView } from '../../../src/components/conversation';
 import { SessionDetailView } from '../../../src/components/subagents/SessionDetailView';
@@ -127,6 +128,7 @@ export default function SessionDetailScreen() {
       setSending(true);
       try {
         await sendTurnToSession(sessionId, text, agentName);
+        useConversationStore.getState().appendUserMessage(sessionId, text);
         queryClient.invalidateQueries({
           queryKey: ['session-detail', sessionId, agentName],
         });

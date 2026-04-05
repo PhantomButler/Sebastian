@@ -142,11 +142,7 @@ export function useConversation(sessionId: string | null): void {
           break;
         }
         case 'turn.response': {
-          s.onTurnComplete(sid);
-          getSessionDetail(sid).then((detail) => {
-            if (cancelled) return;
-            store.getState().setMessages(sid, mapMessages(sid, detail.messages));
-          });
+          s.completeTurn(sid);
           queryClient.invalidateQueries({ queryKey: ['session-detail', sid] });
           break;
         }

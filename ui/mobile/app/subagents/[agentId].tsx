@@ -15,7 +15,7 @@ export default function AgentSessionsScreen() {
 
   const { data: sessions = [] } = useQuery({
     queryKey: ['agent-sessions', normalizedAgentId],
-    queryFn: () => getAgentSessions(agentName),
+    queryFn: () => getAgentSessions(normalizedAgentId),
     enabled: !!normalizedAgentId,
   });
 

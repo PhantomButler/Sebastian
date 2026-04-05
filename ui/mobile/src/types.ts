@@ -155,6 +155,8 @@ export interface ConvMessage {
   role: 'user' | 'assistant';
   content: string;
   createdAt: string;
+  /** Present on assistant messages rendered from a live turn; absent for hydrated messages. */
+  blocks?: RenderBlock[];
 }
 
 export interface ConvSessionState {

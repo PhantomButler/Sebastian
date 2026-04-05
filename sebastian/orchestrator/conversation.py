@@ -60,6 +60,7 @@ class ConversationManager:
                 data={
                     "approval_id": approval_id,
                     "task_id": task_id,
+                    "session_id": session_id,
                     "tool_name": tool_name,
                     "tool_input": tool_input,
                     "reason": reason,
@@ -67,7 +68,12 @@ class ConversationManager:
             )
         )
 
-        return await future
+        try:
+            return await asyncio.wait_for(future, timeout=300.0)
+        except asyncio.TimeoutError:
+            self._pending.pop(approval_id, None)
+            logger.warning("Approval request %s timed out after 300s, denying.", approval_id)
+            return False
 
     async def resolve_approval(self, approval_id: str, granted: bool) -> None:
         """Called by the approval API endpoint to resolve a pending request."""

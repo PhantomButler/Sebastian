@@ -39,17 +39,14 @@ export function ConversationView({ sessionId }: Props) {
       if (message.role === 'user') {
         return <UserBubble content={message.content} />;
       }
-      // Historical assistant messages rendered as plain markdown
+      // Assistant messages: use persisted blocks if available, else fall back to plain text
       return (
         <AssistantMessage
-          blocks={[
-            {
-              type: 'text',
-              blockId: message.id,
-              text: message.content,
-              done: true,
-            },
-          ]}
+          blocks={
+            message.blocks ?? [
+              { type: 'text', blockId: message.id, text: message.content, done: true },
+            ]
+          }
         />
       );
     }

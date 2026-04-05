@@ -18,10 +18,12 @@ interface ConversationStore {
   onTextBlockStart(sessionId: string, blockId: string): void;
   onTextDelta(sessionId: string, blockId: string, delta: string): void;
   onTextBlockStop(sessionId: string, blockId: string): void;
+  appendUserMessage(sessionId: string, content: string): void;
   onToolRunning(sessionId: string, toolId: string, name: string, input: string): void;
   onToolExecuted(sessionId: string, toolId: string, result: string): void;
   onToolFailed(sessionId: string, toolId: string, error: string): void;
   onTurnComplete(sessionId: string): void;
+  completeTurn(sessionId: string): void;
 }
 
 function emptySession(): ConvSessionState {
@@ -173,6 +175,23 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     });
   },
 
+  appendUserMessage(sessionId, content) {
+    set((s) => {
+      const session = s.sessions[sessionId] ?? emptySession();
+      const msg: ConvMessage = {
+        id: `${sessionId}-user-${Date.now()}`,
+        role: 'user',
+        content,
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        sessions: updateSession(s.sessions, sessionId, {
+          messages: [...session.messages, msg],
+        }),
+      };
+    });
+  },
+
   onToolRunning(sessionId, toolId, name, input) {
     set((s) => {
       const session = s.sessions[sessionId] ?? emptySession();
@@ -208,5 +227,30 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
 
   onTurnComplete(sessionId) {
     set((s) => ({ sessions: updateSession(s.sessions, sessionId, { activeTurn: null }) }));
+  },
+
+  completeTurn(sessionId) {
+    set((s) => {
+      const session = s.sessions[sessionId];
+      if (!session?.activeTurn) return s;
+      const blocks = session.activeTurn.blocks;
+      const content = blocks
+        .filter((b) => b.type === 'text')
+        .map((b) => (b as { text: string }).text)
+        .join('');
+      const msg: ConvMessage = {
+        id: `${sessionId}-assistant-${Date.now()}`,
+        role: 'assistant',
+        content,
+        createdAt: new Date().toISOString(),
+        blocks,
+      };
+      return {
+        sessions: updateSession(s.sessions, sessionId, {
+          messages: [...session.messages, msg],
+          activeTurn: null,
+        }),
+      };
+    });
   },
 }));
