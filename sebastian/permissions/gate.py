@@ -102,6 +102,7 @@ class PolicyGate:
                 tool_name=tool_name,
                 tool_input=inputs,
                 reason=decision.explanation,
+                session_id=context.session_id or "",
             )
             if granted:
                 return await self._registry.call(tool_name, **inputs)
@@ -114,6 +115,7 @@ class PolicyGate:
             tool_name=tool_name,
             tool_input=inputs,
             reason=f"High-risk tool '{tool_name}' requires explicit user approval.",
+            session_id=context.session_id or "",
         )
         if granted:
             return await self._registry.call(tool_name, **inputs)

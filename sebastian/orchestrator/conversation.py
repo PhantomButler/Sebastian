@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from sebastian.protocol.events.bus import EventBus
@@ -12,11 +13,14 @@ logger = logging.getLogger(__name__)
 
 class ConversationManager:
     """Conversation plane: manages pending approval futures.
-    Approval requests suspend the awaiting coroutine until the user
-    grants or denies via the REST API. The event bus notifies frontend clients."""
 
-    def __init__(self, event_bus: EventBus) -> None:
+    Approval requests are persisted to DB and suspend the awaiting coroutine
+    indefinitely until the user grants or denies via the REST API.
+    """
+
+    def __init__(self, event_bus: EventBus, db_factory: Any = None) -> None:
         self._bus = event_bus
+        self._db_factory = db_factory
         self._pending: dict[str, asyncio.Future[bool]] = {}
 
     async def request_approval(
@@ -26,8 +30,26 @@ class ConversationManager:
         tool_name: str,
         tool_input: dict[str, Any],
         reason: str,
+        session_id: str = "",
     ) -> bool:
-        """Suspend execution until the user approves or denies. No timeout."""
+        """Persist approval record, then suspend until user grants or denies."""
+        from sebastian.store.models import ApprovalRecord
+
+        if self._db_factory is not None:
+            async with self._db_factory() as db_session:
+                record = ApprovalRecord(
+                    id=approval_id,
+                    task_id=task_id,
+                    session_id=session_id,
+                    tool_name=tool_name,
+                    tool_input=tool_input,
+                    reason=reason,
+                    status="pending",
+                    created_at=datetime.now(UTC),
+                )
+                db_session.add(record)
+                await db_session.commit()
+
         loop = asyncio.get_running_loop()
         future: asyncio.Future[bool] = loop.create_future()
         self._pending[approval_id] = future
@@ -51,6 +73,9 @@ class ConversationManager:
         """Called by the approval API endpoint to resolve a pending request."""
         future = self._pending.pop(approval_id, None)
         if future is None or future.done():
+            logger.warning(
+                "resolve_approval called for unknown or already-done approval: %s", approval_id
+            )
             return
         future.set_result(granted)
         event_type = EventType.USER_APPROVAL_GRANTED if granted else EventType.USER_APPROVAL_DENIED

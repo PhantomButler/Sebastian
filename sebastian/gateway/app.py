@@ -175,7 +175,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sebastian.protocol.a2a.dispatcher import A2ADispatcher
 
     event_bus = bus
-    conversation = ConversationManager(event_bus)
+    conversation = ConversationManager(event_bus, db_factory=db_factory)
     task_manager = TaskManager(session_store, event_bus, index_store=index_store)
     sse_mgr = SSEManager(event_bus)
 
