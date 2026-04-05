@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 
 from sebastian.core.tool import tool
@@ -30,7 +31,7 @@ def _build_rg_cmd(
         cmd.append("-i")
     if glob_pattern:
         cmd.extend(["--glob", glob_pattern])
-    if context_lines:
+    if context_lines is not None:
         cmd.extend(["-C", str(context_lines)])
     cmd.extend([pattern, search_path])
     return cmd
@@ -46,7 +47,7 @@ def _build_grep_cmd(
     cmd = ["grep", "-rn"]
     if ignore_case:
         cmd.append("-i")
-    if context_lines:
+    if context_lines is not None:
         cmd.extend(["-C", str(context_lines)])
     if glob_pattern:
         cmd.extend(["--include", glob_pattern])
@@ -54,14 +55,18 @@ def _build_grep_cmd(
     return cmd
 
 
-async def _run_cmd(cmd: list[str]) -> tuple[str, int | None]:
+async def _run_cmd(cmd: list[str]) -> tuple[str, str, int | None]:
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout_bytes, _ = await proc.communicate()
-    return stdout_bytes.decode(errors="replace"), proc.returncode
+    stdout_bytes, stderr_bytes = await proc.communicate()
+    return (
+        stdout_bytes.decode(errors="replace"),
+        stderr_bytes.decode(errors="replace"),
+        proc.returncode,
+    )
 
 
 @tool(
@@ -80,8 +85,6 @@ async def grep(
     context_lines: int | None = None,
     head_limit: int | None = None,
 ) -> ToolResult:
-    import os
-
     search_path = path if path is not None else os.getcwd()
     effective_limit = head_limit if head_limit is not None else _DEFAULT_HEAD_LIMIT
     use_rg = _check_rg()
@@ -93,7 +96,11 @@ async def grep(
         cmd = _build_grep_cmd(pattern, search_path, glob_pattern=glob, ignore_case=ignore_case, context_lines=context_lines)
         backend = "grep"
 
-    output, _ = await _run_cmd(cmd)
+    output, stderr_output, returncode = await _run_cmd(cmd)
+
+    # returncode=2 indicates a real error (invalid pattern, permission denied, etc.)
+    if returncode is not None and returncode >= 2:
+        return ToolResult(ok=False, error=stderr_output.strip() or f"Search failed with exit code {returncode}")
 
     lines = output.splitlines(keepends=True)
     truncated = len(lines) > effective_limit
