@@ -5,7 +5,7 @@
 Every task follows this sequence — no skipping steps:
 
 1. **Clarify** — List every ambiguous point before writing any code. If the requirement can be interpreted in more than one way, ask. State any assumptions explicitly so the user can correct them early.
-2. **Plan** — For any task that touches more than one file or will take more than ~30 minutes: write an execution plan (what changes, which files, how to verify) and share it with the user before starting. Wait for confirmation.
+2. **Plan** — For any task that touches more than one file, modifies a public interface, or changes shared data structures: write an execution plan (what changes, which files, how to verify) and share it with the user before starting. Wait for confirmation.
 3. **Execute** — Implement according to the plan. Verify after each logical unit — don't batch all verification to the end.
 4. **Verify** — Actually run the code or tests. Attach the real output to your response.
 5. **Report** — State concisely: what was done, what the result is, and any remaining issues or limitations.
