@@ -21,7 +21,12 @@ async def shell(command: str) -> ToolResult:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        return ToolResult(ok=False, error="Shell command timed out after 120 seconds")
     ok = proc.returncode == 0
     return ToolResult(
         ok=ok,
