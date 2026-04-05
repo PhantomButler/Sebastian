@@ -10,9 +10,12 @@
 |---|---|
 | `registry.py` | `CapabilityRegistry`：统一调用入口，`get_all_tool_specs()` 返回所有工具的 Anthropic API 格式 spec，`call(tool_name, **kwargs)` 执行工具（native 优先于 MCP） |
 | `tools/_loader.py` | 启动时自动扫描 `tools/` 目录，import 所有非下划线 `.py` 文件，触发 `@tool` 自注册 |
-| `tools/file_ops.py` | 文件操作工具（读/写/列目录等） |
-| `tools/shell.py` | Shell 命令执行工具 |
-| `tools/web_search.py` | Web 搜索工具 |
+| `tools/read/` | 文件读取工具 |
+| `tools/write/` | 文件写入工具（含 mtime 保护） |
+| `tools/edit/` | 文件精准替换工具 |
+| `tools/bash/` | Shell 命令执行工具 |
+| `tools/glob/` | 文件模式匹配工具 |
+| `tools/grep/` | 文件内容搜索工具（优先 ripgrep） |
 | `mcp_client.py` | `MCPClient`：启动 MCP server 子进程（stdio），初始化 session，将其工具注入 registry |
 | `mcps/` | MCP server 配置目录，每个子目录一个 `config.toml`，启动时自动连接 |
 | `skills/` | Skill 复合能力目录（Phase 2+，当前占位） |

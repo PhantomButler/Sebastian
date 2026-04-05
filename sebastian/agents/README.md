@@ -66,7 +66,6 @@ allowed_skills = []                        # 允许使用的 skill 列表
 | `Bash` | 执行 Shell 命令 |
 | `Glob` | 文件模式匹配 |
 | `Grep` | 文件内容搜索 |
-| `web_search` | 网页搜索 |
 
 `allowed_tools = null`（不写此字段）表示不限制，Agent 可用所有工具。
 
