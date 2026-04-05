@@ -58,3 +58,8 @@ async def my_tool(param: str) -> ToolResult:
 - **修改工具自动加载逻辑** → `tools/_loader.py`
 - **修改 MCP 连接方式** → `mcp_client.py`
 - **查看所有已注册工具** → 运行时调用 `registry.get_all_tool_specs()`，或 grep `@tool` 装饰器
+
+## 详细文档
+
+- **Tool 系统完整指南**：[`capabilities/tools/README.md`](tools/README.md)
+  — 权限档位选择、创建流程、代码示例、常见错误
