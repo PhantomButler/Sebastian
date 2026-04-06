@@ -1,16 +1,19 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../../theme/ThemeContext';
 
 export function MemorySection() {
+  const colors = useTheme();
+
   return (
     <View style={styles.group}>
-      <Text style={styles.groupLabel}>Memory</Text>
-      <View style={styles.card}>
+      <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>Memory</Text>
+      <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
         <View style={styles.row}>
           <View>
-            <Text style={styles.rowTitle}>Memory 管理</Text>
-            <Text style={styles.rowSubtitle}>Episodic / Semantic 配置将随后开放</Text>
+            <Text style={[styles.rowTitle, { color: colors.text }]}>Memory 管理</Text>
+            <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]}>Episodic / Semantic 配置将随后开放</Text>
           </View>
-          <Text style={styles.placeholder}>即将推出</Text>
+          <Text style={[styles.placeholder, { color: colors.textSecondary }]}>即将推出</Text>
         </View>
       </View>
     </View>
@@ -24,12 +27,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     fontSize: 13,
     fontWeight: '600',
-    color: '#6D6D72',
     textTransform: 'uppercase',
   },
   card: {
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
   },
   row: {
@@ -39,7 +40,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  rowTitle: { fontSize: 17, color: '#111111' },
-  rowSubtitle: { marginTop: 4, fontSize: 13, lineHeight: 18, color: '#8E8E93' },
-  placeholder: { fontSize: 13, color: '#8E8E93' },
+  rowTitle: { fontSize: 17 },
+  rowSubtitle: { marginTop: 4, fontSize: 13, lineHeight: 18 },
+  placeholder: { fontSize: 13 },
 });

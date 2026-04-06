@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { View, Text, Switch, StyleSheet, Alert } from 'react-native';
 import { getLogState, patchLogState } from '../../api/debug';
 import { useSettingsStore } from '../../store/settings';
+import { useTheme } from '../../theme/ThemeContext';
 
 export function DebugLogging() {
+  const colors = useTheme();
   const { jwtToken } = useSettingsStore();
   const [llmStream, setLlmStream] = useState(false);
   const [sse, setSse] = useState(false);
@@ -46,10 +48,10 @@ export function DebugLogging() {
 
   return (
     <View style={styles.group}>
-      <Text style={styles.groupLabel}>调试日志</Text>
-      <View style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.rowTitle}>LLM Stream 日志</Text>
+      <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>调试日志</Text>
+      <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+        <View style={[styles.row, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.rowTitle, { color: colors.text }]}>LLM Stream 日志</Text>
           <Switch
             value={llmStream}
             onValueChange={(v) => toggle('llm_stream_enabled', v)}
@@ -57,7 +59,7 @@ export function DebugLogging() {
           />
         </View>
         <View style={[styles.row, styles.lastRow]}>
-          <Text style={styles.rowTitle}>SSE 事件日志</Text>
+          <Text style={[styles.rowTitle, { color: colors.text }]}>SSE 事件日志</Text>
           <Switch
             value={sse}
             onValueChange={(v) => toggle('sse_enabled', v)}
@@ -76,12 +78,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     fontSize: 13,
     fontWeight: '600',
-    color: '#6D6D72',
     textTransform: 'uppercase',
   },
   card: {
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
   },
   row: {
@@ -91,10 +91,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D1D1D6',
   },
   lastRow: {
     borderBottomWidth: 0,
   },
-  rowTitle: { fontSize: 17, color: '#111111' },
+  rowTitle: { fontSize: 17 },
 });
