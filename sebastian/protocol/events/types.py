@@ -55,6 +55,11 @@ class EventType(StrEnum):
     TOOL_EXECUTED = "tool.executed"
     TOOL_FAILED = "tool.failed"
 
+    # Session lifecycle (three-tier architecture)
+    SESSION_COMPLETED = "session.completed"
+    SESSION_FAILED = "session.failed"
+    SESSION_STALLED = "session.stalled"
+
     # Conversation
     TURN_RECEIVED = "turn.received"
     TURN_RESPONSE = "turn.response"
