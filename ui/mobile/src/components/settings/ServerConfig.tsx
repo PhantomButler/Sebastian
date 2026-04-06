@@ -27,6 +27,7 @@ export function ServerConfig() {
               styles.statusText,
               status === 'ok' && { color: colors.success, fontWeight: '600' },
               status === 'fail' && { color: colors.error, fontWeight: '600' },
+              status === 'idle' && { color: colors.textSecondary },
             ]}
           >
             {status === 'ok' ? '已连接' : status === 'fail' ? '失败' : '未测试'}
@@ -73,7 +74,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowTitle: { fontSize: 17 },
-  statusText: { fontSize: 15, color: '#8E8E93' },
+  statusText: { fontSize: 15 },
   inputBlock: { padding: 16, paddingBottom: 12 },
   input: {
     minHeight: 46,
