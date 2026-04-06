@@ -26,8 +26,8 @@ conversation/
 |------------|--------|
 | 修改整体会话布局或滚动逻辑 | [ConversationView.tsx](ConversationView.tsx) |
 | 修改 assistant 消息整体结构 | [AssistantMessage.tsx](AssistantMessage.tsx) |
-| 修改用户消息气泡样式 | [UserBubble.tsx](UserBubble.tsx) |
-| 修改 Markdown 渲染样式或支持语法 | [MarkdownContent.tsx](MarkdownContent.tsx) |
+| 修改用户消息气泡样式（ChatGPT 风格） | [UserBubble.tsx](UserBubble.tsx) |
+| 修改 Markdown 渲染样式或支持语法（普通文字主题化，代码块暗色） | [MarkdownContent.tsx](MarkdownContent.tsx) |
 | 修改思考块展开/收起交互 | [ThinkingBlock.tsx](ThinkingBlock.tsx) |
 | 修改工具调用分组显示逻辑 | [ToolCallGroup.tsx](ToolCallGroup.tsx) |
 | 修改单条工具调用行样式或状态展示 | [ToolCallRow.tsx](ToolCallRow.tsx) |

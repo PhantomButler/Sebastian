@@ -12,6 +12,7 @@
 settings/
 ├── ServerConfig.tsx       # Server URL 配置与连接测试（含登录 / 登出）
 ├── LLMProviderConfig.tsx  # LLM Provider 增删改查配置表单
+├── ThemeSettings.tsx      # 外观设置（日间/夜间主题选择）
 ├── MemorySection.tsx      # Memory 管理占位入口（预留 Phase 3+）
 └── DebugLogging.tsx       # 调试日志开关（llm_stream / sse）
 ```
@@ -22,6 +23,7 @@ settings/
 |------------|--------|
 | 修改 Server URL 输入 / 连接测试 / 登录登出 | [ServerConfig.tsx](ServerConfig.tsx) |
 | 修改 LLM Provider 配置表单或列表 | [LLMProviderConfig.tsx](LLMProviderConfig.tsx) |
+| 修改主题选择（日间/夜间/跟随系统） | [ThemeSettings.tsx](ThemeSettings.tsx) |
 | 修改 Memory 管理入口内容 | [MemorySection.tsx](MemorySection.tsx) |
 | 修改调试日志开关项 | [DebugLogging.tsx](DebugLogging.tsx) |
 

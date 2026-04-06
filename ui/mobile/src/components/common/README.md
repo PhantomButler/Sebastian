@@ -21,7 +21,7 @@ common/
 
 | 如果要修改… | 看这里 |
 |------------|--------|
-| 修改侧边栏动画或手势交互 | [Sidebar.tsx](Sidebar.tsx) |
+| 修改侧边栏动画或手势交互（主题化颜色） | [Sidebar.tsx](Sidebar.tsx) |
 | 修改审批弹窗内容或按钮文案 | [ApprovalModal.tsx](ApprovalModal.tsx) |
 | 修改空状态文案或插图 | [EmptyState.tsx](EmptyState.tsx) |
 | 增删图标或修改图标尺寸 | [Icons.tsx](Icons.tsx) |

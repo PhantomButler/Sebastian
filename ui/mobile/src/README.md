@@ -14,6 +14,7 @@ src/
 ├── components/   # UI 组件（按业务域分组：chat/common/conversation/settings/subagents）
 ├── hooks/        # React Query 查询与 SSE 订阅封装
 ├── store/        # Zustand 本地 UI 状态（含 SecureStore 持久化配置）
+├── theme/        # 主题系统（日间/夜间配色切换，颜色 token 定义）
 ├── screens/      # 屏幕级组件占位（当前空目录，预留未来拆分）
 └── types.ts      # 前端共享 TypeScript 类型定义
 ```
@@ -26,6 +27,7 @@ src/
 | 页面 UI 组件 | [components/](components/README.md) |
 | 数据获取 / 事件订阅 hooks | [hooks/](hooks/README.md) |
 | 本地状态 / 持久化配置 | [store/](store/README.md) |
+| 日间/夜间主题配色 | [theme/](theme/README.md) |
 | 前端共享类型（接口数据结构等） | [types.ts](types.ts) |
 
 ## 子模块
@@ -34,6 +36,7 @@ src/
 - [components/](components/README.md) — UI 组件（按业务域分组）
 - [hooks/](hooks/README.md) — React Query 与 SSE 订阅 hooks
 - [store/](store/README.md) — Zustand 本地 UI 状态管理
+- [theme/](theme/README.md) — 主题系统（日间/夜间配色）
 - `screens/` — 屏幕级组件（当前空目录，预留占位）
 
 ---
