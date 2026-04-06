@@ -57,9 +57,11 @@ class IndexStore:
             entry = {
                 "id": session.id,
                 "agent_type": session.agent_type,
-                "agent_id": session.agent_id,
                 "title": session.title,
                 "status": session.status.value,
+                "depth": session.depth,
+                "parent_session_id": session.parent_session_id,
+                "last_activity_at": session.last_activity_at.isoformat(),
                 "updated_at": session.updated_at.isoformat(),
                 "task_count": session.task_count,
                 "active_task_count": session.active_task_count,
@@ -76,15 +78,17 @@ class IndexStore:
             session for session in await self._read() if session.get("agent_type") == agent_type
         ]
 
-    async def list_by_worker(
+    async def list_active_children(
         self,
         agent_type: str,
-        agent_id: str,
+        parent_session_id: str,
     ) -> list[dict[str, Any]]:
+        """List active child sessions (depth=3) for a given parent session."""
         return [
-            session
-            for session in await self._read()
-            if session.get("agent_type") == agent_type and session.get("agent_id") == agent_id
+            s for s in await self._read()
+            if s.get("agent_type") == agent_type
+            and s.get("parent_session_id") == parent_session_id
+            and s.get("status") == "active"
         ]
 
     async def remove(self, session_id: str) -> None:
