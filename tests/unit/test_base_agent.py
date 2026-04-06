@@ -211,3 +211,10 @@ async def test_run_streaming_interrupt_publishes_interrupted(tmp_path: Path) -> 
     messages = await store.get_messages("interrupt-session", "sebastian", "sebastian_01")
     assert [message["role"] for message in messages] == ["user", "assistant"]
     assert messages[1]["content"] == "partial"
+
+
+def test_base_agent_has_no_execute_delegated_task():
+    """execute_delegated_task should be removed."""
+    from sebastian.core.base_agent import BaseAgent
+
+    assert not hasattr(BaseAgent, "execute_delegated_task")

@@ -6,13 +6,12 @@ import inspect
 import json
 import logging
 from abc import ABC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sebastian.llm.provider import LLMProvider
-    from sebastian.protocol.a2a.types import DelegateTask
-    from sebastian.protocol.a2a.types import TaskResult as A2ATaskResult
 
 from sebastian.permissions.gate import PolicyGate
 from sebastian.permissions.types import ToolCallContext
@@ -75,12 +74,12 @@ class BaseAgent(ABC):
         allowed_skills: list[str] | None = None,
     ) -> None:
         self._gate = gate
-        self._current_task_goal: str = ""
+        self._current_task_goals: dict[str, str] = {}           # session_id → goal
         self._session_store = session_store
         self._event_bus = event_bus
         self._episodic = EpisodicMemory(session_store)
         self.working_memory = WorkingMemory()
-        self._active_stream: asyncio.Task[str] | None = None
+        self._active_streams: dict[str, asyncio.Task[str]] = {}  # session_id → task
 
         # instance-level overrides class-level defaults
         if allowed_tools is not None:
@@ -179,7 +178,7 @@ class BaseAgent(ABC):
         task_id: str | None = None,
         agent_name: str | None = None,
     ) -> str:
-        self._current_task_goal = user_message
+        self._current_task_goals[session_id] = user_message
 
         if not self._provider_injected:
             try:
@@ -194,10 +193,11 @@ class BaseAgent(ABC):
                 pass  # state not initialised — keep existing provider
 
         agent_context = agent_name or self.name
-        if self._active_stream is not None and not self._active_stream.done():
-            self._active_stream.cancel()
+        existing_stream = self._active_streams.get(session_id)
+        if existing_stream is not None and not existing_stream.done():
+            existing_stream.cancel()
             try:
-                await self._active_stream
+                await existing_stream
             except (asyncio.CancelledError, Exception):
                 pass  # Previous stream has ended; ignore its result (M5).
 
@@ -218,6 +218,7 @@ class BaseAgent(ABC):
                 "message": user_message[:200],
             },
         )
+        await self._update_activity(session_id)
         turns = await self._episodic.get_turns(session_id, agent=agent_context, limit=20)
         messages: list[dict[str, str]] = [
             {"role": turn.role, "content": turn.content} for turn in turns
@@ -239,12 +240,12 @@ class BaseAgent(ABC):
                 agent_context=agent_context,
             )
         )
-        self._active_stream = current_stream
+        self._active_streams[session_id] = current_stream
         try:
             return await current_stream
         finally:
-            if self._active_stream is current_stream:
-                self._active_stream = None
+            self._active_streams.pop(session_id, None)
+            self._current_task_goals.pop(session_id, None)
 
     async def _stream_inner(
         self,
@@ -300,9 +301,10 @@ class BaseAgent(ABC):
                         "status": "failed",
                     }
                     tool_records.append(record)
+                    await self._update_activity(session_id)
                     try:
                         context = ToolCallContext(
-                            task_goal=self._current_task_goal,
+                            task_goal=self._current_task_goals.get(session_id, ""),
                             session_id=session_id,
                             task_id=task_id,
                         )
@@ -378,6 +380,7 @@ class BaseAgent(ABC):
                             "interrupted": False,
                         },
                     )
+                    await self._update_activity(session_id)
                     return event.full_text
         except asyncio.CancelledError:
             if full_text:
@@ -397,37 +400,19 @@ class BaseAgent(ABC):
             )
             raise
 
-    async def execute_delegated_task(self, task: DelegateTask) -> A2ATaskResult:
-        """Execute a delegated task from Sebastian. Creates an isolated session per task."""
-        from sebastian.core.types import Session
-        from sebastian.protocol.a2a.types import TaskResult as A2ATaskResult
-
-        session = Session(
-            id=f"a2a_{task.task_id}",
-            agent_type=self.name,
-            agent_id=f"{self.name}_01",
-            title=task.goal[:40],
-        )
-        await self._session_store.create_session(session)
-
+    async def _update_activity(self, session_id: str) -> None:
+        """Update last_activity_at in index for stalled detection."""
         try:
-            result_text = await self.run_streaming(
-                task.goal,
-                session.id,
-                task_id=task.task_id,
-                agent_name=self.name,
-            )
-            return A2ATaskResult(
-                task_id=task.task_id,
-                ok=True,
-                output={"summary": result_text},
-            )
-        except Exception as exc:
-            return A2ATaskResult(
-                task_id=task.task_id,
-                ok=False,
-                error=str(exc),
-            )
+            import sebastian.gateway.state as _state
+
+            entries = await _state.index_store.list_all()
+            for entry in entries:
+                if entry["id"] == session_id:
+                    entry["last_activity_at"] = datetime.now(UTC).isoformat()
+                    break
+            await _state.index_store._write(entries)
+        except AttributeError:
+            pass  # state not initialised (tests)
 
     async def _publish(
         self,
