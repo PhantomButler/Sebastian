@@ -13,6 +13,14 @@ from sebastian.core.types import Session, ToolResult
 logger = logging.getLogger(__name__)
 
 
+def _log_task_failure(task: asyncio.Task) -> None:
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.exception("Background agent session failed", exc_info=exc)
+
+
 def _get_state():
     import sebastian.gateway.state as state
     return state
@@ -61,7 +69,7 @@ async def spawn_sub_agent(
 
     from sebastian.core.session_runner import run_agent_session
 
-    asyncio.create_task(
+    task = asyncio.create_task(
         run_agent_session(
             agent=agent,
             session=session,
@@ -71,5 +79,6 @@ async def spawn_sub_agent(
             event_bus=state.event_bus,
         )
     )
+    task.add_done_callback(_log_task_failure)
 
     return ToolResult(ok=True, output=f"已安排组员处理：{goal}")

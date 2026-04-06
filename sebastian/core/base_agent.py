@@ -74,6 +74,7 @@ class BaseAgent(ABC):
     ) -> None:
         self._gate = gate
         self._current_task_goals: dict[str, str] = {}           # session_id → goal
+        self._current_depth: dict[str, int] = {}               # session_id → depth
         self._session_store = session_store
         self._event_bus = event_bus
         self._episodic = EpisodicMemory(session_store)
@@ -209,6 +210,8 @@ class BaseAgent(ABC):
                 f"Session {session_id!r} not found for agent_type {agent_context!r}"
             )
 
+        self._current_depth[session_id] = worker_session.depth
+
         await self._publish(
             session_id,
             EventType.TURN_RECEIVED,
@@ -245,6 +248,7 @@ class BaseAgent(ABC):
         finally:
             self._active_streams.pop(session_id, None)
             self._current_task_goals.pop(session_id, None)
+            self._current_depth.pop(session_id, None)
 
     async def _stream_inner(
         self,

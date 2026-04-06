@@ -31,10 +31,12 @@ async def check_sub_agents(
         # Sebastian: show all depth=2 sessions
         sessions = [s for s in all_sessions if s.get("depth") == 2]
     else:
-        # Leader: show depth=3 sessions of same agent_type
+        # Leader: show only this leader's own depth=3 children
         sessions = [
             s for s in all_sessions
-            if s.get("depth") == 3 and s.get("agent_type") == _ctx.agent_type
+            if s.get("depth") == 3
+            and s.get("agent_type") == _ctx.agent_type
+            and s.get("parent_session_id") == _ctx.session_id
         ]
 
     if not sessions:
