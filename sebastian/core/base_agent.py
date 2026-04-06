@@ -404,14 +404,8 @@ class BaseAgent(ABC):
         """Update last_activity_at in index for stalled detection."""
         try:
             import sebastian.gateway.state as _state
-
-            entries = await _state.index_store.list_all()
-            for entry in entries:
-                if entry["id"] == session_id:
-                    entry["last_activity_at"] = datetime.now(UTC).isoformat()
-                    break
-            await _state.index_store._write(entries)
-        except AttributeError:
+            await _state.index_store.update_activity(session_id)
+        except (AttributeError, ImportError):
             pass  # state not initialised (tests)
 
     async def _publish(

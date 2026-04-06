@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import weakref
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -90,6 +91,17 @@ class IndexStore:
             and s.get("parent_session_id") == parent_session_id
             and s.get("status") == "active"
         ]
+
+    async def update_activity(self, session_id: str) -> None:
+        """Update last_activity_at for a session (for stalled detection)."""
+        async with self._lock:
+            sessions = await self._read()
+            now = datetime.now(UTC).isoformat()
+            for entry in sessions:
+                if entry["id"] == session_id:
+                    entry["last_activity_at"] = now
+                    break
+            await self._write(sessions)
 
     async def remove(self, session_id: str) -> None:
         async with self._lock:
