@@ -142,7 +142,7 @@ export function ToolCallRow({ name, input, status, result }: Props) {
                   <Text style={[styles.loadingText, { color: colors.textMuted }]}>执行中…</Text>
                 </View>
               ) : (
-                <CollapsibleContent content={result!} />
+                <CollapsibleContent content={result ?? ''} />
               )}
             </View>
           )}

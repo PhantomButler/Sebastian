@@ -14,6 +14,8 @@ export function CollapsibleContent({ content }: Props) {
   const colors = useTheme();
   const [expanded, setExpanded] = useState(false);
 
+  if (!content.trim()) return null;
+
   const allLines = content.split('\n');
   const totalLines = allLines.length;
   const needsCollapse = totalLines > LINE_THRESHOLD;
