@@ -68,7 +68,8 @@
       "Bash(git stash:*)",
       "Bash(find /Users/ericw/work/code/ai/sebastian/sebastian/gateway/routes -type f -name \"*.py\" -exec grep -l \"turn\\\\|message\" {} \\\\;)",
       "Bash(/Users/ericw/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh --project-dir /Users/ericw/work/code/ai/sebastian)",
-      "Bash(ls /Users/ericw/work/code/ai/sebastian/tests/unit/test_agent*)"
+      "Bash(ls /Users/ericw/work/code/ai/sebastian/tests/unit/test_agent*)",
+      "mcp__pycharm__get_symbol_info"
     ]
   }
 }
