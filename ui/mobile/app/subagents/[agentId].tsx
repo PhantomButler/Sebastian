@@ -1,14 +1,16 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getAgentSessions } from '../../src/api/sessions';
+import { deleteSession, getAgentSessions } from '../../src/api/sessions';
 import { SessionList } from '../../src/components/subagents/SessionList';
+import { NewChatFAB } from '../../src/components/common/NewChatFAB';
 import type { SessionMeta } from '../../src/types';
 
 export default function AgentSessionsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { agentId, name } = useLocalSearchParams<{ agentId: string; name?: string }>();
   const agentName = (Array.isArray(name) ? name[0] : name) ?? 'Sub-Agent';
   const normalizedAgentId = (Array.isArray(agentId) ? agentId[0] : agentId) ?? '';
@@ -19,8 +21,19 @@ export default function AgentSessionsScreen() {
     enabled: !!normalizedAgentId,
   });
 
+  const { mutate: handleDeleteSession } = useMutation({
+    mutationFn: (session: SessionMeta) => deleteSession(session.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent-sessions', normalizedAgentId] });
+    },
+  });
+
   function handleSelectSession(session: SessionMeta) {
     router.push(`/subagents/session/${session.id}?agent=${session.agent}`);
+  }
+
+  function handleNewChat() {
+    router.push(`/subagents/session/new?agent=${normalizedAgentId}`);
   }
 
   return (
@@ -39,7 +52,12 @@ export default function AgentSessionsScreen() {
           选择一个会话，继续查看消息流和任务执行状态。
         </Text>
       </View>
-      <SessionList sessions={sessions} onSelect={handleSelectSession} />
+      <SessionList sessions={sessions} onSelect={handleSelectSession} onDelete={handleDeleteSession} />
+      <NewChatFAB
+        label="新对话"
+        onPress={handleNewChat}
+        style={styles.fab}
+      />
     </View>
   );
 }
@@ -80,5 +98,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: '#6B6B6B',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 16,
   },
 });
