@@ -1,20 +1,48 @@
 # core — BaseAgent 引擎
 
-## 职责
+> 上级索引：[sebastian/](../README.md)
 
-提供所有 Agent 的执行基础：任务生命周期管理、LLM 流式调用循环、工具注册与调度、并发 Worker 池。
+## 模块职责
 
-## 关键文件
+提供所有 Agent 的执行基础：任务生命周期管理、LLM 流式调用循环、工具注册与调度、并发 Worker 池。所有 Sub-Agent 均继承 `BaseAgent`，通过 `AgentLoop` 驱动多轮工具调用，由 `TaskManager` 管理状态机流转。
 
-| 文件 | 职责 |
-|---|---|
-| `base_agent.py` | 所有 Agent 的抽象基类，持有 registry/session_store/event_bus，提供 `run_streaming()` 入口 |
-| `agent_loop.py` | 单次 LLM turn 执行循环：发请求 → 处理 tool_use → 迭代，最多 `MAX_ITERATIONS=20` 轮；根据 `provider.message_format` 自动选择 Anthropic/OpenAI 消息格式 |
-| `task_manager.py` | Task 提交与状态机驱动：`submit()` 创建异步 Task，`transition()` 推进状态，发布 EventBus 事件 |
-| `agent_pool.py` | 固定大小 Worker 槽池：`acquire()` 拿到空闲 worker_id，`release()` 归还，内部用 Future 队列等待 |
-| `tool.py` | `@tool` 装饰器系统：自动提取函数签名生成 `ToolSpec`，注册到全局 `_tools` 字典 |
-| `types.py` | 核心数据类型：`Task`、`Session`、`TaskStatus`（状态机枚举）、`ToolResult`、`Checkpoint` 等 |
-| `stream_events.py` | LLM 流式输出的内部事件 dataclass（`TextDelta`、`ToolCallReady`、`TurnDone` 等），用于 AgentLoop → BaseAgent 的事件传递 |
+## 目录结构
+
+```
+core/
+├── __init__.py          # 模块入口（空导出，按需 import 子模块）
+├── base_agent.py        # 所有 Agent 的抽象基类，持有 registry/session_store/event_bus，提供 run_streaming() 入口
+├── agent_loop.py        # 单次 LLM turn 执行循环：发请求 → 处理 tool_use → 迭代，最多 MAX_ITERATIONS=20 轮
+├── agent_pool.py        # 固定大小 Worker 槽池：acquire() 拿到空闲 worker_id，release() 归还
+├── task_manager.py      # Task 提交与状态机驱动：submit() 创建异步 Task，transition() 推进状态并发布 EventBus 事件
+├── protocols.py         # 结构子类型 Protocol 定义：ApprovalManagerProtocol、ToolSpecProvider
+├── stream_events.py     # LLM 流式输出的内部事件 dataclass（TextDelta、ToolCallReady、TurnDone 等）
+├── tool.py              # @tool 装饰器系统：自动提取函数签名生成 ToolSpec，注册到全局 _tools 字典
+└── types.py             # 核心数据类型：Task、Session、TaskStatus 状态机枚举、ToolResult、Checkpoint 等
+```
+
+## 任务状态机
+
+```
+CREATED → PLANNING → RUNNING → COMPLETED
+                   ↘ FAILED
+              ↘ FAILED
+                              ↘ CANCELLED
+```
+
+## 修改导航
+
+| 如果要修改… | 看这里 |
+|------------|--------|
+| Task 状态流转规则 | [task_manager.py](task_manager.py) 的 `_VALID_TRANSITIONS` |
+| LLM 调用参数 / 最大迭代次数 | [agent_loop.py](agent_loop.py) 的 `MAX_ITERATIONS` |
+| Anthropic / OpenAI 消息格式适配 | [agent_loop.py](agent_loop.py)，由 `provider.message_format` 自动分支 |
+| BaseAgent 默认行为（system_prompt、run_streaming） | [base_agent.py](base_agent.py) |
+| Worker 并发槽数 | [agent_pool.py](agent_pool.py)，由 `gateway/app.py` 初始化时传入 `worker_count` |
+| 新增核心数据类型 | [types.py](types.py) |
+| 注册新工具（@tool 装饰器） | [tool.py](tool.py)，工具实现放 `capabilities/tools/` |
+| Approval / ToolSpec 跨模块接口 | [protocols.py](protocols.py) |
+| LLM 流式事件结构 | [stream_events.py](stream_events.py) |
 
 ## 公开接口（其他模块如何使用）
 
@@ -40,20 +68,6 @@ async def my_tool(...) -> ToolResult: ...
 from sebastian.core.types import Task, TaskStatus, Session, ToolResult
 ```
 
-## 任务状态机
+---
 
-```
-CREATED → PLANNING → RUNNING → COMPLETED
-                   ↘ FAILED
-              ↘ FAILED
-                              ↘ CANCELLED
-```
-
-## 常见任务入口
-
-- **修改 Task 状态流转规则** → `task_manager.py` 的 `_VALID_TRANSITIONS`
-- **修改 LLM 调用参数/最大迭代次数** → `agent_loop.py` 的 `MAX_ITERATIONS`
-- **切换消息格式（Anthropic/OpenAI）** → `LLMProvider.message_format`，`AnthropicProvider` 默认 `"anthropic"`，`OpenAICompatProvider` 默认 `"openai"`，AgentLoop 自动适配
-- **新增/修改 BaseAgent 行为** → `base_agent.py`，覆写 `system_prompt` 或 `run_streaming()`
-- **调整 Worker 并发数** → `gateway/app.py` 中 `AgentPool(worker_count=N)` 的初始化
-- **新增核心数据类型** → `types.py`
+> 修改本目录或模块后，请同步更新此 README。

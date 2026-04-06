@@ -1,32 +1,51 @@
 # store — 持久化层
 
-## 职责
+> 上级索引：[sebastian/](../README.md)
 
-两套存储并存：文件系统 JSON（Session/Task 数据，支持断电恢复）+ SQLite ORM（事件日志、Approval 记录、Task 索引，支持结构化查询）。
+## 模块职责
 
-## 关键文件
+两套存储并存：文件系统 JSON（Session/Task 数据，支持断电恢复）+ SQLite ORM（事件日志、Approval 记录、LLM Provider 配置，支持结构化查询）。`SessionStore` 是主要读写入口，`IndexStore` 维护轻量级元数据索引避免全量目录扫描。
 
-| 文件 | 职责 |
-|---|---|
-| `session_store.py` | **主要读写入口**：Session 和 Task 以 JSON 文件存储在 `SEBASTIAN_DATA_DIR/sessions/` 下，提供 `create_session`、`get_session`、`create_task`、`update_task_status`、`list_sessions` 等全部 CRUD 操作 |
-| `index_store.py` | 轻量级 `index.json` 维护 session 元数据快速查询（避免全量扫描目录），由 `TaskManager` 在提交任务时更新 |
-| `event_log.py` | `EventLog`：将 `Event` 对象追加写入 SQLite `events` 表，用于历史查询 |
-| `models.py` | SQLAlchemy ORM 模型：`EventRecord`、`ApprovalRecord`、`TaskRecord`（SQLite 表定义） |
-| `database.py` | SQLAlchemy async engine 初始化，`Base`、`get_db`（async session factory） |
-| `task_store.py` | Task 级别的 SQLite 辅助写入（补充 session_store 的文件存储） |
-| `migrations/` | Alembic 迁移脚本 |
+## 目录结构
 
-## 存储目录结构
+```
+store/
+├── __init__.py          # 模块入口（空导出，按需 import 子模块）
+├── database.py          # SQLAlchemy async engine 初始化，Base、get_db（async session factory）
+├── models.py            # SQLAlchemy ORM 模型：EventRecord、ApprovalRecord、TaskRecord、LLMProviderRecord
+├── session_store.py     # 主要读写入口：Session 和 Task 以 JSON 文件存储，提供完整 CRUD 操作
+├── index_store.py       # 轻量级 index.json 维护 session 元数据快速查询，原子写入防并发损坏
+├── event_log.py         # EventLog：将 Event 对象追加写入 SQLite events 表，用于历史查询
+├── task_store.py        # Task 级别的 SQLite 辅助写入（补充 session_store 的文件存储）
+└── migrations/
+    └── __init__.py      # Alembic 迁移脚本目录（schema 变更在此新增 migration）
+```
+
+## 文件系统存储结构
 
 ```
 SEBASTIAN_DATA_DIR/sessions/
   sebastian/<session_id>/
-    session.json          # Session 元数据
-    tasks/<task_id>.json  # Task 数据（每个 task 独立文件）
+    session.json              # Session 元数据
+    tasks/<task_id>.json      # Task 数据（每个 task 独立文件）
   subagents/<agent_type>/<agent_id>/<session_id>/
     session.json
     tasks/<task_id>.json
+  index.json                  # 全局 session 元数据索引（由 IndexStore 维护）
 ```
+
+## 修改导航
+
+| 如果要修改… | 看这里 |
+|------------|--------|
+| Session / Task 的读写逻辑 | [session_store.py](session_store.py) |
+| Session 快速索引（避免全量扫描） | [index_store.py](index_store.py) |
+| 事件历史查询 | [event_log.py](event_log.py) + [models.py](models.py) 的 `EventRecord` |
+| Approval 持久化结构 | [models.py](models.py) 的 `ApprovalRecord` |
+| LLM Provider 配置持久化 | [models.py](models.py) 的 `LLMProviderRecord` |
+| 数据库 schema 变更 | [models.py](models.py) 修改 ORM + [migrations/](migrations/) 新增 Alembic migration |
+| SQLAlchemy engine / session factory | [database.py](database.py) |
+| Task SQLite 辅助写入 | [task_store.py](task_store.py) |
 
 ## 公开接口（其他模块如何使用）
 
@@ -45,10 +64,6 @@ log = EventLog(db_session)
 await log.append(event)
 ```
 
-## 常见任务入口
+---
 
-- **修改 Session/Task 读写逻辑** → `session_store.py`
-- **修改 session 快速索引** → `index_store.py`
-- **查询事件历史** → `event_log.py` + `models.py` 的 `EventRecord`
-- **修改 Approval 持久化结构** → `models.py` 的 `ApprovalRecord`
-- **数据库 schema 变更** → `models.py` + `migrations/` 新增 Alembic migration
+> 修改本目录或模块后，请同步更新此 README。

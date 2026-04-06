@@ -1,5 +1,7 @@
 # Sebastian Backend Guide
 
+> 上级：[项目根](../INDEX.md) · [CLAUDE.md](../CLAUDE.md)
+
 本 README 面向在 `sebastian/` 目录中工作的开发者与编码代理，帮助快速理解后端目录结构、模块职责与常见切入点。
 
 ## 目录定位
@@ -23,18 +25,26 @@
 
 ```text
 sebastian/
-├── agents/         # Sub-Agent 插件目录
-├── capabilities/   # tools / mcps / skills 能力注册与装载
-├── config/         # 配置解析与运行时设置
-├── core/           # BaseAgent、task loop、tool runtime 等核心引擎
-├── gateway/        # FastAPI HTTP API、SSE、鉴权、路由
-├── identity/       # 身份与权限（当前 Phase 较轻）
-├── memory/         # working / episodic 等记忆层
-├── orchestrator/   # Sebastian 主管家编排逻辑
-├── protocol/       # A2A 协议与事件定义
-├── sandbox/        # 代码执行隔离
-├── store/          # Session / Task / Event 存储层
-├── trigger/        # 主动触发引擎（后续 Phase）
+├── agents/         → agents/README.md
+├── capabilities/   → capabilities/README.md
+│   ├── tools/      → capabilities/tools/README.md
+│   ├── mcps/       → capabilities/mcps/README.md
+│   └── skills/     → capabilities/skills/README.md
+├── config/         → config/README.md
+├── core/           → core/README.md
+├── gateway/        → gateway/README.md
+│   └── routes/     → gateway/routes/README.md
+├── identity/       → identity/README.md
+├── llm/            → llm/README.md
+├── memory/         → memory/README.md
+├── orchestrator/   → orchestrator/README.md
+│   └── tools/      → orchestrator/tools/README.md
+├── protocol/       → protocol/README.md
+│   ├── a2a/        → protocol/a2a/README.md
+│   └── events/     → protocol/events/README.md
+├── sandbox/        → sandbox/README.md
+├── store/          → store/README.md
+├── trigger/        → trigger/README.md
 ├── main.py         # 启动入口
 └── __init__.py
 ```
@@ -154,42 +164,23 @@ Sub-Agent 插件目录。当前已经有：
 - `identity/`：身份与权限能力的预留位置
 - `trigger/`：主动触发引擎的预留位置
 
-## 常见开发入口
+## 修改导航
 
-### 改后端 API
-
-优先看：
-
-- `sebastian/gateway/app.py`
-- `sebastian/gateway/routes/`
-- `sebastian/gateway/state.py`
-
-### 改 Session / Task 持久化
-
-优先看：
-
-- `sebastian/store/session_store.py`
-- `sebastian/store/index_store.py`
-- `sebastian/store/task_store.py`
-- `sebastian/store/models.py`
-
-### 改 Sebastian / Sub-Agent 行为
-
-优先看：
-
-- `sebastian/orchestrator/sebas.py`
-- `sebastian/core/base_agent.py`
-- `sebastian/core/agent_loop.py`
-- `sebastian/core/task_manager.py`
-
-### 改工具 / MCP / Skill 接入
-
-优先看：
-
-- `sebastian/capabilities/registry.py`
-- `sebastian/capabilities/tools/`
-- `sebastian/capabilities/mcps/`
-- `sebastian/capabilities/skills/`
+| 修改场景 | 优先看 |
+|---------|--------|
+| 修改后端 API 路由或响应格式 | [gateway/README.md](gateway/README.md) → `routes/` |
+| 修改 SSE 事件协议 | [gateway/README.md](gateway/README.md) → `sse.py` |
+| 修改 Session / Task 持久化 | [store/README.md](store/README.md) |
+| 修改 Sebastian 对话或编排逻辑 | [orchestrator/README.md](orchestrator/README.md) |
+| 修改 Agent 基础行为或任务执行 | [core/README.md](core/README.md) |
+| 新增基础工具（`@tool` 装饰器） | [capabilities/README.md](capabilities/README.md) → `tools/` |
+| 新增 MCP 集成 | [capabilities/README.md](capabilities/README.md) → `mcps/` |
+| 新增 Sub-Agent | [agents/README.md](agents/README.md) |
+| 修改 LLM 提供商适配 | [llm/README.md](llm/README.md) |
+| 修改记忆系统 | [memory/README.md](memory/README.md) |
+| 修改 A2A 协议或事件总线 | [protocol/README.md](protocol/README.md) |
+| 修改沙箱执行策略 | [sandbox/README.md](sandbox/README.md) |
+| 修改全局配置解析 | [config/README.md](config/README.md) |
 
 ## 与前端的接口边界
 
@@ -200,7 +191,7 @@ Sub-Agent 插件目录。当前已经有：
 - 认证与权限
 - Session / Task / Approval 数据
 
-如果你在排查联调问题，通常需要把本目录与 `ui/mobile/README.md` 一起看。
+如果你在排查联调问题，通常需要把本目录与 [ui/mobile/README.md](../ui/mobile/README.md) 一起看。
 
 ## 常用命令
 
@@ -222,3 +213,7 @@ mypy sebastian/
 - 任何行为变化都应补测试
 - 如果单文件逼近 500 行，应评估拆分
 - 修改目录职责时，也请同步更新本 README、`AGENTS.md` 与相关 spec
+
+---
+
+> 修改模块结构后，请同步更新本 README 中的目录树与修改导航表。

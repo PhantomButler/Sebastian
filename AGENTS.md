@@ -12,9 +12,7 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 **关系说明**：OpenJax（`/Users/ericw/work/code/ai/openJax`）是前驱技术探索，Sebastian 继承其设计经验，不继承代码。
 
-**目录 README 索引**：
-- `sebastian/README.md`：后端主包结构、模块职责、常见开发入口
-- `ui/mobile/README.md`：移动端目录结构、页面导航、前端模块说明
+**目录 README 索引**：从 `INDEX.md` 开始，沿树状链接向下定位目标模块的 README。每个模块 README 包含「修改导航」表，直接指向需要修改的文件。
 
 ## 1) 项目概览
 
@@ -42,14 +40,31 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 ### 模块 README 导航
 
-在针对某模块工作前，优先读对应 README（若存在）以快速获取上下文，避免全量搜索引入无关内容：
+在针对某模块工作前，优先读对应 README 以快速获取上下文，避免全量搜索引入无关内容：
+- `INDEX.md`（根索引，入口）
 - `sebastian/README.md`
 - `ui/mobile/README.md`
 - `sebastian/core/README.md`
 - `sebastian/llm/README.md`
 - `sebastian/gateway/README.md`
+- `sebastian/gateway/routes/README.md`
+- `sebastian/orchestrator/README.md`
+- `sebastian/orchestrator/tools/README.md`
 - `sebastian/agents/README.md`
+- `sebastian/agents/code/README.md`
 - `sebastian/capabilities/README.md`
+- `sebastian/capabilities/tools/README.md`
+- `sebastian/capabilities/mcps/README.md`
+- `sebastian/capabilities/skills/README.md`
+- `sebastian/protocol/README.md`
+- `sebastian/protocol/a2a/README.md`
+- `sebastian/protocol/events/README.md`
+- `sebastian/store/README.md`
+- `sebastian/memory/README.md`
+- `sebastian/config/README.md`
+- `sebastian/identity/README.md`
+- `sebastian/trigger/README.md`
+- `sebastian/sandbox/README.md`
 
 ## 3) 构建与启动
 
@@ -145,7 +160,7 @@ python3 -c "from sebastian.gateway.auth import hash_password; print(hash_passwor
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
 SEBASTIAN_OWNER_NAME=Eric
-SEBASTIAN_DATA_DIR=./data
+# SEBASTIAN_DATA_DIR 默认 ~/.sebastian，本地开发通常无需设置
 SEBASTIAN_JWT_SECRET=local-dev-secret
 SEBASTIAN_OWNER_PASSWORD_HASH=<用上面命令生成>
 SEBASTIAN_GATEWAY_HOST=127.0.0.1
@@ -249,9 +264,14 @@ SEBASTIAN_JWT_SECRET=...
 ### 其他
 - (重要)在处理 python 项目文件时，优先使用 JetBrains pycharm MCP 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于“未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
 - (重要)在分派subagent 任务时记得告知subagent 也可以使用JetBrains pycharm MCP
-- 尽量使用 Read/Edit/Write/Apply patch 等内置工具编辑文件，非必要不使用 echo/cat heredoc/sed 等 shell命令写文件，除非系统内置工具一直出问题得不到解决
+- 尽量使用 Read/Edit/Write 等内置工具编辑文件，非必要不使用 echo/cat heredoc/sed 等 shell命令写文件，除非系统内置工具一直出问题得不到解决
 - 在修改过程中如果发现某个文件内容过多，记得提醒用户规划拆分计划
 - 在针对某部分做修改时优先根据 README 了解对应模块上下文
+- （重要）探索查询或修改任何功能模块前，必须先读对应的 README：
+  - 从根目录 `INDEX.md` 开始，沿树状链接向下定位目标模块
+  - 每个模块 README 包含「修改导航」表，直接指向需要修改的文件
+  - 如果修改了某目录的内容，同步更新该目录的 README（以及受影响的上级 README）
+  - README 索引树：根 `INDEX.md` → `sebastian/README.md` → 各子模块 README
 - 写代码过程中尽量遵循模块化可扩展原则，推荐 500 行以下，不超过 800 行
 - 不要随意拉新分支，需要拉新分支时提前说明
 

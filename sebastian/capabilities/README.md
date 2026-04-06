@@ -1,26 +1,48 @@
 # capabilities — 工具与能力注册
 
-## 职责
+> 上级索引：[sebastian/](../README.md)
 
-统一管理所有可用能力：Native Tools（`@tool` 装饰器注册）、MCP Server Tools（外部进程，stdio 协议）。向 Agent 提供统一的 `CapabilityRegistry` 访问点。
+## 模块职责
 
-## 关键文件
+统一管理所有可用能力：Native Tools（`@tool` 装饰器注册）、MCP Server Tools（外部进程，stdio 协议）以及 Skill 复合能力。向 Agent 提供统一的 `CapabilityRegistry` 访问点，屏蔽底层工具来源差异。
 
-| 文件 | 职责 |
-|---|---|
-| `registry.py` | `CapabilityRegistry`：统一调用入口，`get_all_tool_specs()` 返回所有工具的 Anthropic API 格式 spec，`call(tool_name, **kwargs)` 执行工具（native 优先于 MCP） |
-| `tools/_loader.py` | 启动时自动扫描 `tools/` 目录，import 所有非下划线 `.py` 文件，触发 `@tool` 自注册 |
-| `tools/read/` | 文件读取工具 |
-| `tools/write/` | 文件写入工具（含 mtime 保护） |
-| `tools/edit/` | 文件精准替换工具 |
-| `tools/bash/` | Shell 命令执行工具 |
-| `tools/glob/` | 文件模式匹配工具 |
-| `tools/grep/` | 文件内容搜索工具（优先 ripgrep） |
-| `mcp_client.py` | `MCPClient`：启动 MCP server 子进程（stdio），初始化 session，将其工具注入 registry |
-| `mcps/` | MCP server 配置目录，每个子目录一个 `config.toml`，启动时自动连接 |
-| `skills/` | Skill 复合能力目录（Phase 2+，当前占位） |
+## 目录结构
 
-## 公开接口（其他模块如何使用）
+```
+capabilities/
+├── __init__.py          # 模块入口（空）
+├── registry.py          # CapabilityRegistry：统一调用入口，get_all_tool_specs() / call()
+├── mcp_client.py        # MCPClient：启动 MCP server 子进程（stdio），注入工具到 registry
+├── tools/               # → [tools/README.md](tools/README.md)
+│   ├── __init__.py
+│   ├── _loader.py       # 启动时自动扫描 tools/ 目录，触发 @tool 自注册
+│   ├── _file_state.py   # 文件读取状态追踪（Write/Edit 的前置保护）
+│   ├── bash/            # Shell 命令执行工具
+│   ├── edit/            # 文件精准替换工具
+│   ├── glob/            # 文件模式匹配工具
+│   ├── grep/            # 文件内容搜索工具（优先 ripgrep）
+│   ├── read/            # 文件读取工具
+│   └── write/           # 文件写入工具（含 mtime 保护）
+├── mcps/                # MCP server 配置目录，每个子目录一个 config.toml，启动时自动连接
+│   ├── __init__.py
+│   └── _loader.py       # 扫描 mcps/ 子目录，自动连接各 MCP server
+└── skills/              # Skill 复合能力目录（Phase 2+，当前占位）
+    ├── __init__.py
+    └── _loader.py       # Skill 自动加载（占位）
+```
+
+## 修改导航
+
+| 如果要修改… | 看这里 |
+|------------|--------|
+| 新增 Native 工具 | [tools/](tools/README.md) 下新建目录 + `@tool` 装饰器 |
+| 修改工具调用优先级/错误处理 | [registry.py](registry.py) 的 `call()` |
+| 修改工具自动加载逻辑 | [tools/_loader.py](tools/_loader.py) |
+| 新增 MCP Server 连接 | `mcps/<name>/config.toml`，重启自动连接 |
+| 修改 MCP 连接方式 | [mcp_client.py](mcp_client.py) |
+| 查看所有已注册工具 | 运行时调用 `registry.get_all_tool_specs()`，或搜索 `@tool` 装饰器 |
+
+## 公开接口
 
 ```python
 from sebastian.capabilities.registry import CapabilityRegistry
@@ -42,7 +64,7 @@ await registry.register_mcp_tools(mcp_client)
 
 **新增 Native Tool**（推荐）：
 ```python
-# 在 capabilities/tools/ 下新建文件
+# 在 capabilities/tools/<name>/__init__.py 中
 from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
 
@@ -54,15 +76,12 @@ async def my_tool(param: str) -> ToolResult:
 
 **新增 MCP Server**：在 `capabilities/mcps/<name>/` 下创建 `config.toml`，重启后自动连接。
 
-## 常见任务入口
+## 子模块
 
-- **新增工具** → `capabilities/tools/` 新建文件 + `@tool` 装饰器
-- **修改工具调用优先级/错误处理** → `registry.py` 的 `call()`
-- **修改工具自动加载逻辑** → `tools/_loader.py`
-- **修改 MCP 连接方式** → `mcp_client.py`
-- **查看所有已注册工具** → 运行时调用 `registry.get_all_tool_specs()`，或 grep `@tool` 装饰器
+- [tools/](tools/README.md) — Native 工具插件目录，`@tool` 装饰器驱动自注册
+- `mcps/` — MCP Server 配置目录，`config.toml` 驱动自动连接
+- `skills/` — Skill 复合能力目录（Phase 2+，当前占位）
 
-## 详细文档
+---
 
-- **Tool 系统完整指南**：[`capabilities/tools/README.md`](tools/README.md)
-  — 权限档位选择、创建流程、代码示例、常见错误
+> 修改本目录或模块后，请同步更新此 README。

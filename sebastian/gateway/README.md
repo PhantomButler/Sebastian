@@ -1,22 +1,40 @@
 # gateway — FastAPI HTTP/SSE 网关
 
-## 职责
+> 上级索引：[sebastian/](../README.md)
 
-对外暴露 REST API 和 SSE 事件流；管理全局运行时单例（Agent 池、SessionStore、EventBus 等）；处理认证。
+## 模块职责
 
-## 关键文件
+对外暴露 REST API 和 SSE 事件流，是 Sebastian 系统唯一的 HTTP 入口。
+管理全局运行时单例（Agent 池、SessionStore、EventBus、SSEManager 等），在 `lifespan` 中按严格顺序完成初始化与清理。
+处理 JWT 认证，路由请求至对应业务处理器。
 
-| 文件 | 职责 |
-|---|---|
-| `app.py` | FastAPI 应用入口：`lifespan` 负责启动/关闭时初始化/清理全局状态，`include_router` 注册所有路由，启动时自动发现 agents/ 目录下的 agent 类型 |
-| `state.py` | 全局运行时单例容器（模块级变量）：`sebastian`、`event_bus`、`session_store`、`agent_pools`、`sse_manager` 等，路由中通过 `import sebastian.gateway.state as state` 访问 |
-| `auth.py` | JWT 认证：`create_access_token()`、`require_auth`（FastAPI Depends）、`hash_password()`/`verify_password()` |
-| `sse.py` | `SSEManager`：订阅 EventBus 所有事件，维护客户端连接队列，通过 `stream()` async generator 向客户端推送 SSE |
-| `routes/sessions.py` | Session 增删查 + Task 查询/取消路由 |
-| `routes/turns.py` | 登录（`POST /auth/login`）+ 发送消息（`POST /sessions/{id}/turns`）|
-| `routes/agents.py` | 查询 Agent 类型和 Worker 状态 |
-| `routes/stream.py` | SSE 事件流端点（`GET /events`）|
-| `routes/approvals.py` | Approval 查询与处理（grant/deny）|
+## 目录结构
+
+```
+gateway/
+├── __init__.py        # 模块入口（空）
+├── app.py             # FastAPI 应用创建、lifespan 初始化/关闭、路由注册
+├── auth.py            # JWT 认证：token 生成/校验、密码哈希、require_auth 依赖
+├── sse.py             # SSEManager：订阅 EventBus，向客户端广播 SSE 事件流
+├── state.py           # 全局运行时单例容器（模块级变量，全项目通过 import 访问）
+└── routes/            # → [routes/README.md](routes/README.md)
+```
+
+## 修改导航
+
+| 如果要修改… | 看这里 |
+|------------|--------|
+| 新增 REST 路由 | [routes/](routes/README.md) 下选对应文件或新建，再在 [app.py](app.py) 中 `include_router` |
+| 启动/关闭初始化流程（顺序严格：DB → Store → EventBus → Agent → SSE） | [app.py](app.py) 的 `lifespan` |
+| 认证逻辑、Token 有效期、密码哈希算法 | [auth.py](auth.py) |
+| SSE 推送逻辑、事件缓冲大小（默认 500）、客户端队列大小（默认 200） | [sse.py](sse.py) 的 `SSEManager` |
+| 全局运行时对象（访问或增减单例变量） | [state.py](state.py) |
+| Agent Worker 数量、Sub-Agent 池初始化 | [app.py](app.py) 的 `_initialize_a2a_and_pools()` |
+| Worker 状态跟踪（BUSY/IDLE 切换） | [app.py](app.py) 的 `_register_runtime_agent_state_handlers()` |
+
+## 子模块
+
+- [routes/](routes/README.md) — HTTP 路由处理层，涵盖认证、会话、消息、SSE、审批、Agent 查询、LLM 配置、调试等端点
 
 ## 公开接口（其他模块如何使用）
 
@@ -26,6 +44,7 @@ import sebastian.gateway.state as state
 state.session_store.get_session(session_id)
 state.event_bus.publish(event)
 state.agent_pools["sebastian"]
+state.conversation.request_approval(...)
 
 # 认证依赖
 from sebastian.gateway.auth import require_auth
@@ -33,16 +52,11 @@ from sebastian.gateway.auth import require_auth
 async def foo(_auth: dict = Depends(require_auth)): ...
 ```
 
-## 不要修改
+## 注意事项
 
-- `state.py` 中的变量名（全项目通过模块导入直接访问，重命名会导致全局 NameError）
-- `app.py` 的 lifespan 顺序（依赖初始化顺序有严格要求：DB → Store → EventBus → Agent → SSE）
+- `state.py` 中的变量名**不可随意重命名**——全项目通过模块导入直接访问，重命名会导致全局 `NameError`
+- `app.py` 的 `lifespan` 初始化顺序有严格要求，不可调换：`DB → Store → EventBus → Agent → SSE`
 
-## 常见任务入口
+---
 
-- **新增 REST 路由** → 在 `routes/` 下选对应文件或新建，在 `app.py` 中 `include_router`
-- **修改认证逻辑/Token 有效期** → `auth.py`
-- **修改 SSE 推送逻辑/缓冲大小** → `sse.py` 的 `SSEManager`
-- **修改启动时初始化流程** → `app.py` 的 `lifespan`
-- **调整 Agent Worker 数量** → `app.py` 的 `_initialize_runtime_agent_state()`
-- **访问或修改全局运行时对象** → `state.py`
+> 修改本目录或模块后，请同步更新此 README。
