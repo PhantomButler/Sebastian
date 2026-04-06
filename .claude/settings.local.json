@@ -66,7 +66,8 @@
       "Bash(grep -l \"isolated_registry\" /Users/ericw/work/code/ai/sebastian/tests/unit/*.py)",
       "mcp__pycharm__search_in_files_by_regex",
       "Bash(git stash:*)",
-      "Bash(find /Users/ericw/work/code/ai/sebastian/sebastian/gateway/routes -type f -name \"*.py\" -exec grep -l \"turn\\\\|message\" {} \\\\;)"
+      "Bash(find /Users/ericw/work/code/ai/sebastian/sebastian/gateway/routes -type f -name \"*.py\" -exec grep -l \"turn\\\\|message\" {} \\\\;)",
+      "Bash(/Users/ericw/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh --project-dir /Users/ericw/work/code/ai/sebastian)"
     ]
   }
 }
