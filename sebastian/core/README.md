@@ -4,7 +4,7 @@
 
 ## 模块职责
 
-提供所有 Agent 的执行基础：任务生命周期管理、LLM 流式调用循环、工具注册与调度、并发 Worker 池。所有 Sub-Agent 均继承 `BaseAgent`，通过 `AgentLoop` 驱动多轮工具调用，由 `TaskManager` 管理状态机流转。
+提供所有 Agent 的执行基础：任务生命周期管理、LLM 流式调用循环、工具注册与调度、Sub-Agent session 运行与僵死检测。所有 Sub-Agent 均继承 `BaseAgent`，通过 `AgentLoop` 驱动多轮工具调用，由 `TaskManager` 管理状态机流转，Sub-Agent 的独立 session 通过 `session_runner.py` 以 `asyncio.create_task` 方式启动。
 
 ## 目录结构
 
@@ -13,7 +13,8 @@ core/
 ├── __init__.py          # 模块入口（空导出，按需 import 子模块）
 ├── base_agent.py        # 所有 Agent 的抽象基类，持有 registry/session_store/event_bus，提供 run_streaming() 入口
 ├── agent_loop.py        # 单次 LLM turn 执行循环：发请求 → 处理 tool_use → 迭代，最多 MAX_ITERATIONS=20 轮
-├── agent_pool.py        # 固定大小 Worker 槽池：acquire() 拿到空闲 worker_id，release() 归还
+├── session_runner.py    # Sub-Agent session 独立执行入口：run_agent_session()，供 gateway 通过 asyncio.create_task 调用
+├── stalled_watchdog.py  # 僵死 session 检测：定期扫描长时间无响应的 session 并触发恢复或告警
 ├── task_manager.py      # Task 提交与状态机驱动：submit() 创建异步 Task，transition() 推进状态并发布 EventBus 事件
 ├── protocols.py         # 结构子类型 Protocol 定义：ApprovalManagerProtocol、ToolSpecProvider
 ├── stream_events.py     # LLM 流式输出的内部事件 dataclass（TextDelta、ToolCallReady、TurnDone 等）
@@ -38,7 +39,8 @@ CREATED → PLANNING → RUNNING → COMPLETED
 | LLM 调用参数 / 最大迭代次数 | [agent_loop.py](agent_loop.py) 的 `MAX_ITERATIONS` |
 | Anthropic / OpenAI 消息格式适配 | [agent_loop.py](agent_loop.py)，由 `provider.message_format` 自动分支 |
 | BaseAgent 默认行为（system_prompt、run_streaming） | [base_agent.py](base_agent.py) |
-| Worker 并发槽数 | [agent_pool.py](agent_pool.py)，由 `gateway/app.py` 初始化时传入 `worker_count` |
+| Sub-Agent session 执行入口 | [session_runner.py](session_runner.py) 的 `run_agent_session()` |
+| 僵死 session 检测与恢复 | [stalled_watchdog.py](stalled_watchdog.py) |
 | 新增核心数据类型 | [types.py](types.py) |
 | 注册新工具（@tool 装饰器） | [tool.py](tool.py)，工具实现放 `capabilities/tools/` |
 | Approval / ToolSpec 跨模块接口 | [protocols.py](protocols.py) |
@@ -54,10 +56,9 @@ from sebastian.core.base_agent import BaseAgent
 from sebastian.core.task_manager import TaskManager
 await task_manager.submit(task, async_fn)
 
-# 并发 Worker 调度
-from sebastian.core.agent_pool import AgentPool
-worker_id = await pool.acquire()
-pool.release(worker_id)
+# Sub-Agent session 执行（供 gateway 通过 asyncio.create_task 调用）
+from sebastian.core.session_runner import run_agent_session
+await run_agent_session(agent, session, goal, session_store, index_store, event_bus)
 
 # 注册工具（capabilities/tools/ 中使用）
 from sebastian.core.tool import tool

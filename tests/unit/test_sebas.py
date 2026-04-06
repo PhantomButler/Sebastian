@@ -88,7 +88,6 @@ async def test_chat_uses_run_streaming_without_duplicate_turn_events(
 async def test_get_or_create_session_creates_sebastian_session(
     tmp_path: Path,
 ) -> None:
-    import unittest.mock as mock
 
     from sebastian.core.task_manager import TaskManager
     from sebastian.orchestrator.conversation import ConversationManager

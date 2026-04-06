@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from sebastian.agents._loader import AgentConfig
     from sebastian.core.base_agent import BaseAgent
     from sebastian.gateway.sse import SSEManager
-    from sebastian.memory.working_memory import WorkingMemory
     from sebastian.orchestrator.conversation import ConversationManager
     from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import EventBus

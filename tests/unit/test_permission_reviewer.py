@@ -9,7 +9,6 @@ import pytest
 @pytest.mark.asyncio
 async def test_reviewer_returns_proceed_on_safe_command() -> None:
     from sebastian.permissions.reviewer import PermissionReviewer
-    from sebastian.permissions.types import ReviewDecision
 
     mock_client = MagicMock()
     mock_message = MagicMock()

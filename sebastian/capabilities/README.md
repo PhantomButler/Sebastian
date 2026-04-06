@@ -18,10 +18,14 @@ capabilities/
 │   ├── _loader.py       # 启动时自动扫描 tools/ 目录，触发 @tool 自注册
 │   ├── _file_state.py   # 文件读取状态追踪（Write/Edit 的前置保护）
 │   ├── bash/            # Shell 命令执行工具
+│   ├── check_sub_agents/  # 查询当前 Sub-Agent 会话状态
+│   ├── delegate_to_agent/ # Sebastian 委派任务给 Sub-Agent（工具调用形式）
 │   ├── edit/            # 文件精准替换工具
 │   ├── glob/            # 文件模式匹配工具
 │   ├── grep/            # 文件内容搜索工具（优先 ripgrep）
+│   ├── inspect_session/ # 查看指定 session 的最近消息与状态
 │   ├── read/            # 文件读取工具
+│   ├── spawn_sub_agent/ # Sebastian 创建新的 Sub-Agent session
 │   └── write/           # 文件写入工具（含 mtime 保护）
 ├── mcps/                # MCP server 配置目录，每个子目录一个 config.toml，启动时自动连接
 │   ├── __init__.py

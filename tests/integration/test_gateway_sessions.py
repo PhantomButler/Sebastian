@@ -37,18 +37,13 @@ def client(tmp_path):
                 new_callable=AsyncMock,
                 return_value="Session reply",
             ) as mock_run_streaming:
-                with patch(
-                    "sebastian.orchestrator.sebas.Sebastian.intervene",
-                    new_callable=AsyncMock,
-                    return_value="Intervened reply",
-                ) as mock_intervene:
-                    from starlette.testclient import TestClient
+                from starlette.testclient import TestClient
 
-                    from sebastian.gateway.app import create_app
+                from sebastian.gateway.app import create_app
 
-                    test_app = create_app()
-                    with TestClient(test_app, raise_server_exceptions=True) as test_client:
-                        yield test_client, mock_run_streaming, mock_intervene
+                test_app = create_app()
+                with TestClient(test_app, raise_server_exceptions=True) as test_client:
+                    yield test_client, mock_run_streaming, None
 
 
 def _login(client) -> str:
@@ -64,10 +59,10 @@ def _store_session(session) -> None:
     asyncio.run(state.index_store.upsert(session))
 
 
-def _store_task(task, agent_type: str, agent_id: str) -> None:
+def _store_task(task, agent_type: str, agent_id: str = "") -> None:
     import sebastian.gateway.state as state
 
-    asyncio.run(state.session_store.create_task(task, agent_type, agent_id))
+    asyncio.run(state.session_store.create_task(task, agent_type))
 
 
 def _capture_background_task(scheduled_coroutines: list[object]):
@@ -115,7 +110,6 @@ def test_get_session_returns_meta_and_messages(client):
             "user",
             "Hello",
             agent_type="sebastian",
-            agent_id="sebastian_01",
         )
     )
     asyncio.run(state.index_store.upsert(session))
@@ -164,40 +158,49 @@ def test_send_turn_to_sebastian_session_runs_background_stream(client):
     assert mock_run_streaming.await_count == 0
 
 
-def test_send_turn_to_subagent_session_uses_intervention(client):
-    http_client, _, mock_intervene = client
+def test_send_turn_to_subagent_session_schedules_background_task(client):
+    http_client, _, _ = client
     token = _login(http_client)
 
     import sebastian.gateway.state as state
     from sebastian.core.types import Session
 
-    session = Session(agent_type="stock", agent_id="stock_02", title="Stock session")
-    original_updated_at = session.updated_at
-    _store_session(session)
-    scheduled_coroutines = []
+    # Register a mock agent instance for "code" (the only agent in test registry)
+    from unittest.mock import AsyncMock as _AsyncMock
+    mock_agent = _AsyncMock()
+    mock_agent.run_streaming = _AsyncMock(return_value="Agent reply")
+    original_instances = dict(state.agent_instances)
+    state.agent_instances["code"] = mock_agent
 
-    with patch(
-        "sebastian.gateway.routes.sessions.asyncio.create_task",
-        side_effect=_capture_background_task(scheduled_coroutines),
-    ):
-        response = http_client.post(
-            f"/api/v1/sessions/{session.id}/turns",
-            json={"content": "Please revise the plan"},
-            headers={"Authorization": f"Bearer {token}"},
-        )
+    try:
+        session = Session(agent_type="code", agent_id="code_01", title="Code session")
+        original_updated_at = session.updated_at
+        _store_session(session)
+        scheduled_coroutines = []
 
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["session_id"] == session.id
-    assert "ts" in payload
-    assert "response" not in payload
-    assert len(scheduled_coroutines) == 1
-    mock_intervene.assert_called_once_with("stock", session.id, "Please revise the plan")
-    assert mock_intervene.await_count == 0
+        with patch(
+            "sebastian.gateway.routes.sessions.asyncio.create_task",
+            side_effect=_capture_background_task(scheduled_coroutines),
+        ):
+            response = http_client.post(
+                f"/api/v1/sessions/{session.id}/turns",
+                json={"content": "Please revise the plan"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
 
-    stored_session = asyncio.run(state.session_store.get_session(session.id, "stock", "stock_02"))
-    assert stored_session is not None
-    assert stored_session.updated_at >= original_updated_at
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["session_id"] == session.id
+        assert "ts" in payload
+        assert "response" not in payload
+        assert len(scheduled_coroutines) == 1
+
+        stored_session = asyncio.run(state.session_store.get_session(session.id, "code"))
+        assert stored_session is not None
+        assert stored_session.updated_at >= original_updated_at
+    finally:
+        state.agent_instances.clear()
+        state.agent_instances.update(original_instances)
 
 
 def test_session_task_routes_resolve_stored_agent_metadata(client):

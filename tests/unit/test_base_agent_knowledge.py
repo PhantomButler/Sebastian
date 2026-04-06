@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 
 
 def _make_agent(knowledge_dir: Path | None):

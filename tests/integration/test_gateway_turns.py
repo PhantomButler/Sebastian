@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import importlib
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -119,7 +118,7 @@ def test_send_turn_returns_immediate_session_metadata(client):
     assert mock_run_streaming.await_count == 0
 
 
-def test_agents_returns_initialized_runtime_pools(client):
+def test_agents_returns_initialized_runtime_agents(client):
     http_client, _, _ = client
     token = _login(http_client)
 
@@ -131,116 +130,30 @@ def test_agents_returns_initialized_runtime_pools(client):
     assert response.status_code == 200, response.text
     agents = {agent["agent_type"]: agent for agent in response.json()["agents"]}
 
-    assert set(agents) == {"sebastian", "code", "life", "stock"}
-    assert agents["sebastian"] == {
-        "agent_type": "sebastian",
-        "name": "sebastian",
-        "description": "",
-        "workers": [
-            {
-                "agent_id": "sebastian_01",
-                "status": "idle",
-                "session_id": None,
-                "current_goal": None,
-            }
-        ],
-        "queue_depth": 0,
-    }
-    agent_meta = {
-        "code": (
-            "Code Agent",
-            "Executes code tasks: writes, runs, and debugs Python and shell scripts",
-        ),
-        "life": (
-            "Life Agent",
-            "Handles daily life tasks: schedules, reminders, personal planning, and lifestyle queries",  # noqa: E501
-        ),
-        "stock": (
-            "Stock Agent",
-            "Performs stock and investment research: price lookup, financial analysis, market summaries",  # noqa: E501
-        ),
-    }
-    for agent_type in ("code", "life", "stock"):
-        name, description = agent_meta[agent_type]
-        assert agents[agent_type] == {
-            "agent_type": agent_type,
-            "name": name,
-            "description": description,
-            "workers": [
-                {
-                    "agent_id": f"{agent_type}_01",
-                    "status": "idle",
-                    "session_id": None,
-                    "current_goal": None,
-                },
-                {
-                    "agent_id": f"{agent_type}_02",
-                    "status": "idle",
-                    "session_id": None,
-                    "current_goal": None,
-                },
-                {
-                    "agent_id": f"{agent_type}_03",
-                    "status": "idle",
-                    "session_id": None,
-                    "current_goal": None,
-                },
-            ],
-            "queue_depth": 0,
-        }
+    # Only registered sub-agents appear (sebastian is excluded from listing)
+    assert "code" in agents
+    assert agents["code"]["agent_type"] == "code"
+    assert "name" in agents["code"]
+    assert "active_session_count" in agents["code"]
+    assert "max_children" in agents["code"]
 
 
-def test_agents_reflect_runtime_turn_events(client):
+def test_agents_endpoint_returns_list_format(client):
     http_client, _, _ = client
     token = _login(http_client)
 
-    import sebastian.gateway.state as state
-    from sebastian.protocol.events.types import Event, EventType
-
-    asyncio.run(
-        state.event_bus.publish(
-            Event(
-                type=EventType.TURN_RECEIVED,
-                data={"agent_id": "stock_02", "session_id": "session-123"},
-            )
-        )
-    )
-
     response = http_client.get(
         "/api/v1/agents",
         headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 200, response.text
-    agents = {agent["agent_type"]: agent for agent in response.json()["agents"]}
-    stock_workers = {worker["agent_id"]: worker for worker in agents["stock"]["workers"]}
-    assert stock_workers["stock_02"] == {
-        "agent_id": "stock_02",
-        "status": "busy",
-        "session_id": "session-123",
-        "current_goal": None,
-    }
-
-    asyncio.run(
-        state.event_bus.publish(
-            Event(
-                type=EventType.TURN_RESPONSE,
-                data={"session_id": "session-123", "content": "done"},
-            )
-        )
-    )
-
-    response = http_client.get(
-        "/api/v1/agents",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-
-    assert response.status_code == 200, response.text
-    agents = {agent["agent_type"]: agent for agent in response.json()["agents"]}
-    stock_workers = {worker["agent_id"]: worker for worker in agents["stock"]["workers"]}
-    assert stock_workers["stock_02"] == {
-        "agent_id": "stock_02",
-        "status": "idle",
-        "session_id": None,
-        "current_goal": None,
-    }
+    body = response.json()
+    assert "agents" in body
+    assert isinstance(body["agents"], list)
+    # Each entry has the new flat schema (not pool/worker schema)
+    for agent in body["agents"]:
+        assert "agent_type" in agent
+        assert "name" in agent
+        assert "active_session_count" in agent
+        assert "max_children" in agent

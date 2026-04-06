@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from sebastian.agents._loader import AgentConfig
     from sebastian.protocol.events.bus import EventBus
     from sebastian.store.index_store import IndexStore
     from sebastian.store.session_store import SessionStore

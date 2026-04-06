@@ -5,7 +5,7 @@
 ## 模块职责
 
 对外暴露 REST API 和 SSE 事件流，是 Sebastian 系统唯一的 HTTP 入口。
-管理全局运行时单例（Agent 池、SessionStore、EventBus、SSEManager 等），在 `lifespan` 中按严格顺序完成初始化与清理。
+管理全局运行时单例（`agent_instances`、`agent_registry`、SessionStore、EventBus、SSEManager 等），在 `lifespan` 中按严格顺序完成初始化与清理。
 处理 JWT 认证，路由请求至对应业务处理器。
 
 ## 目录结构
@@ -28,9 +28,10 @@ gateway/
 | 启动/关闭初始化流程（顺序严格：DB → Store → EventBus → Agent → SSE） | [app.py](app.py) 的 `lifespan` |
 | 认证逻辑、Token 有效期、密码哈希算法 | [auth.py](auth.py) |
 | SSE 推送逻辑、事件缓冲大小（默认 500）、客户端队列大小（默认 200） | [sse.py](sse.py) 的 `SSEManager` |
-| 全局运行时对象（访问或增减单例变量） | [state.py](state.py) |
-| Agent Worker 数量、Sub-Agent 池初始化 | [app.py](app.py) 的 `_initialize_a2a_and_pools()` |
-| Worker 状态跟踪（BUSY/IDLE 切换） | [app.py](app.py) 的 `_register_runtime_agent_state_handlers()` |
+| 全局运行时对象（访问或增减单例变量） | [state.py](state.py)（`agent_instances` 替代旧 `agent_pools`） |
+| 注册 Sub-Agent 实例与配置 | [app.py](app.py) 的 `_register_agents()` |
+| 创建 Sub-Agent session（懒启动） | `POST /api/v1/agents/{type}/sessions`（routes/sessions.py） |
+| 查看 session 最近消息与状态 | `GET /api/v1/sessions/{id}/recent`（routes/sessions.py） |
 
 ## 子模块
 
@@ -43,7 +44,8 @@ gateway/
 import sebastian.gateway.state as state
 state.session_store.get_session(session_id)
 state.event_bus.publish(event)
-state.agent_pools["sebastian"]
+state.agent_instances["code"]   # Sub-Agent 实例（替代旧 agent_pools）
+state.agent_registry["code"]    # Sub-Agent 配置元数据
 state.conversation.request_approval(...)
 
 # 认证依赖

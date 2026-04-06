@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 
 from sebastian.core.agent_loop import _is_empty_output, _tool_result_content
 from sebastian.core.stream_events import ToolResult

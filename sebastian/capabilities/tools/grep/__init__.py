@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
 
 from sebastian.config import settings

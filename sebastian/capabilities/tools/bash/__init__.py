@@ -38,7 +38,7 @@ async def bash(command: str, timeout: int | None = None) -> ToolResult:
             proc.communicate(),
             timeout=float(effective_timeout),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.wait()
         return ToolResult(ok=False, error=f"Command timed out after {effective_timeout}s")

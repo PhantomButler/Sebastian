@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import time
 
 import pytest
@@ -29,7 +28,6 @@ def isolated_registry():
 
 @pytest.mark.asyncio
 async def test_glob_finds_matching_files(tmp_path, isolated_registry) -> None:
-    from sebastian.capabilities.tools.glob import glob
     from sebastian.core.tool import call_tool
 
     (tmp_path / "a.py").write_text("a")
@@ -45,7 +43,6 @@ async def test_glob_finds_matching_files(tmp_path, isolated_registry) -> None:
 
 @pytest.mark.asyncio
 async def test_glob_sorted_by_mtime(tmp_path, isolated_registry) -> None:
-    from sebastian.capabilities.tools.glob import glob
     from sebastian.core.tool import call_tool
 
     old_file = tmp_path / "old.py"
@@ -62,7 +59,6 @@ async def test_glob_sorted_by_mtime(tmp_path, isolated_registry) -> None:
 
 @pytest.mark.asyncio
 async def test_glob_truncates_at_100(tmp_path, isolated_registry) -> None:
-    from sebastian.capabilities.tools.glob import glob
     from sebastian.core.tool import call_tool
 
     for i in range(110):
@@ -76,7 +72,6 @@ async def test_glob_truncates_at_100(tmp_path, isolated_registry) -> None:
 
 @pytest.mark.asyncio
 async def test_glob_invalid_path_returns_error(tmp_path, isolated_registry) -> None:
-    from sebastian.capabilities.tools.glob import glob
     from sebastian.core.tool import call_tool
 
     nonexistent = str(tmp_path / "nonexistent")
