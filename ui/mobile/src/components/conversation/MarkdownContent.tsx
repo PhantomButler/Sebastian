@@ -20,6 +20,7 @@ export function MarkdownContent({ content }: Props) {
     em: { fontStyle: 'italic' as const },
     // 行内代码：彩色等宽字体，不用背景（Android Text 不支持 borderRadius 裁剪）
     code_inline: {
+      backgroundColor: 'transparent',
       color: isDark ? '#a8d8a8' : '#007AFF',
       fontFamily: 'monospace',
       fontSize: 13,
