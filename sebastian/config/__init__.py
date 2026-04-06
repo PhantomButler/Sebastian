@@ -81,16 +81,14 @@ settings = Settings()
 
 
 def ensure_data_dir() -> None:
-    """Create the data directory and sessions subdirectories."""
-    data = settings.data_dir
-    data.mkdir(parents=True, exist_ok=True)
-    (data / "sessions").mkdir(exist_ok=True)
-    (data / "sessions" / "sebastian").mkdir(exist_ok=True)
-    (data / "sessions" / "subagents").mkdir(exist_ok=True)
-    (data / "extensions").mkdir(exist_ok=True)
-    (data / "extensions" / "skills").mkdir(exist_ok=True)
-    (data / "extensions" / "agents").mkdir(exist_ok=True)
-    (data / "workspace").mkdir(exist_ok=True)
+    """Create required data directory structure."""
+    for sub in (
+        "sessions/sebastian",
+        "extensions/skills",
+        "extensions/agents",
+        "workspace",
+    ):
+        (settings.data_dir / sub).mkdir(parents=True, exist_ok=True)
 
 
 __all__ = ["Settings", "settings", "ensure_data_dir"]
