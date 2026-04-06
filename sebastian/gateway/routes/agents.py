@@ -17,30 +17,20 @@ async def list_agents(_auth: AuthPayload = Depends(require_auth)) -> JSONDict:
     import sebastian.gateway.state as state
 
     agents = []
-    for agent_type, pool in state.agent_pools.items():
-        cfg = state.agent_registry.get(agent_type)
-        agent_name = cfg.name if cfg else agent_type
-        agent_description = cfg.description if cfg else ""
+    for agent_type, config in state.agent_registry.items():
+        if agent_type == "sebastian":
+            continue
 
-        workers = []
-        for agent_id, worker_status in pool.status().items():
-            workers.append(
-                {
-                    "agent_id": agent_id,
-                    "status": worker_status.value,
-                    "session_id": state.worker_sessions.get(agent_id),
-                    "current_goal": pool.current_goals.get(agent_id),
-                }
-            )
-        agents.append(
-            {
-                "agent_type": agent_type,
-                "name": agent_name,
-                "description": agent_description,
-                "workers": workers,
-                "queue_depth": pool.queue_depth,
-            }
-        )
+        sessions = await state.index_store.list_by_agent_type(agent_type)
+        active_count = sum(1 for s in sessions if s.get("status") == "active")
+
+        agents.append({
+            "agent_type": agent_type,
+            "name": config.display_name,
+            "description": config.description,
+            "active_session_count": active_count,
+            "max_children": config.max_children,
+        })
 
     return {"agents": agents}
 
