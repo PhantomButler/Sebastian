@@ -19,6 +19,7 @@ export function ToolCallGroup({ tools }: Props) {
             name={tool.name}
             input={tool.input}
             status={tool.status}
+            result={tool.result}
           />
           {/* Vertical connector between consecutive tool calls */}
           {index < tools.length - 1 && <View style={{ ...styles.connector, backgroundColor: colors.border }} />}
