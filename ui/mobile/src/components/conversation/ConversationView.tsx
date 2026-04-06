@@ -73,6 +73,6 @@ export function ConversationView({ sessionId }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d0d' },
+  container: { flex: 1, backgroundColor: '#ffffff' },
   content: { paddingTop: 12, paddingBottom: 100 },
 });
