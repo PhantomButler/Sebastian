@@ -54,6 +54,8 @@ async def spawn_sub_agent(
     await state.session_store.create_session(session)
     await state.index_store.upsert(session)
 
+    if agent_type not in state.agent_instances:
+        return ToolResult(ok=False, error=f"Agent {agent_type} 尚未初始化")
     agent = state.agent_instances[agent_type]
     full_goal = f"{goal}\n\n背景信息：{context}" if context else goal
 
