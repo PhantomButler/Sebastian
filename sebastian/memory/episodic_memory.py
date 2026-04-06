@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sebastian.store.session_store import SessionStore
 
@@ -31,6 +32,7 @@ class EpisodicMemory:
         role: str,
         content: str,
         agent: str = "sebastian",
+        blocks: list[dict[str, Any]] | None = None,
     ) -> TurnEntry:
         agent_type, agent_id = await self._get_agent_context(session_id, agent)
         await self._store.append_message(
@@ -39,6 +41,7 @@ class EpisodicMemory:
             content,
             agent_type=agent_type,
             agent_id=agent_id,
+            blocks=blocks,
         )
         return TurnEntry(
             role=role,

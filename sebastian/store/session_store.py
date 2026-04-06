@@ -113,6 +113,7 @@ class SessionStore:
         content: str,
         agent_type: str = "sebastian",
         agent_id: str = "sebastian_01",
+        blocks: list[dict[str, Any]] | None = None,
     ) -> None:
         directory = _session_dir_by_id(
             self._dir,
@@ -120,13 +121,14 @@ class SessionStore:
             agent_type,
             agent_id,
         )
-        message = json.dumps(
-            {
-                "role": role,
-                "content": content,
-                "ts": datetime.now(UTC).isoformat(),
-            }
-        )
+        entry: dict[str, Any] = {
+            "role": role,
+            "content": content,
+            "ts": datetime.now(UTC).isoformat(),
+        }
+        if blocks:
+            entry["blocks"] = blocks
+        message = json.dumps(entry)
         async with aiofiles.open(directory / "messages.jsonl", "a") as file:
             await file.write(message + "\n")
 

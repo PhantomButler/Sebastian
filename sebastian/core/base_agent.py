@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import inspect
+import json
 import logging
 from abc import ABC
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sebastian.llm.provider import LLMProvider
@@ -253,6 +254,7 @@ class BaseAgent(ABC):
         agent_context: str,
     ) -> str:
         full_text = ""
+        tool_records: list[dict[str, Any]] = []
         gen = self._loop.stream(self.system_prompt, messages, task_id=task_id)
         send_value: StreamToolResult | None = None
 
@@ -289,6 +291,14 @@ class BaseAgent(ABC):
                             "name": event.name,
                         },
                     )
+                    record: dict[str, Any] = {
+                        "type": "tool",
+                        "tool_id": event.tool_id,
+                        "name": event.name,
+                        "input": json.dumps(event.inputs, default=str),
+                        "status": "failed",
+                    }
+                    tool_records.append(record)
                     try:
                         context = ToolCallContext(
                             task_goal=self._current_task_goal,
@@ -300,6 +310,7 @@ class BaseAgent(ABC):
                         raise
                     except Exception as exc:  # pragma: no cover - exercised via async failure paths
                         error = str(exc)
+                        record["result"] = error
                         await self._publish(
                             session_id,
                             EventType.TOOL_FAILED,
@@ -318,6 +329,8 @@ class BaseAgent(ABC):
                         )
                     else:
                         if result.ok:
+                            record["status"] = "done"
+                            record["result"] = str(result.output)[:200]
                             await self._publish(
                                 session_id,
                                 EventType.TOOL_EXECUTED,
@@ -328,6 +341,7 @@ class BaseAgent(ABC):
                                 },
                             )
                         else:
+                            record["result"] = result.error or ""
                             await self._publish(
                                 session_id,
                                 EventType.TOOL_FAILED,
@@ -352,6 +366,7 @@ class BaseAgent(ABC):
                         "assistant",
                         event.full_text,
                         agent=agent_context,
+                        blocks=tool_records if tool_records else None,
                     )
                     await self._publish(
                         session_id,
@@ -369,6 +384,7 @@ class BaseAgent(ABC):
                     "assistant",
                     full_text,
                     agent=agent_context,
+                    blocks=tool_records if tool_records else None,
                 )
             await self._publish(
                 session_id,

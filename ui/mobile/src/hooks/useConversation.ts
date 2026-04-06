@@ -9,17 +9,52 @@ import type { ConvMessage, SSEEvent } from '../types';
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 
+type ApiToolBlock = {
+  type: 'tool';
+  tool_id: string;
+  name: string;
+  input: string;
+  status: 'done' | 'failed';
+  result?: string;
+};
+
+type ApiMessage = {
+  role: string;
+  content: string;
+  ts?: string;
+  blocks?: ApiToolBlock[];
+};
+
 /** Map raw API message list to ConvMessage array. */
-function mapMessages(
-  sessionId: string,
-  messages: Array<{ role: string; content: string; ts?: string }>,
-): ConvMessage[] {
-  return messages.map((m, i) => ({
-    id: `${sessionId}-${i}`,
-    role: m.role as ConvMessage['role'],
-    content: m.content,
-    createdAt: m.ts ?? '',
-  }));
+function mapMessages(sessionId: string, messages: ApiMessage[]): ConvMessage[] {
+  return messages.map((m, i) => {
+    const base: ConvMessage = {
+      id: `${sessionId}-${i}`,
+      role: m.role as ConvMessage['role'],
+      content: m.content,
+      createdAt: m.ts ?? '',
+    };
+    if (m.role === 'assistant' && m.blocks?.length) {
+      const renderBlocks: import('../types').RenderBlock[] = [];
+      for (const b of m.blocks) {
+        if (b.type === 'tool') {
+          renderBlocks.push({
+            type: 'tool',
+            toolId: b.tool_id,
+            name: b.name,
+            input: b.input,
+            status: b.status,
+            result: b.result,
+          });
+        }
+      }
+      if (m.content) {
+        renderBlocks.push({ type: 'text', blockId: `${base.id}-text`, text: m.content, done: true });
+      }
+      return { ...base, blocks: renderBlocks };
+    }
+    return base;
+  });
 }
 
 /** 管理单个 session 的 hydrate + per-session SSE 生命周期。
