@@ -31,10 +31,7 @@ _SESSION_LOCKS_BY_PATH: weakref.WeakValueDictionary[Path, asyncio.Lock] = (
 
 def _session_dir(sessions_dir: Path, session: Session) -> Path:
     """Return the session directory, creating the required structure."""
-    if session.agent_type == "sebastian":
-        directory = sessions_dir / "sebastian" / session.id
-    else:
-        directory = sessions_dir / session.agent_type / session.id
+    directory = sessions_dir / session.agent_type / session.id
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "tasks").mkdir(exist_ok=True)
     return directory
@@ -45,8 +42,6 @@ def _session_dir_by_id(
     session_id: str,
     agent_type: str,
 ) -> Path:
-    if agent_type == "sebastian":
-        return sessions_dir / "sebastian" / session_id
     return sessions_dir / agent_type / session_id
 
 
