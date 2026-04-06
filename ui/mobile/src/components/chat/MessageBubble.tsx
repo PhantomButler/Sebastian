@@ -1,15 +1,26 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../../theme/ThemeContext';
 import type { Message } from '../../types';
 
 interface Props { message: Message; }
 
 export function MessageBubble({ message }: Props) {
+  const colors = useTheme();
   const isUser = message.role === 'user';
-  return (
-    <View style={[styles.row, isUser ? styles.rowUser : styles.rowAssistant]}>
-      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
-        <Text style={isUser ? styles.textUser : styles.textAssistant}>{message.content}</Text>
+
+  if (isUser) {
+    return (
+      <View style={[styles.row, styles.rowUser]}>
+        <View style={[styles.bubble, { backgroundColor: colors.userBubbleBg }]}>
+          <Text style={{ color: colors.userBubbleText }}>{message.content}</Text>
+        </View>
       </View>
+    );
+  }
+
+  return (
+    <View style={[styles.row, styles.rowAssistant]}>
+      <Text style={{ color: colors.text }}>{message.content}</Text>
     </View>
   );
 }
@@ -19,8 +30,4 @@ const styles = StyleSheet.create({
   rowUser: { alignItems: 'flex-end' },
   rowAssistant: { alignItems: 'flex-start' },
   bubble: { maxWidth: '80%', borderRadius: 16, padding: 10 },
-  bubbleUser: { backgroundColor: '#007AFF' },
-  bubbleAssistant: { backgroundColor: '#F0F0F0' },
-  textUser: { color: '#fff' },
-  textAssistant: { color: '#000' },
 });
