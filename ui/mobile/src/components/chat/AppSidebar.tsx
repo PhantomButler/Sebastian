@@ -100,9 +100,9 @@ export function AppSidebar({
       {/* New chat button */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
         <TouchableOpacity
-          style={[styles.newChatBtn, draftSession && styles.newChatBtnDisabled]}
-          onPress={draftSession ? undefined : onNewChat}
-          disabled={draftSession}
+          style={[styles.newChatBtn, (draftSession || !currentSessionId) && styles.newChatBtnDisabled]}
+          onPress={(draftSession || !currentSessionId) ? undefined : onNewChat}
+          disabled={draftSession || !currentSessionId}
           activeOpacity={0.85}
         >
           <Text style={styles.newChatBtnText}>新对话</Text>
