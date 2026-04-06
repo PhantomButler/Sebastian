@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { Animated, Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import { useTheme } from '../../theme/ThemeContext';
 
 const SIDEBAR_WIDTH = Dimensions.get('window').width * 0.75;
 const SWIPE_THRESHOLD = 50;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function Sidebar({ visible, onOpen, onClose, children }: Props) {
+  const colors = useTheme();
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export function Sidebar({ visible, onOpen, onClose, children }: Props) {
     >
       {/* Overlay: 点击右侧区域关闭 */}
       <TouchableOpacity
-        style={[styles.overlay, { display: visible ? 'flex' : 'none' }]}
+        style={[styles.overlay, { display: visible ? 'flex' : 'none', backgroundColor: colors.overlay }]}
         activeOpacity={1}
         onPress={onClose}
       />
@@ -50,7 +52,7 @@ export function Sidebar({ visible, onOpen, onClose, children }: Props) {
       <PanGestureHandler onHandlerStateChange={handleSidebarGesture} enabled={visible}>
         <Animated.View
           collapsable={false}
-          style={[styles.sidebar, { transform: [{ translateX }] }]}
+          style={[styles.sidebar, { transform: [{ translateX }], backgroundColor: colors.secondaryBackground }]}
           pointerEvents={visible ? 'auto' : 'none'}
         >
           {children}
@@ -70,7 +72,6 @@ export function Sidebar({ visible, onOpen, onClose, children }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   sidebar: {
     position: 'absolute',
@@ -78,7 +79,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: SIDEBAR_WIDTH,
-    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.12,
