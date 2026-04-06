@@ -1,6 +1,7 @@
-import { View, Text, Switch, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useSettingsStore } from '../../store/settings';
 import { useTheme } from '../../theme/ThemeContext';
+import { SettingToggleRow } from './SettingToggleRow';
 
 export function ThemeSettings() {
   const { themeMode, setThemeMode } = useSettingsStore();
@@ -26,21 +27,18 @@ export function ThemeSettings() {
     <View style={styles.group}>
       <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>外观</Text>
       <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-        <View style={[styles.row, !isFollowSystem && styles.rowBorder, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.rowTitle, { color: colors.text }]}>跟随系统</Text>
-          <Switch
-            value={isFollowSystem}
-            onValueChange={handleFollowSystemChange}
-          />
-        </View>
+        <SettingToggleRow
+          label="跟随系统"
+          value={isFollowSystem}
+          onValueChange={handleFollowSystemChange}
+          hasBorder={!isFollowSystem}
+        />
         {!isFollowSystem && (
-          <View style={styles.row}>
-            <Text style={[styles.rowTitle, { color: colors.text }]}>深色模式</Text>
-            <Switch
-              value={isDarkManual}
-              onValueChange={handleDarkModeChange}
-            />
-          </View>
+          <SettingToggleRow
+            label="深色模式"
+            value={isDarkManual}
+            onValueChange={handleDarkModeChange}
+          />
         )}
       </View>
       <Text style={[styles.footer, { color: colors.textSecondary }]}>
@@ -65,17 +63,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
   },
-  row: {
-    minHeight: 52,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  rowTitle: { fontSize: 17 },
   footer: {
     paddingHorizontal: 4,
     paddingTop: 8,

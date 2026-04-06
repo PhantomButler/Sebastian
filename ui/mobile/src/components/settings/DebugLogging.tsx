@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Switch, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert } from 'react-native';
 import { getLogState, patchLogState } from '../../api/debug';
 import { useSettingsStore } from '../../store/settings';
 import { useTheme } from '../../theme/ThemeContext';
+import { SettingToggleRow } from './SettingToggleRow';
 
 export function DebugLogging() {
   const colors = useTheme();
@@ -50,22 +51,19 @@ export function DebugLogging() {
     <View style={styles.group}>
       <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>调试日志</Text>
       <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-        <View style={[styles.row, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.rowTitle, { color: colors.text }]}>LLM Stream 日志</Text>
-          <Switch
-            value={llmStream}
-            onValueChange={(v) => toggle('llm_stream_enabled', v)}
-            disabled={loading}
-          />
-        </View>
-        <View style={[styles.row, styles.lastRow]}>
-          <Text style={[styles.rowTitle, { color: colors.text }]}>SSE 事件日志</Text>
-          <Switch
-            value={sse}
-            onValueChange={(v) => toggle('sse_enabled', v)}
-            disabled={loading}
-          />
-        </View>
+        <SettingToggleRow
+          label="LLM Stream 日志"
+          value={llmStream}
+          onValueChange={(v) => toggle('llm_stream_enabled', v)}
+          disabled={loading}
+          hasBorder
+        />
+        <SettingToggleRow
+          label="SSE 事件日志"
+          value={sse}
+          onValueChange={(v) => toggle('sse_enabled', v)}
+          disabled={loading}
+        />
       </View>
     </View>
   );
@@ -84,16 +82,4 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
   },
-  row: {
-    minHeight: 52,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  lastRow: {
-    borderBottomWidth: 0,
-  },
-  rowTitle: { fontSize: 17 },
 });
