@@ -7,6 +7,7 @@ const KEYS = {
   jwtToken: 'settings_jwt_token',
   llmProviderType: 'settings_llm_provider_type',
   llmApiKey: 'settings_llm_api_key',
+  themeMode: 'settings_theme_mode',
 } as const;
 
 interface LocalLLMConfig {
@@ -18,25 +19,29 @@ interface SettingsState {
   serverUrl: string;
   jwtToken: string | null;
   llmProvider: LocalLLMConfig | null;
+  themeMode: 'system' | 'light' | 'dark';
   isLoaded: boolean;
   load: () => Promise<void>;
   setServerUrl: (url: string) => Promise<void>;
   setJwtToken: (token: string | null) => Promise<void>;
   setLlmProvider: (provider: LocalLLMConfig) => Promise<void>;
+  setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   serverUrl: '',
   jwtToken: null,
   llmProvider: null,
+  themeMode: 'system',
   isLoaded: false,
 
   load: async () => {
-    const [serverUrl, jwtToken, providerType, apiKey] = await Promise.all([
+    const [serverUrl, jwtToken, providerType, apiKey, themeMode] = await Promise.all([
       SecureStore.getItemAsync(KEYS.serverUrl),
       SecureStore.getItemAsync(KEYS.jwtToken),
       SecureStore.getItemAsync(KEYS.llmProviderType),
       SecureStore.getItemAsync(KEYS.llmApiKey),
+      SecureStore.getItemAsync(KEYS.themeMode),
     ]);
     const llmProvider =
       providerType && apiKey
@@ -46,6 +51,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       serverUrl: serverUrl ?? '',
       jwtToken: jwtToken ?? null,
       llmProvider,
+      themeMode: (themeMode as 'system' | 'light' | 'dark') ?? 'system',
       isLoaded: true,
     });
   },
@@ -67,5 +73,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       SecureStore.setItemAsync(KEYS.llmApiKey, provider.apiKey),
     ]);
     set({ llmProvider: provider });
+  },
+
+  setThemeMode: async (mode) => {
+    await SecureStore.setItemAsync(KEYS.themeMode, mode);
+    set({ themeMode: mode });
   },
 }));
