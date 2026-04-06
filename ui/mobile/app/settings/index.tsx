@@ -9,6 +9,7 @@ import { useSettingsStore } from '@/src/store/settings';
 import { login, logout } from '@/src/api/auth';
 import { ServerConfig } from '@/src/components/settings/ServerConfig';
 import { LLMProviderConfig } from '@/src/components/settings/LLMProviderConfig';
+import { ThemeSettings } from '@/src/components/settings/ThemeSettings';
 import { MemorySection } from '@/src/components/settings/MemorySection';
 import { DebugLogging } from '@/src/components/settings/DebugLogging';
 
@@ -95,6 +96,7 @@ export default function SettingsScreen() {
         </View>
       )}
       <LLMProviderConfig />
+      <ThemeSettings />
       <MemorySection />
       <DebugLogging />
     </ScrollView>
