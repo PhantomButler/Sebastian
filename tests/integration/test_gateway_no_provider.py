@@ -58,3 +58,49 @@ def test_send_turn_returns_400_no_llm_provider(empty_db_client: TestClient) -> N
     detail = response.json()["detail"]
     assert detail["code"] == "no_llm_provider"
     assert "Settings" in detail["message"] or "设置" in detail["message"]
+
+
+def test_create_agent_session_returns_400(empty_db_client: TestClient) -> None:
+    token = _login(empty_db_client)
+    response = empty_db_client.post(
+        "/api/v1/agents/sebastian/sessions",
+        json={"content": "hello sub-agent"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # pre-check 先于 agent_type 404 检查
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "no_llm_provider"
+
+
+def test_send_turn_to_session_returns_400(empty_db_client: TestClient) -> None:
+    """Need an existing session to hit this route. Create one directly via store."""
+    import asyncio
+    from sebastian.core.types import Session
+
+    token = _login(empty_db_client)
+
+    # Create a session directly via store (bypass create route which is also gated).
+    import sebastian.gateway.state as state
+
+    async def _seed() -> str:
+        session = Session(
+            agent_type="sebastian",
+            title="seed",
+            goal="seed",
+            depth=1,
+        )
+        await state.session_store.create_session(session)
+        await state.index_store.upsert(session)
+        return session.id
+
+    session_id = asyncio.run(_seed())
+
+    response = empty_db_client.post(
+        f"/api/v1/sessions/{session_id}/turns",
+        json={"content": "hello"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "no_llm_provider"

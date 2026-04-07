@@ -61,6 +61,9 @@ async def create_agent_session(
 ) -> JSONDict:
     """Create a new conversation with a sub-agent."""
     import sebastian.gateway.state as state
+    from sebastian.gateway.routes.turns import _ensure_llm_ready
+
+    await _ensure_llm_ready(agent_type)
 
     if agent_type not in state.agent_instances:
         raise HTTPException(404, f"Agent type not found: {agent_type}")
@@ -265,8 +268,10 @@ async def send_turn_to_session(
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
     import sebastian.gateway.state as state
+    from sebastian.gateway.routes.turns import _ensure_llm_ready
 
     session = await _resolve_session(state, session_id)
+    await _ensure_llm_ready(session.agent_type)
     now = await _touch_session(state, session)
     await _schedule_session_turn(session, body.content)
 
