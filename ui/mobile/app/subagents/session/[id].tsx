@@ -1,9 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
+import {
+  KeyboardGestureArea,
+  KeyboardStickyView,
+  KeyboardChatScrollView,
+} from 'react-native-keyboard-controller';
 import {
   createAgentSession,
   getSessionDetail,
@@ -15,6 +20,7 @@ import { Composer } from '../../../src/components/composer';
 import { ConversationView } from '../../../src/components/conversation';
 import { SessionDetailView } from '../../../src/components/subagents/SessionDetailView';
 import { ErrorBanner } from '../../../src/components/conversation/ErrorBanner';
+import { COMPOSER_DEFAULT_HEIGHT } from '../../../src/components/composer/constants';
 import type { TaskDetail } from '../../../src/types';
 
 type Tab = 'messages' | 'tasks';
@@ -129,6 +135,22 @@ export default function SessionDetailScreen() {
   const displayTitle = isNewSession && !realSessionId ? '新对话' : (detail?.session.title ?? '会话详情');
   const tasks = isMockSession ? MOCK_TASKS : remoteTasks;
 
+  const stickyOffset = useMemo(() => ({ opened: insets.bottom }), [insets.bottom]);
+
+  const renderScrollComponent = useCallback(
+    (props: object) => (
+      <KeyboardChatScrollView
+        {...props}
+        keyboardDismissMode="interactive"
+        keyboardLiftBehavior="always"
+        offset={insets.bottom}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+      />
+    ),
+    [insets.bottom],
+  );
+
   const handleSend = useCallback(
     async (text: string, _opts?: { thinking: boolean }) => {
       if (isMockSession) {
@@ -168,11 +190,11 @@ export default function SessionDetailScreen() {
         setSending(false);
       }
     },
-    [agentName, effectiveSessionId, isMockSession, isNewSession, queryClient, realSessionId, router],
+    [agentName, effectiveSessionId, isMockSession, isNewSession, queryClient, realSessionId, router, sessionId],
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['bottom']} style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity style={styles.back} onPress={() => router.back()}>
           <Text style={styles.backText}>‹ 返回</Text>
@@ -201,27 +223,34 @@ export default function SessionDetailScreen() {
           </Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.body}>
+
+      <KeyboardGestureArea
+        style={styles.gestureArea}
+        interpolator="ios"
+        offset={COMPOSER_DEFAULT_HEIGHT}
+        textInputNativeID="composer-input"
+      >
         {tab === 'messages' ? (
-          <ConversationView sessionId={isMockSession ? null : effectiveSessionId} />
+          <ConversationView
+            sessionId={isMockSession ? null : effectiveSessionId}
+            errorBanner={banner}
+            onBannerAction={() => router.push('/settings')}
+            renderScrollComponent={renderScrollComponent}
+          />
         ) : (
           <SessionDetailView tasks={tasks} />
         )}
-      </View>
-      {banner && (
-        <ErrorBanner
-          message={banner.message}
-          onAction={() => router.push('/settings')}
-        />
-      )}
-      <Composer
-        sessionId={effectiveSessionId}
-        isWorking={sending}
-        onSend={handleSend}
-        onStop={async () => {}}
-        onHeightChange={() => {}}
-      />
-    </View>
+
+        <KeyboardStickyView offset={stickyOffset} style={styles.stickyComposer}>
+          <Composer
+            sessionId={effectiveSessionId}
+            isWorking={sending}
+            onSend={handleSend}
+            onStop={async () => {}}
+          />
+        </KeyboardStickyView>
+      </KeyboardGestureArea>
+    </SafeAreaView>
   );
 }
 
@@ -249,5 +278,9 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomWidth: 2, borderBottomColor: '#007AFF' },
   tabText: { fontSize: 14, color: '#888888' },
   tabTextActive: { color: '#007AFF', fontWeight: '600' },
-  body: { flex: 1 },
+  gestureArea: { flex: 1 },
+  stickyComposer: {
+    position: 'absolute',
+    width: '100%',
+  },
 });
