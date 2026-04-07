@@ -5,17 +5,20 @@ import { useConversationStore } from '../../store/conversation';
 import { useTheme } from '../../theme/ThemeContext';
 import { UserBubble } from './UserBubble';
 import { AssistantMessage } from './AssistantMessage';
-import type { ConvMessage, RenderBlock } from '../../types';
+import { ErrorBanner } from './ErrorBanner';
+import type { ConvMessage, ErrorBanner as ErrorBannerType, RenderBlock } from '../../types';
 
 interface Props {
   sessionId: string | null;
+  errorBanner?: ErrorBannerType | null;
+  onBannerAction?: () => void;
 }
 
 type ListItem =
   | { kind: 'message'; message: ConvMessage }
   | { kind: 'streaming'; blocks: RenderBlock[] };
 
-export function ConversationView({ sessionId }: Props) {
+export function ConversationView({ sessionId, errorBanner, onBannerAction }: Props) {
   useConversation(sessionId);
   const colors = useTheme();
 
@@ -68,6 +71,11 @@ export function ConversationView({ sessionId }: Props) {
         contentContainerStyle={styles.content}
         onContentSizeChange={() =>
           flatListRef.current?.scrollToEnd({ animated: true })
+        }
+        ListFooterComponent={
+          errorBanner ? (
+            <ErrorBanner message={errorBanner.message} onAction={onBannerAction ?? (() => {})} />
+          ) : null
         }
       />
     </View>

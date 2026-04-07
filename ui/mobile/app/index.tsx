@@ -109,15 +109,21 @@ export default function ChatScreen() {
       </View>
 
       {isEmpty ? (
-        <EmptyState message="向 Sebastian 发送消息开始对话" />
+        currentBanner ? (
+          <View style={styles.emptyContainer}>
+            <ErrorBanner
+              message={currentBanner.message}
+              onAction={() => router.push('/settings')}
+            />
+          </View>
+        ) : (
+          <EmptyState message="向 Sebastian 发送消息开始对话" />
+        )
       ) : (
-        <ConversationView sessionId={currentSessionId} />
-      )}
-
-      {currentBanner && (
-        <ErrorBanner
-          message={currentBanner.message}
-          onAction={() => router.push('/settings')}
+        <ConversationView
+          sessionId={currentSessionId}
+          errorBanner={currentBanner}
+          onBannerAction={() => router.push('/settings')}
         />
       )}
       <MessageInput isWorking={isWorking} onSend={handleSend} onStop={handleStop} />
@@ -143,6 +149,7 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  emptyContainer: { flex: 1, paddingBottom: 100 },
   header: {
     minHeight: 48,
     borderBottomWidth: 1,

@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useTheme } from '../../theme/ThemeContext';
+import { useTheme, useIsDark } from '../../theme/ThemeContext';
 
 interface Props {
   message: string;
@@ -7,21 +7,19 @@ interface Props {
 }
 
 export function ErrorBanner({ message, onAction }: Props) {
-  const colors = useTheme() as any;
+  const colors = useTheme();
+  const isDark = useIsDark();
   return (
     <View
       style={[
         styles.container,
-        { backgroundColor: colors.errorBg ?? '#FEF2F2', borderColor: colors.errorBorder ?? '#FCA5A5' },
+        { backgroundColor: colors.cardBackground, shadowColor: colors.shadowColor },
+        isDark && { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
       ]}
     >
-      <Text style={[styles.message, { color: colors.errorText ?? '#991B1B' }]}>
-        {message}
-      </Text>
+      <Text style={styles.message}>{message}</Text>
       <TouchableOpacity onPress={onAction} style={styles.actionBtn}>
-        <Text style={[styles.actionText, { color: colors.errorText ?? '#991B1B' }]}>
-          前往 Settings →
-        </Text>
+        <Text style={styles.actionText}>前往 Settings</Text>
       </TouchableOpacity>
     </View>
   );
@@ -31,19 +29,28 @@ const styles = StyleSheet.create({
   container: {
     marginHorizontal: 12,
     marginVertical: 8,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
+    padding: 16,
+    borderRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 3,
   },
   message: {
     fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 8,
+    lineHeight: 22,
+    color: '#9A3412',
+    marginBottom: 14,
   },
   actionBtn: {
-    alignSelf: 'flex-start',
+    backgroundColor: '#EA580C',
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 20,
+    alignSelf: 'flex-end',
   },
   actionText: {
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },

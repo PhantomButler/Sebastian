@@ -41,6 +41,9 @@ export interface ThemeColors {
 
   // Segmented control
   segmentedBg: string;
+
+  // Shadow
+  shadowColor: string;
 }
 
 export const lightColors: ThemeColors = {
@@ -74,6 +77,8 @@ export const lightColors: ThemeColors = {
   destructiveBg: '#FFF2F1',
 
   segmentedBg: '#F2F2F7',
+
+  shadowColor: '#000000',
 };
 
 export const darkColors: ThemeColors = {
@@ -107,4 +112,6 @@ export const darkColors: ThemeColors = {
   destructiveBg: '#3A2020',
 
   segmentedBg: '#2C2C2E',
+
+  shadowColor: '#AAAAAA',
 };
