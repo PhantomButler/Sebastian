@@ -126,6 +126,61 @@ def _log_background_turn_failure(task: asyncio.Task[object]) -> None:
         logger.exception("Background session turn failed", exc_info=exc)
 
 
+async def _persist_session_status(
+    session: Session,
+    session_store: Any,
+    index_store: Any,
+    event_bus: Any,
+) -> None:
+    from datetime import UTC, datetime
+
+    from sebastian.protocol.events.types import Event, EventType
+
+    session.updated_at = datetime.now(UTC)
+    await session_store.update_session(session)
+    await index_store.upsert(session)
+    if event_bus is not None:
+        from sebastian.core.types import SessionStatus
+
+        event_type = (
+            EventType.SESSION_CANCELLED
+            if session.status == SessionStatus.CANCELLED
+            else EventType.SESSION_FAILED
+        )
+        await event_bus.publish(
+            Event(
+                type=event_type,
+                data={
+                    "session_id": session.id,
+                    "agent_type": session.agent_type,
+                    "status": session.status.value,
+                },
+            )
+        )
+
+
+def _make_turn_done_callback(
+    session: Session,
+    session_store: Any,
+    index_store: Any,
+    event_bus: Any,
+) -> Any:
+    from sebastian.core.types import SessionStatus
+
+    def _cb(task: asyncio.Task[object]) -> None:
+        if task.cancelled():
+            session.status = SessionStatus.CANCELLED
+        elif task.exception() is not None:
+            session.status = SessionStatus.FAILED
+        else:
+            return
+        asyncio.create_task(
+            _persist_session_status(session, session_store, index_store, event_bus)
+        )
+
+    return _cb
+
+
 async def _resolve_session(state: Any, session_id: str) -> Session:
     entries = await state.index_store.list_all()
     entry = next((e for e in entries if e["id"] == session_id), None)
@@ -172,9 +227,6 @@ async def _schedule_session_turn(
         task = asyncio.create_task(
             state.sebastian.run_streaming(content, session.id)
         )
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-        task.add_done_callback(_log_background_turn_failure)
     else:
         agent = state.agent_instances.get(session.agent_type)
         if agent is None:
@@ -182,9 +234,12 @@ async def _schedule_session_turn(
         task = asyncio.create_task(
             agent.run_streaming(content, session.id)
         )
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-        task.add_done_callback(_log_background_turn_failure)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    task.add_done_callback(_log_background_turn_failure)
+    task.add_done_callback(
+        _make_turn_done_callback(session, state.session_store, state.index_store, state.event_bus)
+    )
 
 
 @router.delete("/sessions/{session_id}")
