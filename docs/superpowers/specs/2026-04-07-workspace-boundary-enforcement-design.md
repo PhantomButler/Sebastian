@@ -37,25 +37,28 @@ workspace_dir = settings.workspace_dir = ~/.sebastian/workspace
 
 ## 变更详情
 
-### 1. Write / Edit 工具：相对路径基准修正
+### 1. 新增共享路径解析工具：`_path_utils.py`
 
-**文件**：
-- `sebastian/capabilities/tools/write/__init__.py`
-- `sebastian/capabilities/tools/edit/__init__.py`
+**文件**：`sebastian/capabilities/tools/_path_utils.py`（新建）
 
-**变更**：将路径解析从 `os.path.abspath(file_path)` 改为：
+所有接受文件路径参数的工具**必须**调用此模块的 `resolve_path()`，禁止在工具内自行调用 `os.path.abspath()`。
 
 ```python
+from pathlib import Path
 from sebastian.config import settings
 
-def _resolve_path(file_path: str) -> Path:
+def resolve_path(file_path: str) -> Path:
+    """将文件路径解析为绝对路径。
+    相对路径解析到 workspace_dir；绝对路径直接 resolve。
+    所有文件类工具必须调用此函数，不得使用 os.path.abspath()。
+    """
     p = Path(file_path)
     if p.is_absolute():
         return p.resolve()
     return (settings.workspace_dir / file_path).resolve()
 ```
 
-相对路径自动解析到 workspace，绝对路径行为不变。两个工具共用此逻辑（可提取为 `capabilities/tools/_path_utils.py`）。
+**修改 Write / Edit**：将各自的 `os.path.abspath(file_path)` 替换为 `resolve_path(file_path)`，引入来自 `_path_utils`。`Read` 工具同步修改（虽然不受 workspace 约束，但路径解析基准应统一）。
 
 ### 2. PolicyGate：workspace 边界前置检查
 
@@ -85,7 +88,7 @@ if tier == PermissionTier.MODEL_DECIDES and "file_path" in inputs:
 
 **检查条件**：`MODEL_DECIDES` tier + inputs 含 `file_path`。`LOW` tier（Read）不触发此检查。
 
-**关键约束**：PolicyGate 和工具层必须共用同一个 `_resolve_path`（来自 `capabilities/tools/_path_utils.py`），确保两处对相对路径的解析结果一致，避免 PolicyGate 判定"在 workspace 内"而工具实际写到别处的逻辑矛盾。
+**关键约束**：PolicyGate 和工具层共用同一个 `resolve_path`（来自 `capabilities/tools/_path_utils.py`），确保两处对相对路径的解析结果完全一致，避免 PolicyGate 判定"在 workspace 内"而工具实际写到别处的逻辑矛盾。
 
 ### 3. PermissionReviewer：动态注入 workspace_dir
 
