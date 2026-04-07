@@ -207,23 +207,6 @@ async def send_turn_to_session(
     }
 
 
-@router.post("/sessions/{session_id}/intervene")
-async def intervene_session(
-    session_id: str,
-    body: SendTurnBody,
-    _auth: AuthPayload = Depends(require_auth),
-) -> JSONDict:
-    import sebastian.gateway.state as state
-
-    session = await _resolve_session(state, session_id)
-    now = await _touch_session(state, session)
-    await _schedule_session_turn(session, body.content)
-    return {
-        "session_id": session_id,
-        "ts": now.isoformat(),
-    }
-
-
 @router.get("/sessions/{session_id}/tasks")
 async def list_session_tasks(
     session_id: str,

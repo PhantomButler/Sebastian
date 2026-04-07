@@ -39,7 +39,6 @@ routes/
 | `GET /sessions/{id}` — 查询单个会话及其消息 | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}` — 删除会话 | [sessions.py](sessions.py) |
 | `POST /sessions/{id}/turns` — 向已有会话发送消息 | [sessions.py](sessions.py) |
-| `POST /sessions/{id}/intervene` — 向 Sub-Agent 会话干预 | [sessions.py](sessions.py) |
 | `GET /sessions/{id}/tasks` — 列出会话下的 Task | [sessions.py](sessions.py) |
 | `POST /sessions/{id}/tasks/{tid}/pause` — 暂停 Task | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}/tasks/{tid}` — 取消 Task（DELETE）| [sessions.py](sessions.py) |
