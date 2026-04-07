@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_db()
     db_factory = get_session_factory()
     session_store = SessionStore(settings.sessions_dir)
-    index_store = IndexStore(settings.sessions_dir)
+    index_store = IndexStore(settings.sessions_dir, session_store=session_store)
 
     from sebastian.llm.registry import LLMProviderRegistry
 

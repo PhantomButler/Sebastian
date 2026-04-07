@@ -8,7 +8,10 @@ import os
 import weakref
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from sebastian.store.session_store import SessionStore
 from uuid import uuid4
 
 import aiofiles
@@ -23,7 +26,7 @@ _LOCKS_BY_PATH: weakref.WeakValueDictionary[Path, asyncio.Lock] = weakref.WeakVa
 class IndexStore:
     """Read and write the top-level session listing index."""
 
-    def __init__(self, sessions_dir: Path) -> None:
+    def __init__(self, sessions_dir: Path, session_store: SessionStore | None = None) -> None:
         self._path = sessions_dir / INDEX_FILE
         resolved = self._path.resolve()
         lock = _LOCKS_BY_PATH.get(resolved)
@@ -31,6 +34,7 @@ class IndexStore:
             lock = asyncio.Lock()
             _LOCKS_BY_PATH[resolved] = lock
         self._lock = lock
+        self._session_store = session_store
 
     async def _read(self) -> list[dict[str, Any]]:
         if not self._path.exists():
@@ -100,7 +104,9 @@ class IndexStore:
 
         Also transitions stalled sessions back to active — if a stalled session
         receives a tool call it means it's no longer stuck.
+        Syncs the change to meta.json via injected session_store (if present).
         """
+        agent_type: str | None = None
         async with self._lock:
             sessions = await self._read()
             now = datetime.now(UTC).isoformat()
@@ -109,8 +115,12 @@ class IndexStore:
                     entry["last_activity_at"] = now
                     if entry.get("status") == "stalled":
                         entry["status"] = "active"
+                    agent_type = entry.get("agent_type")
                     break
             await self._write(sessions)
+
+        if self._session_store is not None and agent_type is not None:
+            await self._session_store.update_activity(session_id, agent_type)
 
     async def remove(self, session_id: str) -> None:
         async with self._lock:

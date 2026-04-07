@@ -82,6 +82,20 @@ class SessionStore:
         async with self._session_lock(session.id, session.agent_type):
             await self._write_session_meta(session)
 
+    async def update_activity(self, session_id: str, agent_type: str) -> None:
+        """Lightweight update: set last_activity_at to now, transition stalled→active in meta.json."""
+        async with self._session_lock(session_id, agent_type):
+            directory = _session_dir_by_id(self._dir, session_id, agent_type)
+            meta_path = directory / "meta.json"
+            if not meta_path.exists():
+                return
+            async with aiofiles.open(meta_path) as f:
+                data = json.loads(await f.read())
+            data["last_activity_at"] = datetime.now(UTC).isoformat()
+            if data.get("status") == "stalled":
+                data["status"] = "active"
+            await self._atomic_write_text(meta_path, json.dumps(data))
+
     async def delete_session(self, session: Session) -> None:
         directory = _session_dir_by_id(self._dir, session.id, session.agent_type)
         if directory.exists():
