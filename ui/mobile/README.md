@@ -37,6 +37,7 @@ ui/mobile/
 │   ├── components/       → [src/components/README.md](src/components/README.md)（UI 组件，按领域分组）
 │   │   ├── chat/         → [chat/README.md](src/components/chat/README.md)
 │   │   ├── common/       → [common/README.md](src/components/common/README.md)
+│   │   ├── composer/     → [composer/README.md](src/components/composer/README.md)
 │   │   ├── conversation/ → [conversation/README.md](src/components/conversation/README.md)
 │   │   ├── settings/     → [settings/README.md](src/components/settings/README.md)
 │   │   └── subagents/    → [subagents/README.md](src/components/subagents/README.md)
@@ -205,6 +206,10 @@ Zustand 本地 UI 状态层，只放前端状态，不作为业务真数据源�
 | 改 React Query 数据装配 | `src/hooks/` |
 | 改 SSE 订阅逻辑 | `src/api/sse.ts`、`src/hooks/useSSE.ts` |
 | 改通用组件（侧边栏、审批弹窗等） | `src/components/common/` |
+| 修改输入框行为/样式 | `src/components/composer/index.tsx` |
+| 修改发送/停止按钮 | `src/components/composer/SendButton.tsx` |
+| 修改思考按钮 | `src/components/composer/ThinkButton.tsx` |
+| 修改思考开关 session 状态 | `src/store/composer.ts` |
 
 ## 常用命令
 
