@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { View, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import axios from 'axios';
 import { useSessionStore } from '@/src/store/session';
 import { useSessions } from '@/src/hooks/useSessions';
 import { sendTurn, cancelTurn } from '@/src/api/turns';
@@ -11,6 +13,7 @@ import { EmptyState } from '@/src/components/common/EmptyState';
 import { AppSidebar } from '@/src/components/chat/AppSidebar';
 import { MessageInput } from '@/src/components/chat/MessageInput';
 import { ConversationView } from '@/src/components/conversation';
+import { ErrorBanner } from '@/src/components/conversation/ErrorBanner';
 import { useConversationStore } from '@/src/store/conversation';
 import { useTheme } from '@/src/theme/ThemeContext';
 
@@ -26,6 +29,9 @@ export default function ChatScreen() {
   const { data: sessions = [] } = useSessions();
   const isWorking = useConversationStore(
     (s) => !!(currentSessionId && s.sessions[currentSessionId]?.activeTurn),
+  );
+  const currentBanner = useConversationStore((s) =>
+    currentSessionId ? (s.sessions[currentSessionId]?.errorBanner ?? null) : s.draftErrorBanner,
   );
 
   async function handleSend(text: string) {
@@ -46,7 +52,20 @@ export default function ChatScreen() {
       }
       useConversationStore.getState().appendUserMessage(sessionId, text);
       queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
-    } catch {
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 400) {
+        const detail = err.response.data?.detail;
+        if (detail?.code === 'no_llm_provider') {
+          const banner = { code: detail.code, message: detail.message };
+          const store = useConversationStore.getState();
+          if (currentSessionId) {
+            store.setErrorBanner(currentSessionId, banner);
+          } else {
+            store.setDraftErrorBanner(banner);
+          }
+          return;
+        }
+      }
       Alert.alert('发送失败，请重试');
     }
   }
@@ -95,6 +114,12 @@ export default function ChatScreen() {
         <ConversationView sessionId={currentSessionId} />
       )}
 
+      {currentBanner && (
+        <ErrorBanner
+          message={currentBanner.message}
+          onAction={() => router.push('/settings')}
+        />
+      )}
       <MessageInput isWorking={isWorking} onSend={handleSend} onStop={handleStop} />
 
       <Sidebar
