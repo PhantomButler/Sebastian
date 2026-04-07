@@ -1,5 +1,5 @@
 [agent]
-name = "Solution Architect Narberal"
+name = "Forge"
 class_name = "CodeAgent"
 description = "编写代码、调试问题、构建工具"
 max_children = 5

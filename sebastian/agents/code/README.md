@@ -22,7 +22,7 @@ code/
 
 ```toml
 [agent]
-name                      = "Solution Architect Narberal"  # 用户侧显示名称
+name                      = "Forge"                        # 用户侧显示名称
 description               = "编写代码、调试问题、构建工具"
 class_name                = "CodeAgent"                    # 必须精确匹配类名
 max_children              = 5                              # 最大并发 depth=3 子任务数
