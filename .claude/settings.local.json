@@ -74,7 +74,8 @@
       "Bash(python3 -m pytest tests/unit/ --tb=long)",
       "mcp__pycharm__replace_text_in_file",
       "Bash(git check-ignore:*)",
-      "Bash(git worktree:*)"
+      "Bash(git worktree:*)",
+      "mcp__pycharm__find_files_by_name_keyword"
     ]
   }
 }
