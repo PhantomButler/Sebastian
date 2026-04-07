@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
+from collections.abc import Callable
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -132,8 +133,6 @@ async def _persist_session_status(
     index_store: Any,
     event_bus: Any,
 ) -> None:
-    from datetime import UTC, datetime
-
     from sebastian.protocol.events.types import Event, EventType
 
     session.updated_at = datetime.now(UTC)
@@ -142,11 +141,12 @@ async def _persist_session_status(
     if event_bus is not None:
         from sebastian.core.types import SessionStatus
 
-        event_type = (
-            EventType.SESSION_CANCELLED
-            if session.status == SessionStatus.CANCELLED
-            else EventType.SESSION_FAILED
-        )
+        if session.status == SessionStatus.CANCELLED:
+            event_type = EventType.SESSION_CANCELLED
+        elif session.status == SessionStatus.FAILED:
+            event_type = EventType.SESSION_FAILED
+        else:
+            return  # unexpected status, skip publishing
         await event_bus.publish(
             Event(
                 type=event_type,
@@ -164,7 +164,7 @@ def _make_turn_done_callback(
     session_store: Any,
     index_store: Any,
     event_bus: Any,
-) -> Any:
+) -> Callable[[asyncio.Task[object]], None]:
     from sebastian.core.types import SessionStatus
 
     def _cb(task: asyncio.Task[object]) -> None:
@@ -174,9 +174,12 @@ def _make_turn_done_callback(
             session.status = SessionStatus.FAILED
         else:
             return
-        asyncio.create_task(
+        persist_task = asyncio.create_task(
             _persist_session_status(session, session_store, index_store, event_bus)
         )
+        _background_tasks.add(persist_task)
+        persist_task.add_done_callback(_background_tasks.discard)
+        persist_task.add_done_callback(_log_background_turn_failure)
 
     return _cb
 

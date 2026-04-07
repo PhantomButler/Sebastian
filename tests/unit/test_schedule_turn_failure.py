@@ -38,6 +38,7 @@ async def test_turn_done_callback_sets_failed_on_exception() -> None:
 
     # Let the background persist task run
     await asyncio.sleep(0.01)
+    session_store.update_session.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -50,7 +51,8 @@ async def test_turn_done_callback_sets_cancelled_on_cancel() -> None:
     session.agent_type = "code"
     session.status = SessionStatus.ACTIVE
 
-    cb = _make_turn_done_callback(session, AsyncMock(), AsyncMock(), AsyncMock())
+    event_bus = AsyncMock()
+    cb = _make_turn_done_callback(session, AsyncMock(), AsyncMock(), event_bus)
 
     async def cancellable() -> None:
         await asyncio.sleep(100)
@@ -66,6 +68,8 @@ async def test_turn_done_callback_sets_cancelled_on_cancel() -> None:
     assert session.status == SessionStatus.CANCELLED
 
     await asyncio.sleep(0.01)
+    # event_bus.publish should have been called
+    event_bus.publish.assert_awaited_once()
 
 
 @pytest.mark.asyncio
