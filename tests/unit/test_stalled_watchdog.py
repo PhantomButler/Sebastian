@@ -25,3 +25,6 @@ async def test_marks_stalled_session():
     assert len(stalled) == 1
     assert stalled[0] == "s1"
     session_store.update_session.assert_awaited_once()
+    event_bus.publish.assert_awaited_once()
+    publish_call = event_bus.publish.call_args[0][0]
+    assert publish_call.data.get("goal") == "analyze stock market"

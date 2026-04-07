@@ -47,7 +47,7 @@ async def check_sub_agents(
     for s in sessions:
         status = s.get("status", "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
-        goal = s.get("goal") or s.get("title", "无标题")
+        goal = s.get("goal", s.get("title", "无标题"))
         last_active = s.get("last_activity_at", "未知")
         lines.append(
             f"- [{status}] {goal} "
