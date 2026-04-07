@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import os
+from pathlib import Path
 
 from sebastian.capabilities.tools import _file_state
+from sebastian.capabilities.tools._path_utils import resolve_path
 from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
 from sebastian.permissions.types import PermissionTier
@@ -25,12 +26,12 @@ async def edit(
     new_string: str,
     replace_all: bool = False,
 ) -> ToolResult:
-    path = os.path.abspath(file_path)
+    path = str(resolve_path(file_path))
     try:
         _file_state.check_write(path)
     except ValueError as e:
         return ToolResult(ok=False, error=str(e))
-    if not os.path.exists(path):
+    if not Path(path).exists():
         return ToolResult(ok=False, error=f"File not found: {path}")
     try:
         with open(path, encoding="utf-8", errors="replace") as f:

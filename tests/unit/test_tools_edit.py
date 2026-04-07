@@ -180,3 +180,27 @@ async def test_edit_rejects_stale_mtime(tmp_path, isolated_registry) -> None:
     )
     assert not result.ok
     assert "modified externally" in result.error
+
+
+@pytest.mark.asyncio
+async def test_edit_relative_path_resolves_to_workspace(tmp_path):
+    """相对路径应解析到 workspace_dir。"""
+    from unittest.mock import patch
+    from sebastian.capabilities.tools._file_state import record_read
+    from sebastian.core.tool import call_tool
+
+    target = tmp_path / "script.py"
+    target.write_text("x = 1\n")
+    record_read(str(target))
+
+    with patch("sebastian.capabilities.tools._path_utils.settings") as mock_settings:
+        mock_settings.workspace_dir = tmp_path
+        result = await call_tool(
+            "Edit",
+            file_path="script.py",
+            old_string="x = 1",
+            new_string="x = 42",
+        )
+
+    assert result.ok
+    assert target.read_text() == "x = 42\n"
