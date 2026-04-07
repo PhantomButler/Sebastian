@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
@@ -46,6 +48,33 @@ class LLMProviderRegistry:
         if record is None:
             return None
         return self._instantiate(record)
+
+    async def get_provider(self, agent_type: str | None = None) -> tuple[LLMProvider, str]:
+        """Return (provider, model) for the given agent_type.
+
+        Checks agents/{agent_type}/manifest.toml [llm] section first.
+        Falls back to get_default_with_model() if no manifest config or no matching DB record.
+        """
+        if agent_type is not None:
+            manifest_llm = _read_manifest_llm(agent_type)
+            if manifest_llm:
+                provider_type = manifest_llm.get("provider_type")
+                model = manifest_llm.get("model")
+                if provider_type and model:
+                    record = await self._get_by_type(provider_type)
+                    if record is not None:
+                        return self._instantiate(record), model
+        return await self.get_default_with_model()
+
+    async def _get_by_type(self, provider_type: str) -> LLMProviderRecord | None:
+        """Return first DB record matching provider_type."""
+        async with self._db_factory() as session:
+            result = await session.execute(
+                select(LLMProviderRecord)
+                .where(LLMProviderRecord.provider_type == provider_type)
+                .limit(1)
+            )
+            return result.scalar_one_or_none()
 
     async def list_all(self) -> list[LLMProviderRecord]:
         async with self._db_factory() as session:
@@ -102,3 +131,15 @@ class LLMProviderRegistry:
                 thinking_format=record.thinking_format,
             )
         raise ValueError(f"Unknown provider_type: {record.provider_type!r}")
+
+
+def _read_manifest_llm(agent_type: str) -> dict | None:
+    """Read [llm] section from the agent's manifest.toml, or return None if absent."""
+    # Builtin agents live alongside this package: sebastian/agents/{agent_type}/manifest.toml
+    agents_dir = Path(__file__).parent.parent / "agents"
+    manifest_path = agents_dir / agent_type / "manifest.toml"
+    if not manifest_path.exists():
+        return None
+    with manifest_path.open("rb") as f:
+        data = tomllib.load(f)
+    return data.get("llm")  # None if no [llm] section

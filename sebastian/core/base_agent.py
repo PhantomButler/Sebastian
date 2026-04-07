@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sebastian.llm.provider import LLMProvider
+    from sebastian.llm.registry import LLMProviderRegistry
     from sebastian.store.index_store import IndexStore
 
 from sebastian.permissions.gate import PolicyGate
@@ -73,6 +74,7 @@ class BaseAgent(ABC):
         allowed_tools: list[str] | None = None,
         allowed_skills: list[str] | None = None,
         index_store: IndexStore | None = None,
+        llm_registry: LLMProviderRegistry | None = None,
     ) -> None:
         self._gate = gate
         self._current_task_goals: dict[str, str] = {}           # session_id → goal
@@ -80,6 +82,7 @@ class BaseAgent(ABC):
         self._session_store = session_store
         self._event_bus = event_bus
         self._index_store = index_store
+        self._llm_registry = llm_registry
         self._episodic = EpisodicMemory(session_store)
         self.working_memory = WorkingMemory()
         self._active_streams: dict[str, asyncio.Task[str]] = {}  # session_id → task
@@ -183,17 +186,10 @@ class BaseAgent(ABC):
     ) -> str:
         self._current_task_goals[session_id] = user_message
 
-        if not self._provider_injected:
-            try:
-                import sebastian.gateway.state as _state
-
-                if not hasattr(_state, "llm_registry"):
-                    raise AttributeError("llm_registry not initialised")
-                provider, model = await _state.llm_registry.get_default_with_model()
-                self._loop._provider = provider
-                self._loop._model = model
-            except AttributeError:
-                pass  # state not initialised — keep existing provider
+        if not self._provider_injected and self._llm_registry is not None:
+            provider, model = await self._llm_registry.get_provider(self.name)
+            self._loop._provider = provider
+            self._loop._model = model
 
         agent_context = agent_name or self.name
         existing_stream = self._active_streams.get(session_id)

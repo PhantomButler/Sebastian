@@ -10,6 +10,7 @@ from fastapi import FastAPI
 if TYPE_CHECKING:
     from sebastian.agents._loader import AgentConfig
     from sebastian.core.base_agent import BaseAgent
+    from sebastian.llm.registry import LLMProviderRegistry
     from sebastian.protocol.events.bus import EventBus
     from sebastian.store.index_store import IndexStore
     from sebastian.store.session_store import SessionStore
@@ -23,6 +24,7 @@ def _initialize_agent_instances(
     session_store: SessionStore,
     event_bus: EventBus,
     index_store: IndexStore,
+    llm_registry: LLMProviderRegistry,
 ) -> dict[str, BaseAgent]:
     """Create a singleton instance for each registered agent type."""
     instances: dict[str, BaseAgent] = {}
@@ -32,6 +34,7 @@ def _initialize_agent_instances(
             session_store=session_store,
             event_bus=event_bus,
             index_store=index_store,
+            llm_registry=llm_registry,
             allowed_tools=cfg.allowed_tools,
             allowed_skills=cfg.allowed_skills,
         )
@@ -136,6 +139,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         session_store=state.session_store,
         event_bus=state.event_bus,
         index_store=state.index_store,
+        llm_registry=llm_registry,
     )
 
     watchdog_task = start_watchdog(
