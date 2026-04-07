@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View, type ScrollViewProps } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -138,7 +138,7 @@ export default function SessionDetailScreen() {
   const stickyOffset = useMemo(() => ({ opened: insets.bottom }), [insets.bottom]);
 
   const renderScrollComponent = useCallback(
-    (props: object) => (
+    (props: ScrollViewProps) => (
       <KeyboardChatScrollView
         {...props}
         keyboardDismissMode="interactive"

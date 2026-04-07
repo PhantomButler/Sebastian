@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { FlatList, View, StyleSheet } from 'react-native';
+import { FlatList, View, StyleSheet, type ScrollViewProps } from 'react-native';
 import { useConversation } from '../../hooks/useConversation';
 import { useConversationStore } from '../../store/conversation';
 import { useTheme } from '../../theme/ThemeContext';
@@ -19,7 +19,7 @@ interface Props {
   onBannerAction?: () => void;
   // Pass KeyboardChatScrollView as renderScrollComponent for keyboard-aware scrolling.
   // If omitted, FlatList uses its built-in ScrollView (e.g. in non-chat contexts).
-  renderScrollComponent?: (props: object) => React.ReactElement;
+  renderScrollComponent?: (props: ScrollViewProps) => React.ReactElement;
 }
 
 type ListItem =

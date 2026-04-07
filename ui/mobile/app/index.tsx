@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
+import { View, StyleSheet, Alert, TouchableOpacity, Text, type ScrollViewProps } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import axios from 'axios';
@@ -51,7 +51,7 @@ export default function ChatScreen() {
   // offset = insets.bottom makes KeyboardChatScrollView's scroll adjustment align with
   // how KeyboardStickyView positions the Composer.
   const renderScrollComponent = useCallback(
-    (props: object) => (
+    (props: ScrollViewProps) => (
       <KeyboardChatScrollView
         {...props}
         keyboardDismissMode="interactive"
