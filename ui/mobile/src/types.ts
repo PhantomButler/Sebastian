@@ -166,8 +166,14 @@ export interface ConvMessage {
   blocks?: RenderBlock[];
 }
 
+export interface ErrorBanner {
+  code: string;
+  message: string;
+}
+
 export interface ConvSessionState {
   status: 'idle' | 'loading' | 'live' | 'paused';
   messages: ConvMessage[];
   activeTurn: ActiveTurn | null;
+  errorBanner: ErrorBanner | null;
 }

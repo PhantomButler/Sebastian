@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type { ActiveTurn, ConvMessage, ConvSessionState, RenderBlock } from '../types';
+import type { ActiveTurn, ConvMessage, ConvSessionState, ErrorBanner, RenderBlock } from '../types';
 
 const MAX_PAUSED = 5;
 
 interface ConversationStore {
   sessions: Record<string, ConvSessionState>;
+  draftErrorBanner: ErrorBanner | null;
 
   getOrInit(sessionId: string): ConvSessionState;
   setStatus(sessionId: string, status: ConvSessionState['status']): void;
@@ -24,10 +25,13 @@ interface ConversationStore {
   onToolFailed(sessionId: string, toolId: string, error: string): void;
   onTurnComplete(sessionId: string): void;
   completeTurn(sessionId: string): void;
+  setErrorBanner(sessionId: string, banner: ErrorBanner | null): void;
+  setDraftErrorBanner(banner: ErrorBanner | null): void;
+  clearErrorBanners(sessionId: string | null): void;
 }
 
 function emptySession(): ConvSessionState {
-  return { status: 'idle', messages: [], activeTurn: null };
+  return { status: 'idle', messages: [], activeTurn: null, errorBanner: null };
 }
 
 /** Produces a new ActiveTurn with the block appended. Does not mutate input. */
@@ -72,6 +76,7 @@ function updateSession(
 
 export const useConversationStore = create<ConversationStore>((set, get) => ({
   sessions: {},
+  draftErrorBanner: null,
 
   getOrInit(sessionId) {
     return get().sessions[sessionId] ?? emptySession();
@@ -187,7 +192,9 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       return {
         sessions: updateSession(s.sessions, sessionId, {
           messages: [...session.messages, msg],
+          errorBanner: null,
         }),
+        draftErrorBanner: null,
       };
     });
   },
@@ -251,6 +258,24 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
           activeTurn: null,
         }),
       };
+    });
+  },
+
+  setErrorBanner(sessionId, banner) {
+    set((s) => ({ sessions: updateSession(s.sessions, sessionId, { errorBanner: banner }) }));
+  },
+
+  setDraftErrorBanner(banner) {
+    set({ draftErrorBanner: banner });
+  },
+
+  clearErrorBanners(sessionId) {
+    set((s) => {
+      const next: Partial<ConversationStore> = { draftErrorBanner: null };
+      if (sessionId && s.sessions[sessionId]) {
+        next.sessions = updateSession(s.sessions, sessionId, { errorBanner: null });
+      }
+      return next as ConversationStore;
     });
   },
 }));
