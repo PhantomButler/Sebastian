@@ -72,7 +72,9 @@
       "mcp__pycharm__get_symbol_info",
       "Bash(python3 -m pytest tests/unit/ -q --tb=long -v)",
       "Bash(python3 -m pytest tests/unit/ --tb=long)",
-      "mcp__pycharm__replace_text_in_file"
+      "mcp__pycharm__replace_text_in_file",
+      "Bash(git check-ignore:*)",
+      "Bash(git worktree:*)"
     ]
   }
 }
