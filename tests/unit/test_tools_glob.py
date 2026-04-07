@@ -16,9 +16,11 @@ def isolated_registry():
     tool_module._tools.clear()
 
     # 强制重新执行 @tool 装饰器，确保 Glob 工具在清空后重新注册
+    # importlib.import_module 会在首次调用时导入，之后返回缓存；
+    # 之后 reload 强制重跑 @tool 装饰器，将 Glob 注册到当前 _tools 中。
     glob_mod_name = "sebastian.capabilities.tools.glob"
-    if glob_mod_name in sys.modules:
-        importlib.reload(sys.modules[glob_mod_name])
+    importlib.import_module(glob_mod_name)
+    importlib.reload(sys.modules[glob_mod_name])
 
     yield
 
