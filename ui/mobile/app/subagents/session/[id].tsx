@@ -3,6 +3,7 @@ import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import axios from 'axios';
 import {
   createAgentSession,
   getSessionDetail,
@@ -13,6 +14,7 @@ import { useConversationStore } from '../../../src/store/conversation';
 import { MessageInput } from '../../../src/components/chat/MessageInput';
 import { ConversationView } from '../../../src/components/conversation';
 import { SessionDetailView } from '../../../src/components/subagents/SessionDetailView';
+import { ErrorBanner } from '../../../src/components/conversation/ErrorBanner';
 import type { TaskDetail } from '../../../src/types';
 
 type Tab = 'messages' | 'tasks';
@@ -104,6 +106,9 @@ export default function SessionDetailScreen() {
   const [realSessionId, setRealSessionId] = useState<string | null>(null);
   const sendingRef = useRef(false);
   const effectiveSessionId = realSessionId || (isNewSession ? null : sessionId);
+  const banner = useConversationStore(
+    (s) => s.sessions[effectiveSessionId ?? sessionId]?.errorBanner ?? null,
+  );
 
   const { data: remoteDetail } = useQuery({
     queryKey: ['session-detail', effectiveSessionId, agentName],
@@ -146,7 +151,17 @@ export default function SessionDetailScreen() {
         queryClient.invalidateQueries({
           queryKey: ['session-detail', effectiveSessionId, agentName],
         });
-      } catch {
+      } catch (err) {
+        if (axios.isAxiosError(err) && err.response?.status === 400) {
+          const detail = err.response.data?.detail;
+          if (detail?.code === 'no_llm_provider') {
+            useConversationStore.getState().setErrorBanner(effectiveSessionId ?? sessionId, {
+              code: detail.code,
+              message: detail.message,
+            });
+            return;
+          }
+        }
         Alert.alert('发送失败，请重试');
       } finally {
         sendingRef.current = false;
@@ -193,6 +208,12 @@ export default function SessionDetailScreen() {
           <SessionDetailView tasks={tasks} />
         )}
       </View>
+      {banner && (
+        <ErrorBanner
+          message={banner.message}
+          onAction={() => router.push('/settings')}
+        />
+      )}
       <MessageInput isWorking={sending} onSend={handleSend} onStop={() => {}} />
     </View>
   );
