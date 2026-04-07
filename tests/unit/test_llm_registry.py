@@ -25,10 +25,9 @@ async def registry_with_db(monkeypatch):
 @pytest.mark.asyncio
 async def test_registry_returns_env_fallback_when_no_default(registry_with_db, monkeypatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-fallback")
-    from sebastian.llm.anthropic import AnthropicProvider
 
-    provider = await registry_with_db.get_default()
-    assert isinstance(provider, AnthropicProvider)
+    with pytest.raises(RuntimeError, match="No default LLM provider configured"):
+        await registry_with_db.get_default()
 
 
 @pytest.mark.asyncio

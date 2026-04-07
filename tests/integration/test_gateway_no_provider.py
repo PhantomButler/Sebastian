@@ -26,12 +26,20 @@ def empty_db_client(tmp_path):
         import sebastian.config as cfg_module
 
         importlib.reload(cfg_module)
+
+        import sebastian.store.database as db_module
+
+        db_module._engine = None
+        db_module._session_factory = None
+
         with patch.object(cfg_module.settings, "sebastian_owner_password_hash", password_hash):
             from sebastian.gateway.app import create_app
 
             test_app = create_app()
             with TestClient(test_app, raise_server_exceptions=True) as test_client:
                 yield test_client
+            db_module._engine = None
+            db_module._session_factory = None
 
 
 def _login(client: TestClient) -> str:

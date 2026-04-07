@@ -62,7 +62,7 @@ def test_hash_and_verify_password() -> None:
 def test_sessions_dir_derived_from_data_dir() -> None:
     from sebastian.config import settings
 
-    assert settings.sessions_dir == Path(settings.sebastian_data_dir) / "sessions"
+    assert settings.sessions_dir == Path(settings.sebastian_data_dir).expanduser().resolve() / "sessions"
 
 
 def test_log_settings_defaults() -> None:

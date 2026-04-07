@@ -319,13 +319,8 @@ async def cancel_task(
     import sebastian.gateway.state as state
 
     session, _ = await _resolve_session_task(state, session_id, task_id)
-    if session.agent_type == "sebastian":
-        manager = state.sebastian._task_manager
-    else:
-        agent = state.agent_instances.get(session.agent_type)
-        if agent is None:
-            raise HTTPException(404, f"Agent not found: {session.agent_type}")
-        manager = agent._task_manager
+    agent = state.agent_instances.get(session.agent_type)
+    manager = agent._task_manager if agent is not None else state.sebastian._task_manager
     cancelled = await manager.cancel(task_id)
     return {"task_id": task_id, "cancelled": cancelled}
 
@@ -347,13 +342,8 @@ async def cancel_task_post(
     import sebastian.gateway.state as state
 
     session, task = await _resolve_session_task(state, session_id, task_id)
-    if session.agent_type == "sebastian":
-        manager = state.sebastian._task_manager
-    else:
-        agent = state.agent_instances.get(session.agent_type)
-        if agent is None:
-            raise HTTPException(404, f"Agent not found: {session.agent_type}")
-        manager = agent._task_manager
+    agent = state.agent_instances.get(session.agent_type)
+    manager = agent._task_manager if agent is not None else state.sebastian._task_manager
     try:
         cancelled = await manager.cancel(task_id)
     except InvalidTaskTransitionError as exc:

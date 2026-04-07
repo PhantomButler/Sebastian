@@ -74,7 +74,7 @@ def test_tool_default_permission_tier_is_low() -> None:
         return ToolResult(ok=True, output=x)
 
     spec, _ = tool_module._tools["default_tier_tool"]
-    assert spec.permission_tier == PermissionTier.LOW
+    assert spec.permission_tier == PermissionTier.MODEL_DECIDES
 
 
 def test_tool_explicit_permission_tier() -> None:

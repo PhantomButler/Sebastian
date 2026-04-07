@@ -48,8 +48,14 @@ async def test_check_sub_agents_includes_goal_and_activity() -> None:
         task_id=None, agent_type="code", depth=2,
     )
 
+    from sebastian.core.tool_context import _current_tool_ctx
+
     with patch("sebastian.capabilities.tools.check_sub_agents._get_state", return_value=mock_state):
-        result = await check_sub_agents(_ctx=ctx)
+        token = _current_tool_ctx.set(ctx)
+        try:
+            result = await check_sub_agents()
+        finally:
+            _current_tool_ctx.reset(token)
 
     assert result.ok
     assert "write unit tests for auth module" in result.output
