@@ -86,6 +86,8 @@ class BaseAgent(ABC):
         self._episodic = EpisodicMemory(session_store)
         self.working_memory = WorkingMemory()
         self._active_streams: dict[str, asyncio.Task[str]] = {}  # session_id → task
+        self._cancel_requested: set[str] = set()
+        self._partial_buffer: dict[str, str] = {}
 
         # instance-level overrides class-level defaults
         if allowed_tools is not None:
@@ -256,9 +258,30 @@ class BaseAgent(ABC):
         try:
             return await current_stream
         finally:
+            was_cancelled = session_id in self._cancel_requested
+            self._cancel_requested.discard(session_id)
             self._active_streams.pop(session_id, None)
             self._current_task_goals.pop(session_id, None)
             self._current_depth.pop(session_id, None)
+
+            if was_cancelled:
+                partial = self._partial_buffer.pop(session_id, "")
+                if partial:
+                    partial += "\n\n[用户中断]"
+                    try:
+                        await self._episodic.add_turn(
+                            session_id, "assistant", partial, agent=agent_context,
+                        )
+                    except Exception:
+                        logger.warning("Failed to flush partial text on cancel", exc_info=True)
+                await self._publish(
+                    session_id,
+                    EventType.TURN_CANCELLED,
+                    {"agent_type": agent_context, "had_partial": bool(partial)},
+                )
+                await self._publish(session_id, EventType.TURN_RESPONSE, {})
+            else:
+                self._partial_buffer.pop(session_id, None)
 
     async def _stream_inner(
         self,
@@ -282,6 +305,7 @@ class BaseAgent(ABC):
 
                 if isinstance(event, TextDelta):
                     full_text += event.delta
+                    self._partial_buffer[session_id] = full_text
 
                 stream_event_type = _STREAM_EVENT_TYPES.get(type(event))
                 if stream_event_type is not None:
@@ -398,21 +422,24 @@ class BaseAgent(ABC):
                     await self._update_activity(session_id)
                     return event.full_text
         except asyncio.CancelledError:
-            if full_text:
-                await self._episodic.add_turn(
+            # When cancelled via cancel_session(), the finally block in run_streaming
+            # handles episodic flush. Only save here for external cancellations.
+            if session_id not in self._cancel_requested:
+                if full_text:
+                    await self._episodic.add_turn(
+                        session_id,
+                        "assistant",
+                        full_text,
+                        agent=agent_context,
+                        blocks=tool_records if tool_records else None,
+                    )
+                await self._publish(
                     session_id,
-                    "assistant",
-                    full_text,
-                    agent=agent_context,
-                    blocks=tool_records if tool_records else None,
+                    EventType.TURN_INTERRUPTED,
+                    {
+                        "partial_content": full_text,
+                    },
                 )
-            await self._publish(
-                session_id,
-                EventType.TURN_INTERRUPTED,
-                {
-                    "partial_content": full_text,
-                },
-            )
             raise
 
     async def _update_activity(self, session_id: str) -> None:
@@ -434,3 +461,19 @@ class BaseAgent(ABC):
                 data={"session_id": session_id, **data},
             )
         )
+
+    async def cancel_session(self, session_id: str) -> bool:
+        """Cancel the active streaming turn for session_id.
+
+        Returns True if a stream was cancelled, False if no active stream exists.
+        """
+        stream = self._active_streams.get(session_id)
+        if stream is None or stream.done():
+            return False
+        self._cancel_requested.add(session_id)
+        stream.cancel()
+        try:
+            await stream
+        except (asyncio.CancelledError, Exception):
+            pass
+        return True

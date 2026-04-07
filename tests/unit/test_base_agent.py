@@ -269,3 +269,263 @@ def test_guidelines_section_appears_before_tools_section() -> None:
     guidelines_pos = prompt.index("Operation Guidelines")
     tools_pos = prompt.index("Available Tools")
     assert guidelines_pos < tools_pos
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# cancel_session tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_cancel_session_returns_false_when_no_active_stream(tmp_path: Path) -> None:
+    """Cancelling an idle session returns False — no stream to cancel."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="idle-session", agent_type="sebastian", title="t"))
+    agent = TestAgent(MagicMock(), store)
+
+    result = await agent.cancel_session("idle-session")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_session_cancels_active_stream(tmp_path: Path) -> None:
+    """cancel_session() cancels a long-running stream and clears _active_streams."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TextBlockStart, TextDelta
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="running-session", agent_type="sebastian", title="t"))
+    agent = TestAgent(MagicMock(), store)
+
+    stream_started = asyncio.Event()
+
+    async def slow_stream(*args, **kwargs):
+        yield TextBlockStart(block_id="b1")
+        yield TextDelta(block_id="b1", delta="hello")
+        stream_started.set()
+        await asyncio.sleep(10)  # runs until cancelled
+
+    agent._loop.stream = slow_stream  # type: ignore[attr-defined]
+
+    run_task = asyncio.create_task(agent.run_streaming("hi", "running-session"))
+    await stream_started.wait()
+
+    result = await agent.cancel_session("running-session")
+
+    assert result is True
+    # After cancellation the stream task is no longer tracked
+    assert "running-session" not in agent._active_streams
+
+    with pytest.raises((asyncio.CancelledError, Exception)):
+        await run_task
+
+
+@pytest.mark.asyncio
+async def test_cancel_session_flushes_partial_text_to_episodic(tmp_path: Path) -> None:
+    """Partial text is saved to episodic memory with [用户中断] suffix on cancel."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TextBlockStart, TextDelta, TextBlockStop
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="partial-session", agent_type="sebastian", title="t"))
+    agent = TestAgent(MagicMock(), store)
+
+    stream_started = asyncio.Event()
+
+    async def partial_stream(*args, **kwargs):
+        yield TextBlockStart(block_id="b1")
+        yield TextDelta(block_id="b1", delta="你好世界")
+        stream_started.set()
+        await asyncio.sleep(10)
+
+    agent._loop.stream = partial_stream  # type: ignore[attr-defined]
+
+    run_task = asyncio.create_task(agent.run_streaming("hello", "partial-session"))
+    await stream_started.wait()
+    await asyncio.sleep(0.01)  # let TextDelta be processed
+
+    await agent.cancel_session("partial-session")
+
+    with pytest.raises((asyncio.CancelledError, Exception)):
+        await run_task
+
+    messages = await store.get_messages("partial-session", "sebastian")
+    assistant_msgs = [m for m in messages if m["role"] == "assistant"]
+    assert len(assistant_msgs) == 1
+    assert "你好世界" in assistant_msgs[0]["content"]
+    assert "[用户中断]" in assistant_msgs[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_cancel_session_skips_flush_when_no_partial(tmp_path: Path) -> None:
+    """If no text was emitted before cancel, no assistant message is written."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TextBlockStart
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="no-partial", agent_type="sebastian", title="t"))
+    agent = TestAgent(MagicMock(), store)
+
+    stream_started = asyncio.Event()
+
+    async def empty_stream(*args, **kwargs):
+        yield TextBlockStart(block_id="b1")
+        stream_started.set()
+        await asyncio.sleep(10)
+
+    agent._loop.stream = empty_stream  # type: ignore[attr-defined]
+
+    run_task = asyncio.create_task(agent.run_streaming("hi", "no-partial"))
+    await stream_started.wait()
+
+    await agent.cancel_session("no-partial")
+
+    with pytest.raises((asyncio.CancelledError, Exception)):
+        await run_task
+
+    messages = await store.get_messages("no-partial", "sebastian")
+    assistant_msgs = [m for m in messages if m["role"] == "assistant"]
+    assert len(assistant_msgs) == 0
+
+
+@pytest.mark.asyncio
+async def test_cancel_session_emits_turn_cancelled_and_turn_response(tmp_path: Path) -> None:
+    """cancel_session emits TURN_CANCELLED then TURN_RESPONSE on the event bus."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TextBlockStart, TextDelta
+    from sebastian.core.types import Session
+    from sebastian.protocol.events.bus import EventBus
+    from sebastian.protocol.events.types import EventType
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="event-session", agent_type="sebastian", title="t"))
+    bus = EventBus()
+    collected: list = []
+    bus.subscribe(lambda e: collected.append(e))
+    agent = TestAgent(MagicMock(), store, bus)
+
+    stream_started = asyncio.Event()
+
+    async def stream_with_text(*args, **kwargs):
+        yield TextBlockStart(block_id="b1")
+        yield TextDelta(block_id="b1", delta="hi")
+        stream_started.set()
+        await asyncio.sleep(10)
+
+    agent._loop.stream = stream_with_text  # type: ignore[attr-defined]
+
+    run_task = asyncio.create_task(agent.run_streaming("hello", "event-session"))
+    await stream_started.wait()
+    await asyncio.sleep(0.01)
+
+    await agent.cancel_session("event-session")
+
+    with pytest.raises((asyncio.CancelledError, Exception)):
+        await run_task
+
+    event_types = [e.type for e in collected]
+    assert EventType.TURN_CANCELLED in event_types
+    assert EventType.TURN_RESPONSE in event_types
+    # TURN_CANCELLED must appear before TURN_RESPONSE
+    assert event_types.index(EventType.TURN_CANCELLED) < event_types.index(EventType.TURN_RESPONSE)
+
+
+@pytest.mark.asyncio
+async def test_cancel_session_idempotent(tmp_path: Path) -> None:
+    """Second cancel call on same session returns False and does not raise."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TextBlockStart
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="idem-session", agent_type="sebastian", title="t"))
+    agent = TestAgent(MagicMock(), store)
+
+    stream_started = asyncio.Event()
+
+    async def slow(*args, **kwargs):
+        yield TextBlockStart(block_id="b1")
+        stream_started.set()
+        await asyncio.sleep(10)
+
+    agent._loop.stream = slow  # type: ignore[attr-defined]
+
+    run_task = asyncio.create_task(agent.run_streaming("hi", "idem-session"))
+    await stream_started.wait()
+
+    first = await agent.cancel_session("idem-session")
+    second = await agent.cancel_session("idem-session")
+
+    assert first is True
+    assert second is False  # stream already gone
+
+    with pytest.raises((asyncio.CancelledError, Exception)):
+        await run_task
+
+
+@pytest.mark.asyncio
+async def test_cancel_session_no_memory_leak_in_buffers(tmp_path: Path) -> None:
+    """After cancel, _cancel_requested and _partial_buffer are cleaned up."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TextBlockStart, TextDelta
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="leak-session", agent_type="sebastian", title="t"))
+    agent = TestAgent(MagicMock(), store)
+
+    stream_started = asyncio.Event()
+
+    async def stream_partial(*args, **kwargs):
+        yield TextBlockStart(block_id="b1")
+        yield TextDelta(block_id="b1", delta="text")
+        stream_started.set()
+        await asyncio.sleep(10)
+
+    agent._loop.stream = stream_partial  # type: ignore[attr-defined]
+
+    run_task = asyncio.create_task(agent.run_streaming("hi", "leak-session"))
+    await stream_started.wait()
+    await asyncio.sleep(0.01)
+
+    await agent.cancel_session("leak-session")
+
+    with pytest.raises((asyncio.CancelledError, Exception)):
+        await run_task
+
+    assert "leak-session" not in agent._cancel_requested
+    assert "leak-session" not in agent._partial_buffer
