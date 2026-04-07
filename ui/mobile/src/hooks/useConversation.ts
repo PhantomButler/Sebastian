@@ -178,6 +178,12 @@ export function useConversation(sessionId: string | null): void {
           queryClient.invalidateQueries({ queryKey: ['session-detail', sid] });
           break;
         }
+        case 'turn.cancelled': {
+          // Partial text was flushed by backend; finalize the streaming UI now.
+          s.completeTurn(sid);
+          queryClient.invalidateQueries({ queryKey: ['session-detail', sid] });
+          break;
+        }
         default:
           break;
       }

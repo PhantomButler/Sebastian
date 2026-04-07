@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { apiClient } from './client';
 
 export async function sendTurn(
@@ -12,5 +13,13 @@ export async function sendTurn(
 }
 
 export async function cancelTurn(sessionId: string): Promise<void> {
-  await apiClient.post(`/api/v1/sessions/${sessionId}/cancel`);
+  try {
+    await apiClient.post(`/api/v1/sessions/${sessionId}/cancel`);
+  } catch (err) {
+    // 404 = 后端已无活跃 stream（正常竞态），静默处理
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      return;
+    }
+    throw err;
+  }
 }

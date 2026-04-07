@@ -72,6 +72,7 @@ export type SSEEventType =
   | 'task.planning_failed'
   | 'turn.received'
   | 'turn.response'
+  | 'turn.cancelled'
   | 'turn.delta'
   | 'turn.thinking_delta'
   | 'thinking_block.start'
