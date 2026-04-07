@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, TouchableOpacity, Text, Keyboard, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useMemo, useState } from 'react';
+import { View, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import axios from 'axios';
+import {
+  KeyboardGestureArea,
+  KeyboardStickyView,
+  KeyboardChatScrollView,
+} from 'react-native-keyboard-controller';
 import { useSessionStore } from '@/src/store/session';
 import { useSessions } from '@/src/hooks/useSessions';
 import { sendTurn, cancelTurn } from '@/src/api/turns';
@@ -24,19 +29,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [composerHeight, setComposerHeight] = useState(COMPOSER_DEFAULT_HEIGHT);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  // Track keyboard height so the absolute-positioned Composer slides above the keyboard.
-  // On Android (edge-to-edge), the window does NOT shrink when keyboard appears, so we
-  // must move the Composer manually.
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
   const {
     currentSessionId, draftSession,
     setCurrentSession, startDraft, persistSession,
@@ -49,14 +42,29 @@ export default function ChatScreen() {
     currentSessionId ? (s.sessions[currentSessionId]?.errorBanner ?? null) : s.draftErrorBanner,
   );
 
-  // bottomPadding: how much space to reserve at the bottom of the scroll list so
-  // the last message stays above the floating Composer.
-  // Composer sits at `keyboard.height + insets.bottom + 8` from screen bottom (via
-  // Reanimated useAnimatedKeyboard). We mirror that here for the list padding.
-  const bottomPadding = composerHeight + keyboardHeight + insets.bottom + 32;
+  // KeyboardStickyView offset: when keyboard opens, Composer bottom sits at keyboard top.
+  // insets.bottom compensates for SafeAreaView's bottom padding (which would double-stack
+  // without this offset when keyboard is visible).
+  const stickyOffset = useMemo(() => ({ opened: insets.bottom }), [insets.bottom]);
+
+  // renderScrollComponent passes KeyboardChatScrollView to FlatList.
+  // offset = insets.bottom makes KeyboardChatScrollView's scroll adjustment align with
+  // how KeyboardStickyView positions the Composer.
+  const renderScrollComponent = useCallback(
+    (props: object) => (
+      <KeyboardChatScrollView
+        {...props}
+        keyboardDismissMode="interactive"
+        keyboardLiftBehavior="always"
+        offset={insets.bottom}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+      />
+    ),
+    [insets.bottom],
+  );
 
   async function handleSend(text: string, _opts: { thinking: boolean }) {
-    // _opts.thinking is captured for future backend wiring (Phase 2)
     try {
       const { sessionId } = await sendTurn(currentSessionId, text);
       if (!currentSessionId) {
@@ -92,7 +100,7 @@ export default function ChatScreen() {
         }
       }
       Alert.alert('发送失败，请重试');
-      throw err; // re-throw so Composer restores text
+      throw err;
     }
   }
 
@@ -124,20 +132,38 @@ export default function ChatScreen() {
   const isEmpty = !currentSessionId && !draftSession;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.borderLight }]}>
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => setSidebarOpen(true)}
-          >
-            <Text style={[styles.menuIcon, { color: colors.text }]}>☰</Text>
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Sebastian</Text>
-        </View>
+    <SafeAreaView
+      edges={['bottom']}
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top,
+            backgroundColor: colors.background,
+            borderBottomColor: colors.borderLight,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.menuButton}
+          onPress={() => setSidebarOpen(true)}
+        >
+          <Text style={[styles.menuIcon, { color: colors.text }]}>☰</Text>
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Sebastian</Text>
+      </View>
 
+      <KeyboardGestureArea
+        style={styles.gestureArea}
+        interpolator="ios"
+        offset={COMPOSER_DEFAULT_HEIGHT}
+        textInputNativeID="composer-input"
+      >
         {isEmpty ? (
           currentBanner ? (
-            <View style={[styles.emptyContainer, { paddingBottom: bottomPadding }]}>
+            <View style={styles.emptyContainer}>
               <ErrorBanner
                 message={currentBanner.message}
                 onAction={() => router.push('/settings')}
@@ -150,35 +176,37 @@ export default function ChatScreen() {
           <ConversationView
             sessionId={currentSessionId}
             errorBanner={currentBanner}
-            bottomPadding={bottomPadding}
             onBannerAction={() => router.push('/settings')}
+            renderScrollComponent={renderScrollComponent}
           />
         )}
 
-        <Composer
-          sessionId={currentSessionId}
-          isWorking={isWorking}
-          onSend={handleSend}
-          onStop={handleStop}
-          onHeightChange={setComposerHeight}
-        />
-
-        <Sidebar
-          visible={sidebarOpen}
-          onOpen={() => setSidebarOpen(true)}
-          onClose={() => setSidebarOpen(false)}
-        >
-          <AppSidebar
-            sessions={sessions}
-            currentSessionId={currentSessionId}
-            draftSession={draftSession}
-            onSelect={(id) => { setCurrentSession(id); setSidebarOpen(false); }}
-            onNewChat={() => { startDraft(); setSidebarOpen(false); }}
-            onDelete={handleDeleteSession}
-            onClose={() => setSidebarOpen(false)}
+        <KeyboardStickyView offset={stickyOffset} style={styles.stickyComposer}>
+          <Composer
+            sessionId={currentSessionId}
+            isWorking={isWorking}
+            onSend={handleSend}
+            onStop={handleStop}
           />
-        </Sidebar>
-    </View>
+        </KeyboardStickyView>
+      </KeyboardGestureArea>
+
+      <Sidebar
+        visible={sidebarOpen}
+        onOpen={() => setSidebarOpen(true)}
+        onClose={() => setSidebarOpen(false)}
+      >
+        <AppSidebar
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          draftSession={draftSession}
+          onSelect={(id) => { setCurrentSession(id); setSidebarOpen(false); }}
+          onNewChat={() => { startDraft(); setSidebarOpen(false); }}
+          onDelete={handleDeleteSession}
+          onClose={() => setSidebarOpen(false)}
+        />
+      </Sidebar>
+    </SafeAreaView>
   );
 }
 
@@ -200,5 +228,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginRight: 36,
+  },
+  gestureArea: { flex: 1 },
+  stickyComposer: {
+    position: 'absolute',
+    width: '100%',
   },
 });
