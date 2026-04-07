@@ -79,7 +79,7 @@ async def create_agent_session(
 
     from sebastian.core.session_runner import run_agent_session
 
-    asyncio.create_task(
+    _task = asyncio.create_task(
         run_agent_session(
             agent=agent,
             session=session,
@@ -89,6 +89,7 @@ async def create_agent_session(
             event_bus=state.event_bus,
         )
     )
+    _task.add_done_callback(_log_background_turn_failure)
 
     return {"session_id": session.id, "ts": session.created_at.isoformat()}
 
@@ -172,7 +173,7 @@ async def _schedule_session_turn(
         if agent is None:
             raise ValueError(f"No agent instance for type: {session.agent_type}")
         task = asyncio.create_task(
-            agent.run_streaming(content, session.id, agent_name=session.agent_type)
+            agent.run_streaming(content, session.id)
         )
     task.add_done_callback(_log_background_turn_failure)
 
