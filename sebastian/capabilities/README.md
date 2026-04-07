@@ -71,12 +71,22 @@ await registry.register_mcp_tools(mcp_client)
 # 在 capabilities/tools/<name>/__init__.py 中
 from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
+from sebastian.permissions.types import PermissionTier
 
-@tool(description="做什么事")
+@tool(
+    name="my_tool",
+    description="做什么事",
+    permission_tier=PermissionTier.LOW,  # 必须显式指定，默认为 MODEL_DECIDES
+)
 async def my_tool(param: str) -> ToolResult:
     return ToolResult(ok=True, output="结果")
 # 重启后自动注册，无需修改其他文件
 ```
+
+> **注意**：`permission_tier` 必须显式指定，默认值为 `MODEL_DECIDES`（经过 reviewer 审查）。
+> - `LOW`：只读查询、状态检查等无副作用操作
+> - `MODEL_DECIDES`：有副作用但可审查的操作（文件写入、网络请求等）
+> - `HIGH_RISK`：高危操作，始终请求用户确认
 
 **新增 MCP Server**：在 `capabilities/mcps/<name>/` 下创建 `config.toml`，重启后自动连接。
 

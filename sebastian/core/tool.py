@@ -138,7 +138,7 @@ def _coerce_args(fn: Callable[..., Any], kwargs: dict[str, Any]) -> dict[str, An
 def tool(
     name: str,
     description: str,
-    permission_tier: PermissionTier = PermissionTier.LOW,
+    permission_tier: PermissionTier = PermissionTier.MODEL_DECIDES,
 ) -> Callable[[ToolFn], ToolFn]:
     """Decorator that registers an async function as a callable tool."""
 

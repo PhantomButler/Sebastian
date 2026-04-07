@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 from sebastian.core.tool import tool
 from sebastian.core.types import Session, ToolResult
+from sebastian.permissions.types import PermissionTier
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def _get_state():
 @tool(
     name="delegate_to_agent",
     description="委派任务给指定的下属 Agent。任务将异步执行，你可以继续处理其他事务。",
+    permission_tier=PermissionTier.LOW,
 )
 async def delegate_to_agent(
     agent_type: str,

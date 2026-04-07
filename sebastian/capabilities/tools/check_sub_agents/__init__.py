@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
+from sebastian.permissions.types import PermissionTier
 
 
 def _get_state():
@@ -17,6 +18,7 @@ def _get_state():
 @tool(
     name="check_sub_agents",
     description="查看下属 Agent 的任务执行状态摘要。",
+    permission_tier=PermissionTier.LOW,
 )
 async def check_sub_agents(
     _ctx: ToolCallContext | None = None,
