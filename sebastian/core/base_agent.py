@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sebastian.llm.provider import LLMProvider
+    from sebastian.store.index_store import IndexStore
 
 from sebastian.permissions.gate import PolicyGate
 from sebastian.permissions.types import ToolCallContext
@@ -71,12 +72,14 @@ class BaseAgent(ABC):
         model: str | None = None,
         allowed_tools: list[str] | None = None,
         allowed_skills: list[str] | None = None,
+        index_store: IndexStore | None = None,
     ) -> None:
         self._gate = gate
         self._current_task_goals: dict[str, str] = {}           # session_id → goal
         self._current_depth: dict[str, int] = {}               # session_id → depth
         self._session_store = session_store
         self._event_bus = event_bus
+        self._index_store = index_store
         self._episodic = EpisodicMemory(session_store)
         self.working_memory = WorkingMemory()
         self._active_streams: dict[str, asyncio.Task[str]] = {}  # session_id → task
@@ -407,11 +410,8 @@ class BaseAgent(ABC):
 
     async def _update_activity(self, session_id: str) -> None:
         """Update last_activity_at in index for stalled detection."""
-        try:
-            import sebastian.gateway.state as _state
-            await _state.index_store.update_activity(session_id)
-        except (AttributeError, ImportError):
-            pass  # state not initialised (tests)
+        if self._index_store is not None:
+            await self._index_store.update_activity(session_id)
 
     async def _publish(
         self,
