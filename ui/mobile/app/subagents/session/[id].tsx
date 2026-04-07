@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -102,6 +102,7 @@ export default function SessionDetailScreen() {
   const [tab, setTab] = useState<Tab>('messages');
   const [sending, setSending] = useState(false);
   const [realSessionId, setRealSessionId] = useState<string | null>(null);
+  const sendingRef = useRef(false);
   const effectiveSessionId = realSessionId || (isNewSession ? null : sessionId);
 
   const { data: remoteDetail } = useQuery({
@@ -129,21 +130,17 @@ export default function SessionDetailScreen() {
         Alert.alert('模拟会话', '这是用于导航测试的假数据页面。');
         return;
       }
-      if (isNewSession && !realSessionId) {
-        setSending(true);
-        try {
-          const { sessionId: newId } = await createAgentSession(agentName, text);
-          router.replace(`/subagents/session/${newId}?agent=${agentName}`);
-        } catch {
-          Alert.alert('错误', '创建会话失败，请重试');
-        } finally {
-          setSending(false);
-        }
-        return;
-      }
-      if (!effectiveSessionId) return;
+      if (sendingRef.current) return;
+      sendingRef.current = true;
       setSending(true);
       try {
+        if (isNewSession && !realSessionId) {
+          const { sessionId: newId } = await createAgentSession(agentName, text);
+          setRealSessionId(newId);
+          router.replace(`/subagents/session/${newId}?agent=${agentName}`);
+          return;
+        }
+        if (!effectiveSessionId) return;
         await sendTurnToSession(effectiveSessionId, text, agentName);
         useConversationStore.getState().appendUserMessage(effectiveSessionId, text);
         queryClient.invalidateQueries({
@@ -152,6 +149,7 @@ export default function SessionDetailScreen() {
       } catch {
         Alert.alert('发送失败，请重试');
       } finally {
+        sendingRef.current = false;
         setSending(false);
       }
     },
