@@ -16,6 +16,7 @@ async def test_marks_stalled_session():
     session_store = AsyncMock()
     session_store.get_session = AsyncMock(return_value=MagicMock(
         id="s1", status="active", last_activity_at=now - timedelta(minutes=10),
+        goal="analyze stock market",
     ))
     event_bus = AsyncMock()
     registry = {"code": MagicMock(stalled_threshold_minutes=5)}

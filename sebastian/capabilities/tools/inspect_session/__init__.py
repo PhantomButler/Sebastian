@@ -41,6 +41,7 @@ async def inspect_session(
 
     lines = [
         f"Session: {session.title}",
+        f"目标: {session.goal}",
         f"状态: {session.status}",
         f"Agent: {agent_type}",
         f"最后活动: {session.last_activity_at}",

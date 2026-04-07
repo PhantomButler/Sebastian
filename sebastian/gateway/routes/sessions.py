@@ -69,6 +69,7 @@ async def create_agent_session(
     session = Session(
         agent_type=agent_type,
         title=content[:40],
+        goal=content,
         depth=2,
     )
     await state.session_store.create_session(session)
@@ -295,6 +296,7 @@ async def get_session_recent(
         "session_id": session.id,
         "status": session.status,
         "title": session.title,
+        "goal": session.goal,
         "last_activity_at": session.last_activity_at.isoformat(),
         "messages": messages,
     }

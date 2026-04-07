@@ -47,6 +47,7 @@ async def delegate_to_agent(
     session = Session(
         agent_type=agent_type,
         title=goal[:40],
+        goal=goal,
         depth=2,
     )
     await state.session_store.create_session(session)

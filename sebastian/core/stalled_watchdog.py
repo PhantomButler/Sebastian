@@ -66,6 +66,7 @@ async def _check_stalled_sessions(
                         data={
                             "session_id": session_id,
                             "agent_type": agent_type,
+                            "goal": session.goal,
                             "last_activity_at": last_activity_str,
                         },
                     )

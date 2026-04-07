@@ -97,6 +97,7 @@ class Session(BaseModel):
     )
     agent_type: str
     title: str
+    goal: str = ""
     status: SessionStatus = SessionStatus.ACTIVE
     depth: int = 1
     parent_session_id: str | None = None

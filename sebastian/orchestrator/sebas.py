@@ -110,6 +110,7 @@ class Sebastian(BaseAgent):
         session = Session(
             agent_type="sebastian",
             title=first_message[:40] or "新对话",
+            goal=first_message,
             depth=1,
         )
         await self._session_store.create_session(session)

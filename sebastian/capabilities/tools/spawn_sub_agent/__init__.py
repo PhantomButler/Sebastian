@@ -66,6 +66,7 @@ async def spawn_sub_agent(
         session = Session(
             agent_type=agent_type,
             title=goal[:40],
+            goal=goal,
             depth=3,
             parent_session_id=parent_session_id,
         )
