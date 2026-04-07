@@ -28,7 +28,7 @@ export function AgentList({ agents, onSelect }: Props) {
             <AgentStatusBadge status={item.status} />
           </View>
           <Text style={styles.goal} numberOfLines={2}>
-            {item.goal}
+            {item.description}
           </Text>
           <View style={styles.footer}>
             <Text style={styles.footerText}>查看该 Agent 的会话与任务</Text>
