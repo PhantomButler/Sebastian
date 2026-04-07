@@ -33,6 +33,7 @@ async def list_sessions(
     import sebastian.gateway.state as state
 
     sessions = await state.index_store.list_all()
+    sessions = [s for s in sessions if s.get("depth", 1) == 1]
     if agent_type is not None:
         sessions = [s for s in sessions if s.get("agent_type") == agent_type]
     if status is not None:
