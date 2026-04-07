@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { View, StyleSheet, Alert, TouchableOpacity, Text, Platform } from 'react-native';
+import { View, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAvoidingView } from 'react-native';
 import { router } from 'expo-router';
 import axios from 'axios';
 import { useSessionStore } from '@/src/store/session';
@@ -38,7 +37,11 @@ export default function ChatScreen() {
     currentSessionId ? (s.sessions[currentSessionId]?.errorBanner ?? null) : s.draftErrorBanner,
   );
 
-  const bottomPadding = composerHeight + 24;
+  // composerHeight: measured height of Composer component
+  // insets.bottom: safe-area bottom (0 on emulator)
+  // +8: the fixed `bottom: insets.bottom + 8` offset in Composer
+  // +24: comfortable gap so last message clears the top edge of Composer
+  const bottomPadding = composerHeight + insets.bottom + 32;
 
   async function handleSend(text: string, _opts: { thinking: boolean }) {
     // _opts.thinking is captured for future backend wiring (Phase 2)
@@ -109,11 +112,7 @@ export default function ChatScreen() {
   const isEmpty = !currentSessionId && !draftSession;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.borderLight }]}>
           <TouchableOpacity
             style={styles.menuButton}
@@ -168,8 +167,7 @@ export default function ChatScreen() {
             onClose={() => setSidebarOpen(false)}
           />
         </Sidebar>
-      </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
