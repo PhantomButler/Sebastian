@@ -135,11 +135,17 @@ class LLMProviderRegistry:
 
 def _read_manifest_llm(agent_type: str) -> dict | None:
     """Read [llm] section from the agent's manifest.toml, or return None if absent."""
+    import logging
+
     # Builtin agents live alongside this package: sebastian/agents/{agent_type}/manifest.toml
     agents_dir = Path(__file__).parent.parent / "agents"
     manifest_path = agents_dir / agent_type / "manifest.toml"
     if not manifest_path.exists():
         return None
-    with manifest_path.open("rb") as f:
-        data = tomllib.load(f)
+    try:
+        with manifest_path.open("rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError:
+        logging.getLogger(__name__).warning("Invalid TOML in manifest for agent %r", agent_type)
+        return None
     return data.get("llm")  # None if no [llm] section
