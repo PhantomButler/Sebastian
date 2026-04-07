@@ -88,21 +88,22 @@ class PolicyGate:
 
         token = _current_tool_ctx.set(context)
         try:
-            # Workspace 边界检查：MODEL_DECIDES 工具含 file_path 时，路径在 workspace 外直接请求用户审批
+            # Workspace 边界检查：MODEL_DECIDES 工具含 file_path 时，
+            # 路径在 workspace 外直接请求用户审批（跳过 LLM reviewer）
             if tier == PermissionTier.MODEL_DECIDES and "file_path" in inputs:
                 resolved = resolve_path(inputs["file_path"])
-                if not resolved.is_relative_to(settings.workspace_dir):
-                    clean_inputs = {k: v for k, v in inputs.items() if k != "reason"}
+                if not resolved.is_relative_to(settings.workspace_dir.resolve()):
+                    reason = inputs.pop("reason", "")  # 与常规 MODEL_DECIDES 路径一致
                     granted = await self._approval_manager.request_approval(
                         approval_id=uuid.uuid4().hex,
                         task_id=context.task_id or "",
                         tool_name=tool_name,
-                        tool_input=clean_inputs,
+                        tool_input=inputs,
                         reason=f"操作路径 '{resolved}' 在 workspace 外，需要用户确认。",
                         session_id=context.session_id or "",
                     )
                     if granted:
-                        return await self._registry.call(tool_name, **clean_inputs)
+                        return await self._registry.call(tool_name, **inputs)
                     return ToolResult(ok=False, error="用户拒绝了 workspace 外的文件操作。")
 
             if tier == PermissionTier.LOW:
