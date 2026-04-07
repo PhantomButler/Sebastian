@@ -102,7 +102,7 @@ export function AppSidebar({
       <NewChatFAB
         label="新对话"
         onPress={onNewChat}
-        disabled={draftSession}
+        disabled={!!draftSession || !currentSessionId}
         style={styles.fab}
       />
     </View>
