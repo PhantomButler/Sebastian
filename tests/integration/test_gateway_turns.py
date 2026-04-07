@@ -34,22 +34,26 @@ def client(tmp_path):
 
         with patch.object(cfg_module.settings, "sebastian_owner_password_hash", password_hash):
             with patch(
-                "sebastian.orchestrator.sebas.Sebastian.run_streaming",
+                "sebastian.gateway.routes.turns._ensure_llm_ready",
                 new_callable=AsyncMock,
-                return_value="Mocked response from Sebastian.",
-            ) as mock_run_streaming:
+            ):
                 with patch(
-                    "sebastian.orchestrator.sebas.Sebastian.get_or_create_session",
+                    "sebastian.orchestrator.sebas.Sebastian.run_streaming",
                     new_callable=AsyncMock,
-                    return_value=fake_session,
-                ):
-                    from starlette.testclient import TestClient
+                    return_value="Mocked response from Sebastian.",
+                ) as mock_run_streaming:
+                    with patch(
+                        "sebastian.orchestrator.sebas.Sebastian.get_or_create_session",
+                        new_callable=AsyncMock,
+                        return_value=fake_session,
+                    ):
+                        from starlette.testclient import TestClient
 
-                    from sebastian.gateway.app import create_app
+                        from sebastian.gateway.app import create_app
 
-                    test_app = create_app()
-                    with TestClient(test_app, raise_server_exceptions=True) as test_client:
-                        yield test_client, mock_run_streaming, fake_session
+                        test_app = create_app()
+                        with TestClient(test_app, raise_server_exceptions=True) as test_client:
+                            yield test_client, mock_run_streaming, fake_session
 
 
 def _login(client) -> str:

@@ -31,6 +31,26 @@ class SendTurnRequest(BaseModel):
     session_id: str | None = None
 
 
+async def _ensure_llm_ready(agent_type: str) -> None:
+    """Verify that the given agent_type has a usable LLM provider.
+
+    Raises HTTPException(400) with a structured code if none is configured,
+    so the client can render a friendly error pointing to Settings.
+    """
+    import sebastian.gateway.state as state
+
+    try:
+        await state.llm_registry.get_provider(agent_type)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "no_llm_provider",
+                "message": "尚未配置 LLM Provider，请前往 Settings → 模型 页面添加",
+            },
+        )
+
+
 def _log_background_turn_failure(task: asyncio.Task[object]) -> None:
     if task.cancelled():
         return
@@ -57,6 +77,7 @@ async def send_turn(
 ) -> JSONDict:
     import sebastian.gateway.state as state
 
+    await _ensure_llm_ready("sebastian")
     session = await state.sebastian.get_or_create_session(body.session_id, body.content)
     task = asyncio.create_task(state.sebastian.run_streaming(body.content, session.id))
     task.add_done_callback(_log_background_turn_failure)
