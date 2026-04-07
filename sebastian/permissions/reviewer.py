@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from sebastian.permissions.types import ReviewDecision
 
 if TYPE_CHECKING:
-    from sebastian.llm.provider import LLMProvider
+    from sebastian.llm.registry import LLMProviderRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +31,14 @@ When decision is "proceed", explanation is an empty string.\
 class PermissionReviewer:
     """Stateless LLM reviewer for MODEL_DECIDES tool calls.
 
-    Each review is a single API call with no session state.
-    Defaults to escalate on any failure (conservative).
+    Holds a reference to the LLM registry and lazily resolves the default
+    provider on each review() call. This way the reviewer can be constructed
+    before any provider is configured — at review time, if the registry still
+    has no provider, the reviewer falls back to a safe escalate decision.
     """
 
-    def __init__(self, provider: LLMProvider, model: str = "claude-haiku-4-5-20251001") -> None:
-        self._provider = provider
-        self._model = model
+    def __init__(self, llm_registry: LLMProviderRegistry) -> None:
+        self._llm_registry = llm_registry
 
     async def review(
         self,
@@ -49,6 +50,17 @@ class PermissionReviewer:
         """Return a proceed/escalate decision for the given tool call."""
         from sebastian.core.stream_events import TextDelta
 
+        try:
+            provider, model = await self._llm_registry.get_default_with_model()
+        except RuntimeError:
+            logger.warning(
+                "PermissionReviewer: no LLM provider configured, defaulting to escalate"
+            )
+            return ReviewDecision(
+                decision="escalate",
+                explanation="未配置 LLM Provider，无法自动审查工具调用，请人工批准。",
+            )
+
         user_content = (
             f"Task goal: {task_goal}\n"
             f"Tool: {tool_name}\n"
@@ -57,11 +69,11 @@ class PermissionReviewer:
         )
         try:
             text = ""
-            async for event in self._provider.stream(
+            async for event in provider.stream(
                 system=_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_content}],
                 tools=[],
-                model=self._model,
+                model=model,
                 max_tokens=256,
             ):
                 if isinstance(event, TextDelta):
