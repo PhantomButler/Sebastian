@@ -9,10 +9,10 @@ import weakref
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from sebastian.store.session_store import SessionStore
-from uuid import uuid4
 
 import aiofiles
 
