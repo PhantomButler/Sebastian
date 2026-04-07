@@ -51,11 +51,9 @@ export default function ChatScreen() {
 
   // bottomPadding: how much space to reserve at the bottom of the scroll list so
   // the last message stays above the floating Composer.
-  // Composer layout bottom is always 0 (transform-based animation doesn't change layout).
-  // We add composerHeight + insets.bottom + 8 (Composer's translateY offset) + extra breathing room.
-  // keyboardHeight is added so the list scrolls up when the keyboard opens, revealing
-  // the last message above the Composer which has already shifted up by the same amount.
-  const bottomPadding = composerHeight + keyboardHeight + insets.bottom + 24;
+  // Composer sits at `keyboard.height + insets.bottom + 8` from screen bottom (via
+  // Reanimated useAnimatedKeyboard). We mirror that here for the list padding.
+  const bottomPadding = composerHeight + keyboardHeight + insets.bottom + 32;
 
   async function handleSend(text: string, _opts: { thinking: boolean }) {
     // _opts.thinking is captured for future backend wiring (Phase 2)

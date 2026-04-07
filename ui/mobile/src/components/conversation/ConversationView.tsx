@@ -70,17 +70,14 @@ export function ConversationView({ sessionId, errorBanner, onBannerAction, botto
           item.kind === 'message' ? item.message.id : `streaming-${index}`
         }
         renderItem={renderItem}
-        contentContainerStyle={{ paddingTop: 12 }}
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomPadding }}
         onContentSizeChange={() =>
           flatListRef.current?.scrollToEnd({ animated: true })
         }
         ListFooterComponent={
-          <>
-            {errorBanner && (
-              <ErrorBanner message={errorBanner.message} onAction={onBannerAction ?? (() => {})} />
-            )}
-            <View style={{ height: bottomPadding }} />
-          </>
+          errorBanner ? (
+            <ErrorBanner message={errorBanner.message} onAction={onBannerAction ?? (() => {})} />
+          ) : null
         }
       />
     </View>
