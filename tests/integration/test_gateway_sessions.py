@@ -7,10 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-not-real")
-os.environ.setdefault("SEBASTIAN_JWT_SECRET", "test-secret-key")
-os.environ.setdefault("SEBASTIAN_DATA_DIR", "/tmp/sebastian_test")
-
 
 @pytest.fixture
 def client(tmp_path):

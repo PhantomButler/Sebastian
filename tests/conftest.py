@@ -25,3 +25,10 @@ async def db_session():
     async with factory() as session:
         yield session
     await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _patch_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """确保每个测试都有必要的环境变量，防止 config 加载失败。"""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    monkeypatch.setenv("SEBASTIAN_JWT_SECRET", "test-secret-key")
