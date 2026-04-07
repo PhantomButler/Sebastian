@@ -26,6 +26,10 @@ class EventBus:
         key = event_type.value if event_type is not None else _WILDCARD
         self._handlers[key] = [h for h in self._handlers[key] if h is not handler]
 
+    def reset(self) -> None:
+        """Clear all handlers. Used in tests to prevent handler leakage between tests."""
+        self._handlers.clear()
+
     async def publish(self, event: Event) -> None:
         handlers = list(self._handlers.get(event.type.value, [])) + list(
             self._handlers.get(_WILDCARD, [])

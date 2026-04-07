@@ -34,7 +34,6 @@ class SessionStatus(StrEnum):
     FAILED = "failed"
     STALLED = "stalled"
     CANCELLED = "cancelled"
-    ARCHIVED = "archived"
 
 
 class ToolResult(BaseModel):

@@ -12,7 +12,7 @@ export interface SessionMeta {
   id: string;
   agent: string;
   title: string;
-  status: 'active' | 'idle' | 'completed' | 'failed' | 'stalled' | 'cancelled' | 'archived';
+  status: 'active' | 'idle' | 'completed' | 'failed' | 'stalled' | 'cancelled';
   updated_at: string;
   task_count: number;
   active_task_count: number;
