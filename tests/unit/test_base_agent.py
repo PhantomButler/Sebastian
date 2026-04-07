@@ -218,6 +218,7 @@ def test_build_system_prompt_contains_guidelines_section() -> None:
     """build_system_prompt() 包含 guidelines section，含 workspace_dir 路径。"""
     from pathlib import Path
     from unittest.mock import MagicMock, patch
+
     from sebastian.core.base_agent import BaseAgent
 
     class TestAgent(BaseAgent):
@@ -248,15 +249,14 @@ def test_guidelines_section_appears_before_tools_section() -> None:
     """guidelines section 必须在 tools section 之前出现。"""
     from pathlib import Path
     from unittest.mock import MagicMock, patch
+
     from sebastian.core.base_agent import BaseAgent
 
     class TestAgent(BaseAgent):
         name = "test"
 
     gate = MagicMock()
-    gate.get_tool_specs.return_value = [
-        {"name": "Read", "description": "Read a file"}
-    ]
+    gate.get_tool_specs.return_value = [{"name": "Read", "description": "Read a file"}]
     gate.get_skill_specs.return_value = []
 
     with patch("sebastian.core.base_agent.settings") as mock_settings:
@@ -274,6 +274,7 @@ def test_guidelines_section_appears_before_tools_section() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # cancel_session tests
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_cancel_session_returns_false_when_no_active_stream(tmp_path: Path) -> None:
@@ -336,7 +337,7 @@ async def test_cancel_session_cancels_active_stream(tmp_path: Path) -> None:
 async def test_cancel_session_flushes_partial_text_to_episodic(tmp_path: Path) -> None:
     """Partial text is saved to episodic memory with [用户中断] suffix on cancel."""
     from sebastian.core.base_agent import BaseAgent
-    from sebastian.core.stream_events import TextBlockStart, TextDelta, TextBlockStop
+    from sebastian.core.stream_events import TextBlockStart, TextDelta
     from sebastian.core.types import Session
     from sebastian.store.session_store import SessionStore
 
