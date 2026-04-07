@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useLLMProvidersStore } from '../../store/llmProviders';
+import { useSettingsStore } from '../../store/settings';
 import type { LLMProvider, LLMProviderCreate, LLMProviderType } from '../../types';
 import { useTheme } from '../../theme/ThemeContext';
 
@@ -145,12 +146,13 @@ function ProviderForm({
 export function LLMProviderConfig() {
   const colors = useTheme();
   const { providers, loading, error, fetch, create, update, remove } = useLLMProvidersStore();
+  const { jwtToken } = useSettingsStore();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<LLMProvider | null>(null);
 
   useEffect(() => {
-    fetch();
-  }, []);
+    if (jwtToken) fetch();
+  }, [jwtToken]);
 
   async function handleCreate(data: LLMProviderCreate) {
     await create(data);

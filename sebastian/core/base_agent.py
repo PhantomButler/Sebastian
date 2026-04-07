@@ -96,11 +96,6 @@ class BaseAgent(ABC):
         resolved_model = model or settings.sebastian_model
         self._provider_injected = provider is not None
 
-        if provider is None:
-            from sebastian.llm.anthropic import AnthropicProvider
-
-            provider = AnthropicProvider(api_key=settings.anthropic_api_key)
-
         self._loop = AgentLoop(
             provider,
             gate,

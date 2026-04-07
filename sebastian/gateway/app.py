@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sebastian.llm.registry import LLMProviderRegistry
 
     llm_registry = LLMProviderRegistry(db_factory)
-    default_provider = await llm_registry.get_default()
+    default_provider, default_model = await llm_registry.get_default_with_model()
 
     load_tools()
 
@@ -96,16 +96,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     task_manager = TaskManager(session_store, event_bus, index_store=index_store)
     sse_mgr = SSEManager(event_bus)
 
-    from sebastian.llm.anthropic import AnthropicProvider
     from sebastian.permissions.gate import PolicyGate
     from sebastian.permissions.reviewer import PermissionReviewer
 
-    if isinstance(default_provider, AnthropicProvider):
-        _reviewer_client = default_provider._client
-    else:
-        import anthropic as _anthropic
-        _reviewer_client = _anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    reviewer = PermissionReviewer(client=_reviewer_client)
+    reviewer = PermissionReviewer(provider=default_provider, model=default_model)
     gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=conversation)
 
     from sebastian.agents._loader import load_agents
@@ -120,7 +114,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         task_manager=task_manager,
         conversation=conversation,
         event_bus=event_bus,
-        provider=default_provider,
+        llm_registry=llm_registry,
         agent_registry={cfg.agent_type: cfg for cfg in agent_configs},
     )
 

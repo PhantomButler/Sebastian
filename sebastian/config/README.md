@@ -17,7 +17,6 @@ config/
 
 | 字段 | 环境变量 | 默认值 | 说明 |
 |------|---------|--------|------|
-| `anthropic_api_key` | `ANTHROPIC_API_KEY` | `""` | Anthropic LLM 密钥 |
 | `sebastian_owner_name` | `SEBASTIAN_OWNER_NAME` | `"Owner"` | 主人名字，用于系统 prompt |
 | `data_dir`（property） | `SEBASTIAN_DATA_DIR` | `~/.sebastian` | 数据根目录，自动展开 `~` |
 | `database_url`（property） | `SEBASTIAN_DB_URL` | 自动派生 | SQLite 连接串 |

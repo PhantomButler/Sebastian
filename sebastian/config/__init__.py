@@ -12,9 +12,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # LLM API keys (no prefix, match .env.example)
-    anthropic_api_key: str = ""
-    openai_api_key: str = ""
+    # LLM API keys are managed via the Settings page (stored in DB, encrypted)
+    openai_api_key: str = ""  # reserved, not currently used
 
     # Sebastian core
     sebastian_owner_name: str = "Owner"

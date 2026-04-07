@@ -1,11 +1,13 @@
-# sebastian/permissions/reviewer.py
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sebastian.permissions.types import ReviewDecision
+
+if TYPE_CHECKING:
+    from sebastian.llm.provider import LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +35,8 @@ class PermissionReviewer:
     Defaults to escalate on any failure (conservative).
     """
 
-    def __init__(self, client: Any, model: str = "claude-haiku-4-5-20251001") -> None:
-        self._client = client
+    def __init__(self, provider: LLMProvider, model: str = "claude-haiku-4-5-20251001") -> None:
+        self._provider = provider
         self._model = model
 
     async def review(
@@ -45,6 +47,8 @@ class PermissionReviewer:
         task_goal: str,
     ) -> ReviewDecision:
         """Return a proceed/escalate decision for the given tool call."""
+        from sebastian.core.stream_events import TextDelta
+
         user_content = (
             f"Task goal: {task_goal}\n"
             f"Tool: {tool_name}\n"
@@ -52,14 +56,17 @@ class PermissionReviewer:
             f"Model's reason: {reason}"
         )
         try:
-            message = await self._client.messages.create(
-                model=self._model,
-                max_tokens=256,
+            text = ""
+            async for event in self._provider.stream(
                 system=_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_content}],
-            )
-            raw = message.content[0].text.strip()
-            data = json.loads(raw)
+                tools=[],
+                model=self._model,
+                max_tokens=256,
+            ):
+                if isinstance(event, TextDelta):
+                    text += event.delta
+            data = json.loads(text.strip())
             decision = data.get("decision", "escalate")
             if decision not in ("proceed", "escalate"):
                 decision = "escalate"

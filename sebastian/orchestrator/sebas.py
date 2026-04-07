@@ -16,6 +16,7 @@ from sebastian.store.session_store import SessionStore
 if TYPE_CHECKING:
     from sebastian.agents._loader import AgentConfig
     from sebastian.llm.provider import LLMProvider
+    from sebastian.llm.registry import LLMProviderRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +71,11 @@ class Sebastian(BaseAgent):
         task_manager: TaskManager,
         conversation: ConversationManager,
         event_bus: EventBus,
-        provider: LLMProvider | None = None,
+        llm_registry: LLMProviderRegistry | None = None,
         agent_registry: dict[str, AgentConfig] | None = None,
     ) -> None:
         self._agent_registry: dict[str, AgentConfig] = agent_registry or {}
-        super().__init__(gate, session_store, event_bus=event_bus, provider=provider)
+        super().__init__(gate, session_store, event_bus=event_bus, llm_registry=llm_registry)
         self._index = index_store
         self._task_manager = task_manager
         self._conversation = conversation

@@ -32,10 +32,9 @@ class LLMProviderRegistry:
             record = result.scalar_one_or_none()
 
         if record is None:
-            from sebastian.config import settings
-            from sebastian.llm.anthropic import AnthropicProvider
-
-            return AnthropicProvider(api_key=settings.anthropic_api_key), settings.sebastian_model
+            raise RuntimeError(
+                "No default LLM provider configured. Add one via the Settings page."
+            )
 
         return self._instantiate(record), record.model
 

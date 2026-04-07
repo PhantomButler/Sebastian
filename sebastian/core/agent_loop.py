@@ -66,7 +66,7 @@ class AgentLoop:
 
     def __init__(
         self,
-        provider: LLMProvider,
+        provider: LLMProvider | None,
         tool_provider: ToolSpecProvider,
         model: str = "claude-opus-4-6",
         max_tokens: int | None = None,
@@ -88,6 +88,8 @@ class AgentLoop:
         task_id: str | None = None,
     ) -> AsyncGenerator[LLMStreamEvent, ToolResult | None]:
         """Yield LLM stream events; accept tool results injected via asend()."""
+        if self._provider is None:
+            raise RuntimeError("No LLM provider configured. Add one via the Settings page.")
         working = list(messages)
         tools = self._registry.get_all_tool_specs()
         full_text_parts: list[str] = []
