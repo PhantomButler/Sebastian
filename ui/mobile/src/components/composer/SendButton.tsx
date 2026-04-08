@@ -1,6 +1,6 @@
 import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
-import { SendIcon, StopCircleIcon } from '../common/Icons';
-import { useTheme } from '../../theme/ThemeContext';
+import { SendActionIcon, StopActionIcon } from '../common/Icons';
+import { useIsDark, useTheme } from '../../theme/ThemeContext';
 import type { ComposerState } from './types';
 
 // Size of the send/stop button in dp.
@@ -13,28 +13,38 @@ interface Props {
 
 export function SendButton({ state, onPress }: Props) {
   const colors = useTheme();
+  const isDark = useIsDark();
   const isDisabled =
     state === 'idle_empty' || state === 'sending' || state === 'cancelling';
+  const activeBackground = isDark ? '#FFFFFF' : '#111111';
+  const activeForeground = isDark ? '#111111' : '#FFFFFF';
+  const disabledBackground = colors.disabledButton;
+  const disabledForeground = isDark ? '#111111' : '#FFFFFF';
 
   // spinner states: ActivityIndicator needs its own background circle
   if (state === 'sending' || state === 'cancelling') {
     return (
-      <View style={[styles.spinnerCircle, { backgroundColor: colors.accent }]}>
-        <ActivityIndicator size="small" color="#FFFFFF" />
+      <View style={[styles.spinnerCircle, { backgroundColor: activeBackground }]}>
+        <ActivityIndicator size="small" color={activeForeground} />
       </View>
     );
   }
-
-  // The SVG icons (SendIcon, StopCircleIcon) already embed a full circle in
-  // their path data — sizing them to BTN_SIZE fills the tap target completely.
-  const iconColor = state === 'idle_empty' ? '#AEAEB2' : colors.accent;
+  const iconProps = isDisabled
+    ? {
+        backgroundColor: disabledBackground,
+        foregroundColor: disabledForeground,
+      }
+    : {
+        backgroundColor: activeBackground,
+        foregroundColor: activeForeground,
+      };
 
   return (
     <TouchableOpacity onPress={onPress} disabled={isDisabled} activeOpacity={0.8}>
       {state === 'streaming' ? (
-        <StopCircleIcon size={BTN_SIZE} color={iconColor} />
+        <StopActionIcon size={BTN_SIZE} {...iconProps} />
       ) : (
-        <SendIcon size={BTN_SIZE} color={iconColor} />
+        <SendActionIcon size={BTN_SIZE} {...iconProps} />
       )}
     </TouchableOpacity>
   );

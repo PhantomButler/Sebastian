@@ -1,5 +1,5 @@
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Pressable } from 'react-native';
-import { useTheme } from '../../theme/ThemeContext';
+import { useIsDark, useTheme } from '../../theme/ThemeContext';
 import type { ThinkingEffort } from '../../types';
 
 interface Props {
@@ -21,12 +21,18 @@ const LABELS: Record<ThinkingEffort, string> = {
 
 export function EffortPicker({ visible, options, current, onSelect, onClose }: Props) {
   const colors = useTheme();
+  const isDark = useIsDark();
+  const activeBackground = isDark ? '#FFFFFF' : '#111111';
+  const activeForeground = isDark ? '#111111' : '#FFFFFF';
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
       <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose}>
@@ -42,7 +48,7 @@ export function EffortPicker({ visible, options, current, onSelect, onClose }: P
                 key={opt}
                 style={[
                   styles.option,
-                  active && { backgroundColor: colors.activeSessionBg },
+                  active && { backgroundColor: activeBackground },
                 ]}
                 onPress={() => {
                   onSelect(opt);
@@ -53,14 +59,11 @@ export function EffortPicker({ visible, options, current, onSelect, onClose }: P
                 <Text
                   style={[
                     styles.optionLabel,
-                    { color: active ? colors.accent : colors.text },
+                    { color: active ? activeForeground : colors.text },
                   ]}
                 >
                   {LABELS[opt]}
                 </Text>
-                {active && (
-                  <Text style={{ color: colors.accent, fontSize: 16 }}>✓</Text>
-                )}
               </TouchableOpacity>
             );
           })}

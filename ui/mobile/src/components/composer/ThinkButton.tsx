@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { ThinkIcon } from '../common/Icons';
-import { useTheme } from '../../theme/ThemeContext';
+import { useIsDark, useTheme } from '../../theme/ThemeContext';
 import { EffortPicker } from './EffortPicker';
 import { useSettingsStore } from '../../store/settings';
 import { EFFORT_LEVELS_BY_CAPABILITY } from '../../types';
@@ -11,9 +11,6 @@ interface Props {
   current: ThinkingEffort;
   onChange: (next: ThinkingEffort) => void;
 }
-
-const ACTIVE_BG = '#E8F0FE';
-const ACTIVE_FG = '#3B82F6';
 
 const SHORT_LABEL: Record<ThinkingEffort, string> = {
   off: '思考',
@@ -26,8 +23,11 @@ const SHORT_LABEL: Record<ThinkingEffort, string> = {
 
 export function ThinkButton({ current, onChange }: Props) {
   const colors = useTheme();
+  const isDark = useIsDark();
   const capability = useSettingsStore((s) => s.currentThinkingCapability);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const activeBackground = isDark ? '#FFFFFF' : '#111111';
+  const activeForeground = isDark ? '#111111' : '#FFFFFF';
 
   // Not loaded / not configured: disabled pill
   if (capability === null) {
@@ -59,12 +59,15 @@ export function ThinkButton({ current, onChange }: Props) {
     const active = current === 'on';
     return (
       <TouchableOpacity
-        style={[styles.pill, { backgroundColor: active ? ACTIVE_BG : colors.inputBackground }]}
+        style={[
+          styles.pill,
+          { backgroundColor: active ? activeBackground : colors.inputBackground },
+        ]}
         onPress={() => onChange(active ? 'off' : 'on')}
         activeOpacity={0.7}
       >
-        <ThinkIcon size={16} color={active ? ACTIVE_FG : colors.textMuted} />
-        <Text style={[styles.label, { color: active ? ACTIVE_FG : colors.textMuted }]}>
+        <ThinkIcon size={16} color={active ? activeForeground : colors.textMuted} />
+        <Text style={[styles.label, { color: active ? activeForeground : colors.textMuted }]}>
           思考
         </Text>
       </TouchableOpacity>
@@ -78,12 +81,15 @@ export function ThinkButton({ current, onChange }: Props) {
   return (
     <>
       <TouchableOpacity
-        style={[styles.pill, { backgroundColor: active ? ACTIVE_BG : colors.inputBackground }]}
+        style={[
+          styles.pill,
+          { backgroundColor: active ? activeBackground : colors.inputBackground },
+        ]}
         onPress={() => setPickerVisible(true)}
         activeOpacity={0.7}
       >
-        <ThinkIcon size={16} color={active ? ACTIVE_FG : colors.textMuted} />
-        <Text style={[styles.label, { color: active ? ACTIVE_FG : colors.textMuted }]}>
+        <ThinkIcon size={16} color={active ? activeForeground : colors.textMuted} />
+        <Text style={[styles.label, { color: active ? activeForeground : colors.textMuted }]}>
           {SHORT_LABEL[current]}
         </Text>
       </TouchableOpacity>

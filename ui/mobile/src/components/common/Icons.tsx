@@ -5,7 +5,7 @@
  * across Expo SDK versions.
  */
 import type { ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 interface IconProps {
   size?: number;
@@ -166,6 +166,30 @@ export function SendIcon({ size = 18, color = '#fff', style }: IconProps) {
   );
 }
 
+interface ComposerActionIconProps {
+  size?: number;
+  backgroundColor?: string;
+  foregroundColor?: string;
+  style?: ViewStyle;
+}
+
+export function SendActionIcon({
+  size = 18,
+  backgroundColor = '#111111',
+  foregroundColor = '#FFFFFF',
+  style,
+}: ComposerActionIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 1024 1024" style={style}>
+      <Circle cx="512" cy="512" r="512" fill={backgroundColor} />
+      <Path
+        d="M512 780.8c-25.685333 0-46.506667-20.821333-46.506667-46.506667V401.066667l-89.813333 89.813333a46.506667 46.506667 0 1 1-65.792-65.792l169.472-169.472a46.506667 46.506667 0 0 1 65.792 0l169.429333 169.472a46.506667 46.506667 0 0 1-65.792 65.792L558.506667 400.64v333.653333c0 25.685333-20.821333 46.506667-46.506667 46.506667z"
+        fill={foregroundColor}
+      />
+    </Svg>
+  );
+}
+
 // Path data from src/assets/icons/stop_circle.svg
 export function StopCircleIcon({ size = 18, color = '#fff', style }: IconProps) {
   return (
@@ -173,6 +197,27 @@ export function StopCircleIcon({ size = 18, color = '#fff', style }: IconProps) 
       <Path
         d="M512 42.666667C252.793333 42.666667 42.666667 252.793333 42.666667 512s210.126667 469.333333 469.333333 469.333333 469.333333-210.126667 469.333333-469.333333S771.206667 42.666667 512 42.666667z m213.333333 645.333333a37.373333 37.373333 0 0 1-37.333333 37.333333H336a37.373333 37.373333 0 0 1-37.333333-37.333333V336a37.373333 37.373333 0 0 1 37.333333-37.333333h352a37.373333 37.373333 0 0 1 37.333333 37.333333z"
         fill={color}
+      />
+    </Svg>
+  );
+}
+
+export function StopActionIcon({
+  size = 18,
+  backgroundColor = '#111111',
+  foregroundColor = '#FFFFFF',
+  style,
+}: ComposerActionIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 1024 1024" style={style}>
+      <Circle cx="512" cy="512" r="469.333333" fill={backgroundColor} />
+      <Rect
+        x="298.666667"
+        y="298.666667"
+        width="426.666666"
+        height="426.666666"
+        rx="37.333333"
+        fill={foregroundColor}
       />
     </Svg>
   );
