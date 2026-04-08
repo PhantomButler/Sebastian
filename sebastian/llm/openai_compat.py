@@ -37,12 +37,14 @@ class OpenAICompatProvider(LLMProvider):
         api_key: str,
         base_url: str | None = None,
         thinking_format: str | None = None,
+        thinking_capability: str | None = None,
     ) -> None:
         self._client = openai.AsyncOpenAI(
             api_key=api_key,
             **({"base_url": base_url} if base_url else {}),
         )
         self._thinking_format = thinking_format
+        self._capability = thinking_capability
 
     async def stream(
         self,
@@ -53,6 +55,7 @@ class OpenAICompatProvider(LLMProvider):
         model: str,
         max_tokens: int,
         block_id_prefix: str = "",
+        thinking_effort: str | None = None,
     ) -> AsyncGenerator[LLMStreamEvent, None]:
         openai_messages: list[dict[str, Any]] = [
             {"role": "system", "content": system},
@@ -76,6 +79,11 @@ class OpenAICompatProvider(LLMProvider):
                 }
                 for t in tools
             ]
+        if (
+            getattr(self, "_capability", None) == "effort"
+            and thinking_effort in ("low", "medium", "high")
+        ):
+            kwargs["reasoning_effort"] = thinking_effort
 
         text_block_id = f"{block_id_prefix}0"
         text_buffer = ""
