@@ -62,12 +62,12 @@ def _log_background_turn_failure(task: asyncio.Task[object]) -> None:
 
 @router.post("/auth/login", response_model=TokenResponse)
 async def login(body: LoginRequest) -> TokenResponse:
-    from sebastian.config import settings
+    from sebastian.gateway.state import get_owner_store
 
-    stored_hash = settings.sebastian_owner_password_hash
-    if not stored_hash or not verify_password(body.password, stored_hash):
+    owner = await get_owner_store().get_owner()
+    if owner is None or not verify_password(body.password, owner.password_hash):
         raise HTTPException(status_code=401, detail="Invalid password")
-    token = create_access_token({"sub": settings.sebastian_owner_name, "role": "owner"})
+    token = create_access_token({"sub": owner.name, "role": "owner"})
     return TokenResponse(access_token=token)
 
 
