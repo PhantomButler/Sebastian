@@ -65,6 +65,9 @@ Composer 本身是普通 `View`（`marginHorizontal: 12, marginBottom: 12`），
 - 新 session 从 `lastUserChoice` 继承档位
 - Draft 用 `__draft__` key，`persistSession` 后调 `migrateDraftToSession(newId)` 迁移
 
-Provider 切换导致 capability 变化时，`syncCurrentThinkingCapability`（`src/api/llm.ts`）会调 `clampAllToCapability(allowedEfforts)` 统一降级/升级档位（例如从 `adaptive` 切到 `effort` 时 `max` → `high`）。
+Provider 切换导致 capability 变化时，`syncCurrentThinkingCapability`（`src/api/llm.ts`）会调 `clampAllToCapability(allowedEfforts)` 统一降级/升级档位（例如从 `adaptive` 切到 `effort` 时 `max` → `high`）。`clampAllToCapability` 会返回 `ClampReport | null`（记录第一个发生降级的 from→to），调用方据此弹 Toast/Alert 告知用户档位已调整；入口：
 
-effort 在 `POST /turns` / `POST /sessions/{id}/turns` 时锁定（body 的 `thinking_effort` 字段，off 时为 null），in-flight turn 不受中途改档位影响，picker 始终可点。
+- 应用启动（`app/_layout.tsx` 的 `syncCurrentThinkingCapability`）
+- 新建 / 编辑 Provider（`components/settings/LLMProviderConfig.tsx` 的 `handleCreate` / `handleUpdate`）
+
+effort 在 `POST /turns` / `POST /sessions/{id}/turns` / `POST /agents/{agent_type}/sessions`（新 sub-agent 会话首条消息）时锁定（body 的 `thinking_effort` 字段，off 时为 null），in-flight turn 不受中途改档位影响，picker 始终可点。

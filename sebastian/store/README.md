@@ -43,6 +43,7 @@ SEBASTIAN_DATA_DIR/sessions/
 | Approval 持久化结构 | [models.py](models.py) 的 `ApprovalRecord` |
 | LLM Provider 配置持久化（含 `thinking_format` / `thinking_capability`） | [models.py](models.py) 的 `LLMProviderRecord` |
 | 数据库 schema 变更 | [models.py](models.py) 修改 ORM + [migrations/](migrations/) 新增 Alembic migration |
+| 新增列的幂等迁移（启动时 ALTER TABLE 补列） | [database.py](database.py) 的 `_apply_idempotent_migrations`（已存在列自动跳过） |
 | SQLAlchemy engine / session factory | [database.py](database.py) |
 | Task SQLite 辅助写入 | [task_store.py](task_store.py) |
 | Todo 列表读写 | [todo_store.py](todo_store.py) |

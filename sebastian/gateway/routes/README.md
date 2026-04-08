@@ -33,12 +33,13 @@ routes/
 | `PATCH /debug/logging` — 动态开关 LLM stream / SSE 日志 | [debug.py](debug.py) |
 | `GET /llm-providers` — 列出所有 LLM Provider（含 `thinking_capability`） | [llm_providers.py](llm_providers.py) |
 | `POST /llm-providers` — 新增 LLM Provider（支持 `thinking_capability`） | [llm_providers.py](llm_providers.py) |
-| `PUT /llm-providers/{id}` — 更新 LLM Provider（支持 `thinking_capability`） | [llm_providers.py](llm_providers.py) |
+| `PUT /llm-providers/{id}` — 更新 LLM Provider（`exclude_unset` 语义：省略字段保留原值，显式 `null` 清空） | [llm_providers.py](llm_providers.py) |
 | `DELETE /llm-providers/{id}` — 删除 LLM Provider | [llm_providers.py](llm_providers.py) |
 | `GET /sessions` — 列出会话（支持过滤/分页） | [sessions.py](sessions.py) |
 | `GET /sessions/{id}` — 查询单个会话及其消息 | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}` — 删除会话 | [sessions.py](sessions.py) |
 | `POST /sessions/{id}/turns` — 向已有会话发送消息（支持 `thinking_effort`） | [sessions.py](sessions.py) |
+| `POST /agents/{agent_type}/sessions` — 创建 sub-agent 会话（首条消息即透传 `thinking_effort`，无需先建会话再发 turn） | [sessions.py](sessions.py) |
 | `GET /sessions/{id}/tasks` — 列出会话下的 Task | [sessions.py](sessions.py) |
 | `POST /sessions/{id}/tasks/{tid}/pause` — 暂停 Task | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}/tasks/{tid}` — 取消 Task（DELETE）| [sessions.py](sessions.py) |

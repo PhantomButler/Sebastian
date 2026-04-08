@@ -64,7 +64,11 @@ llm/
 
 **注意**：`OpenAICompatProvider` 收到 `capability=toggle` 时默认 no-op。OpenAI 兼容接口没有统一的"布尔 thinking"字段标准，若将来需要支持具体某个后端，再在 `openai_compat.py` 加分支。
 
-Anthropic 旧版 effort 模式的 budget_tokens 映射写在 `AnthropicProvider.FIXED_EFFORT_TO_BUDGET` 常量表里（low=2048 / medium=8192 / high=24576）。budget_tokens 必须小于 max_tokens，超出时自动 clamp 到 `max(1024, max_tokens - 1)`；如果连 1024 都放不下则禁用 thinking。
+Anthropic 旧版 effort 模式的 budget_tokens 映射写在 `AnthropicProvider.FIXED_EFFORT_TO_BUDGET` 常量表里（low=2048 / medium=8192 / high=24576）。**快速失败原则**：
+- `thinking_effort` 不在 low/medium/high 中 → 抛 `ValueError`（不静默兜底）
+- `budget_tokens >= max_tokens` → 抛 `ValueError`，要求调用方显式抬高 `max_tokens` 或降档
+
+UI 层需在 clamp 规则中保证传入 Provider 的 effort 始终合法（见 `ui/mobile/src/store/composer.ts` 的 `clampAllToCapability`）。
 
 ## 修改导航
 
