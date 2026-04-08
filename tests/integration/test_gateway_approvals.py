@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import os
 from collections.abc import Iterator
@@ -21,7 +22,6 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
     password_hash = hash_password("testpass")
 
     with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setenv("SEBASTIAN_OWNER_PASSWORD_HASH", password_hash)
         monkeypatch.setenv("SEBASTIAN_DATA_DIR", str(tmp_path))
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
         monkeypatch.setenv("SEBASTIAN_JWT_SECRET", "test-secret-key")
@@ -29,11 +29,11 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         import sebastian.config as cfg_module
 
         importlib.reload(cfg_module)
-        monkeypatch.setattr(
-            cfg_module.settings,
-            "sebastian_owner_password_hash",
-            password_hash,
-        )
+
+        import sebastian.store.database as db_module
+
+        db_module._engine = None
+        db_module._session_factory = None
 
         from starlette.testclient import TestClient
 
@@ -41,6 +41,16 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
 
         app = create_app()
         with TestClient(app, raise_server_exceptions=True) as test_client:
+            import sebastian.gateway.state as state
+            from sebastian.store.owner_store import OwnerStore
+
+            async def _seed_owner() -> None:
+                await OwnerStore(state.db_factory).create_owner(
+                    name="test-owner",
+                    password_hash=password_hash,
+                )
+
+            asyncio.run(_seed_owner())
             yield test_client
 
 

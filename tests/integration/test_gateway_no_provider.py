@@ -11,6 +11,8 @@ from starlette.testclient import TestClient
 @pytest.fixture
 def empty_db_client(tmp_path):
     """Gateway with empty DB (no LLM provider configured)."""
+    import asyncio
+
     from sebastian.gateway.auth import hash_password
 
     password_hash = hash_password("testpass")
@@ -18,7 +20,6 @@ def empty_db_client(tmp_path):
     with patch.dict(
         os.environ,
         {
-            "SEBASTIAN_OWNER_PASSWORD_HASH": password_hash,
             "SEBASTIAN_DATA_DIR": str(tmp_path),
             "SEBASTIAN_JWT_SECRET": "test-secret-key",
         },
@@ -32,14 +33,23 @@ def empty_db_client(tmp_path):
         db_module._engine = None
         db_module._session_factory = None
 
-        with patch.object(cfg_module.settings, "sebastian_owner_password_hash", password_hash):
-            from sebastian.gateway.app import create_app
+        from sebastian.gateway.app import create_app
 
-            test_app = create_app()
-            with TestClient(test_app, raise_server_exceptions=True) as test_client:
-                yield test_client
-            db_module._engine = None
-            db_module._session_factory = None
+        test_app = create_app()
+        with TestClient(test_app, raise_server_exceptions=True) as test_client:
+            import sebastian.gateway.state as state
+            from sebastian.store.owner_store import OwnerStore
+
+            async def _seed_owner() -> None:
+                await OwnerStore(state.db_factory).create_owner(
+                    name="test-owner",
+                    password_hash=password_hash,
+                )
+
+            asyncio.run(_seed_owner())
+            yield test_client
+        db_module._engine = None
+        db_module._session_factory = None
 
 
 def _login(client: TestClient) -> str:

@@ -45,8 +45,7 @@ class JwtSigner:
             self._secret = fallback_secret
         else:
             raise RuntimeError(
-                f"No JWT secret available (file {secret_key_path} missing and "
-                "no fallback provided)"
+                f"No JWT secret available (file {secret_key_path} missing and no fallback provided)"
             )
 
     def encode(self, payload: dict[str, Any]) -> str:

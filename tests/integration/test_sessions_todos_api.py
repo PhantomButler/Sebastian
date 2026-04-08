@@ -17,7 +17,6 @@ def client(tmp_path):
     with patch.dict(
         os.environ,
         {
-            "SEBASTIAN_OWNER_PASSWORD_HASH": password_hash,
             "SEBASTIAN_DATA_DIR": str(tmp_path),
             "ANTHROPIC_API_KEY": "test-key-not-real",
             "SEBASTIAN_JWT_SECRET": "test-secret-key",
@@ -27,18 +26,32 @@ def client(tmp_path):
 
         importlib.reload(cfg_module)
 
-        with patch.object(cfg_module.settings, "sebastian_owner_password_hash", password_hash):
-            with patch(
-                "sebastian.gateway.routes.turns._ensure_llm_ready",
-                new_callable=AsyncMock,
-            ):
-                from starlette.testclient import TestClient
+        with patch(
+            "sebastian.gateway.routes.turns._ensure_llm_ready",
+            new_callable=AsyncMock,
+        ):
+            import sebastian.store.database as db_module
 
-                from sebastian.gateway.app import create_app
+            db_module._engine = None
+            db_module._session_factory = None
 
-                test_app = create_app()
-                with TestClient(test_app, raise_server_exceptions=True) as test_client:
-                    yield test_client
+            from starlette.testclient import TestClient
+
+            from sebastian.gateway.app import create_app
+
+            test_app = create_app()
+            with TestClient(test_app, raise_server_exceptions=True) as test_client:
+                import sebastian.gateway.state as state
+                from sebastian.store.owner_store import OwnerStore
+
+                async def _seed_owner() -> None:
+                    await OwnerStore(state.db_factory).create_owner(
+                        name="test-owner",
+                        password_hash=password_hash,
+                    )
+
+                asyncio.run(_seed_owner())
+                yield test_client
 
 
 def _login(http_client) -> str:

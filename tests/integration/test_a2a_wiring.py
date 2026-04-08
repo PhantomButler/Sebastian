@@ -8,7 +8,6 @@ import pytest
 @pytest.mark.asyncio
 async def test_gateway_starts_with_agent_registry_and_instances() -> None:
     os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test")
-    os.environ.setdefault("SEBASTIAN_OWNER_PASSWORD_HASH", "")
 
     from sebastian.gateway.app import create_app
 
