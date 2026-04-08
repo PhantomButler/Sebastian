@@ -149,6 +149,42 @@ async def test_run_streaming_publishes_turn_events(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_base_agent_run_streaming_passes_thinking_effort_to_loop(tmp_path: Path) -> None:
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TurnDone
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    sessions_dir = tmp_path / "sessions"
+    store = SessionStore(sessions_dir)
+    await store.create_session(
+        Session(
+            id="thinking-session",
+            agent_type="sebastian",
+            title="Thinking session",
+        )
+    )
+
+    agent = TestAgent(MagicMock(), store)
+
+    captured: dict = {}
+
+    async def fake_stream(*args, **kwargs):
+        captured.update(kwargs)
+        yield TurnDone(full_text="done")
+
+    agent._loop.stream = fake_stream  # type: ignore[attr-defined]
+
+    result = await agent.run_streaming("hello", "thinking-session", thinking_effort="medium")
+
+    assert result == "done"
+    assert captured.get("thinking_effort") == "medium"
+
+
+@pytest.mark.asyncio
 async def test_run_streaming_interrupt_publishes_interrupted(tmp_path: Path) -> None:
     from sebastian.core.base_agent import BaseAgent
     from sebastian.core.stream_events import TextBlockStart, TextDelta
