@@ -10,10 +10,25 @@ import {
 } from 'react-native';
 import { useLLMProvidersStore } from '../../store/llmProviders';
 import { useSettingsStore } from '../../store/settings';
-import type { LLMProvider, LLMProviderCreate, LLMProviderType } from '../../types';
+import { syncCurrentThinkingCapability } from '../../api/llm';
+import type {
+  LLMProvider,
+  LLMProviderCreate,
+  LLMProviderType,
+  ThinkingCapability,
+} from '../../types';
 import { useTheme } from '../../theme/ThemeContext';
 
 const PROVIDER_TYPES: LLMProviderType[] = ['anthropic', 'openai'];
+
+const CAPABILITY_OPTIONS: { value: ThinkingCapability | null; label: string; hint: string }[] = [
+  { value: null, label: '未设置', hint: '后端不会注入思考相关参数' },
+  { value: 'none', label: 'none', hint: '模型不支持思考控制' },
+  { value: 'toggle', label: 'toggle', hint: '只支持开/关，无档位' },
+  { value: 'effort', label: 'effort', hint: '支持 low/medium/high 三档' },
+  { value: 'adaptive', label: 'adaptive', hint: 'Anthropic Adaptive（含 max）' },
+  { value: 'always_on', label: 'always_on', hint: '模型必然思考，UI 固定' },
+];
 
 const DEFAULT_MODELS: Record<LLMProviderType, string> = {
   anthropic: 'claude-opus-4-6',
@@ -38,6 +53,9 @@ function ProviderForm({
   const [model, setModel] = useState(initial?.model ?? DEFAULT_MODELS.anthropic);
   const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? '');
   const [isDefault, setIsDefault] = useState(initial?.is_default ?? false);
+  const [thinkingCapability, setThinkingCapability] = useState<ThinkingCapability | null>(
+    initial?.thinking_capability ?? null,
+  );
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -53,6 +71,7 @@ function ProviderForm({
         api_key: apiKey.trim(),
         model: model.trim(),
         base_url: baseUrl.trim() || null,
+        thinking_capability: thinkingCapability,
         is_default: isDefault,
       });
     } finally {
@@ -127,6 +146,37 @@ function ProviderForm({
         <Text style={[styles.toggleValue, { color: colors.accent }]}>{isDefault ? '✓' : '○'}</Text>
       </TouchableOpacity>
 
+      <Text style={[styles.label, { color: colors.textSecondary }]}>思考能力（thinking_capability）</Text>
+      <View style={styles.capabilityList}>
+        {CAPABILITY_OPTIONS.map((opt) => {
+          const active = thinkingCapability === opt.value;
+          return (
+            <TouchableOpacity
+              key={opt.label}
+              style={[
+                styles.capabilityRow,
+                {
+                  backgroundColor: active ? colors.activeSessionBg : colors.inputBackground,
+                  borderColor: active ? colors.accent : 'transparent',
+                },
+              ]}
+              onPress={() => setThinkingCapability(opt.value)}
+              activeOpacity={0.7}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.capabilityLabel, { color: active ? colors.accent : colors.text }]}>
+                  {opt.label}
+                </Text>
+                <Text style={[styles.capabilityHint, { color: colors.textSecondary }]}>
+                  {opt.hint}
+                </Text>
+              </View>
+              {active && <Text style={{ color: colors.accent, fontSize: 16 }}>✓</Text>}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       <View style={styles.buttonRow}>
         <TouchableOpacity style={[styles.btn, styles.btnCancel, { backgroundColor: colors.inputBackground }]} onPress={onCancel}>
           <Text style={[styles.btnCancelText, { color: colors.text }]}>取消</Text>
@@ -156,12 +206,14 @@ export function LLMProviderConfig() {
 
   async function handleCreate(data: LLMProviderCreate) {
     await create(data);
+    await syncCurrentThinkingCapability();
     setShowForm(false);
   }
 
   async function handleUpdate(data: LLMProviderCreate) {
     if (!editing) return;
     await update(editing.id, data);
+    await syncCurrentThinkingCapability();
     setEditing(null);
   }
 
@@ -292,6 +344,17 @@ const styles = StyleSheet.create({
   },
   toggleLabel: { fontSize: 17 },
   toggleValue: { fontSize: 20 },
+  capabilityList: { gap: 8 },
+  capabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  capabilityLabel: { fontSize: 15, fontWeight: '500' },
+  capabilityHint: { fontSize: 12, marginTop: 2 },
   buttonRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
   btn: { flex: 1, minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   btnCancel: {},

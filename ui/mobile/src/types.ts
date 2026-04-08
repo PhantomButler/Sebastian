@@ -150,6 +150,7 @@ export interface LLMProvider {
   api_key: string;
   model: string;
   thinking_format: ThinkingFormat;
+  thinking_capability: ThinkingCapability | null;
   is_default: boolean;
   created_at: string;
   updated_at: string;
@@ -162,6 +163,7 @@ export interface LLMProviderCreate {
   model: string;
   base_url?: string | null;
   thinking_format?: ThinkingFormat;
+  thinking_capability?: ThinkingCapability | null;
   is_default?: boolean;
 }
 
