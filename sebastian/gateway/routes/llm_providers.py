@@ -19,6 +19,7 @@ class LLMProviderCreate(BaseModel):
     model: str
     base_url: str | None = None
     thinking_format: str | None = None  # None | "reasoning_content" | "think_tags"
+    thinking_capability: str | None = None
     is_default: bool = False
 
 
@@ -28,6 +29,7 @@ class LLMProviderUpdate(BaseModel):
     model: str | None = None
     base_url: str | None = None
     thinking_format: str | None = None
+    thinking_capability: str | None = None
     is_default: bool | None = None
 
 
@@ -39,6 +41,7 @@ def _record_to_dict(record: Any) -> dict[str, Any]:
         "base_url": record.base_url,
         "model": record.model,
         "thinking_format": record.thinking_format,
+        "thinking_capability": record.thinking_capability,
         "is_default": record.is_default,
         "created_at": record.created_at.isoformat(),
         "updated_at": record.updated_at.isoformat(),
@@ -71,6 +74,7 @@ async def create_llm_provider(
         model=body.model,
         base_url=body.base_url,
         thinking_format=body.thinking_format,
+        thinking_capability=body.thinking_capability,
         is_default=body.is_default,
     )
     await state.llm_registry.create(record)
@@ -97,6 +101,8 @@ async def update_llm_provider(
         updates["base_url"] = body.base_url
     if body.thinking_format is not None:
         updates["thinking_format"] = body.thinking_format
+    if body.thinking_capability is not None:
+        updates["thinking_capability"] = body.thinking_capability
     if body.is_default is not None:
         updates["is_default"] = body.is_default
 
