@@ -14,8 +14,10 @@ import { sendTurn, cancelTurn } from '@/src/api/turns';
 import { deleteSession } from '@/src/api/sessions';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from '@/src/components/common/Sidebar';
+import { ContentPanGestureArea } from '@/src/components/common/ContentPanGestureArea';
 import { EmptyState } from '@/src/components/common/EmptyState';
 import { AppSidebar } from '@/src/components/chat/AppSidebar';
+import { TodoSidebar } from '@/src/components/chat/TodoSidebar';
 import { Composer } from '@/src/components/composer';
 import { ConversationView } from '@/src/components/conversation';
 import { ErrorBanner } from '@/src/components/conversation/ErrorBanner';
@@ -29,6 +31,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [todoSidebarOpen, setTodoSidebarOpen] = useState(false);
 
   const {
     currentSessionId, draftSession,
@@ -155,41 +158,46 @@ export default function ChatScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Sebastian</Text>
       </View>
 
-      <KeyboardGestureArea
-        style={styles.gestureArea}
-        interpolator="ios"
-        offset={COMPOSER_DEFAULT_HEIGHT}
-        textInputNativeID="composer-input"
+      <ContentPanGestureArea
+        onOpenLeft={() => setSidebarOpen(true)}
+        onOpenRight={() => setTodoSidebarOpen(true)}
       >
-        {isEmpty ? (
-          currentBanner ? (
-            <View style={styles.emptyContainer}>
-              <ErrorBanner
-                message={currentBanner.message}
-                onAction={() => router.push('/settings')}
-              />
-            </View>
+        <KeyboardGestureArea
+          style={styles.gestureArea}
+          interpolator="ios"
+          offset={COMPOSER_DEFAULT_HEIGHT}
+          textInputNativeID="composer-input"
+        >
+          {isEmpty ? (
+            currentBanner ? (
+              <View style={styles.emptyContainer}>
+                <ErrorBanner
+                  message={currentBanner.message}
+                  onAction={() => router.push('/settings')}
+                />
+              </View>
+            ) : (
+              <EmptyState message="向 Sebastian 发送消息开始对话" />
+            )
           ) : (
-            <EmptyState message="向 Sebastian 发送消息开始对话" />
-          )
-        ) : (
-          <ConversationView
-            sessionId={currentSessionId}
-            errorBanner={currentBanner}
-            onBannerAction={() => router.push('/settings')}
-            renderScrollComponent={renderScrollComponent}
-          />
-        )}
+            <ConversationView
+              sessionId={currentSessionId}
+              errorBanner={currentBanner}
+              onBannerAction={() => router.push('/settings')}
+              renderScrollComponent={renderScrollComponent}
+            />
+          )}
 
-        <KeyboardStickyView offset={stickyOffset} style={styles.stickyComposer}>
-          <Composer
-            sessionId={currentSessionId}
-            isWorking={isWorking}
-            onSend={handleSend}
-            onStop={handleStop}
-          />
-        </KeyboardStickyView>
-      </KeyboardGestureArea>
+          <KeyboardStickyView offset={stickyOffset} style={styles.stickyComposer}>
+            <Composer
+              sessionId={currentSessionId}
+              isWorking={isWorking}
+              onSend={handleSend}
+              onStop={handleStop}
+            />
+          </KeyboardStickyView>
+        </KeyboardGestureArea>
+      </ContentPanGestureArea>
 
       <Sidebar
         visible={sidebarOpen}
@@ -204,6 +212,19 @@ export default function ChatScreen() {
           onNewChat={() => { startDraft(); setSidebarOpen(false); }}
           onDelete={handleDeleteSession}
           onClose={() => setSidebarOpen(false)}
+        />
+      </Sidebar>
+
+      <Sidebar
+        visible={todoSidebarOpen}
+        side="right"
+        onOpen={() => setTodoSidebarOpen(true)}
+        onClose={() => setTodoSidebarOpen(false)}
+      >
+        <TodoSidebar
+          sessionId={currentSessionId}
+          agentType="sebastian"
+          onClose={() => setTodoSidebarOpen(false)}
         />
       </Sidebar>
     </SafeAreaView>
