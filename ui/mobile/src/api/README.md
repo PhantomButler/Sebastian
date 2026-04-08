@@ -17,6 +17,7 @@ api/
 ├── agents.ts          # Sub-Agent 列表相关接口
 ├── approvals.ts       # 审批项查询与操作
 ├── llmProviders.ts    # LLM Provider 增删改查（CRUD）
+├── todos.ts           # session 级 todo 列表读取（GET /sessions/:id/todos）
 ├── debug.ts           # 调试日志开关（GET/PATCH /debug/logging）
 └── sse.ts             # SSE 连接层（全局事件流 + 会话级流式）
 ```
@@ -32,6 +33,7 @@ api/
 | 修改 Sub-Agent 列表接口 | [agents.ts](agents.ts) |
 | 修改审批流程接口 | [approvals.ts](approvals.ts) |
 | 修改 LLM Provider 配置接口 | [llmProviders.ts](llmProviders.ts) |
+| 修改 session 级 todo 列表接口 | [todos.ts](todos.ts) |
 | 修改 SSE 连接协议 / Last-Event-ID 续接 | [sse.ts](sse.ts) |
 | 修改调试日志开关接口 | [debug.ts](debug.ts) |
 

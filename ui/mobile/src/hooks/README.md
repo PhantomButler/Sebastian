@@ -14,7 +14,8 @@ hooks/
 ├── useSSE.ts           # 全局 SSE 连接（task 事件、审批事件、App 前后台切换管理）
 ├── useSessions.ts      # React Query：Session 列表查询
 ├── useMessages.ts      # React Query：会话消息查询
-└── useAgents.ts        # React Query：Sub-Agent 列表查询
+├── useAgents.ts        # React Query：Sub-Agent 列表查询
+└── useSessionTodos.ts  # React Query：session 级 todo 列表查询（key: ['session-todos', sessionId]）
 ```
 
 ## 修改导航
@@ -26,6 +27,7 @@ hooks/
 | 修改 Session 列表数据获取 / 缓存失效 | [useSessions.ts](useSessions.ts) |
 | 修改消息列表查询逻辑 | [useMessages.ts](useMessages.ts) |
 | 修改 Sub-Agent 列表查询逻辑 | [useAgents.ts](useAgents.ts) |
+| 修改 session 级 todo 列表查询逻辑 | [useSessionTodos.ts](useSessionTodos.ts) |
 
 ---
 
