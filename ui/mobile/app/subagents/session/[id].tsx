@@ -12,18 +12,16 @@ import {
 import {
   createAgentSession,
   getSessionDetail,
-  getSessionTasks,
   sendTurnToSession,
 } from '../../../src/api/sessions';
 import { useConversationStore } from '../../../src/store/conversation';
 import { Composer } from '../../../src/components/composer';
 import { ConversationView } from '../../../src/components/conversation';
-import { SessionDetailView } from '../../../src/components/subagents/SessionDetailView';
 import { ErrorBanner } from '../../../src/components/conversation/ErrorBanner';
 import { COMPOSER_DEFAULT_HEIGHT } from '../../../src/components/composer/constants';
-import type { TaskDetail } from '../../../src/types';
-
-type Tab = 'messages' | 'tasks';
+import { ContentPanGestureArea } from '../../../src/components/common/ContentPanGestureArea';
+import { TodoSidebar } from '../../../src/components/chat/TodoSidebar';
+import { Sidebar } from '../../../src/components/common/Sidebar';
 
 const MOCK_MESSAGES = [
   {
@@ -39,27 +37,6 @@ const MOCK_MESSAGES = [
     role: 'assistant' as const,
     content: '我已经把盘中异动拆成了两条任务，一条看新闻，一条看技术面。',
     createdAt: '2026-04-02T10:00:12Z',
-  },
-];
-
-const MOCK_TASKS: TaskDetail[] = [
-  {
-    id: 'mock-task-1',
-    session_id: 'mock-session',
-    goal: '收集盘前新闻并标记影响仓位的事件',
-    status: 'running',
-    assigned_agent: 'stock',
-    created_at: '2026-04-02T10:00:15Z',
-    completed_at: null,
-  },
-  {
-    id: 'mock-task-2',
-    session_id: 'mock-session',
-    goal: '对比昨日与今日的成交量结构',
-    status: 'completed',
-    assigned_agent: 'stock',
-    created_at: '2026-04-02T10:00:20Z',
-    completed_at: '2026-04-02T10:02:00Z',
   },
 ];
 
@@ -84,8 +61,8 @@ function buildMockDetail(sessionId: string, agentName: string): MockDetail {
       title: '模拟 Supervision 会话',
       status: 'active',
       updated_at: '2026-04-02T10:03:00Z',
-      task_count: MOCK_TASKS.length,
-      active_task_count: 1,
+      task_count: 0,
+      active_task_count: 0,
     },
     messages: MOCK_MESSAGES.map((message) => ({
       role: message.role,
@@ -107,9 +84,9 @@ export default function SessionDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>('messages');
   const [sending, setSending] = useState(false);
   const [realSessionId, setRealSessionId] = useState<string | null>(null);
+  const [todoSidebarOpen, setTodoSidebarOpen] = useState(false);
   const sendingRef = useRef(false);
   const effectiveSessionId = realSessionId || (isNewSession ? null : sessionId);
   const banner = useConversationStore(
@@ -122,18 +99,11 @@ export default function SessionDetailScreen() {
     enabled: !!effectiveSessionId && !isMockSession,
   });
 
-  const { data: remoteTasks = [] } = useQuery({
-    queryKey: ['session-tasks', effectiveSessionId, agentName],
-    queryFn: () => getSessionTasks(effectiveSessionId!, agentName),
-    enabled: !!effectiveSessionId && !isMockSession,
-  });
-
   const detail = useMemo(
     () => (isMockSession ? buildMockDetail(sessionId, agentName) : remoteDetail),
     [agentName, isMockSession, remoteDetail, sessionId],
   );
   const displayTitle = isNewSession && !realSessionId ? '新对话' : (detail?.session.title ?? '会话详情');
-  const tasks = isMockSession ? MOCK_TASKS : remoteTasks;
 
   const stickyOffset = useMemo(() => ({ opened: insets.bottom }), [insets.bottom]);
 
@@ -203,53 +173,44 @@ export default function SessionDetailScreen() {
           {displayTitle}
         </Text>
       </View>
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'messages' && styles.tabActive]}
-          onPress={() => setTab('messages')}
-        >
-          <Text
-            style={[styles.tabText, tab === 'messages' && styles.tabTextActive]}
-          >
-            消息
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'tasks' && styles.tabActive]}
-          onPress={() => setTab('tasks')}
-        >
-          <Text style={[styles.tabText, tab === 'tasks' && styles.tabTextActive]}>
-            任务 {tasks.length > 0 ? `(${tasks.length})` : ''}
-          </Text>
-        </TouchableOpacity>
-      </View>
 
-      <KeyboardGestureArea
-        style={styles.gestureArea}
-        interpolator="ios"
-        offset={COMPOSER_DEFAULT_HEIGHT}
-        textInputNativeID="composer-input"
-      >
-        {tab === 'messages' ? (
+      <ContentPanGestureArea onOpenRight={() => setTodoSidebarOpen(true)}>
+        <KeyboardGestureArea
+          style={styles.gestureArea}
+          interpolator="ios"
+          offset={COMPOSER_DEFAULT_HEIGHT}
+          textInputNativeID="composer-input"
+        >
           <ConversationView
             sessionId={isMockSession ? null : effectiveSessionId}
             errorBanner={banner}
             onBannerAction={() => router.push('/settings')}
             renderScrollComponent={renderScrollComponent}
           />
-        ) : (
-          <SessionDetailView tasks={tasks} />
-        )}
 
-        <KeyboardStickyView offset={stickyOffset} style={styles.stickyComposer}>
-          <Composer
-            sessionId={effectiveSessionId}
-            isWorking={sending}
-            onSend={handleSend}
-            onStop={async () => {}}
-          />
-        </KeyboardStickyView>
-      </KeyboardGestureArea>
+          <KeyboardStickyView offset={stickyOffset} style={styles.stickyComposer}>
+            <Composer
+              sessionId={effectiveSessionId}
+              isWorking={sending}
+              onSend={handleSend}
+              onStop={async () => {}}
+            />
+          </KeyboardStickyView>
+        </KeyboardGestureArea>
+      </ContentPanGestureArea>
+
+      <Sidebar
+        visible={todoSidebarOpen}
+        side="right"
+        onOpen={() => setTodoSidebarOpen(true)}
+        onClose={() => setTodoSidebarOpen(false)}
+      >
+        <TodoSidebar
+          sessionId={effectiveSessionId}
+          agentType={agentName}
+          onClose={() => setTodoSidebarOpen(false)}
+        />
+      </Sidebar>
     </SafeAreaView>
   );
 }
@@ -268,16 +229,6 @@ const styles = StyleSheet.create({
   back: { padding: 8, marginRight: 4 },
   backText: { fontSize: 16, color: '#007AFF' },
   title: { flex: 1, fontSize: 15, fontWeight: '600', color: '#111111' },
-  tabs: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: '#007AFF' },
-  tabText: { fontSize: 14, color: '#888888' },
-  tabTextActive: { color: '#007AFF', fontWeight: '600' },
   gestureArea: { flex: 1 },
   stickyComposer: {
     position: 'absolute',
