@@ -138,6 +138,83 @@ async def todo_write(todos: list[dict]) -> ToolResult:
 - 校验：每项必须有 `content`（非空）、`activeForm`（非空）、`status ∈ {pending, in_progress, completed}`
 - `_validate_todos` 实现放同目录 `_validation.py`（如果简单也可内联）
 
+#### 3.1.1 覆盖式语义说明
+
+这是本设计最反直觉、但也最关键的一点：**LLM 从不"更新"或"增量修改"单个 todo，也不传 id 或序号**。每次调用 `todo_write`，LLM 传入完整的新列表，工具整体覆盖 `todos.json`。没有 create/update/delete 的动作区分——只有一个动作：**写入当前完整状态**。
+
+所有操作都通过"重传整个列表"实现：
+
+**场景 A — 首次创建**
+
+LLM 发现要做 3 步工作，写入初始列表：
+
+```json
+{
+  "todos": [
+    {"content": "写 LoginForm 组件", "activeForm": "正在写 LoginForm 组件", "status": "in_progress"},
+    {"content": "接入 auth API",     "activeForm": "正在接入 auth API",     "status": "pending"},
+    {"content": "加路由守卫",        "activeForm": "正在加路由守卫",        "status": "pending"}
+  ]
+}
+```
+
+文件不存在则创建。
+
+**场景 B — 完成一项、开始下一项**
+
+LLM 重传**整个**列表，只改动相关项的 status：
+
+```json
+{
+  "todos": [
+    {"content": "写 LoginForm 组件", "activeForm": "...", "status": "completed"},
+    {"content": "接入 auth API",     "activeForm": "...", "status": "in_progress"},
+    {"content": "加路由守卫",        "activeForm": "...", "status": "pending"}
+  ]
+}
+```
+
+**场景 C — 中途插入新项**
+
+LLM 自行决定新项的插入位置，重写整个列表：
+
+```json
+{
+  "todos": [
+    {"content": "写 LoginForm 组件",     "activeForm": "...", "status": "completed"},
+    {"content": "写通用 error handler",  "activeForm": "...", "status": "in_progress"},
+    {"content": "接入 auth API",         "activeForm": "...", "status": "pending"},
+    {"content": "加路由守卫",            "activeForm": "...", "status": "pending"}
+  ]
+}
+```
+
+**场景 D — 开启全新任务**
+
+用户抛出无关的新任务时，LLM 写一个全新列表，旧列表被整体替换（包括已 completed 的历史项）：
+
+```json
+{
+  "todos": [
+    {"content": "写 RegisterForm 组件", "activeForm": "...", "status": "in_progress"},
+    {"content": "加表单校验",           "activeForm": "...", "status": "pending"}
+  ]
+}
+```
+
+旧的登录页 todo 全部消失。"创建新列表"和"更新现有列表"是同一个动作，由 LLM 自己决定是否携带历史项。
+
+**LLM 如何知道"当前列表长什么样"**：通过 system prompt 注入（见下）。LLM 每轮都能在上下文里看到最新的 todos 快照，然后在其基础上做增删改，再整体回写。它**不需要 read tool**。
+
+**为什么不引入 id / 序号**：
+
+1. 有 id 就要维护 id 的稳定性、生命周期、引用一致性，LLM 容易传错 id 更新错项
+2. 覆盖式让 LLM 用最自然的方式表达意图——它脑子里维护的就是"一份列表"，不需要翻译成"update id=3 的 status"
+3. 列表通常只有 3-10 项，整体传输的 token 成本可忽略
+4. 位置即身份，LLM 可以自然表达"在第 2 位插入"这类人类思维
+
+#### 3.1.2 LLM 获取当前 todo 状态的路径
+
 本期**不提供独立的 read tool**。Todo 列表通过两条路径让 LLM 可见：
 
 1. **System prompt 注入**：每轮 agent loop 开始前，把当前 `todos.json` 的内容拼接进 system prompt（或 user-turn prefix），避免 LLM 额外 tool call
