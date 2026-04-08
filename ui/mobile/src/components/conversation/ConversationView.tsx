@@ -19,7 +19,7 @@ interface Props {
   onBannerAction?: () => void;
   // Pass KeyboardChatScrollView as renderScrollComponent for keyboard-aware scrolling.
   // If omitted, FlatList uses its built-in ScrollView (e.g. in non-chat contexts).
-  renderScrollComponent?: (props: ScrollViewProps) => React.ReactElement;
+  renderScrollComponent?: (props: ScrollViewProps) => React.ReactElement<ScrollViewProps>;
 }
 
 type ListItem =

@@ -21,7 +21,7 @@ export interface SessionMeta {
   last_activity_at: string;
 }
 
-export type AgentStatus = 'idle' | 'working';
+export type AgentStatus = 'idle' | 'working' | 'waiting_approval' | 'completed' | 'failed';
 
 export interface Agent {
   id: string;
