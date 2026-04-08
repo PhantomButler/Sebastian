@@ -26,6 +26,7 @@ def test_llm_provider_stream_signature_accepted_by_subclass() -> None:
             model: str,
             max_tokens: int,
             block_id_prefix: str = "",
+            thinking_effort: str | None = None,
         ) -> AsyncGenerator[LLMStreamEvent, None]:
             return
             yield  # make it an async generator

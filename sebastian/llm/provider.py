@@ -30,12 +30,17 @@ class LLMProvider(ABC):
         model: str,
         max_tokens: int,
         block_id_prefix: str = "",
+        thinking_effort: str | None = None,
     ) -> AsyncGenerator[LLMStreamEvent, None]:
         """Yield LLMStreamEvent objects for one complete LLM call.
 
         The last event MUST be ProviderCallEnd(stop_reason=...).
         block_id_prefix is prepended to every block_id (e.g. "b0_") to keep
         IDs unique across AgentLoop iterations.
+
+        thinking_effort: one of 'off' | 'on' | 'low' | 'medium' | 'high' | 'max' | None.
+        Each Provider interprets according to its thinking_capability; providers with
+        capability 'none' or 'always_on' ignore this parameter.
         """
         ...
         yield  # satisfy type checker that this is an async generator
