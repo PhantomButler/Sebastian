@@ -90,21 +90,22 @@ async def update_llm_provider(
     import sebastian.gateway.state as state
     from sebastian.llm.crypto import encrypt
 
+    data = body.model_dump(exclude_unset=True)
     updates: dict[str, Any] = {}
-    if body.name is not None:
-        updates["name"] = body.name
-    if body.api_key is not None:
-        updates["api_key_enc"] = encrypt(body.api_key)
-    if body.model is not None:
-        updates["model"] = body.model
-    if body.base_url is not None:
-        updates["base_url"] = body.base_url
-    if body.thinking_format is not None:
-        updates["thinking_format"] = body.thinking_format
-    if body.thinking_capability is not None:
-        updates["thinking_capability"] = body.thinking_capability
-    if body.is_default is not None:
-        updates["is_default"] = body.is_default
+    if "name" in data:
+        updates["name"] = data["name"]
+    if "api_key" in data:
+        updates["api_key_enc"] = encrypt(data["api_key"])
+    if "model" in data:
+        updates["model"] = data["model"]
+    if "base_url" in data:
+        updates["base_url"] = data["base_url"]
+    if "thinking_format" in data:
+        updates["thinking_format"] = data["thinking_format"]
+    if "thinking_capability" in data:
+        updates["thinking_capability"] = data["thinking_capability"]
+    if "is_default" in data:
+        updates["is_default"] = data["is_default"]
 
     record = await state.llm_registry.update(provider_id, **updates)
     if record is None:
