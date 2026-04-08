@@ -22,13 +22,22 @@ def serve(
 
 @app.command()
 def init(
-    password: str = typer.Option(..., prompt=True, hide_input=True, help="Owner password"),
+    headless: bool = typer.Option(
+        False, help="Non-interactive CLI wizard (for SSH / headless servers)"
+    ),
 ) -> None:
-    """Initialize Sebastian: hash owner password and print to .env."""
-    from sebastian.gateway.auth import hash_password
+    """Initialize Sebastian (create owner account + generate JWT secret)."""
+    import asyncio
 
-    hashed = hash_password(password)
-    typer.echo(f"\nAdd this to your .env:\nSEBASTIAN_OWNER_PASSWORD_HASH={hashed}\n")
+    if headless:
+        from sebastian.cli.init_wizard import run_interactive_headless_cli
+
+        asyncio.run(run_interactive_headless_cli())
+    else:
+        typer.echo(
+            "默认通过 Web 向导初始化。请运行 `sebastian serve` 并在浏览器打开提示的 URL。\n"
+            "如果当前是无头服务器，请加 --headless 进入命令行向导。"
+        )
 
 
 if __name__ == "__main__":
