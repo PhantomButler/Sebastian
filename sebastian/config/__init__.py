@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     sebastian_jwt_algorithm: str = "HS256"
     sebastian_jwt_expire_minutes: int = 43200  # 30 days
 
+    # JWT secret key file path (empty = data_dir/secret.key)
+    sebastian_secret_key_path: str = ""
+
     # Owner password (bcrypt hash, set via `sebastian init` CLI)
     sebastian_owner_password_hash: str = ""
 
@@ -75,6 +78,11 @@ class Settings(BaseSettings):
     @property
     def workspace_dir(self) -> Path:
         return self.data_dir / "workspace"
+
+    def resolved_secret_key_path(self) -> Path:
+        if self.sebastian_secret_key_path:
+            return Path(self.sebastian_secret_key_path).expanduser()
+        return Path(self.sebastian_data_dir).expanduser() / "secret.key"
 
 
 settings = Settings()
