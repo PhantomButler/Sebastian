@@ -208,3 +208,21 @@ async def test_anthropic_thinking_block_stop_carries_signature() -> None:
     assert len(stops) == 1
     assert stops[0].signature == 'sig_xyz'
     assert stops[0].thinking == 'reasoning'
+
+
+def test_effort_max_raises_for_capability_effort() -> None:
+    """capability='effort' 下传入 'max' 应抛 ValueError（'max' 仅 adaptive 允许）。"""
+    from sebastian.llm.anthropic import AnthropicProvider
+
+    provider = AnthropicProvider(api_key='sk-test', thinking_capability='effort')
+    with pytest.raises(ValueError, match="max.*not allowed.*effort"):
+        provider._build_thinking_kwargs('max', max_tokens=8192)
+
+
+def test_effort_budget_exceeds_max_tokens_raises() -> None:
+    """effort='high' (budget=24576) 但 max_tokens=8192 时应抛 ValueError。"""
+    from sebastian.llm.anthropic import AnthropicProvider
+
+    provider = AnthropicProvider(api_key='sk-test', thinking_capability='effort')
+    with pytest.raises(ValueError, match="budget_tokens.*max_tokens"):
+        provider._build_thinking_kwargs('high', max_tokens=8192)

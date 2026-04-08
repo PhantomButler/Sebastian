@@ -74,15 +74,15 @@ class AnthropicProvider(LLMProvider):
         if capability == 'effort':
             budget = self.FIXED_EFFORT_TO_BUDGET.get(thinking_effort)
             if budget is None:
-                return {}
-            # budget_tokens must be strictly less than max_tokens. If caller's
-            # max_tokens is too tight, clamp budget to max_tokens - 1 with a
-            # floor of 1024 (Anthropic minimum). If even 1024 doesn't fit,
-            # disable thinking rather than raise.
+                raise ValueError(
+                    f"thinking_effort={thinking_effort!r} not allowed for "
+                    f"thinking_capability='effort' (allowed: low/medium/high)"
+                )
             if budget >= max_tokens:
-                budget = max(1024, max_tokens - 1)
-                if budget >= max_tokens:
-                    return {}
+                raise ValueError(
+                    f"budget_tokens={budget} must be strictly less than "
+                    f"max_tokens={max_tokens}; raise max_tokens or lower effort"
+                )
             return {'thinking': {'type': 'enabled', 'budget_tokens': budget}}
 
         return {}
