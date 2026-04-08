@@ -287,6 +287,33 @@ export async function sendTurn(
 
 [sebastian/gateway/routes/sessions.py] 中 sub-agent 的 `POST /api/v1/sessions/{id}/turns` 同样需要接受 `thinking_effort` 字段并透传到对应 agent 的 `run_streaming`。改动与 §3.3 / §3.4 对称。
 
+### 3.8 切换时机与生效语义
+
+**核心原则**：effort 在 `POST /api/v1/turns` 那一刻被锁定，不存在"在 in-flight turn 中途切换 thinking 强度"的概念。这是 HTTP 请求 + LLM API 的本质决定的，不是设计选择——Anthropic 与 OpenAI 的 API 都不允许在一次调用进行中改变 thinking 参数。
+
+因此本节定义的是**前端 UI 在不同时机的行为**，而不是后端"热切换"机制。
+
+| 场景 | 行为 |
+|---|---|
+| 用户当前 turn 流式输出中，点开 EffortPicker 选了新档位 | 立刻接受，写入 `effortBySession[sessionId]` 与 `lastUserChoice`。**当前 in-flight turn 不受影响**，依然按发出时锁定的 effort 跑完。下一条 turn 自动使用新档位。 |
+| 用户改档位后立刻"中断 + 重发新消息" | 走现有 cancel 流程（[BaseAgent.run_streaming](../../sebastian/core/base_agent.py#L230) 的 `_active_streams` cancel 路径），新 turn 自然使用新档位。 |
+| 用户在 Settings 改默认 provider，导致 capability 变化 | 立刻按 §3.6 的规则把当前选中档位 clamp 到新 capability 的可用集合（max → high 等），并 toast 提示。**不影响 in-flight turn**——in-flight turn 在 BaseAgent 内已绑定当时的 Provider 实例，跑完为止。 |
+| Provider 切换发生时，picker 当前档位在新 capability 中不存在 | 自动降级到新 capability 的最高可用档位，单次 toast 提示"{原档位} 在新模型下不可用，已切换为 {新档位}"。 |
+
+**Picker 不锁定的理由**：
+
+1. **语义上 picker 控制的是"下一条消息"**，与 in-flight turn 无关。锁住反而误导用户以为 picker 跟当前流绑定。
+2. **打断场景常见**：用户经常在看到模型思考方向不对时立刻改档位 + 中断 + 重发。锁住 picker 强制用户多一步"等输出停 → 改档位 → 重发"，体验更差。
+3. **零额外状态**：不锁就不需要追踪"何时解锁"，也不会出现 SSE 异常断开导致 picker 永远锁住的边缘 bug。
+
+**不弹"下一条生效"toast 的理由**：picker 的视觉变化本身已是反馈，多一条 toast 是噪声。首次使用的引导属于文档/onboarding 的事，不该用 toast 兜底。
+
+**实现要点**：
+
+- `useComposerStore.setEffort()` 不需要任何"是否流式中"判断，直接写入。
+- `EffortPicker` 不读取 `useConversationStore` 的 `status` 字段，不做 disabled 切换。
+- Provider 切换时的 clamp 逻辑放在 `useSettingsStore` 接收 `currentThinkingCapability` 更新的副作用里：遍历 `effortBySession` 中所有非法档位，统一 clamp 并触发 toast。
+
 ---
 
 ## 4. 数据迁移
@@ -392,6 +419,7 @@ export async function sendTurn(
 - [x] 默认档位：跟随用户上次选择（持久化），首次安装为 off
 - [x] always_on 的 UI：保留位置，显示不可点的"思考·自动"徽标
 - [x] 前端档位 UI：点击 ThinkButton 弹出选择栏（ActionSheet/BottomSheet），按当前 provider capability 显示可用档位
+- [x] 切换时机：effort 在 POST /turns 时锁定；picker 不在 in-flight 期间禁用；改动应用到下一条 turn；provider 切换导致 capability 变化时 clamp + toast
 
 ---
 
