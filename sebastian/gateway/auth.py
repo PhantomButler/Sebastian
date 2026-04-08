@@ -85,6 +85,11 @@ def reset_signer() -> None:
 
     Used right after the setup wizard generates a new secret.key so that
     subsequent token operations pick it up without a process restart.
+
+    Note: there is a one-request TOCTOU window — if a request arrives between
+    a concurrent secret.key rewrite and this call, it may still use the old
+    signer for that single request. Acceptable for single-process deployment;
+    revisit if we ever run multi-worker.
     """
     global _signer
     _signer = None

@@ -40,3 +40,18 @@ def _reset_event_bus() -> Generator[None, None, None]:
     from sebastian.protocol.events.bus import bus
 
     bus.reset()
+
+
+@pytest.fixture(autouse=True)
+def _reset_jwt_signer() -> Generator[None, None, None]:
+    """Drop cached JwtSigner between tests so each test starts with a fresh signer.
+
+    The signer is a module-level singleton in `sebastian.gateway.auth`; without
+    this fixture, a test that writes a different secret.key or monkeypatches
+    settings after another test has already materialized the signer would silently
+    get stale state.
+    """
+    yield
+    from sebastian.gateway.auth import reset_signer
+
+    reset_signer()
