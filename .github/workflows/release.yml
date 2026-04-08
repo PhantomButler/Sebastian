@@ -122,6 +122,51 @@ jobs:
       - name: Restore keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/sebastian-release.keystore
+      - name: Inject release signing config into build.gradle
+        working-directory: ui/mobile/android/app
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          p = Path("build.gradle")
+          src = p.read_text()
+
+          # 1) Add release signingConfig alongside debug (idempotent).
+          if "signingConfigs.release" not in src:
+              release_block = (
+                  "        release {\n"
+                  "            if (System.getenv(\"ANDROID_KEYSTORE_FILE\")) {\n"
+                  "                storeFile file(System.getenv(\"ANDROID_KEYSTORE_FILE\"))\n"
+                  "                storePassword System.getenv(\"ANDROID_KEYSTORE_PASSWORD\")\n"
+                  "                keyAlias System.getenv(\"ANDROID_KEY_ALIAS\")\n"
+                  "                keyPassword System.getenv(\"ANDROID_KEY_PASSWORD\")\n"
+                  "            }\n"
+                  "        }\n"
+              )
+              src, n = re.subn(
+                  r"(signingConfigs\s*\{\s*\n\s*debug\s*\{[^}]*\}\s*\n)",
+                  r"\1" + release_block,
+                  src,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit("Failed to locate signingConfigs.debug to inject release block")
+
+          # 2) Point buildTypes.release at signingConfigs.release.
+          src, n = re.subn(
+              r"(buildTypes\s*\{\s*\n\s*release\s*\{[^}]*?)signingConfig signingConfigs\.debug",
+              r"\1signingConfig signingConfigs.release",
+              src,
+              count=1,
+              flags=re.S,
+          )
+          if n != 1:
+              raise SystemExit("Failed to switch buildTypes.release signingConfig")
+
+          p.write_text(src)
+          print("Injected release signingConfig")
+          PY
       - name: Gradle assembleRelease
         working-directory: ui/mobile/android
         env:
