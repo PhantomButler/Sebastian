@@ -19,6 +19,7 @@ class ThinkingDelta:
 class ThinkingBlockStop:
     block_id: str
     thinking: str  # full accumulated thinking text for this block
+    signature: str | None = None
 
 
 @dataclass

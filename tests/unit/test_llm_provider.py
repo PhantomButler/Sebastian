@@ -169,6 +169,16 @@ async def test_openai_compat_provider_streams_text_and_ends() -> None:
     ]
 
 
+def test_thinking_block_stop_has_signature_field() -> None:
+    from sebastian.core.stream_events import ThinkingBlockStop
+
+    ev = ThinkingBlockStop(block_id="b0_0", thinking="thought", signature="sig_abc")
+    assert ev.signature == "sig_abc"
+
+    ev2 = ThinkingBlockStop(block_id="b0_0", thinking="thought")
+    assert ev2.signature is None
+
+
 def test_llm_provider_record_has_thinking_capability_field() -> None:
     from sebastian.store.models import LLMProviderRecord
 
