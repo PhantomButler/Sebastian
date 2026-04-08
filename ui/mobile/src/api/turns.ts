@@ -1,13 +1,16 @@
 import axios from 'axios';
 import { apiClient } from './client';
+import type { ThinkingEffort } from '../types';
 
 export async function sendTurn(
   sessionId: string | null,
   content: string,
+  thinkingEffort: ThinkingEffort,
 ): Promise<{ sessionId: string; ts: string }> {
   const { data } = await apiClient.post<{ session_id: string; ts: string }>('/api/v1/turns', {
     session_id: sessionId,
     content,
+    thinking_effort: thinkingEffort === 'off' ? null : thinkingEffort,
   });
   return { sessionId: data.session_id, ts: data.ts };
 }

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { MessageRole, SessionMeta, TaskDetail } from '../types';
+import type { MessageRole, SessionMeta, TaskDetail, ThinkingEffort } from '../types';
 
 export interface SessionMessage {
   role: MessageRole;
@@ -80,10 +80,12 @@ export async function getSessionDetail(
 export async function sendTurnToSession(
   sessionId: string,
   content: string,
+  thinkingEffort: ThinkingEffort,
   _agent = 'sebastian',
 ): Promise<{ sessionId: string; ts: string }> {
   const { data } = await apiClient.post<TurnResponse>(`/api/v1/sessions/${sessionId}/turns`, {
     content,
+    thinking_effort: thinkingEffort === 'off' ? null : thinkingEffort,
   });
   return { sessionId: data.session_id, ts: data.ts };
 }

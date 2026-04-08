@@ -2,24 +2,19 @@ import { View, StyleSheet } from 'react-native';
 import { ThinkButton } from './ThinkButton';
 import { SendButton } from './SendButton';
 import type { ComposerState } from './types';
+import type { ThinkingEffort } from '../../types';
 
 interface Props {
   state: ComposerState;
-  thinkActive: boolean;
-  onThinkToggle: () => void;
+  effort: ThinkingEffort;
+  onEffortChange: (next: ThinkingEffort) => void;
   onSendOrStop: () => void;
 }
 
-export function ActionsRow({ state, thinkActive, onThinkToggle, onSendOrStop }: Props) {
-  const isWorking =
-    state === 'streaming' || state === 'cancelling' || state === 'sending';
+export function ActionsRow({ state, effort, onEffortChange, onSendOrStop }: Props) {
   return (
     <View style={styles.row}>
-      <ThinkButton
-        active={thinkActive}
-        onPress={onThinkToggle}
-        disabled={isWorking}
-      />
+      <ThinkButton current={effort} onChange={onEffortChange} />
       <SendButton state={state} onPress={onSendOrStop} />
     </View>
   );

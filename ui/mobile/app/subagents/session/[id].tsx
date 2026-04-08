@@ -23,6 +23,7 @@ import { ContentPanGestureArea } from '../../../src/components/common/ContentPan
 import { TodoSidebar } from '../../../src/components/chat/TodoSidebar';
 import { Sidebar } from '../../../src/components/common/Sidebar';
 import { useTheme } from '../../../src/theme/ThemeContext';
+import type { ThinkingEffort } from '../../../src/types';
 
 const MOCK_MESSAGES = [
   {
@@ -124,7 +125,7 @@ export default function SessionDetailScreen() {
   );
 
   const handleSend = useCallback(
-    async (text: string, _opts?: { thinking: boolean }) => {
+    async (text: string, opts: { effort: ThinkingEffort }) => {
       if (isMockSession) {
         Alert.alert('模拟会话', '这是用于导航测试的假数据页面。');
         return;
@@ -140,7 +141,7 @@ export default function SessionDetailScreen() {
           return;
         }
         if (!effectiveSessionId) return;
-        await sendTurnToSession(effectiveSessionId, text, agentName);
+        await sendTurnToSession(effectiveSessionId, text, opts.effort, agentName);
         useConversationStore.getState().appendUserMessage(effectiveSessionId, text);
         queryClient.invalidateQueries({
           queryKey: ['session-detail', effectiveSessionId, agentName],

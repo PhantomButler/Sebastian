@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { useComposerStore } from '../../store/composer';
+import type { ThinkingEffort } from '../../types';
 import { InputTextArea } from './InputTextArea';
 import { ActionsRow } from './ActionsRow';
 import type { ComposerState } from './types';
@@ -11,7 +12,7 @@ export interface ComposerProps {
   sessionId: string | null;
   /** True while the backend is streaming a response for this session. */
   isWorking: boolean;
-  onSend: (text: string, opts: { thinking: boolean }) => Promise<void>;
+  onSend: (text: string, opts: { effort: ThinkingEffort }) => Promise<void>;
   onStop: () => Promise<void>;
 }
 
@@ -28,8 +29,8 @@ export function Composer({
   const [isCancelling, setIsCancelling] = useState(false);
   const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const thinkActive = useComposerStore((s) => s.getThinking(sessionId));
-  const setThinking = useComposerStore((s) => s.setThinking);
+  const effort = useComposerStore((s) => s.getEffort(sessionId));
+  const setEffort = useComposerStore((s) => s.setEffort);
 
   const state: ComposerState = useMemo(() => {
     if (isCancelling) return 'cancelling';
@@ -81,7 +82,7 @@ export function Composer({
     setText('');
     setIsSending(true);
     try {
-      await onSend(content, { thinking: thinkActive });
+      await onSend(content, { effort });
     } catch {
       setText(content);
     } finally {
@@ -109,8 +110,8 @@ export function Composer({
       />
       <ActionsRow
         state={state}
-        thinkActive={thinkActive}
-        onThinkToggle={() => setThinking(sessionId, !thinkActive)}
+        effort={effort}
+        onEffortChange={(next) => setEffort(sessionId, next)}
         onSendOrStop={handleSendOrStop}
       />
     </View>

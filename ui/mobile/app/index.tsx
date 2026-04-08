@@ -12,6 +12,7 @@ import { useSessionStore } from '@/src/store/session';
 import { useSessions } from '@/src/hooks/useSessions';
 import { sendTurn, cancelTurn } from '@/src/api/turns';
 import { deleteSession } from '@/src/api/sessions';
+import type { ThinkingEffort } from '@/src/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from '@/src/components/common/Sidebar';
 import { ContentPanGestureArea } from '@/src/components/common/ContentPanGestureArea';
@@ -67,9 +68,9 @@ export default function ChatScreen() {
     [insets.bottom],
   );
 
-  async function handleSend(text: string, _opts: { thinking: boolean }) {
+  async function handleSend(text: string, opts: { effort: ThinkingEffort }) {
     try {
-      const { sessionId } = await sendTurn(currentSessionId, text);
+      const { sessionId } = await sendTurn(currentSessionId, text, opts.effort);
       if (!currentSessionId) {
         persistSession({
           id: sessionId,
