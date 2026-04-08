@@ -1,46 +1,116 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import type { StateStorage } from 'zustand/middleware';
+import type { ThinkingEffort } from '../types';
 
 const DRAFT_KEY = '__draft__';
+const STORAGE_KEY = 'sebastian-composer-v2';
+
+// Simple in-memory storage fallback for React Native
+// In production, this could be upgraded to use AsyncStorage if available
+const memoryStorage: Record<string, string> = {};
+
+const createMemoryStorage = (): StateStorage => ({
+  getItem: async (name: string) => {
+    return memoryStorage[name] ?? null;
+  },
+  setItem: async (name: string, value: string) => {
+    memoryStorage[name] = value;
+  },
+  removeItem: async (name: string) => {
+    delete memoryStorage[name];
+  },
+});
 
 interface ComposerStore {
-  thinkingBySession: Record<string, boolean>;
-  getThinking: (sessionId: string | null) => boolean;
-  setThinking: (sessionId: string | null, v: boolean) => void;
+  effortBySession: Record<string, ThinkingEffort>;
+  lastUserChoice: ThinkingEffort;
+
+  getEffort: (sessionId: string | null) => ThinkingEffort;
+  setEffort: (sessionId: string | null, effort: ThinkingEffort) => void;
   migrateDraftToSession: (newSessionId: string) => void;
   clearSession: (sessionId: string) => void;
+  clampAllToCapability: (allowedEfforts: readonly ThinkingEffort[]) => ThinkingEffort | null;
 }
 
-export const useComposerStore = create<ComposerStore>((set, get) => ({
-  thinkingBySession: {},
+function clampOne(
+  current: ThinkingEffort,
+  allowed: readonly ThinkingEffort[],
+): ThinkingEffort {
+  if (allowed.includes(current)) return current;
+  if (allowed.includes('on')) {
+    return current === 'off' ? 'off' : 'on';
+  }
+  if (current === 'max' && allowed.includes('high')) return 'high';
+  if (current === 'on' && allowed.includes('medium')) return 'medium';
+  if (allowed.includes('off')) return 'off';
+  return allowed[0] ?? 'off';
+}
 
-  getThinking(sessionId) {
-    const key = sessionId ?? DRAFT_KEY;
-    return get().thinkingBySession[key] ?? false;
-  },
+export const useComposerStore = create<ComposerStore>()(
+  persist(
+    (set, get) => ({
+      effortBySession: {},
+      lastUserChoice: 'off',
 
-  setThinking(sessionId, v) {
-    const key = sessionId ?? DRAFT_KEY;
-    set((s) => ({
-      thinkingBySession: { ...s.thinkingBySession, [key]: v },
-    }));
-  },
+      getEffort(sessionId) {
+        const key = sessionId ?? DRAFT_KEY;
+        return get().effortBySession[key] ?? get().lastUserChoice;
+      },
 
-  migrateDraftToSession(newSessionId) {
-    set((s) => {
-      const draftVal = s.thinkingBySession[DRAFT_KEY];
-      if (draftVal === undefined) return s;
-      const next = { ...s.thinkingBySession };
-      if (draftVal) next[newSessionId] = true;
-      delete next[DRAFT_KEY];
-      return { thinkingBySession: next };
-    });
-  },
+      setEffort(sessionId, effort) {
+        const key = sessionId ?? DRAFT_KEY;
+        set((s) => ({
+          effortBySession: { ...s.effortBySession, [key]: effort },
+          lastUserChoice: effort,
+        }));
+      },
 
-  clearSession(sessionId) {
-    set((s) => {
-      const next = { ...s.thinkingBySession };
-      delete next[sessionId];
-      return { thinkingBySession: next };
-    });
-  },
-}));
+      migrateDraftToSession(newSessionId) {
+        set((s) => {
+          const draftVal = s.effortBySession[DRAFT_KEY];
+          if (draftVal === undefined) return s;
+          const next = { ...s.effortBySession };
+          next[newSessionId] = draftVal;
+          delete next[DRAFT_KEY];
+          return { effortBySession: next };
+        });
+      },
+
+      clearSession(sessionId) {
+        set((s) => {
+          const next = { ...s.effortBySession };
+          delete next[sessionId];
+          return { effortBySession: next };
+        });
+      },
+
+      clampAllToCapability(allowedEfforts) {
+        const s = get();
+        let changedFromValue: ThinkingEffort | null = null;
+        const nextMap: Record<string, ThinkingEffort> = {};
+        for (const [k, v] of Object.entries(s.effortBySession)) {
+          const clamped = clampOne(v, allowedEfforts);
+          if (clamped !== v) {
+            nextMap[k] = clamped;
+            if (k === DRAFT_KEY) changedFromValue = v;
+          } else {
+            nextMap[k] = v;
+          }
+        }
+        const clampedLast = clampOne(s.lastUserChoice, allowedEfforts);
+        const lastChanged = clampedLast !== s.lastUserChoice;
+        set({
+          effortBySession: nextMap,
+          lastUserChoice: clampedLast,
+        });
+        return lastChanged ? s.lastUserChoice : changedFromValue;
+      },
+    }),
+    {
+      name: STORAGE_KEY,
+      storage: createJSONStorage(createMemoryStorage),
+      partialize: (s) => ({ lastUserChoice: s.lastUserChoice }),
+    },
+  ),
+);
