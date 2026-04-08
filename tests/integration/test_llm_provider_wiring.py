@@ -1,22 +1,33 @@
 from __future__ import annotations
 
+import importlib
 import os
 
 import pytest
 
 os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test")
-os.environ.setdefault("SEBASTIAN_OWNER_PASSWORD_HASH", "")
 
 
 @pytest.mark.asyncio
 async def test_gateway_starts_and_has_llm_registry(tmp_path) -> None:
-    import importlib
-
-    import sebastian.config as cfg_module
-
     with pytest.MonkeyPatch().context() as mp:
         mp.setenv("SEBASTIAN_DATA_DIR", str(tmp_path))
-        importlib.reload(cfg_module)
+        importlib.reload(importlib.import_module("sebastian.config"))
+
+        import sebastian.store.database as db_module
+
+        db_module._engine = None
+        db_module._session_factory = None
+
+        from sebastian.gateway.auth import hash_password
+        from sebastian.store.database import get_session_factory, init_db
+        from sebastian.store.owner_store import OwnerStore
+
+        await init_db()
+        await OwnerStore(get_session_factory()).create_owner(
+            name="test-owner", password_hash=hash_password("testpass")
+        )
+        (tmp_path / "secret.key").write_text("test-secret-key")
 
         from sebastian.gateway.app import create_app
 

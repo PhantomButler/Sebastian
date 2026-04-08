@@ -145,6 +145,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         agent_registry=state.agent_registry,
     )
 
+    # Setup mode detection: triggered when no owner OR no secret.key
+    from sebastian.gateway.setup.secret_key import SecretKeyManager
+    from sebastian.gateway.setup.security import SetupSecurity
+    from sebastian.gateway.setup.setup_routes import create_setup_router
+    from sebastian.store.owner_store import OwnerStore
+
+    owner_store = OwnerStore(db_factory)
+    secret_key = SecretKeyManager(settings.resolved_secret_key_path())
+    needs_setup = (not await owner_store.owner_exists()) or (not secret_key.exists())
+
+    app.state.setup_mode = needs_setup
+    if needs_setup:
+        token = SetupSecurity.generate_token()
+        security = SetupSecurity(token=token)
+        app.include_router(
+            create_setup_router(
+                security=security,
+                owner_store=owner_store,
+                secret_key=secret_key,
+            )
+        )
+        url = f"http://127.0.0.1:{settings.sebastian_gateway_port}/setup?token={token}"
+        print("\n" + "=" * 60)
+        print("  Sebastian 首次启动：请完成初始化")
+        print(f"  打开浏览器: {url}")
+        print("=" * 60 + "\n")
+        try:
+            import webbrowser
+
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001
+            pass
+
     logger.info("Sebastian gateway started")
     yield
     watchdog_task.cancel()
@@ -152,6 +185,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
     from sebastian.gateway.routes import (
         agents,
         approvals,
@@ -163,6 +199,16 @@ def create_app() -> FastAPI:
     )
 
     app = FastAPI(title="Sebastian Gateway", version="0.1.0", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def _setup_mode_gate(request: Request, call_next):  # type: ignore[no-untyped-def]
+        if getattr(app.state, "setup_mode", False) and not request.url.path.startswith("/setup"):
+            return JSONResponse(
+                {"detail": "Sebastian is in setup mode. Visit /setup to initialize."},
+                status_code=503,
+            )
+        return await call_next(request)
+
     app.include_router(turns.router, prefix="/api/v1")
     app.include_router(sessions.router, prefix="/api/v1")
     app.include_router(approvals.router, prefix="/api/v1")

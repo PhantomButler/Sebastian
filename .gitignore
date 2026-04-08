@@ -46,3 +46,7 @@ ui/mobile/ios/build/
 ui/web/node_modules/
 ui/web/dist/
 ui/web/.next/
+
+# Sebastian runtime secrets
+secret.key
+.sebastian/

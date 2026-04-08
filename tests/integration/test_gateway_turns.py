@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,7 +23,6 @@ def client(tmp_path):
     with patch.dict(
         os.environ,
         {
-            "SEBASTIAN_OWNER_PASSWORD_HASH": password_hash,
             "SEBASTIAN_DATA_DIR": str(tmp_path),
             "ANTHROPIC_API_KEY": "test-key-not-real",
             "SEBASTIAN_JWT_SECRET": "test-secret-key",
@@ -32,28 +32,45 @@ def client(tmp_path):
 
         importlib.reload(cfg_module)
 
-        with patch.object(cfg_module.settings, "sebastian_owner_password_hash", password_hash):
+        with patch(
+            "sebastian.gateway.routes.turns._ensure_llm_ready",
+            new_callable=AsyncMock,
+        ):
             with patch(
-                "sebastian.gateway.routes.turns._ensure_llm_ready",
+                "sebastian.orchestrator.sebas.Sebastian.run_streaming",
                 new_callable=AsyncMock,
-            ):
+                return_value="Mocked response from Sebastian.",
+            ) as mock_run_streaming:
                 with patch(
-                    "sebastian.orchestrator.sebas.Sebastian.run_streaming",
+                    "sebastian.orchestrator.sebas.Sebastian.get_or_create_session",
                     new_callable=AsyncMock,
-                    return_value="Mocked response from Sebastian.",
-                ) as mock_run_streaming:
-                    with patch(
-                        "sebastian.orchestrator.sebas.Sebastian.get_or_create_session",
-                        new_callable=AsyncMock,
-                        return_value=fake_session,
-                    ):
-                        from starlette.testclient import TestClient
+                    return_value=fake_session,
+                ):
+                    import sebastian.store.database as db_module
 
-                        from sebastian.gateway.app import create_app
+                    db_module._engine = None
+                    db_module._session_factory = None
 
-                        test_app = create_app()
-                        with TestClient(test_app, raise_server_exceptions=True) as test_client:
-                            yield test_client, mock_run_streaming, fake_session
+                    from sebastian.store.database import get_session_factory, init_db
+                    from sebastian.store.owner_store import OwnerStore
+
+                    async def _seed() -> None:
+                        await init_db()
+                        await OwnerStore(get_session_factory()).create_owner(
+                            name="test-owner",
+                            password_hash=password_hash,
+                        )
+
+                    asyncio.run(_seed())
+                    (tmp_path / "secret.key").write_text("test-secret-key")
+
+                    from starlette.testclient import TestClient
+
+                    from sebastian.gateway.app import create_app
+
+                    test_app = create_app()
+                    with TestClient(test_app, raise_server_exceptions=True) as test_client:
+                        yield test_client, mock_run_streaming, fake_session
 
 
 def _login(client) -> str:

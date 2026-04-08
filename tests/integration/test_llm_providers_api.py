@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import os
 from unittest.mock import AsyncMock, patch
@@ -16,7 +17,6 @@ def client(tmp_path):
     with patch.dict(
         os.environ,
         {
-            "SEBASTIAN_OWNER_PASSWORD_HASH": password_hash,
             "SEBASTIAN_DATA_DIR": str(tmp_path),
             "ANTHROPIC_API_KEY": "test-key-not-real",
             "SEBASTIAN_JWT_SECRET": "test-secret-key",
@@ -26,32 +26,48 @@ def client(tmp_path):
 
         importlib.reload(cfg_module)
 
-        with patch.object(cfg_module.settings, "sebastian_owner_password_hash", password_hash):
-            with patch(
-                "sebastian.gateway.routes.turns._ensure_llm_ready",
-                new_callable=AsyncMock,
-            ):
-                from starlette.testclient import TestClient
+        with patch(
+            "sebastian.gateway.routes.turns._ensure_llm_ready",
+            new_callable=AsyncMock,
+        ):
+            import sebastian.store.database as db_module
 
-                from sebastian.gateway.app import create_app
+            db_module._engine = None
+            db_module._session_factory = None
 
-                app = create_app()
-                with TestClient(app, raise_server_exceptions=True) as test_client:
-                    # Login first
-                    login_resp = test_client.post(
-                        "/api/v1/auth/login",
-                        json={"password": "testpass"},
-                    )
-                    assert login_resp.status_code == 200
-                    token = login_resp.json()["access_token"]
+            from sebastian.store.database import get_session_factory, init_db
+            from sebastian.store.owner_store import OwnerStore
 
-                    yield test_client, token
+            async def _seed() -> None:
+                await init_db()
+                await OwnerStore(get_session_factory()).create_owner(
+                    name="test-owner",
+                    password_hash=password_hash,
+                )
+
+            asyncio.run(_seed())
+            (tmp_path / "secret.key").write_text("test-secret-key")
+
+            from starlette.testclient import TestClient
+
+            from sebastian.gateway.app import create_app
+
+            app = create_app()
+            with TestClient(app, raise_server_exceptions=True) as test_client:
+                # Login first
+                login_resp = test_client.post(
+                    "/api/v1/auth/login",
+                    json={"password": "testpass"},
+                )
+                assert login_resp.status_code == 200
+                token = login_resp.json()["access_token"]
+
+                yield test_client, token
 
 
 @pytest.fixture(autouse=True)
 def set_env():
     os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test")
-    os.environ.setdefault("SEBASTIAN_OWNER_PASSWORD_HASH", "")
 
 
 def test_llm_providers_crud(client) -> None:
