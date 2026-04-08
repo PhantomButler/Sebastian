@@ -22,6 +22,7 @@ import { COMPOSER_DEFAULT_HEIGHT } from '../../../src/components/composer/consta
 import { ContentPanGestureArea } from '../../../src/components/common/ContentPanGestureArea';
 import { TodoSidebar } from '../../../src/components/chat/TodoSidebar';
 import { Sidebar } from '../../../src/components/common/Sidebar';
+import { useTheme } from '../../../src/theme/ThemeContext';
 
 const MOCK_MESSAGES = [
   {
@@ -84,6 +85,7 @@ export default function SessionDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const colors = useTheme();
   const [sending, setSending] = useState(false);
   const [realSessionId, setRealSessionId] = useState<string | null>(null);
   const [todoSidebarOpen, setTodoSidebarOpen] = useState(false);
@@ -164,12 +166,17 @@ export default function SessionDetailScreen() {
   );
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: colors.secondaryBackground }]}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.borderLight },
+        ]}
+      >
         <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-          <Text style={styles.backText}>‹ 返回</Text>
+          <Text style={[styles.backText, { color: colors.accent }]}>‹ 返回</Text>
         </TouchableOpacity>
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
           {displayTitle}
         </Text>
       </View>
@@ -216,19 +223,17 @@ export default function SessionDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1 },
   header: {
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 48,
     paddingHorizontal: 12,
   },
   back: { padding: 8, marginRight: 4 },
-  backText: { fontSize: 16, color: '#007AFF' },
-  title: { flex: 1, fontSize: 15, fontWeight: '600', color: '#111111' },
+  backText: { fontSize: 16 },
+  title: { flex: 1, fontSize: 15, fontWeight: '600' },
   gestureArea: { flex: 1 },
   stickyComposer: {
     position: 'absolute',
