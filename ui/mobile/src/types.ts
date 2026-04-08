@@ -178,3 +178,18 @@ export interface ConvSessionState {
   activeTurn: ActiveTurn | null;
   errorBanner: ErrorBanner | null;
 }
+
+// ── Todo types ────────────────────────────────────────────────────────────
+
+export type TodoStatus = 'pending' | 'in_progress' | 'completed';
+
+export interface TodoItem {
+  content: string;
+  activeForm: string;
+  status: TodoStatus;
+}
+
+export interface SessionTodosResponse {
+  todos: TodoItem[];
+  updated_at: string | null;
+}
