@@ -82,7 +82,9 @@ def test_create_provider_with_thinking_capability(client) -> None:
     data = resp.json()
     assert data["thinking_capability"] == "adaptive"
 
-    list_resp = http_client.get("/api/v1/llm-providers", headers={"Authorization": f"Bearer {token}"})
+    list_resp = http_client.get(
+        "/api/v1/llm-providers", headers={"Authorization": f"Bearer {token}"}
+    )
     assert list_resp.status_code == 200
     providers = list_resp.json()["providers"]
     created = next(p for p in providers if p["id"] == data["id"])

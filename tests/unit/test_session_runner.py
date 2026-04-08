@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from sebastian.core.types import Session, SessionStatus
+
+import pytest
+
 from sebastian.core.session_runner import run_agent_session
+from sebastian.core.types import Session, SessionStatus
 from sebastian.protocol.events.types import EventType
 
 
@@ -23,7 +25,7 @@ async def test_run_agent_session_success():
         event_bus=event_bus,
     )
 
-    agent.run_streaming.assert_awaited_once_with("write tests", "s1")
+    agent.run_streaming.assert_awaited_once_with("write tests", "s1", thinking_effort=None)
     session_store.update_session.assert_awaited_once()
     updated = session_store.update_session.call_args[0][0]
     assert updated.status == SessionStatus.COMPLETED

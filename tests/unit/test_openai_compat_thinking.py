@@ -19,7 +19,7 @@ def _build_empty_completion_stream():
         def __init__(self) -> None:
             self._yielded = False
 
-        def __aiter__(self) -> "AsyncIter":
+        def __aiter__(self) -> AsyncIter:
             return self
 
         async def __anext__(self) -> MagicMock:
@@ -147,7 +147,7 @@ def _build_reasoning_then_text_stream():
         def __init__(self) -> None:
             self._i = 0
 
-        def __aiter__(self) -> "AsyncIter":
+        def __aiter__(self) -> AsyncIter:
             return self
 
         async def __anext__(self) -> MagicMock:
