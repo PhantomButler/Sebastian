@@ -3,9 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import pytest
-
-from sebastian.cli.daemon import read_pid, write_pid, remove_pid, is_running
+from sebastian.cli.daemon import is_running, read_pid, remove_pid, write_pid
 
 
 def test_write_and_read_pid(tmp_path: Path) -> None:
