@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- 一键安装脚本在 bash `set -u` 下误把中文全角字符当成变量名的一部分导致
+  `unbound variable` 报错：`scripts/install.sh` 的 Python 版本检查和
+  `bootstrap.sh` 的 release tag 解析错误提示均用 `${VAR}` 显式包裹。
+- `bootstrap.sh` 改走 `github.com/<repo>/releases/latest` 的 302 重定向
+  解析最新 tag，避免 `api.github.com` 未认证 60/hr 限流导致 403。
+
 ## [0.2.0] - 2026-04-09
 
 ### Added
