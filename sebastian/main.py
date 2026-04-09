@@ -66,6 +66,56 @@ def serve(
 
 
 @app.command()
+def stop() -> None:
+    """Stop the background Sebastian server."""
+    from sebastian.cli.daemon import pid_path, stop_process
+    from sebastian.config import settings
+
+    pf = pid_path(settings.data_dir)
+    if stop_process(pf):
+        typer.echo("✓ Sebastian 已停止")
+    else:
+        typer.echo("Sebastian 未在运行")
+
+
+@app.command()
+def status() -> None:
+    """Check whether Sebastian is running."""
+    from sebastian.cli.daemon import is_running, pid_path, read_pid, remove_pid
+    from sebastian.config import settings
+
+    pf = pid_path(settings.data_dir)
+    pid = read_pid(pf)
+    if pid and is_running(pid):
+        typer.echo(f"✓ Sebastian 正在运行 (PID {pid})")
+    else:
+        typer.echo("Sebastian 未在运行")
+        if pid:
+            remove_pid(pf)
+
+
+@app.command()
+def logs(
+    follow: bool = typer.Option(True, "--follow/--no-follow", "-f", help="实时跟踪"),
+    lines: int = typer.Option(50, "--lines", "-n", help="显示最后 N 行"),
+) -> None:
+    """Tail Sebastian log file."""
+    import subprocess
+
+    from sebastian.config import settings
+
+    log_file = settings.data_dir / "logs" / "main.log"
+    if not log_file.exists():
+        typer.echo(f"日志文件不存在: {log_file}")
+        raise typer.Exit(code=1)
+    cmd = ["tail", f"-n{lines}"]
+    if follow:
+        cmd.append("-f")
+    cmd.append(str(log_file))
+    subprocess.run(cmd)
+
+
+@app.command()
 def update(
     check: bool = typer.Option(False, "--check", help="只检查是否有新版本，不实际升级"),
     force: bool = typer.Option(False, "--force", help="即使版本一致也强制重新下载"),
