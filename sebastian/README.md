@@ -196,7 +196,10 @@ Sub-Agent 插件目录。当前已有：
 ## 常用命令
 
 ```bash
-# 启动 gateway
+# 启动 gateway（首次会进入 Web 初始化向导）
+sebastian serve
+
+# 开发态热重载（已初始化）
 uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
 
 # 后端测试

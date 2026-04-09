@@ -16,18 +16,77 @@
 
 ## 快速开始
 
+### 一键安装（推荐，macOS / Linux）
+
 ```bash
-# 安装后端依赖
-pip install -e ".[dev,memory]"
-
-# 配置环境变量（参考 .env.example）
-cp .env.example .env
-
-# 启动后端网关
-uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
+curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash
 ```
 
-移动端开发见 [ui/mobile/README.md](ui/mobile/README.md)。
+脚本会：
+
+1. 检查 Python 3.12+ 等依赖
+2. 从最新 GitHub Release 下载源码包与 `SHA256SUMS`
+3. 校验文件指纹
+4. 解压到 `~/.sebastian/app/`
+5. 创建 venv、安装依赖、启动首次初始化向导
+
+启动后浏览器会被唤起到 `http://127.0.0.1:8000/setup?token=...`，填入主人名字与登录密码即可。
+
+### 升级到新版本
+
+```bash
+sebastian update            # 拉取最新 release，校验、原地替换、自动回滚
+sebastian update --check    # 只检查不升级
+```
+
+升级流程会保留 `.venv` / `.env` / `~/.sebastian/` 数据目录不动，最近 3 个旧版本会留作备份。
+
+### 手动安装（偏执模式）
+
+```bash
+# 1. 下载最新 release
+curl -LO https://github.com/Jaxton07/Sebastian/releases/latest/download/SHA256SUMS
+TAR=$(grep '\.tar\.gz$' SHA256SUMS | awk '{print $2}')
+curl -LO "https://github.com/Jaxton07/Sebastian/releases/latest/download/${TAR}"
+
+# 2. 校验 SHA256
+shasum -a 256 -c SHA256SUMS --ignore-missing
+
+# 3. 解压并运行
+tar xzf "${TAR}"
+cd "${TAR%.tar.gz}"
+./scripts/install.sh
+```
+
+### 从源码开发
+
+```bash
+git clone git@github.com:Jaxton07/Sebastian.git
+cd Sebastian
+pip install -e ".[dev,memory]"
+sebastian serve
+```
+
+### Android App
+
+从 [Releases 页面](https://github.com/Jaxton07/Sebastian/releases) 下载 `sebastian-app-v*.apk`，通过 `adb install` 或直接传到手机安装。
+
+首次打开 App → Settings → 填写 Server URL：
+
+- 模拟器（宿主机）：`http://10.0.2.2:8000`
+- 同局域网真机：`http://<电脑局域网 IP>:8000`
+
+### iOS
+
+本版本不分发 iOS 构建。开发者可通过 Xcode 自行 build：
+
+```bash
+cd ui/mobile
+npm install --legacy-peer-deps
+npx expo run:ios        # 需要 macOS + Xcode
+```
+
+移动端开发详情见 [ui/mobile/README.md](ui/mobile/README.md)。
 
 ## 文档
 
