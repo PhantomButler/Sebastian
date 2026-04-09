@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Added
+- `sebastian serve -d`：后台 daemon 模式运行，写 PID 到 `~/.sebastian/sebastian.pid`，
+  stdout/stderr 重定向到 `~/.sebastian/logs/sebastian.log`。
+- `sebastian stop` / `sebastian status` / `sebastian logs`：配套进程管理命令。
+- `sebastian serve` 启动时打印版本、数据目录、日志路径、监听地址等关键信息。
+- `scripts/setup-https.sh`：一键检测 Tailscale → 申请证书 → 安装 Caddy → 生成
+  Caddyfile → 启动反代。
+
+### Changed
+- `docs/DEPLOYMENT.md` 按使用场景重构为三级：局域网（最简）→ Tailscale 组网（推荐）
+  → 云服务器公网部署，每个场景独立可跟随操作。macOS 推荐 Tailscale 桌面版，
+  引入 `setup-https.sh` 一键脚本。
+
 ## [0.2.3] - 2026-04-09
 
 ### Added
