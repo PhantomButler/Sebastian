@@ -48,7 +48,7 @@ export interface ThemeColors {
 
 export const lightColors: ThemeColors = {
   background: '#FFFFFF',
-  secondaryBackground: '#F9F9F9',
+  secondaryBackground: '#FFFFFF',
   settingsBackground: '#F2F2F7',
   cardBackground: '#FFFFFF',
   inputBackground: '#F2F2F7',
