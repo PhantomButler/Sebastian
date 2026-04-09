@@ -230,24 +230,30 @@ jobs:
                         sebastian-app-v${{ inputs.version }}.apk > SHA256SUMS
           cat SHA256SUMS
       - name: Extract changelog body
-        id: changelog
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import re
+          python - <<'PY'
+          import os, re
+          version = os.environ['VERSION']
           content = open('CHANGELOG.md').read()
-          m = re.search(r'## \[${{ inputs.version }}\][^\n]*\n(.*?)(?=\n## \[|\Z)', content, re.S)
+          pattern = rf'## \[{re.escape(version)}\][^\n]*\n(.*?)(?=\n## \[|\Z)'
+          m = re.search(pattern, content, re.S)
           body = m.group(1).strip() if m else '(No changelog entry)'
-          body = body.replace('\n', '%0A').replace('\r', '')
-          print(f"body={body}")
+          with open('RELEASE_NOTES.md', 'w') as f:
+              f.write(body)
           PY
+          echo "--- RELEASE_NOTES.md ---"
+          cat RELEASE_NOTES.md
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
         run: |
           cd dist
-          gh release create "v${{ inputs.version }}" \
-            sebastian-backend-v${{ inputs.version }}.tar.gz \
-            sebastian-app-v${{ inputs.version }}.apk \
+          gh release create "v${VERSION}" \
+            "sebastian-backend-v${VERSION}.tar.gz" \
+            "sebastian-app-v${VERSION}.apk" \
             SHA256SUMS \
-            --title "v${{ inputs.version }}" \
-            --notes "${{ steps.changelog.outputs.body }}"
+            --title "v${VERSION}" \
+            --notes-file ../RELEASE_NOTES.md

@@ -14,6 +14,14 @@
   手机 App Server URL 里的 `:8000` 改成 `:8823`，或在 `.env` 里显式设置
   `SEBASTIAN_GATEWAY_PORT=8000` 保留旧行为。
 
+### Fixed
+- `release.yml` 的 publish job 不再把 CHANGELOG 内容直接拼进
+  `gh release create --notes` 的 shell 命令行：改为写入 `RELEASE_NOTES.md` 后走
+  `--notes-file`。旧写法把换行替换成 `%0A`（GitHub release body 不解 URL 编码），
+  并且当 changelog 里出现反引号时会被 shell 当成命令替换去执行，v0.2.3 发版就是
+  卡在这里。顺带把 `inputs.version` 通过 `env:` 传入而非直接 `${{ }}` 插值，
+  避免任何 shell interpolation 风险。
+
 ## [0.2.2] - 2026-04-09
 
 ### Added
