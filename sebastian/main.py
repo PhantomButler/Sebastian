@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import sys
+
 import typer
 import uvicorn
 
@@ -11,12 +14,54 @@ def serve(
     host: str = typer.Option(None, help="Override gateway host"),
     port: int = typer.Option(None, help="Override gateway port"),
     reload: bool = typer.Option(False, help="Enable auto-reload (dev mode)"),
+    daemon: bool = typer.Option(False, "--daemon", "-d", help="以后台模式运行"),
 ) -> None:
     """Start the Sebastian gateway server."""
-    from sebastian.config import settings
+    import importlib.metadata
+
+    from sebastian.cli.daemon import is_running, pid_path, read_pid, write_pid
+    from sebastian.config import ensure_data_dir, settings
+
+    ensure_data_dir()
 
     h = host or settings.sebastian_gateway_host
     p = port or settings.sebastian_gateway_port
+    version = importlib.metadata.version("sebastian")
+    log_file = settings.data_dir / "logs" / "main.log"
+
+    # --- startup banner ---
+    typer.echo(f"Sebastian v{version}")
+    typer.echo(f"  数据目录: {settings.data_dir}")
+    typer.echo(f"  日志文件: {log_file}")
+    typer.echo(f"  监听地址: http://{h}:{p}")
+
+    if daemon:
+        pf = pid_path(settings.data_dir)
+        existing = read_pid(pf)
+        if existing and is_running(existing):
+            typer.echo(f"❌ Sebastian 已在运行 (PID {existing})", err=True)
+            raise typer.Exit(code=1)
+
+        typer.echo(f"  运行模式: 后台 (PID 文件: {pf})")
+
+        log_dir = settings.data_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        pid = os.fork()
+        if pid > 0:
+            # parent
+            typer.echo(f"✓ Sebastian 已启动 (PID {pid})")
+            raise typer.Exit(code=0)
+
+        # child — detach
+        os.setsid()
+        log_fd = open(log_file, "a")  # noqa: SIM115
+        os.dup2(log_fd.fileno(), sys.stdout.fileno())
+        os.dup2(log_fd.fileno(), sys.stderr.fileno())
+        write_pid(pf)
+    else:
+        typer.echo("  运行模式: 前台 (Ctrl+C 停止)")
+
     uvicorn.run("sebastian.gateway.app:app", host=h, port=p, reload=reload)
 
 
