@@ -12,7 +12,9 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 **关系说明**：OpenJax（`/Users/ericw/work/code/ai/openJax`）是前驱技术探索，Sebastian 继承其设计经验，不继承代码。
 
-**目录 README 索引**：从 `INDEX.md` 开始，沿树状链接向下定位目标模块的 README。每个模块 README 包含「修改导航」表，直接指向需要修改的文件。
+**目录 README 索引**：
+- `sebastian/README.md`：后端主包结构、模块职责、常见开发入口
+- `ui/mobile/README.md`：移动端目录结构、页面导航、前端模块说明
 
 ## 1) 项目概览
 
@@ -40,31 +42,17 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 ### 模块 README 导航
 
-在针对某模块工作前，优先读对应 README 以快速获取上下文，避免全量搜索引入无关内容：
-- `INDEX.md`（根索引，入口）
+在针对某模块工作前，优先读对应 README（若存在）以快速获取上下文，避免全量搜索引入无关内容：
 - `sebastian/README.md`
 - `ui/mobile/README.md`
 - `sebastian/core/README.md`
 - `sebastian/llm/README.md`
 - `sebastian/gateway/README.md`
-- `sebastian/gateway/routes/README.md`
-- `sebastian/orchestrator/README.md`
-- `sebastian/orchestrator/tools/README.md`
-- `sebastian/agents/README.md`
-- `sebastian/agents/code/README.md`
-- `sebastian/capabilities/README.md`
-- `sebastian/capabilities/tools/README.md`
-- `sebastian/capabilities/mcps/README.md`
-- `sebastian/capabilities/skills/README.md`
-- `sebastian/protocol/README.md`
-- `sebastian/protocol/a2a/README.md`
-- `sebastian/protocol/events/README.md`
 - `sebastian/store/README.md`
-- `sebastian/memory/README.md`
-- `sebastian/config/README.md`
-- `sebastian/identity/README.md`
-- `sebastian/trigger/README.md`
-- `sebastian/sandbox/README.md`
+- `sebastian/protocol/README.md`
+- `sebastian/capabilities/README.md`
+- `sebastian/agents/README.md`
+- `sebastian/orchestrator/README.md`
 
 ## 3) 构建与启动
 
@@ -136,6 +124,12 @@ npx expo start          # 启动 Metro，App 内自动热更新
 
 > Expo Router 默认路由：`app/index.tsx` 用 `<Redirect>` 控制落地页，**不要**在 `_layout.tsx` 用 `initialRouteName`（此版本不支持）。
 
+> **Metro 热更新注意**：热更新依赖 app 连上 Metro；不确定改动是否生效时，用 `npx expo run:android` 重新 build 更可靠。
+
+> **React Native SSE**：RN 原生 `fetch` streaming 不支持 SSE 长连接，需用 `react-native-sse` 包实现 EventSource。
+
+> **Anthropic SDK 0.87+**：`AsyncMessageStream.current_message` 已改名为 `current_message_snapshot`。
+
 ### 启动 Gateway 供 App 联调
 
 ```bash
@@ -148,12 +142,28 @@ uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
 
 > 模拟器内访问宿主机 localhost 需用 `10.0.2.2`，不是 `127.0.0.1`。
 
-### 生成测试用密码 Hash
+### 本地开发首次启动
 
 ```bash
-python3 -c "from sebastian.gateway.auth import hash_password; print(hash_password('你的密码'))"
-# 将输出写入 .env：SEBASTIAN_OWNER_PASSWORD_HASH=<输出值>
+# 从源码开发首次启动（会进入 Web 初始化向导）
+./scripts/install.sh
+
+# 或已装好依赖后直接启动
+sebastian serve
+
+# 浏览器会被唤起到 http://127.0.0.1:8000/setup?token=...
+# 填入主人名字和密码（至少 6 位）→ 完成 → 服务自动退出
+# 再次 `sebastian serve` 进入正常模式
 ```
+
+Headless 服务器（无图形界面）可以用：
+
+```bash
+sebastian init --headless
+sebastian serve
+```
+
+升级到新版本：`sebastian update`（详见 README）。
 
 ### .env 最小配置（本地开发）
 
@@ -161,11 +171,15 @@ python3 -c "from sebastian.gateway.auth import hash_password; print(hash_passwor
 ANTHROPIC_API_KEY=sk-ant-...
 SEBASTIAN_OWNER_NAME=Eric
 # SEBASTIAN_DATA_DIR 默认 ~/.sebastian，本地开发通常无需设置
-SEBASTIAN_JWT_SECRET=local-dev-secret
-SEBASTIAN_OWNER_PASSWORD_HASH=<用上面命令生成>
 SEBASTIAN_GATEWAY_HOST=127.0.0.1
 SEBASTIAN_GATEWAY_PORT=8000
 ```
+
+> **注意**：从 v0.2.0 起，owner 账号与 JWT 签名密钥不再由环境变量提供：
+> - Owner 账号存在 `~/.sebastian/sebastian.db` 的 `users` 表
+> - JWT 密钥存在 `~/.sebastian/secret.key`（chmod 600）
+> - 两者均由首启 Web 向导或 `sebastian init --headless` 生成
+> - 开发模式若未初始化，可临时设置 `SEBASTIAN_JWT_SECRET` 作为 fallback
 
 ## 4) Lint 与格式化
 
@@ -200,7 +214,7 @@ SEBASTIAN_DATA_DIR=./data
 SEBASTIAN_SANDBOX_ENABLED=true
 SEBASTIAN_GATEWAY_HOST=0.0.0.0
 SEBASTIAN_GATEWAY_PORT=8000
-SEBASTIAN_JWT_SECRET=...
+# SEBASTIAN_JWT_SECRET=...   # 仅作为未初始化时的开发态 fallback
 
 # Phase 3（语音）
 # SEBASTIAN_FCM_KEY=...
@@ -277,28 +291,57 @@ SEBASTIAN_JWT_SECRET=...
 
 ## 11) 代码提交与 PR 工作流
 
-### 提交前准备（同步 main）
-1. 确认当前分支不是 `main`
-2. `git fetch origin main` 拉取最新 main
-3. 若有未提交改动先 `git stash`，完成 rebase 后 `git stash pop`
-4. `git rebase origin/main`，有冲突手动解决后继续
+### 分支模型
+- `main`：受保护分支，只接受 PR squash merge，是发版基线
+- `dev`：常驻开发分支，所有日常工作直接在 dev 上 commit + push
+- 不要随意拉新分支；确实需要独立分支（例如长期实验）时提前与用户对齐
+
+### 提交前准备（同步 main 到 dev）
+每次开始新工作 / 一个 PR 合并后都要做：
+1. 确认在 `dev` 分支：`git checkout dev`
+2. `git fetch origin main`
+3. 若工作区有未提交改动先 `git stash`，rebase 后再 `git stash pop`
+4. `git rebase origin/main`（squash 合并的提交会被 git 检测为 cherry-pick 自动 skip）
+5. `git push --force-with-lease` 把 dev 拉平到 main
 
 ### 提交规范
 - 用 `git add <具体文件>` 逐一添加，**禁止** `git add .` 或 `git add -A`
 - commit message 格式：`类型(范围): 中文摘要`
-  - 类型：`feat` / `fix` / `docs` / `refactor` / `chore` / `test`
+  - 类型：`feat` / `fix` / `docs` / `refactor` / `chore` / `test` / `style` / `ci`
   - 可在类型前加 emoji（参考现有历史记录风格）
-- message 末尾附：`Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+- message 末尾附：`Co-Authored-By: Claude <noreply@anthropic.com>`
+  （或写当前实际模型，例如 `Claude Opus 4.6` / `Claude Sonnet 4.6`）
 - 保持改动原子化，一个 commit 只做一件事
 
 ### 推送与 PR
-- push 使用 `-u` 绑定远程：`git push -u origin <branch>`
-- 用 `gh pr create` 创建 PR，base branch 统一指向 `main`
+- `dev` 已 track `origin/dev`，直接 `git push` 即可（首次推新分支才用 `-u`）
+- 用 `gh pr create --base main --head dev` 创建 PR，base 永远是 `main`
 - PR title 与 commit message 风格一致，控制在 70 字以内
 - PR body 必须包含两部分：
   - **Summary**：改了什么、为什么改（1-3 条要点）
   - **Test plan**：验证步骤 checklist
-- 可直接调用 `/commit-pr` skill 自动完成上述全流程
+- 合并使用 squash merge（`gh pr merge --squash`），合并后按上面「提交前准备」流程把 dev 拉回 main
+
+### 分支保护
+- `main` 只接受 PR squash merge，需 CI 四项 job（`backend-lint` / `backend-type` / `backend-test` / `mobile-lint`）全绿 + 1 个 approval
+- tag `v*.*.*` 只有 admin 和 `github-actions[bot]` 可创建
+- `release.yml` 通过 `RELEASE_TOKEN`（admin PAT）push tag 与 main commit，绕过保护规则
+
+### 发版流程
+1. 在 `main` 上手动触发 release workflow，二选一：
+   - GitHub UI：Actions → Release → Run workflow → 输入版本号
+   - 命令行：`gh workflow run release.yml -f version=X.Y.Z --ref main`
+2. Workflow 自动：
+   - 同步 `pyproject.toml` + `ui/mobile/app.json` 版本号
+   - 把 `CHANGELOG.md` 的 `## [Unreleased]` 翻成 `## [X.Y.Z] - YYYY-MM-DD`
+   - commit + tag + push 到 main
+   - 构建 backend tarball、签名 Android APK
+   - 发布 GitHub Release（包含 `sebastian-backend-vX.Y.Z.tar.gz`、`sebastian-app-vX.Y.Z.apk`、`SHA256SUMS`）
+3. 用 `gh run watch <run-id>` 跟随进度（Android 构建约 20 分钟）
+4. 发版完成后，dev 上的 `CHANGELOG.md` 会与 main 冲突，按「提交前准备」rebase + force-push
+5. 用户端升级方式：
+   - 已安装：`sebastian update`（保留数据/venv，失败自动回滚）
+   - 全新安装：`curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash`
 
 ## 12) 安全规范
 

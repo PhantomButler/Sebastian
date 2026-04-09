@@ -291,39 +291,57 @@ SEBASTIAN_GATEWAY_PORT=8000
 
 ## 11) 代码提交与 PR 工作流
 
-### 提交前准备（同步 main）
-1. 确认当前分支不是 `main`
-2. `git fetch origin main` 拉取最新 main
-3. 若有未提交改动先 `git stash`，完成 rebase 后 `git stash pop`
-4. `git rebase origin/main`，有冲突手动解决后继续
+### 分支模型
+- `main`：受保护分支，只接受 PR squash merge，是发版基线
+- `dev`：常驻开发分支，所有日常工作直接在 dev 上 commit + push
+- 不要随意拉新分支；确实需要独立分支（例如长期实验）时提前与用户对齐
+
+### 提交前准备（同步 main 到 dev）
+每次开始新工作 / 一个 PR 合并后都要做：
+1. 确认在 `dev` 分支：`git checkout dev`
+2. `git fetch origin main`
+3. 若工作区有未提交改动先 `git stash`，rebase 后再 `git stash pop`
+4. `git rebase origin/main`（squash 合并的提交会被 git 检测为 cherry-pick 自动 skip）
+5. `git push --force-with-lease` 把 dev 拉平到 main
 
 ### 提交规范
 - 用 `git add <具体文件>` 逐一添加，**禁止** `git add .` 或 `git add -A`
 - commit message 格式：`类型(范围): 中文摘要`
-  - 类型：`feat` / `fix` / `docs` / `refactor` / `chore` / `test`
+  - 类型：`feat` / `fix` / `docs` / `refactor` / `chore` / `test` / `style` / `ci`
   - 可在类型前加 emoji（参考现有历史记录风格）
-- message 末尾附：`Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+- message 末尾附：`Co-Authored-By: Claude <noreply@anthropic.com>`
+  （或写当前实际模型，例如 `Claude Opus 4.6` / `Claude Sonnet 4.6`）
 - 保持改动原子化，一个 commit 只做一件事
 
 ### 推送与 PR
-- push 使用 `-u` 绑定远程：`git push -u origin <branch>`
-- 用 `gh pr create` 创建 PR，base branch 统一指向 `main`
+- `dev` 已 track `origin/dev`，直接 `git push` 即可（首次推新分支才用 `-u`）
+- 用 `gh pr create --base main --head dev` 创建 PR，base 永远是 `main`
 - PR title 与 commit message 风格一致，控制在 70 字以内
 - PR body 必须包含两部分：
   - **Summary**：改了什么、为什么改（1-3 条要点）
   - **Test plan**：验证步骤 checklist
-- 可直接调用 `/commit-pr` skill 自动完成上述全流程
+- 合并使用 squash merge（`gh pr merge --squash`），合并后按上面「提交前准备」流程把 dev 拉回 main
 
 ### 分支保护
-- `main` 只接受 PR squash merge，需 CI 四项全绿 + 1 个 approval
+- `main` 只接受 PR squash merge，需 CI 四项 job（`backend-lint` / `backend-type` / `backend-test` / `mobile-lint`）全绿 + 1 个 approval
 - tag `v*.*.*` 只有 admin 和 `github-actions[bot]` 可创建
-- 日常开发直接 push 到 `dev`
+- `release.yml` 通过 `RELEASE_TOKEN`（admin PAT）push tag 与 main commit，绕过保护规则
 
 ### 发版流程
-1. 在 `main` 上 Actions 页面手动触发 `Release` workflow
-2. 输入语义版本号（如 `0.3.0`）
-3. Workflow 自动同步 `pyproject.toml` + `app.json` 版本 + 改 CHANGELOG + 打 tag + 构建 backend tarball + 签名 Android APK + 发布 GitHub Release（含 SHA256SUMS）
-4. 用户端通过 `sebastian update` 一键升级到新版
+1. 在 `main` 上手动触发 release workflow，二选一：
+   - GitHub UI：Actions → Release → Run workflow → 输入版本号
+   - 命令行：`gh workflow run release.yml -f version=X.Y.Z --ref main`
+2. Workflow 自动：
+   - 同步 `pyproject.toml` + `ui/mobile/app.json` 版本号
+   - 把 `CHANGELOG.md` 的 `## [Unreleased]` 翻成 `## [X.Y.Z] - YYYY-MM-DD`
+   - commit + tag + push 到 main
+   - 构建 backend tarball、签名 Android APK
+   - 发布 GitHub Release（包含 `sebastian-backend-vX.Y.Z.tar.gz`、`sebastian-app-vX.Y.Z.apk`、`SHA256SUMS`）
+3. 用 `gh run watch <run-id>` 跟随进度（Android 构建约 20 分钟）
+4. 发版完成后，dev 上的 `CHANGELOG.md` 会与 main 冲突，按「提交前准备」rebase + force-push
+5. 用户端升级方式：
+   - 已安装：`sebastian update`（保留数据/venv，失败自动回滚）
+   - 全新安装：`curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash`
 
 ## 12) 安全规范
 
