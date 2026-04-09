@@ -14,6 +14,9 @@
 - `scripts/setup-https.sh`：一键检测 Tailscale → 申请证书 → 安装 Caddy → 生成
   Caddyfile → 启动反代。
 
+### Fixed
+- 修复退出 App 重新打开历史对话时 thinking（思考过程）折叠块不显示的问题。
+
 ### Changed
 - `docs/DEPLOYMENT.md` 按使用场景重构为三级：局域网（最简）→ Tailscale 组网（推荐）
   → 云服务器公网部署，每个场景独立可跟随操作。macOS 推荐 Tailscale 桌面版，

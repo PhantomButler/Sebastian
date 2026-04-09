@@ -11,10 +11,12 @@ Flow:
 4. Download ``sebastian-backend-<tag>.tar.gz`` + ``SHA256SUMS`` to a tmp dir.
 5. Verify SHA256.
 6. Extract into a staging dir, then atomically swap top-level entries with
-   the existing install dir, keeping a backup for rollback.
+   the existing install dir, keeping a backup under ``~/.sebastian/backups/``
+   for rollback.
 7. Re-run ``pip install -e .`` inside the same interpreter so dependency
    changes take effect.
-8. Roll back on any failure.
+8. Roll back on any failure; on success delete the backup.
+9. Auto-restart daemon if it was running.
 """
 
 from __future__ import annotations
@@ -44,7 +46,7 @@ MANAGED_ENTRIES = (
     "LICENSE",
     "CHANGELOG.md",
 )
-BACKUP_KEEP = 3
+BACKUP_KEEP = 1
 
 
 class UpdateError(RuntimeError):
@@ -148,8 +150,15 @@ def extract_tarball(tarball: Path, into: Path) -> Path:
     return children[0]
 
 
-def _backup_dir(install_dir: Path) -> Path:
-    return install_dir / f".sebastian.bak.{int(time.time())}"
+def _backup_parent() -> Path:
+    """Return ``~/.sebastian/backups``, creating it if needed."""
+    d = Path.home() / ".sebastian" / "backups"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _backup_dir() -> Path:
+    return _backup_parent() / f"sebastian.bak.{int(time.time())}"
 
 
 def swap_in(staging: Path, install_dir: Path) -> Path:
@@ -157,7 +166,7 @@ def swap_in(staging: Path, install_dir: Path) -> Path:
 
     Returns the backup directory path so callers can prune or rollback.
     """
-    backup = _backup_dir(install_dir)
+    backup = _backup_dir()
     backup.mkdir(parents=True, exist_ok=False)
 
     moved: list[str] = []
@@ -198,9 +207,10 @@ def rollback(backup: Path, install_dir: Path) -> None:
     shutil.rmtree(backup, ignore_errors=True)
 
 
-def prune_backups(install_dir: Path, keep: int = BACKUP_KEEP) -> None:
+def prune_backups(keep: int = BACKUP_KEEP) -> None:
+    backup_root = _backup_parent()
     backups = sorted(
-        (p for p in install_dir.glob(".sebastian.bak.*") if p.is_dir()),
+        (p for p in backup_root.glob("sebastian.bak.*") if p.is_dir()),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -224,6 +234,28 @@ def reinstall_editable(install_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 # orchestration
 # ---------------------------------------------------------------------------
+
+
+def _try_restart_daemon(printer: Callable[[str], None]) -> None:
+    """If a Sebastian daemon is running, stop it and start a new one."""
+    from sebastian.cli.daemon import is_running, pid_path, read_pid, stop_process
+    from sebastian.config import settings
+
+    pf = pid_path(settings.data_dir)
+    pid = read_pid(pf)
+    if pid is None or not is_running(pid):
+        printer("提示：未检测到后台进程，请手动运行 `sebastian serve`。")
+        return
+
+    printer(f"→ 检测到后台进程 (PID {pid})，正在重启...")
+    stop_process(pf)
+
+    cmd = [sys.executable, "-m", "sebastian", "serve", "--daemon"]
+    proc = subprocess.run(cmd, check=False)
+    if proc.returncode == 0:
+        printer("✓ 后台进程已重启")
+    else:
+        printer("⚠ 自动重启失败，请手动运行 `sebastian serve -d`。")
 
 
 def run_update(
@@ -293,8 +325,14 @@ def run_update(
             printer("已回滚到旧版本。")
             return 1
 
-    prune_backups(install_dir)
+    # Upgrade succeeded — remove backup and prune old ones
+    shutil.rmtree(backup, ignore_errors=True)
+    prune_backups()
+
     printer("")
     printer(f"✓ 升级完成：{cur} → {latest}")
-    printer("请关闭当前 sebastian 进程并重新运行 `sebastian serve`。")
+
+    # Auto-restart daemon if it was running
+    _try_restart_daemon(printer)
+
     return 0

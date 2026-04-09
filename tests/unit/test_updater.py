@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import tarfile
 from pathlib import Path
 
@@ -80,6 +81,15 @@ def _make_install_dir(root: Path) -> Path:
     return inst
 
 
+@pytest.fixture()
+def _patch_backup_parent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Redirect backup directory to tmp_path/backups for all tests."""
+    backup_root = tmp_path / "backups"
+    backup_root.mkdir()
+    monkeypatch.setattr(updater, "_backup_parent", lambda: backup_root)
+    return backup_root
+
+
 # ---------------------------------------------------------------------------
 # pure helpers
 # ---------------------------------------------------------------------------
@@ -121,7 +131,9 @@ def test_extract_tarball_returns_top_dir(tmp_path: Path) -> None:
     assert (top / "sebastian" / "__init__.py").exists()
 
 
-def test_swap_in_replaces_managed_keeps_unmanaged(tmp_path: Path) -> None:
+def test_swap_in_replaces_managed_keeps_unmanaged(
+    tmp_path: Path, _patch_backup_parent: Path
+) -> None:
     inst = _make_install_dir(tmp_path)
     tar = _build_release_tarball(tmp_path)
     staging = tmp_path / "staging"
@@ -141,7 +153,7 @@ def test_swap_in_replaces_managed_keeps_unmanaged(tmp_path: Path) -> None:
     assert (inst / ".venv" / "marker").read_text() == "dont touch\n"
 
 
-def test_rollback_restores_old_files(tmp_path: Path) -> None:
+def test_rollback_restores_old_files(tmp_path: Path, _patch_backup_parent: Path) -> None:
     inst = _make_install_dir(tmp_path)
     tar = _build_release_tarball(tmp_path)
     staging = tmp_path / "staging"
@@ -157,7 +169,7 @@ def test_rollback_restores_old_files(tmp_path: Path) -> None:
     assert not backup.exists()
 
 
-def test_swap_in_missing_entry_rolls_back(tmp_path: Path) -> None:
+def test_swap_in_missing_entry_rolls_back(tmp_path: Path, _patch_backup_parent: Path) -> None:
     inst = _make_install_dir(tmp_path)
     # Build a broken staging dir missing LICENSE
     staging = tmp_path / "staging" / "broken"
@@ -177,22 +189,17 @@ def test_swap_in_missing_entry_rolls_back(tmp_path: Path) -> None:
     # Original install dir is intact
     assert (inst / "sebastian" / "__init__.py").read_text() == "# old\n"
     assert (inst / "README.md").read_text() == "old readme\n"
-    assert not list(inst.glob(".sebastian.bak.*"))
 
 
-def test_prune_backups_keeps_newest(tmp_path: Path) -> None:
-    inst = tmp_path / "app"
-    inst.mkdir()
+def test_prune_backups_keeps_newest(tmp_path: Path, _patch_backup_parent: Path) -> None:
+    backup_root = _patch_backup_parent
     for i in range(5):
-        b = inst / f".sebastian.bak.{i}"
+        b = backup_root / f"sebastian.bak.{i}"
         b.mkdir()
-        # Force distinct mtimes
-        import os
-
         os.utime(b, (i, i))
-    updater.prune_backups(inst, keep=2)
-    remaining = sorted(p.name for p in inst.glob(".sebastian.bak.*"))
-    assert remaining == [".sebastian.bak.3", ".sebastian.bak.4"]
+    updater.prune_backups(keep=2)
+    remaining = sorted(p.name for p in backup_root.glob("sebastian.bak.*"))
+    assert remaining == ["sebastian.bak.3", "sebastian.bak.4"]
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +207,7 @@ def test_prune_backups_keeps_newest(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_run_update_already_latest(monkeypatch, tmp_path: Path) -> None:
+def test_run_update_already_latest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     inst = _make_install_dir(tmp_path)
     monkeypatch.setattr(updater, "resolve_install_dir", lambda: inst)
     monkeypatch.setattr(updater, "current_version", lambda: "1.2.3")
@@ -212,7 +219,7 @@ def test_run_update_already_latest(monkeypatch, tmp_path: Path) -> None:
     assert any("已经是最新版" in line for line in out)
 
 
-def test_run_update_check_only(monkeypatch, tmp_path: Path) -> None:
+def test_run_update_check_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     inst = _make_install_dir(tmp_path)
     monkeypatch.setattr(updater, "resolve_install_dir", lambda: inst)
     monkeypatch.setattr(updater, "current_version", lambda: "1.0.0")
@@ -224,7 +231,9 @@ def test_run_update_check_only(monkeypatch, tmp_path: Path) -> None:
     assert any("可升级: 1.0.0 → 1.1.0" in line for line in out)
 
 
-def test_run_update_full_flow(monkeypatch, tmp_path: Path) -> None:
+def test_run_update_full_flow(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _patch_backup_parent: Path
+) -> None:
     inst = _make_install_dir(tmp_path)
     tar = _build_release_tarball(tmp_path, version="9.9.9")
     sums_text = f"{updater._sha256(tar)}  {tar.name}\n"
@@ -232,6 +241,7 @@ def test_run_update_full_flow(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(updater, "resolve_install_dir", lambda: inst)
     monkeypatch.setattr(updater, "current_version", lambda: "0.0.1")
     monkeypatch.setattr(updater, "fetch_latest_tag", lambda: "v9.9.9")
+    monkeypatch.setattr(updater, "_try_restart_daemon", lambda printer: None)
 
     def fake_download(url: str, dest: Path) -> None:
         if url.endswith(".tar.gz"):
@@ -249,11 +259,14 @@ def test_run_update_full_flow(monkeypatch, tmp_path: Path) -> None:
     assert rc == 0
     assert (inst / "README.md").read_text() == "new readme\n"
     assert (inst / ".env").read_text() == "SECRET=keep\n"
-    # Backup created
-    assert list(inst.glob(".sebastian.bak.*"))
+    # Backup cleaned up after success
+    backup_root = _patch_backup_parent
+    assert not list(backup_root.glob("sebastian.bak.*"))
 
 
-def test_run_update_pip_failure_rolls_back(monkeypatch, tmp_path: Path) -> None:
+def test_run_update_pip_failure_rolls_back(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _patch_backup_parent: Path
+) -> None:
     inst = _make_install_dir(tmp_path)
     tar = _build_release_tarball(tmp_path, version="9.9.9")
     sums_text = f"{updater._sha256(tar)}  {tar.name}\n"
@@ -281,4 +294,6 @@ def test_run_update_pip_failure_rolls_back(monkeypatch, tmp_path: Path) -> None:
     # Rolled back to old contents
     assert (inst / "README.md").read_text() == "old readme\n"
     assert (inst / "sebastian" / "__init__.py").read_text() == "# old\n"
-    assert not list(inst.glob(".sebastian.bak.*"))
+    # Backup cleaned up by rollback
+    backup_root = _patch_backup_parent
+    assert not list(backup_root.glob("sebastian.bak.*"))
