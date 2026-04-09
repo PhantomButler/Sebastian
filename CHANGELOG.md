@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-04-09
+
 ### Added
 - 新增 `docs/DEPLOYMENT.md` 生产部署指南，覆盖 Tailscale（首推）/
   Cloudflare Tunnel / 云服务器 + Caddy 三条路径，全部落到真 Let's Encrypt 证书。
