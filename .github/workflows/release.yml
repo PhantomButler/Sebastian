@@ -21,7 +21,7 @@ jobs:
     outputs:
       tag: ${{ steps.tagout.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: sync-version
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.sync-version.outputs.tag }}
       - name: Build tarball
@@ -100,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: sync-version
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.sync-version.outputs.tag }}
       - uses: actions/setup-node@v4
@@ -216,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-backend, build-android, sync-version]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.sync-version.outputs.tag }}
       - uses: actions/download-artifact@v4
