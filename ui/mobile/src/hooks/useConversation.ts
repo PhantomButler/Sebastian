@@ -9,6 +9,12 @@ import type { ConvMessage, SSEEvent } from '../types';
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 
+type ApiThinkingBlock = {
+  type: 'thinking';
+  thinking: string;
+  signature?: string;
+};
+
 type ApiToolBlock = {
   type: 'tool';
   tool_id: string;
@@ -18,11 +24,13 @@ type ApiToolBlock = {
   result?: string;
 };
 
+type ApiBlock = ApiThinkingBlock | ApiToolBlock;
+
 type ApiMessage = {
   role: string;
   content: string;
   ts?: string;
-  blocks?: ApiToolBlock[];
+  blocks?: ApiBlock[];
 };
 
 /** Map raw API message list to ConvMessage array. */
@@ -37,8 +45,16 @@ function mapMessages(sessionId: string, messages: ApiMessage[]): ConvMessage[] {
     if (m.role === 'assistant' && m.blocks?.length) {
       const renderBlocks: import('../types').RenderBlock[] = [];
       // Tools appear before the final text response (natural execution order)
-      for (const b of m.blocks) {
-        if (b.type === 'tool') {
+      for (let j = 0; j < m.blocks.length; j++) {
+        const b = m.blocks[j];
+        if (b.type === 'thinking') {
+          renderBlocks.push({
+            type: 'thinking',
+            blockId: `${base.id}-thinking-${j}`,
+            text: b.thinking,
+            done: true,
+          });
+        } else if (b.type === 'tool') {
           renderBlocks.push({
             type: 'tool',
             toolId: b.tool_id,
