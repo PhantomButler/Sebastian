@@ -34,11 +34,12 @@ done
 color_grn "✓ 系统依赖齐全"
 
 # 2. 最新 release tag
+# 走 github.com 的 /releases/latest 302 重定向，避免 api.github.com 的 60/hr 未认证限流
 color_ylw "→ 查询最新 release..."
-LATEST_JSON="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")"
-LATEST_TAG="$(printf '%s' "$LATEST_JSON" | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
-if [[ -z "$LATEST_TAG" ]]; then
-  color_red "❌ 无法解析最新 release tag"
+LATEST_LOCATION="$(curl -fsSIL -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest")"
+LATEST_TAG="${LATEST_LOCATION##*/}"
+if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "latest" ]]; then
+  color_red "❌ 无法解析最新 release tag（从 ${LATEST_LOCATION}）"
   exit 1
 fi
 color_grn "✓ 最新版本: $LATEST_TAG"

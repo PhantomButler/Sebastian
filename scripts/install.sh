@@ -27,7 +27,7 @@ PY_VERSION="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 PY_MAJOR="$(echo "$PY_VERSION" | cut -d. -f1)"
 PY_MINOR="$(echo "$PY_VERSION" | cut -d. -f2)"
 if [[ "$PY_MAJOR" -lt 3 ]] || { [[ "$PY_MAJOR" -eq 3 ]] && [[ "$PY_MINOR" -lt 12 ]]; }; then
-  color_red "❌ Python 版本过低（当前 $PY_VERSION），需要 >= 3.12"
+  color_red "❌ Python 版本过低（当前 ${PY_VERSION}），需要 >= 3.12"
   exit 1
 fi
 color_grn "✓ Python $PY_VERSION"
