@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.s
 4. 解压到 `~/.sebastian/app/`
 5. 创建 venv、安装依赖、启动首次初始化向导
 
-启动后浏览器会被唤起到 `http://127.0.0.1:8000/setup?token=...`，填入主人名字与登录密码即可。
+启动后浏览器会被唤起到 `http://127.0.0.1:8823/setup?token=...`，填入主人名字与登录密码即可。
 
 ### 升级到新版本
 
@@ -73,8 +73,10 @@ sebastian serve
 
 首次打开 App → Settings → 填写 Server URL：
 
-- 模拟器（宿主机）：`http://10.0.2.2:8000`
-- 同局域网真机：`http://<电脑局域网 IP>:8000`
+- 模拟器（宿主机）：`http://10.0.2.2:8823`
+- 同局域网真机：`http://<电脑局域网 IP>:8823`
+
+> ⚠️ Release APK 仅允许 HTTPS，局域网直连明文需用 debug build。公网部署推荐 Tailscale，详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
 ### iOS
 

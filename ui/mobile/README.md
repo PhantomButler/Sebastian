@@ -297,8 +297,8 @@ SafeAreaView edges={['bottom']}           ← 仅处理底部安全区
 
 ## 联调约定
 
-- 模拟器访问宿主机 gateway 用 `http://10.0.2.2:8000`
-- 真机用局域网 IP：`http://192.168.x.x:8000`
+- 模拟器访问宿主机 gateway 用 `http://10.0.2.2:8823`
+- 真机用局域网 IP：`http://192.168.x.x:8823`
 - 前端是服务端状态的镜像，不应自行发明持久化真相
 - API / SSE 变更时，需同步检查 `sebastian/gateway/` 与相关 spec
 

@@ -200,7 +200,7 @@ Sub-Agent 插件目录。当前已有：
 sebastian serve
 
 # 开发态热重载（已初始化）
-uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
+uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8823 --reload
 
 # 后端测试
 pytest tests/ -q

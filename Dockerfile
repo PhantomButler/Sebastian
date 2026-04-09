@@ -18,4 +18,4 @@ COPY .env.example ./.env.example
 # Create data dir
 RUN mkdir -p /app/data /app/data/sessions/sebastian /app/data/sessions/subagents /app/knowledge
 
-CMD ["uvicorn", "sebastian.gateway.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "sebastian.gateway.app:app", "--host", "0.0.0.0", "--port", "8823"]

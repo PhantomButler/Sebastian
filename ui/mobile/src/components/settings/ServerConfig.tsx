@@ -41,7 +41,7 @@ export function ServerConfig() {
             style={[styles.input, { backgroundColor: colors.inputBackground, color: colors.text }]}
             value={input}
             onChangeText={setInput}
-            placeholder="http://192.168.1.x:8000"
+            placeholder="https://sebastian.example.com"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             keyboardType="url"

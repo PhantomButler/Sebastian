@@ -61,13 +61,13 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 pip install -e ".[dev,memory]"
 
 # 本地启动（gateway）
-uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
+uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8823 --reload
 
 # Docker 一键启动
 docker compose up
 
 # 本地预览统一用 127.0.0.1 而非 localhost
-# Gateway: http://127.0.0.1:8000
+# Gateway: http://127.0.0.1:8823
 ```
 
 ## 3.1) Android App 开发（macOS）
@@ -134,10 +134,10 @@ npx expo start          # 启动 Metro，App 内自动热更新
 
 ```bash
 # 根目录执行，确保 .env 已配置
-uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
+uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8823 --reload
 
-# App 内 Settings 页填写 Server URL：http://10.0.2.2:8000（模拟器访问宿主机）
-# 真机用局域网 IP：http://192.168.x.x:8000
+# App 内 Settings 页填写 Server URL：http://10.0.2.2:8823（模拟器访问宿主机）
+# 真机用局域网 IP：http://192.168.x.x:8823
 ```
 
 > 模拟器内访问宿主机 localhost 需用 `10.0.2.2`，不是 `127.0.0.1`。
@@ -151,7 +151,7 @@ uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
 # 或已装好依赖后直接启动
 sebastian serve
 
-# 浏览器会被唤起到 http://127.0.0.1:8000/setup?token=...
+# 浏览器会被唤起到 http://127.0.0.1:8823/setup?token=...
 # 填入主人名字和密码（至少 6 位）→ 完成 → 服务自动退出
 # 再次 `sebastian serve` 进入正常模式
 ```
@@ -172,7 +172,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 SEBASTIAN_OWNER_NAME=Eric
 # SEBASTIAN_DATA_DIR 默认 ~/.sebastian，本地开发通常无需设置
 SEBASTIAN_GATEWAY_HOST=127.0.0.1
-SEBASTIAN_GATEWAY_PORT=8000
+SEBASTIAN_GATEWAY_PORT=8823
 ```
 
 > **注意**：从 v0.2.0 起，owner 账号与 JWT 签名密钥不再由环境变量提供：
@@ -213,7 +213,7 @@ SEBASTIAN_OWNER_NAME=...
 SEBASTIAN_DATA_DIR=./data
 SEBASTIAN_SANDBOX_ENABLED=true
 SEBASTIAN_GATEWAY_HOST=0.0.0.0
-SEBASTIAN_GATEWAY_PORT=8000
+SEBASTIAN_GATEWAY_PORT=8823
 # SEBASTIAN_JWT_SECRET=...   # 仅作为未初始化时的开发态 fallback
 
 # Phase 3（语音）

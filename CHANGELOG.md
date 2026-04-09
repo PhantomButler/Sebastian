@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Added
+- 新增 `docs/DEPLOYMENT.md` 生产部署指南，覆盖 Tailscale（首推）/
+  Cloudflare Tunnel / 云服务器 + Caddy 三条路径，全部落到真 Let's Encrypt 证书。
+
+### Changed
+- **[breaking]** 默认网关端口由 `8000` 改为 `8823`。`8000` 在开发机与容器
+  场景下常被 Django / `python -m http.server` 等占用。已部署的用户升级后需把
+  手机 App Server URL 里的 `:8000` 改成 `:8823`，或在 `.env` 里显式设置
+  `SEBASTIAN_GATEWAY_PORT=8000` 保留旧行为。
+
 ## [0.2.2] - 2026-04-09
 
 ### Added

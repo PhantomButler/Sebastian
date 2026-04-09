@@ -51,7 +51,7 @@ docs/              — 架构文档与设计 Spec
 pip install -e ".[dev,memory]"
 
 # 启动后端网关
-uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
+uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8823 --reload
 
 # 启动 Android App（需先启动模拟器）
 cd ui/mobile && npx expo start

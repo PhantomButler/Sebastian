@@ -16,7 +16,7 @@ def test_settings_defaults(
     from sebastian.config import Settings
 
     s = Settings()
-    assert s.sebastian_gateway_port == 8000
+    assert s.sebastian_gateway_port == 8823
     assert s.sebastian_jwt_algorithm == "HS256"
     assert s.sebastian_owner_name == "Owner"
     assert "sqlite" in s.database_url

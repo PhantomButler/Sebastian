@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Gateway
     sebastian_gateway_host: str = "0.0.0.0"
-    sebastian_gateway_port: int = 8000
+    sebastian_gateway_port: int = 8823
 
     # JWT
     sebastian_jwt_secret: str = "change-me-in-production"
