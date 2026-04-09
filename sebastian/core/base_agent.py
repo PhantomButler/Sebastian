@@ -337,7 +337,7 @@ class BaseAgent(ABC):
         thinking_effort: str | None = None,
     ) -> str:
         full_text = ""
-        tool_records: list[dict[str, Any]] = []
+        assistant_blocks: list[dict[str, Any]] = []
         todo_section = await self._session_todos_section(session_id, agent_context)
         effective_system_prompt = (
             f"{self.system_prompt}\n\n{todo_section}" if todo_section else self.system_prompt
@@ -367,6 +367,15 @@ class BaseAgent(ABC):
                         dataclasses.asdict(event),
                     )
 
+                if isinstance(event, ThinkingBlockStop):
+                    block: dict[str, Any] = {
+                        "type": "thinking",
+                        "thinking": event.thinking,
+                    }
+                    if event.signature is not None:
+                        block["signature"] = event.signature
+                    assistant_blocks.append(block)
+
                 if isinstance(event, ToolCallReady):
                     await self._publish(
                         session_id,
@@ -389,7 +398,7 @@ class BaseAgent(ABC):
                         "input": json.dumps(event.inputs, default=str),
                         "status": "failed",
                     }
-                    tool_records.append(record)
+                    assistant_blocks.append(record)
                     await self._update_activity(session_id)
                     try:
                         context = ToolCallContext(
@@ -461,7 +470,7 @@ class BaseAgent(ABC):
                         "assistant",
                         event.full_text,
                         agent=agent_context,
-                        blocks=tool_records if tool_records else None,
+                        blocks=assistant_blocks if assistant_blocks else None,
                     )
                     await self._publish(
                         session_id,
@@ -483,7 +492,7 @@ class BaseAgent(ABC):
                         "assistant",
                         full_text,
                         agent=agent_context,
-                        blocks=tool_records if tool_records else None,
+                        blocks=assistant_blocks if assistant_blocks else None,
                     )
                 await self._publish(
                     session_id,
