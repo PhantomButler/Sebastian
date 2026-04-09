@@ -1,0 +1,300 @@
+"""Sebastian self-update logic.
+
+Replaces the current source tree under the installer-managed directory
+(typically ``~/.sebastian/app``) with the latest GitHub release tarball.
+
+Flow:
+1. Resolve install dir from ``sebastian.__file__``.
+2. Read current version from package metadata.
+3. Resolve latest tag via the ``releases/latest`` 302 redirect (avoids the
+   60/hr unauthenticated api.github.com rate limit).
+4. Download ``sebastian-backend-<tag>.tar.gz`` + ``SHA256SUMS`` to a tmp dir.
+5. Verify SHA256.
+6. Extract into a staging dir, then atomically swap top-level entries with
+   the existing install dir, keeping a backup for rollback.
+7. Re-run ``pip install -e .`` inside the same interpreter so dependency
+   changes take effect.
+8. Roll back on any failure.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.request
+from collections.abc import Callable
+from importlib import metadata
+from pathlib import Path
+from urllib.error import URLError
+
+REPO = "Jaxton07/Sebastian"
+# Top-level entries that we own and may safely replace inside the install dir.
+# Anything not in this list (.venv, .env, data/, ~/.sebastian/secret.key, etc.)
+# is left untouched.
+MANAGED_ENTRIES = (
+    "sebastian",
+    "pyproject.toml",
+    "scripts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+)
+BACKUP_KEEP = 3
+
+
+class UpdateError(RuntimeError):
+    """Raised when an update step fails. Caller prints message and exits 1."""
+
+
+# ---------------------------------------------------------------------------
+# environment discovery
+# ---------------------------------------------------------------------------
+
+
+def resolve_install_dir() -> Path:
+    """Return the directory that owns this `sebastian` package.
+
+    For an installer-managed setup this is e.g. ``~/.sebastian/app``.
+    """
+    import sebastian  # local import to avoid cycles
+
+    pkg_file = Path(sebastian.__file__).resolve()
+    # .../app/sebastian/__init__.py -> .../app
+    install_dir = pkg_file.parents[1]
+    if not (install_dir / "pyproject.toml").exists():
+        raise UpdateError(
+            f"无法识别安装目录：{install_dir} 下没有 pyproject.toml。\n"
+            "sebastian update 仅支持通过 bootstrap.sh / install.sh 安装的部署。"
+        )
+    return install_dir
+
+
+def current_version() -> str:
+    try:
+        return metadata.version("sebastian")
+    except metadata.PackageNotFoundError as e:  # pragma: no cover - install bug
+        raise UpdateError(f"无法读取当前 sebastian 版本：{e}") from e
+
+
+# ---------------------------------------------------------------------------
+# remote lookups
+# ---------------------------------------------------------------------------
+
+
+def fetch_latest_tag() -> str:
+    """Resolve the latest release tag via the github.com 302 redirect."""
+    url = f"https://github.com/{REPO}/releases/latest"
+    try:
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            final: str = resp.geturl()
+    except URLError as e:
+        raise UpdateError(f"查询最新版本失败：{e}") from e
+    # final looks like https://github.com/<repo>/releases/tag/v0.2.1
+    tag = final.rsplit("/", 1)[-1]
+    if not tag or tag == "latest":
+        raise UpdateError(f"无法解析最新 release tag（从 {final}）")
+    return tag
+
+
+def _download(url: str, dest: Path) -> None:
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp, dest.open("wb") as f:
+            shutil.copyfileobj(resp, f)
+    except URLError as e:
+        raise UpdateError(f"下载失败 {url}：{e}") from e
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_sha256(tarball: Path, sums_file: Path) -> None:
+    expected: str | None = None
+    for line in sums_file.read_text().splitlines():
+        parts = line.strip().split(maxsplit=1)
+        if len(parts) == 2 and parts[1] == tarball.name:
+            expected = parts[0]
+            break
+    if not expected:
+        raise UpdateError(f"SHA256SUMS 中没有 {tarball.name} 的指纹")
+    actual = _sha256(tarball)
+    if actual != expected:
+        raise UpdateError(
+            f"SHA256 校验失败：期望 {expected}，实际 {actual}（已中止以防供应链污染）"
+        )
+
+
+# ---------------------------------------------------------------------------
+# extraction + swap
+# ---------------------------------------------------------------------------
+
+
+def extract_tarball(tarball: Path, into: Path) -> Path:
+    """Extract a github release tarball and return the (single) top-level dir."""
+    with tarfile.open(tarball, "r:gz") as tf:
+        tf.extractall(into, filter="data")
+    children = [p for p in into.iterdir() if p.is_dir()]
+    if len(children) != 1:
+        raise UpdateError(f"tarball 顶层目录数量异常：{[p.name for p in children]}")
+    return children[0]
+
+
+def _backup_dir(install_dir: Path) -> Path:
+    return install_dir / f".sebastian.bak.{int(time.time())}"
+
+
+def swap_in(staging: Path, install_dir: Path) -> Path:
+    """Move managed entries from staging into install_dir, keeping a backup.
+
+    Returns the backup directory path so callers can prune or rollback.
+    """
+    backup = _backup_dir(install_dir)
+    backup.mkdir(parents=True, exist_ok=False)
+
+    moved: list[str] = []
+    try:
+        for name in MANAGED_ENTRIES:
+            src = staging / name
+            if not src.exists():
+                # Tarball missing an entry we expect — refuse to proceed.
+                raise UpdateError(f"新版本 tarball 缺少 {name}")
+            dst = install_dir / name
+            if dst.exists():
+                shutil.move(str(dst), str(backup / name))
+            shutil.move(str(src), str(dst))
+            moved.append(name)
+    except Exception:
+        # Rollback partial move.
+        for name in moved:
+            dst = install_dir / name
+            if dst.exists():
+                shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
+            bak_entry = backup / name
+            if bak_entry.exists():
+                shutil.move(str(bak_entry), str(dst))
+        shutil.rmtree(backup, ignore_errors=True)
+        raise
+    return backup
+
+
+def rollback(backup: Path, install_dir: Path) -> None:
+    for name in MANAGED_ENTRIES:
+        bak_entry = backup / name
+        if not bak_entry.exists():
+            continue
+        dst = install_dir / name
+        if dst.exists():
+            shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
+        shutil.move(str(bak_entry), str(dst))
+    shutil.rmtree(backup, ignore_errors=True)
+
+
+def prune_backups(install_dir: Path, keep: int = BACKUP_KEEP) -> None:
+    backups = sorted(
+        (p for p in install_dir.glob(".sebastian.bak.*") if p.is_dir()),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for old in backups[keep:]:
+        shutil.rmtree(old, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# pip
+# ---------------------------------------------------------------------------
+
+
+def reinstall_editable(install_dir: Path) -> None:
+    """Run ``pip install -e .`` inside the current interpreter."""
+    cmd = [sys.executable, "-m", "pip", "install", "-e", str(install_dir)]
+    proc = subprocess.run(cmd, check=False)
+    if proc.returncode != 0:
+        raise UpdateError("pip install -e . 失败，请查看上方输出")
+
+
+# ---------------------------------------------------------------------------
+# orchestration
+# ---------------------------------------------------------------------------
+
+
+def run_update(
+    *,
+    check_only: bool = False,
+    force: bool = False,
+    assume_yes: bool = False,
+    printer: Callable[[str], None] = print,
+    confirm: Callable[[str], str] = input,
+) -> int:
+    """Entry point used by the CLI. Returns process exit code."""
+    install_dir = resolve_install_dir()
+    cur = current_version()
+    printer(f"安装目录: {install_dir}")
+    printer(f"当前版本: {cur}")
+
+    printer("→ 查询最新版本...")
+    tag = fetch_latest_tag()
+    latest = tag.lstrip("v")
+    printer(f"最新版本: {latest}")
+
+    if latest == cur and not force:
+        printer("✓ 已经是最新版。")
+        return 0
+    if check_only:
+        printer(f"可升级: {cur} → {latest}（运行 `sebastian update` 应用升级）")
+        return 0
+
+    if not assume_yes:
+        ans = confirm(f"将从 {cur} 升级到 {latest}，是否继续？[y/N] ").strip().lower()
+        if ans not in ("y", "yes"):
+            printer("已取消。")
+            return 1
+
+    tar_name = f"sebastian-backend-{tag}.tar.gz"
+    tar_url = f"https://github.com/{REPO}/releases/download/{tag}/{tar_name}"
+    sums_url = f"https://github.com/{REPO}/releases/download/{tag}/SHA256SUMS"
+
+    with tempfile.TemporaryDirectory(prefix="sebastian-update-") as tmp:
+        tmp_path = Path(tmp)
+        tarball = tmp_path / tar_name
+        sums_file = tmp_path / "SHA256SUMS"
+
+        printer(f"→ 下载 {tar_name} ...")
+        _download(tar_url, tarball)
+        printer("→ 下载 SHA256SUMS ...")
+        _download(sums_url, sums_file)
+
+        printer("→ 校验 SHA256 ...")
+        verify_sha256(tarball, sums_file)
+        printer("✓ SHA256 校验通过")
+
+        printer("→ 解压新版本 ...")
+        staging_root = tmp_path / "staging"
+        staging_root.mkdir()
+        staging = extract_tarball(tarball, staging_root)
+
+        printer("→ 替换安装目录文件（旧版本会备份）...")
+        backup = swap_in(staging, install_dir)
+
+        try:
+            printer("→ 重新安装依赖 ...")
+            reinstall_editable(install_dir)
+        except Exception as e:
+            printer(f"✗ 升级失败，正在回滚：{e}")
+            rollback(backup, install_dir)
+            printer("已回滚到旧版本。")
+            return 1
+
+    prune_backups(install_dir)
+    printer("")
+    printer(f"✓ 升级完成：{cur} → {latest}")
+    printer("请关闭当前 sebastian 进程并重新运行 `sebastian serve`。")
+    return 0

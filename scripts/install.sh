@@ -51,6 +51,7 @@ color_grn "✓ 依赖安装完成"
 color_grn ""
 color_grn "============================================"
 color_grn "  即将启动 Sebastian（首次启动会进入初始化向导）"
+color_grn "  后续升级到新版本：sebastian update"
 color_grn "============================================"
 color_grn ""
 exec sebastian serve

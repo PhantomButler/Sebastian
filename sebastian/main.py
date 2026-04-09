@@ -21,6 +21,23 @@ def serve(
 
 
 @app.command()
+def update(
+    check: bool = typer.Option(False, "--check", help="只检查是否有新版本，不实际升级"),
+    force: bool = typer.Option(False, "--force", help="即使版本一致也强制重新下载"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认"),
+) -> None:
+    """Update Sebastian to the latest GitHub release in place."""
+    from sebastian.cli.updater import UpdateError, run_update
+
+    try:
+        code = run_update(check_only=check, force=force, assume_yes=yes)
+    except UpdateError as e:
+        typer.echo(f"❌ {e}", err=True)
+        raise typer.Exit(code=1) from e
+    raise typer.Exit(code=code)
+
+
+@app.command()
 def init(
     headless: bool = typer.Option(
         False, help="Non-interactive CLI wizard (for SSH / headless servers)"

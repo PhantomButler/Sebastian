@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added
+- `sebastian update` 子命令：自托管部署一行命令升级到最新 release。复用
+  bootstrap.sh 的 302 重定向 + SHA256 校验流程，下载 tarball 后原地替换
+  managed entries（`sebastian/`、`pyproject.toml`、`scripts/`、`README.md`、
+  `LICENSE`、`CHANGELOG.md`），保留 `.venv` / `.env` / 数据目录不动，
+  失败自动回滚。支持 `--check` 仅查询、`--force` 强制重装、`-y` 跳过确认。
+
 ## [0.2.1] - 2026-04-09
 
 ### Fixed
