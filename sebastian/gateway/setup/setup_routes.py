@@ -288,7 +288,8 @@ _SETUP_HTML = """\
     </div>
     <div class="field">
       <label for="pw">访问密码</label>
-      <input id="pw" type="password" placeholder="至少 6 个字符" autocomplete="new-password" required minlength="6">
+      <input id="pw" type="password" placeholder="至少 6 个字符"
+             autocomplete="new-password" required minlength="6">
       <div class="hint">密码用于登录 Sebastian，请妥善保管，暂不支持找回。</div>
     </div>
     <button id="btn" type="submit">完成初始化</button>
