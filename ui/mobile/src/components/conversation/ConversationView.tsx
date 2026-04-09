@@ -11,7 +11,7 @@ import type { ConvMessage, ErrorBanner as ErrorBannerType, RenderBlock } from '.
 
 // Static bottom padding: space for the Composer at rest.
 // KeyboardChatScrollView automatically adds keyboard height on top of this.
-const LIST_BOTTOM_PADDING = COMPOSER_DEFAULT_HEIGHT + 36;
+const LIST_BOTTOM_PADDING = COMPOSER_DEFAULT_HEIGHT + 72;
 
 interface Props {
   sessionId: string | null;
