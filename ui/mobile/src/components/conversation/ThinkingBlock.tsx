@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
+import { RightArrowIcon } from '../common/Icons';
 import { MarkdownContent } from './MarkdownContent';
 
 interface Props {
@@ -26,7 +27,7 @@ export function ThinkingBlock({ text, done }: Props) {
       >
         <Text style={styles.pillIcon}>💭</Text>
         <Text style={[styles.pillLabel, { color: colors.textMuted }]}>{label}</Text>
-        <Text style={[styles.pillChevron, { color: colors.textMuted }]}>›</Text>
+        <RightArrowIcon size={12} color={colors.textMuted} />
       </TouchableOpacity>
     );
   }
@@ -46,7 +47,7 @@ export function ThinkingBlock({ text, done }: Props) {
       >
         <Text style={styles.pillIcon}>💭</Text>
         <Text style={[styles.pillLabel, { color: colors.textMuted }]}>{label}</Text>
-        <Text style={[styles.pillChevron, { color: colors.textMuted }]}>⌄</Text>
+        <RightArrowIcon size={12} color={colors.textMuted} style={{ transform: [{ rotate: '90deg' }] }} />
       </TouchableOpacity>
       {/* Content — connected to header, same container */}
       <View style={styles.body}>
@@ -89,5 +90,4 @@ const styles = StyleSheet.create({
   },
   pillIcon: { fontSize: 14 },
   pillLabel: { fontSize: 13, flex: 1 },
-  pillChevron: { fontSize: 16 },
 });
