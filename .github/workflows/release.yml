@@ -132,10 +132,35 @@ jobs:
           p = Path("build.gradle")
           src = p.read_text()
 
-          # 1) Add release signingConfig alongside debug (idempotent).
+
+          def find_block(text: str, header_re: str, start: int = 0) -> tuple[int, int, int]:
+              """Return (header_start, body_start, body_end) for the first block matching
+              header_re after `start`. body_start points right after the opening '{',
+              body_end points at the matching closing '}'."""
+              m = re.search(header_re, text[start:])
+              if not m:
+                  raise SystemExit(f"Could not locate block: {header_re}")
+              header_start = start + m.start()
+              body_start = start + m.end()  # just after '{'
+              depth = 1
+              i = body_start
+              while i < len(text) and depth > 0:
+                  c = text[i]
+                  if c == "{":
+                      depth += 1
+                  elif c == "}":
+                      depth -= 1
+                      if depth == 0:
+                          return header_start, body_start, i
+                  i += 1
+              raise SystemExit(f"Unbalanced braces while scanning block: {header_re}")
+
+
+          # 1) Inject release signingConfig inside signingConfigs {...} (idempotent).
           if "signingConfigs.release" not in src:
+              _, sc_body_start, sc_body_end = find_block(src, r"signingConfigs\s*\{")
               release_block = (
-                  "        release {\n"
+                  "\n        release {\n"
                   "            if (System.getenv(\"ANDROID_KEYSTORE_FILE\")) {\n"
                   "                storeFile file(System.getenv(\"ANDROID_KEYSTORE_FILE\"))\n"
                   "                storePassword System.getenv(\"ANDROID_KEYSTORE_PASSWORD\")\n"
@@ -144,25 +169,25 @@ jobs:
                   "            }\n"
                   "        }\n"
               )
-              src, n = re.subn(
-                  r"(signingConfigs\s*\{\s*\n\s*debug\s*\{[^}]*\}\s*\n)",
-                  r"\1" + release_block,
-                  src,
-                  count=1,
-              )
-              if n != 1:
-                  raise SystemExit("Failed to locate signingConfigs.debug to inject release block")
+              src = src[:sc_body_end] + release_block + src[sc_body_end:]
 
-          # 2) Point buildTypes.release at signingConfigs.release.
-          src, n = re.subn(
-              r"(buildTypes\s*\{\s*\n\s*release\s*\{[^}]*?)signingConfig signingConfigs\.debug",
-              r"\1signingConfig signingConfigs.release",
-              src,
-              count=1,
-              flags=re.S,
+          # 2) Switch buildTypes.release from signingConfigs.debug to signingConfigs.release.
+          _, bt_body_start, bt_body_end = find_block(src, r"buildTypes\s*\{")
+          _, rel_body_start, rel_body_end = find_block(
+              src, r"\brelease\s*\{", start=bt_body_start
           )
-          if n != 1:
-              raise SystemExit("Failed to switch buildTypes.release signingConfig")
+          release_body = src[rel_body_start:rel_body_end]
+          if "signingConfigs.debug" in release_body:
+              release_body = release_body.replace(
+                  "signingConfigs.debug", "signingConfigs.release", 1
+              )
+          elif "signingConfigs.release" not in release_body:
+              # No explicit signingConfig at all — append one.
+              release_body = (
+                  release_body.rstrip()
+                  + "\n            signingConfig signingConfigs.release\n        "
+              )
+          src = src[:rel_body_start] + release_body + src[rel_body_end:]
 
           p.write_text(src)
           print("Injected release signingConfig")
