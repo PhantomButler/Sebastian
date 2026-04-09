@@ -142,12 +142,28 @@ uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8000 --reload
 
 > 模拟器内访问宿主机 localhost 需用 `10.0.2.2`，不是 `127.0.0.1`。
 
-### 生成测试用密码 Hash
+### 本地开发首次启动
 
 ```bash
-python3 -c "from sebastian.gateway.auth import hash_password; print(hash_password('你的密码'))"
-# 将输出写入 .env：SEBASTIAN_OWNER_PASSWORD_HASH=<输出值>
+# 从源码开发首次启动（会进入 Web 初始化向导）
+./scripts/install.sh
+
+# 或已装好依赖后直接启动
+sebastian serve
+
+# 浏览器会被唤起到 http://127.0.0.1:8000/setup?token=...
+# 填入主人名字和密码（至少 6 位）→ 完成 → 服务自动退出
+# 再次 `sebastian serve` 进入正常模式
 ```
+
+Headless 服务器（无图形界面）可以用：
+
+```bash
+sebastian init --headless
+sebastian serve
+```
+
+升级到新版本：`sebastian update`（详见 README）。
 
 ### .env 最小配置（本地开发）
 
@@ -155,11 +171,15 @@ python3 -c "from sebastian.gateway.auth import hash_password; print(hash_passwor
 ANTHROPIC_API_KEY=sk-ant-...
 SEBASTIAN_OWNER_NAME=Eric
 # SEBASTIAN_DATA_DIR 默认 ~/.sebastian，本地开发通常无需设置
-SEBASTIAN_JWT_SECRET=local-dev-secret
-SEBASTIAN_OWNER_PASSWORD_HASH=<用上面命令生成>
 SEBASTIAN_GATEWAY_HOST=127.0.0.1
 SEBASTIAN_GATEWAY_PORT=8000
 ```
+
+> **注意**：从 v0.2.0 起，owner 账号与 JWT 签名密钥不再由环境变量提供：
+> - Owner 账号存在 `~/.sebastian/sebastian.db` 的 `users` 表
+> - JWT 密钥存在 `~/.sebastian/secret.key`（chmod 600）
+> - 两者均由首启 Web 向导或 `sebastian init --headless` 生成
+> - 开发模式若未初始化，可临时设置 `SEBASTIAN_JWT_SECRET` 作为 fallback
 
 ## 4) Lint 与格式化
 
@@ -194,7 +214,7 @@ SEBASTIAN_DATA_DIR=./data
 SEBASTIAN_SANDBOX_ENABLED=true
 SEBASTIAN_GATEWAY_HOST=0.0.0.0
 SEBASTIAN_GATEWAY_PORT=8000
-SEBASTIAN_JWT_SECRET=...
+# SEBASTIAN_JWT_SECRET=...   # 仅作为未初始化时的开发态 fallback
 
 # Phase 3（语音）
 # SEBASTIAN_FCM_KEY=...
@@ -293,6 +313,17 @@ SEBASTIAN_JWT_SECRET=...
   - **Summary**：改了什么、为什么改（1-3 条要点）
   - **Test plan**：验证步骤 checklist
 - 可直接调用 `/commit-pr` skill 自动完成上述全流程
+
+### 分支保护
+- `main` 只接受 PR squash merge，需 CI 四项全绿 + 1 个 approval
+- tag `v*.*.*` 只有 admin 和 `github-actions[bot]` 可创建
+- 日常开发直接 push 到 `dev`
+
+### 发版流程
+1. 在 `main` 上 Actions 页面手动触发 `Release` workflow
+2. 输入语义版本号（如 `0.3.0`）
+3. Workflow 自动同步 `pyproject.toml` + `app.json` 版本 + 改 CHANGELOG + 打 tag + 构建 backend tarball + 签名 Android APK + 发布 GitHub Release（含 SHA256SUMS）
+4. 用户端通过 `sebastian update` 一键升级到新版
 
 ## 12) 安全规范
 
