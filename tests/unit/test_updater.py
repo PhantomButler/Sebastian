@@ -153,9 +153,7 @@ def test_swap_in_replaces_managed_keeps_unmanaged(
     assert (inst / ".venv" / "marker").read_text() == "dont touch\n"
 
 
-def test_rollback_restores_old_files(
-    tmp_path: Path, _patch_backup_parent: Path
-) -> None:
+def test_rollback_restores_old_files(tmp_path: Path, _patch_backup_parent: Path) -> None:
     inst = _make_install_dir(tmp_path)
     tar = _build_release_tarball(tmp_path)
     staging = tmp_path / "staging"
@@ -171,9 +169,7 @@ def test_rollback_restores_old_files(
     assert not backup.exists()
 
 
-def test_swap_in_missing_entry_rolls_back(
-    tmp_path: Path, _patch_backup_parent: Path
-) -> None:
+def test_swap_in_missing_entry_rolls_back(tmp_path: Path, _patch_backup_parent: Path) -> None:
     inst = _make_install_dir(tmp_path)
     # Build a broken staging dir missing LICENSE
     staging = tmp_path / "staging" / "broken"
@@ -195,9 +191,7 @@ def test_swap_in_missing_entry_rolls_back(
     assert (inst / "README.md").read_text() == "old readme\n"
 
 
-def test_prune_backups_keeps_newest(
-    tmp_path: Path, _patch_backup_parent: Path
-) -> None:
+def test_prune_backups_keeps_newest(tmp_path: Path, _patch_backup_parent: Path) -> None:
     backup_root = _patch_backup_parent
     for i in range(5):
         b = backup_root / f"sebastian.bak.{i}"
