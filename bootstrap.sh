@@ -39,7 +39,7 @@ color_ylw "→ 查询最新 release..."
 LATEST_LOCATION="$(curl -fsSIL -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest")"
 LATEST_TAG="${LATEST_LOCATION##*/}"
 if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "latest" ]]; then
-  color_red "❌ 无法解析最新 release tag（从 $LATEST_LOCATION）"
+  color_red "❌ 无法解析最新 release tag（从 ${LATEST_LOCATION}）"
   exit 1
 fi
 color_grn "✓ 最新版本: $LATEST_TAG"
