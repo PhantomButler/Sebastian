@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { StyleSheet, Alert } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, StyleSheet, Alert } from 'react-native';
 import { useTheme, useIsDark } from '../../theme/ThemeContext';
 import { useComposerStore } from '../../store/composer';
 import type { ThinkingEffort } from '../../types';
@@ -95,14 +94,12 @@ export function Composer({
   const isInputDisabled = state === 'sending' || state === 'cancelling';
 
   return (
-    <BlurView
-      intensity={isDark ? 55 : 72}
-      tint={isDark ? 'dark' : 'light'}
+    <View
       style={[
         styles.container,
         isDark
-          ? { borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }
-          : { borderWidth: 0 },
+          ? { backgroundColor: 'rgba(38, 38, 42, 0.82)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }
+          : { backgroundColor: 'rgba(242, 242, 247, 0.95)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
       ]}
     >
       <InputTextArea
@@ -116,7 +113,7 @@ export function Composer({
         onEffortChange={(next) => setEffort(sessionId, next)}
         onSendOrStop={handleSendOrStop}
       />
-    </BlurView>
+    </View>
   );
 }
 
@@ -126,7 +123,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 24,
     padding: 12,
-    overflow: 'hidden',
     // iOS shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
