@@ -62,10 +62,18 @@ export function ConversationView({
     prevMessageCount.current = messageCount;
   }, [messageCount]);
 
+  // Fire as soon as the user's finger starts dragging — before onScroll fires.
+  // This immediately disables auto-follow so the next streaming delta doesn't
+  // snap the list back to bottom while the user is actively scrolling up.
+  const handleScrollBeginDrag = useCallback(() => {
+    isNearBottom.current = false;
+  }, []);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const distFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    isNearBottom.current = distFromBottom < 80;
+    // Re-engage auto-follow only when user scrolls back close to the bottom.
+    isNearBottom.current = distFromBottom < 200;
   }, []);
 
   // Non-streaming: scroll to end when a completed message is appended.
@@ -135,6 +143,7 @@ export function ConversationView({
         renderItem={renderItem}
         renderScrollComponent={renderScrollComponent}
         contentContainerStyle={{ paddingTop: 12, paddingBottom: LIST_BOTTOM_PADDING }}
+        onScrollBeginDrag={handleScrollBeginDrag}
         onScroll={handleScroll}
         scrollEventThrottle={64}
         onContentSizeChange={handleContentSizeChange}
