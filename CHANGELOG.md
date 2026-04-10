@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-04-10
+
+### Added
+- 新增自定义 App 图标（发光交叉环设计）与黑色 splash 背景，替换默认 Expo 图标。
+- `scripts/dev.sh`：开发环境一键启动脚本，使用独立数据目录 `~/.sebastian-dev` 和端口 8824，避免与生产环境冲突。
+
+### Changed
+- 侧边栏导航重构为 `SwipePager` 平铺滑动方案，替换旧 `Sidebar` + `ContentPanGestureArea` 组件，解决导航跳转闪烁与返回状态丢失问题。
+- 统一密钥源为 `secret.key` 文件，移除 `SEBASTIAN_JWT_SECRET` 等废弃环境变量 fallback；`crypto.py` / `auth.py` 只从文件读取密钥。
+- 流式输出滚动优化：修复上滑被强制拉回底部及跟随无法恢复的问题。
+
+### Fixed
+- 修复夜间模式下对话样式与下箭头图标显示异常。
+- 修复 Markdown 引用块夜间模式样式。
+- `setup` 完成后终端正确输出重启提示。
+
 ## [0.2.5] - 2026-04-09
 
 ## [0.2.4] - 2026-04-09
