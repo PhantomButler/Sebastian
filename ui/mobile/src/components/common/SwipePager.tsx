@@ -44,12 +44,13 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
       if (h > 0) setContainerHeight(h);
     }
 
-    // translateX drives all sidebar animations:
-    //   hasLeft+hasRight: snapPoints = [0, -sidebarPx, -2*sidebarPx]
-    //   left or right only: snapPoints = [0, -sidebarPx]
-    // centerIndex = 1 when hasLeft, else 0
+    // translateX drives all panel animations, mirroring the old flex-row track offset.
+    // snapPoints[i] is the translateX value that brings panel i into view.
+    //   hasLeft+hasRight: [0, -sidebarPx, -2*sidebarPx]
+    //   left or right only: [0, -sidebarPx]
+    //   centerIndex = 1 when hasLeft, else 0
     const snapPoints = useMemo(() => {
-      if (hasLeft && hasRight) return [0, -sidebarPx, -(sidebarPx + sidebarPx)];
+      if (hasLeft && hasRight) return [0, -sidebarPx, -(2 * sidebarPx)];
       if (hasLeft || hasRight) return [0, -sidebarPx];
       return [0];
     }, [hasLeft, hasRight, sidebarPx]);
@@ -65,11 +66,8 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
 
     function fireOnPanelChange(snapValue: number) {
       let panel: PanelPosition = 'center';
-      if (hasLeft && snapValue === snapPoints[0]) {
-        panel = 'left';
-      } else if (snapValue !== snapPoints[centerIndex]) {
-        panel = 'right';
-      }
+      if (hasLeft && snapValue === snapPoints[0]) panel = 'left';
+      else if (snapValue !== snapPoints[centerIndex]) panel = 'right';
       setActivePanel(panel);
       if (onPanelChange) onPanelChange(panel);
     }
@@ -131,22 +129,40 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }), [snapPoints, sidebarPx, minSnap, maxSnap]);
 
-    // Left sidebar slides with translateX directly (it was at offset 0 in the old flex track).
-    const leftPanelAnimStyle = useAnimatedStyle(() => ({
+    // Each panel's translateX reproduces the visual position it had in the old flex-row track,
+    // but now every panel is absolutely positioned so its layout coordinates are fixed:
+    //
+    //   left   panel: layout x = 0..sidebarPx          (position: absolute, left: 0)
+    //   center panel: layout x = 0..screenWidth         (position: absolute, left: 0)
+    //   right  panel: layout x = screenWidth-sidebarPx..screenWidth  (position: absolute, right: 0)
+    //
+    // When a panel is the active panel, its visual position matches its layout position,
+    // so Android touch hit-testing works correctly. Inactive panels have pointerEvents="none".
+    //
+    // translateX formulas (same as track offset + shared translateX.value):
+    //   left:   translateX.value  (was at offset 0 in the track)
+    //   center: translateX.value + leftPanelWidth
+    //   right:  translateX.value + (hasLeft ? 2 : 1) * sidebarPx
+    //           (derived so that right-panel visual = screenWidth-sidebarPx when open)
+
+    const leftPanelWidth = hasLeft ? sidebarPx : 0;
+
+    const leftAnimStyle = useAnimatedStyle(() => ({
       transform: [{ translateX: translateX.value }],
     }));
 
-    // Right sidebar offset = (hasLeft ? sidebarPx : 0) + screenWidth
-    // At center snap, this puts the right panel exactly at x=screenWidth (off-screen).
-    const rightPanelBaseOffset = (hasLeft ? sidebarPx : 0) + screenWidth;
-    const rightPanelAnimStyle = useAnimatedStyle(() => ({
-      transform: [{ translateX: translateX.value + rightPanelBaseOffset }],
+    const centerAnimStyle = useAnimatedStyle(() => ({
+      transform: [{ translateX: translateX.value + leftPanelWidth }],
+    }));
+
+    const rightAnimStyle = useAnimatedStyle(() => ({
+      transform: [{ translateX: translateX.value + (hasLeft ? 2 : 1) * sidebarPx }],
     }));
 
     const centerSnapValue = snapPoints[centerIndex];
     const dimStyle = useAnimatedStyle(() => {
-      const distFromCenter = Math.abs(translateX.value - centerSnapValue);
-      const ratio = Math.min(distFromCenter / sidebarPx, 1);
+      const dist = Math.abs(translateX.value - centerSnapValue);
+      const ratio = Math.min(dist / sidebarPx, 1);
       return { opacity: ratio * DIM_OPACITY };
     });
 
@@ -158,8 +174,13 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
 
     return (
       <View style={styles.container} onLayout={handleContainerLayout} {...panResponder.panHandlers}>
-        {/* Center panel: always at layout x=0 so touch hit-testing works correctly on Android. */}
-        <View style={{ width: screenWidth, height: containerHeight, overflow: 'hidden' }}>
+        {/* Render order: center → left → right, so right has highest z-order.
+            Active sidebars sit on top; center is always beneath them. */}
+
+        {/* Center panel: layout x=0..screenWidth, always touchable. */}
+        <Animated.View
+          style={[styles.center, { width: screenWidth, height: containerHeight }, centerAnimStyle]}
+        >
           {children}
           {(hasLeft || hasRight) && (
             <Animated.View style={[styles.dimOverlay, dimStyle]} pointerEvents="none" />
@@ -170,12 +191,12 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
               onPress={() => navigateTo(snapPoints[centerIndex])}
             />
           )}
-        </View>
+        </Animated.View>
 
-        {/* Left sidebar: absolutely positioned, slides over center panel. */}
+        {/* Left panel: layout x=0..sidebarPx — matches visual position when open. */}
         {hasLeft && (
           <Animated.View
-            style={[styles.sidebar, { width: sidebarPx, height: containerHeight }, leftPanelAnimStyle]}
+            style={[styles.leftPanel, { width: sidebarPx, height: containerHeight }, leftAnimStyle]}
             pointerEvents={activePanel === 'left' ? 'auto' : 'none'}
           >
             {left}
@@ -183,10 +204,10 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
           </Animated.View>
         )}
 
-        {/* Right sidebar: absolutely positioned, slides over center panel from the right. */}
+        {/* Right panel: layout x=screenWidth-sidebarPx..screenWidth — matches visual when open. */}
         {hasRight && (
           <Animated.View
-            style={[styles.sidebar, { width: sidebarPx, height: containerHeight }, rightPanelAnimStyle]}
+            style={[styles.rightPanel, { width: sidebarPx, height: containerHeight }, rightAnimStyle]}
             pointerEvents={activePanel === 'right' ? 'auto' : 'none'}
           >
             <View style={styles.panelSepLeft} pointerEvents="none" />
@@ -201,10 +222,23 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    overflow: 'hidden',
   },
-  sidebar: {
+  center: {
     position: 'absolute',
     left: 0,
+    top: 0,
+    overflow: 'hidden',
+  },
+  leftPanel: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    overflow: 'hidden',
+  },
+  rightPanel: {
+    position: 'absolute',
+    right: 0,
     top: 0,
     overflow: 'hidden',
   },

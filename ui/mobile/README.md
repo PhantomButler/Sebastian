@@ -254,6 +254,56 @@ npx expo run:android
 npx tsc --noEmit
 ```
 
+## SwipePager Android 触摸机制
+
+> 核心坑：Android touch hit-test 用 **layout 坐标**，不受 `transform` 影响。
+
+### 问题根因
+
+`SwipePager` 最初用 flex-row `Animated.View` (track) + `translateX` 实现三面板横向滑动：
+
+```
+[left panel][center panel][right panel]  ← flex row，整体 translateX 平移
+```
+
+有左侧栏时，初始 `translateX = -sidebarPx`，视觉上中心面板在 x=0，但**各面板的 layout 坐标不受 transform 影响**：
+
+| 面板 | layout x | 视觉 x（中心状态） |
+|------|---------|-----------------|
+| 左侧 | 0..sidebarPx | -sidebarPx（屏外） |
+| 中心 | sidebarPx..sidebarPx+screenWidth | 0..screenWidth |
+| 右侧 | sidebarPx+screenWidth.. | screenWidth.. |
+
+Android 的 touch hit-test 用 layout 坐标，左侧面板 layout 覆盖屏幕约 80% 宽度，中心面板 FlatList **完全收不到触摸事件**，导致无法上下滚动。SubAgent 页（无左侧栏，translateX=0）因为 layout 与视觉一致，不受影响。
+
+### 修复方案
+
+三面板均改为**绝对定位**，各面板的 layout 坐标与其**激活时的视觉坐标**对齐：
+
+| 面板 | CSS | 激活时 layout = 激活时视觉 |
+|------|-----|--------------------------|
+| 左侧 | `position: absolute, left: 0` | x=0..sidebarPx ✓ |
+| 中心 | `position: absolute, left: 0` | x=0..screenWidth ✓ |
+| 右侧 | `position: absolute, right: 0` | x=screenWidth-sidebarPx..screenWidth ✓ |
+
+**右侧面板必须用 `right: 0`**，否则 layout 在 x=0..sidebarPx，与激活时视觉不符，右侧 sidebar 有约 20% 区域不可点击。
+
+各面板的 `translateX` 完全复刻原 flex-row track 的视觉效果（推移而非覆盖）：
+
+```
+左侧  translateX = tv                          // tv = Reanimated 共享值
+中心  translateX = tv + (hasLeft ? sidebarPx : 0)
+右侧  translateX = tv + (hasLeft ? 2 : 1) * sidebarPx
+```
+
+非激活面板设置 `pointerEvents="none"`，激活面板触摸正常响应。
+
+### 关键结论
+
+> 在 React Native Android 上，**永远不要依赖 `transform` 来移动可交互区域**——hit-test 只认 layout 坐标。需要触摸的地方，layout 必须在正确位置。
+
+---
+
 ## 键盘适配方案
 
 > 技术选型：`react-native-keyboard-controller@1.21.4`（行业标准，WhatsApp/Telegram 同款方案）
