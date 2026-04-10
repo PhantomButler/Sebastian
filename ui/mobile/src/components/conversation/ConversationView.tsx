@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View, StyleSheet, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewProps } from 'react-native';
 import { useConversation } from '../../hooks/useConversation';
 import { useConversationStore } from '../../store/conversation';
@@ -10,27 +10,27 @@ import { COMPOSER_DEFAULT_HEIGHT } from '../composer/constants';
 import type { ConvMessage, ErrorBanner as ErrorBannerType, RenderBlock } from '../../types';
 
 // Static bottom padding: space for the Composer at rest.
-// KeyboardChatScrollView automatically adds keyboard height on top of this.
 const LIST_BOTTOM_PADDING = COMPOSER_DEFAULT_HEIGHT + 72;
 
-// Streaming chunk-scroll: check every SCROLL_INTERVAL_MS whether content has
-// grown past the viewport bottom. When it has, scroll to max offset so that
-// the Footer Spacer (SPACER_RATIO of viewport) sits below actual content,
-// leaving a half-screen of breathing room and naturally anchoring the content
-// bottom to the viewport center.
-const SCROLL_INTERVAL_MS = 400;
-// A small negative tolerance: trigger just before content reaches viewport bottom.
-const SCROLL_TRIGGER_PX = -20;
-// Fraction of viewport height used as the footer spacer during streaming.
+// Trigger a chunk-scroll when actual content bottom is this many px above
+// viewport bottom. Negative = above viewport bottom. Using COMPOSER_DEFAULT_HEIGHT
+// as offset means we trigger just before content reaches the composer top.
+const SCROLL_TRIGGER_PX = -(COMPOSER_DEFAULT_HEIGHT + 20);
+
+// Fraction of viewport height used as a footer spacer during streaming.
+// After each chunk-scroll to max offset, actual content sits at mid-screen
+// and the spacer fills the lower half — no coordinate math needed.
 const SPACER_RATIO = 0.5;
+
+// Duration to hold the animation lock after each programmatic scroll (ms).
+// Prevents overlapping scroll animations when streaming is fast.
+const SCROLL_LOCK_MS = 500;
 
 interface Props {
   sessionId: string | null;
   errorBanner?: ErrorBannerType | null;
   onBannerAction?: () => void;
   bannerActionLabel?: string;
-  // Pass KeyboardChatScrollView as renderScrollComponent for keyboard-aware scrolling.
-  // If omitted, FlatList uses its built-in ScrollView (e.g. in non-chat contexts).
   renderScrollComponent?: (props: ScrollViewProps) => React.ReactElement<ScrollViewProps>;
 }
 
@@ -52,13 +52,17 @@ export function ConversationView({
   const isNearBottom = useRef(true);
   const isStreaming = useRef(false);
 
-  // Live scroll metrics — updated by both onScroll and onContentSizeChange.
+  // Live scroll metrics.
   const scrollOffsetRef = useRef(0);
   const contentHeightRef = useRef(0);
   const viewportHeightRef = useRef(0);
 
-  // Measure the container's actual pixel height so FlatList always has
-  // a bounded scroll region, even if the flex chain above is broken.
+  // Animation lock: prevents overlapping programmatic scroll animations.
+  const isScrollingRef = useRef(false);
+
+  // Tracks previous nowStreaming value to detect the streaming-end transition.
+  const prevNowStreamingRef = useRef(false);
+
   const [containerH, setContainerH] = useState(0);
   const handleContainerLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
@@ -72,10 +76,8 @@ export function ConversationView({
   const messages = session?.messages ?? [];
   const activeTurn = session?.activeTurn ?? null;
 
-  // Track streaming state for scroll behavior
   isStreaming.current = activeTurn !== null && activeTurn.blocks.length > 0;
 
-  // When a new user message is sent, reset to auto-follow
   const messageCount = messages.length;
   const prevMessageCount = useRef(messageCount);
   useEffect(() => {
@@ -88,15 +90,13 @@ export function ConversationView({
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     scrollOffsetRef.current = contentOffset.y;
-    // onScroll always carries the latest contentSize — more reliable than waiting for
-    // onContentSizeChange alone, which can lag on async layout passes.
     contentHeightRef.current = contentSize.height;
     viewportHeightRef.current = layoutMeasurement.height;
     const distFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
     isNearBottom.current = distFromBottom < 300;
   }, []);
 
-  // Non-streaming scroll: when a completed message is appended, scroll to end.
+  // Non-streaming scroll: fires when a completed message is appended.
   const handleContentSizeChange = useCallback((_w: number, h: number) => {
     contentHeightRef.current = h;
     if (isNearBottom.current && !isStreaming.current) {
@@ -104,26 +104,51 @@ export function ConversationView({
     }
   }, []);
 
-  // Streaming chunk-scroll with Footer Spacer technique:
-  // While streaming, a spacer (SPACER_RATIO * viewportH) is appended to the list footer.
-  // This means scrolling to offset 999999 (clamped by native to max) always leaves
-  // actual content sitting at the top ~50% of the screen — no offset math needed.
-  // Each interval tick checks whether actual content has grown past the viewport bottom;
-  // if so, we trigger one scroll-to-max.
   const nowStreaming = !!activeTurn && activeTurn.blocks.length > 0;
+
+  // Streaming content length — changes on every SSE delta, driving the
+  // scroll check without relying on a timer or onContentSizeChange.
+  const streamingLen = useMemo(
+    () =>
+      activeTurn?.blocks.reduce(
+        (acc, b) => acc + ('text' in b ? b.text.length : b.input.length),
+        0,
+      ) ?? 0,
+    [activeTurn],
+  );
+
+  // Data-driven chunk-scroll: fires on every streaming update.
+  // Uses exact scroll max (not 999999) so native animates smoothly.
+  // Updates scrollOffsetRef immediately so the next check uses a fresh baseline
+  // even if onScroll hasn't fired yet.
   useEffect(() => {
-    if (!nowStreaming) return;
-    const id = setInterval(() => {
-      if (!isNearBottom.current) return;
+    if (!nowStreaming || !isNearBottom.current || isScrollingRef.current) return;
+    const viewportH = viewportHeightRef.current || containerH;
+    const spacerH = Math.round(viewportH * SPACER_RATIO);
+    const actualContentH = contentHeightRef.current - spacerH;
+    const dist = actualContentH - scrollOffsetRef.current - viewportH;
+    if (dist < SCROLL_TRIGGER_PX) return;
+    const targetOffset = Math.max(0, contentHeightRef.current - viewportH);
+    isScrollingRef.current = true;
+    scrollOffsetRef.current = targetOffset;
+    flatListRef.current?.scrollToOffset({ offset: targetOffset, animated: true });
+    setTimeout(() => { isScrollingRef.current = false; }, SCROLL_LOCK_MS);
+  }, [streamingLen, nowStreaming, containerH]);
+
+  // Streaming-end transition: when streaming finishes, instantly reposition
+  // the scroll to where content will sit after the spacer is removed.
+  // This prevents native from doing a visible clamp-jump when spacer height
+  // disappears from the content.
+  useEffect(() => {
+    if (prevNowStreamingRef.current && !nowStreaming) {
+      isScrollingRef.current = false;
       const viewportH = viewportHeightRef.current || containerH;
       const spacerH = Math.round(viewportH * SPACER_RATIO);
-      // Actual content bottom relative to viewport bottom (spacer excluded).
-      const actualContentH = contentHeightRef.current - spacerH;
-      const dist = actualContentH - scrollOffsetRef.current - viewportH;
-      if (dist < SCROLL_TRIGGER_PX) return;
-      flatListRef.current?.scrollToOffset({ offset: 999999, animated: true });
-    }, SCROLL_INTERVAL_MS);
-    return () => clearInterval(id);
+      const target = Math.max(0, contentHeightRef.current - spacerH - viewportH);
+      scrollOffsetRef.current = target;
+      flatListRef.current?.scrollToOffset({ offset: target, animated: false });
+    }
+    prevNowStreamingRef.current = nowStreaming;
   }, [nowStreaming, containerH]);
 
   const items: ListItem[] = [
