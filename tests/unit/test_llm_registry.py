@@ -8,8 +8,13 @@ from sebastian.llm.crypto import encrypt
 
 
 @pytest_asyncio.fixture
-async def registry_with_db(monkeypatch):
-    monkeypatch.setattr("sebastian.config.settings.sebastian_jwt_secret", "test-secret")
+async def registry_with_db(tmp_path, monkeypatch):
+    key_file = tmp_path / "secret.key"
+    key_file.write_text("test-secret")
+    monkeypatch.setattr(
+        "sebastian.config.settings.sebastian_data_dir",
+        str(tmp_path),
+    )
     from sebastian.llm.registry import LLMProviderRegistry
     from sebastian.store import models  # noqa: F401
     from sebastian.store.database import Base

@@ -168,18 +168,28 @@ sebastian serve
 ### .env 最小配置（本地开发）
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
 SEBASTIAN_OWNER_NAME=Eric
 # SEBASTIAN_DATA_DIR 默认 ~/.sebastian，本地开发通常无需设置
 SEBASTIAN_GATEWAY_HOST=127.0.0.1
 SEBASTIAN_GATEWAY_PORT=8823
 ```
 
-> **注意**：从 v0.2.0 起，owner 账号与 JWT 签名密钥不再由环境变量提供：
+> **注意**：从 v0.2.0 起，owner 账号、JWT 签名密钥和 LLM API Key 不再由环境变量提供：
 > - Owner 账号存在 `~/.sebastian/sebastian.db` 的 `users` 表
-> - JWT 密钥存在 `~/.sebastian/secret.key`（chmod 600）
+> - JWT 密钥和 API Key 加密密钥均来自 `~/.sebastian/secret.key`（chmod 600）
 > - 两者均由首启 Web 向导或 `sebastian init --headless` 生成
-> - 开发模式若未初始化，可临时设置 `SEBASTIAN_JWT_SECRET` 作为 fallback
+> - LLM API Key 通过 App Settings 页面添加，加密存储在数据库中
+
+### 开发环境隔离
+
+生产和开发使用独立数据目录，避免 `secret.key`、数据库、端口冲突：
+
+```bash
+# 开发环境一键启动（数据目录 ~/.sebastian-dev，端口 8824）
+./scripts/dev.sh
+
+# Android 模拟器 Settings 页填写 Server URL：http://10.0.2.2:8824
+```
 
 ## 4) Lint 与格式化
 
@@ -206,19 +216,18 @@ pytest -s -v tests/unit/test_task_store.py
 ## 6) 运行时环境变量
 
 ```bash
-ANTHROPIC_API_KEY=...
-OPENAI_API_KEY=...                  # 可选，多模型支持
-
 SEBASTIAN_OWNER_NAME=...
 SEBASTIAN_DATA_DIR=./data
 SEBASTIAN_SANDBOX_ENABLED=true
 SEBASTIAN_GATEWAY_HOST=0.0.0.0
 SEBASTIAN_GATEWAY_PORT=8823
-# SEBASTIAN_JWT_SECRET=...   # 仅作为未初始化时的开发态 fallback
 
-# Phase 3（语音）
-# SEBASTIAN_FCM_KEY=...
+# OPENAI_API_KEY=...                # 可选，reserved
+# SEBASTIAN_FCM_KEY=...             # Phase 3（语音）
 ```
+
+> LLM API Key 通过 App Settings 页面管理（加密存储在数据库），不再通过环境变量。
+> JWT 签名密钥和 API Key 加密密钥统一来自 `<data_dir>/secret.key`（setup wizard 自动生成）。
 
 ## 7) Python 代码风格
 

@@ -18,26 +18,12 @@ def test_signer_reads_secret_from_file(tmp_path: Path) -> None:
     assert payload["sub"] == "eric"
 
 
-def test_signer_falls_back_to_env_secret_when_file_missing(tmp_path: Path) -> None:
+def test_signer_refuses_when_file_missing(tmp_path: Path) -> None:
     missing = tmp_path / "absent.key"
 
-    signer = JwtSigner(
-        secret_key_path=missing,
-        algorithm="HS256",
-        expire_minutes=60,
-        fallback_secret="env-secret",
-    )
-    token = signer.encode({"sub": "eric"})
-    assert signer.decode(token)["sub"] == "eric"
-
-
-def test_signer_refuses_when_no_secret_at_all(tmp_path: Path) -> None:
-    missing = tmp_path / "absent.key"
-
-    with pytest.raises(RuntimeError, match="No JWT secret available"):
+    with pytest.raises(RuntimeError, match="Secret key file not found"):
         JwtSigner(
             secret_key_path=missing,
             algorithm="HS256",
             expire_minutes=60,
-            fallback_secret="",
         )

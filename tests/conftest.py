@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -28,10 +29,13 @@ async def db_session():
 
 
 @pytest.fixture(autouse=True)
-def _patch_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """确保每个测试都有必要的环境变量，防止 config 加载失败。"""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
-    monkeypatch.setenv("SEBASTIAN_JWT_SECRET", "test-secret-key")
+def _patch_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """确保每个测试都有临时 secret.key，防止 config/auth 加载失败。"""
+    data_dir = tmp_path / "_sebastian_test_data"
+    data_dir.mkdir()
+    key_file = data_dir / "secret.key"
+    key_file.write_text("test-secret-key")
+    monkeypatch.setattr("sebastian.config.settings.sebastian_data_dir", str(data_dir))
 
 
 @pytest.fixture(autouse=True)

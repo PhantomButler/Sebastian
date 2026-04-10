@@ -25,15 +25,11 @@ class Settings(BaseSettings):
     sebastian_gateway_port: int = 8823
 
     # JWT
-    sebastian_jwt_secret: str = "change-me-in-production"
     sebastian_jwt_algorithm: str = "HS256"
     sebastian_jwt_expire_minutes: int = 43200  # 30 days
 
     # JWT secret key file path (empty = data_dir/secret.key)
     sebastian_secret_key_path: str = ""
-
-    # Owner password (bcrypt hash, set via `sebastian init` CLI)
-    sebastian_owner_password_hash: str = ""
 
     # DB override (empty = auto-derive from data_dir)
     sebastian_db_url: str = ""

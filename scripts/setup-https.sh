@@ -94,10 +94,10 @@ case "$OS" in
     color_grn "✓ Caddy 已通过 systemd 启动"
     ;;
   Darwin)
-    # 停掉可能存在的旧进程
-    pkill -f "caddy run" 2>/dev/null || true
-    nohup caddy run --config "$CADDYFILE" >/tmp/caddy.log 2>&1 &
-    color_grn "✓ Caddy 已在后台启动 (日志: /tmp/caddy.log)"
+    # 停掉可能存在的旧实例
+    caddy stop 2>/dev/null || true
+    caddy start --config "$CADDYFILE"
+    color_grn "✓ Caddy 已在后台启动 (caddy stop 可停止)"
     ;;
 esac
 

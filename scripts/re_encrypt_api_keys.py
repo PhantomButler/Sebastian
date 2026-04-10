@@ -1,32 +1,38 @@
 #!/usr/bin/env python3
-"""re_encrypt_api_keys.py — 轮换 SEBASTIAN_JWT_SECRET 后重新加密 api_key_enc。
+"""re_encrypt_api_keys.py — 轮换 secret.key 后重新加密 api_key_enc。
 
 ## 使用场景
 
 Sebastian 的 LLM Provider api_key 使用 Fernet 对称加密存储，加密密钥从
-SEBASTIAN_JWT_SECRET 派生（SHA-256 → Base64）。
+secret.key 文件内容派生（SHA-256 → Base64）。
 
-**如果你需要轮换 SEBASTIAN_JWT_SECRET，必须先运行本脚本重新加密，再重启服务。**
+**如果你需要轮换 secret.key，必须先运行本脚本重新加密，再重启服务。**
 顺序错误（先重启服务）会导致所有 LLM Provider 调用抛出 InvalidToken 错误。
 
 ## 操作步骤
 
 1. **停止 Sebastian 服务**（避免并发写入）：
    ```
-   docker compose down
+   sebastian stop
    # 或 kill uvicorn 进程
    ```
 
-2. **设置新 secret 到环境变量**（或直接写入 .env 但不要重启服务）：
+2. **替换 secret.key 文件**：
    ```
-   export SEBASTIAN_JWT_SECRET="new-secret-value"
+   # 备份旧的
+   cp ~/.sebastian/secret.key ~/.sebastian/secret.key.bak
+
+   # 生成新的
+   python3 -c "import secrets; print(secrets.token_urlsafe(32))" > ~/.sebastian/secret.key
+   chmod 600 ~/.sebastian/secret.key
    ```
 
 3. **运行本脚本**（在项目根目录）：
    ```
    python scripts/re_encrypt_api_keys.py
    ```
-   脚本会提示输入旧 secret，并从环境变量读取新 secret。
+   脚本会提示输入旧 secret（即 secret.key.bak 的内容），
+   并从当前 secret.key 读取新 secret。
 
 4. **确认输出**：
    ```
@@ -35,16 +41,15 @@ SEBASTIAN_JWT_SECRET 派生（SHA-256 → Base64）。
 
 5. **重启服务**：
    ```
-   docker compose up
-   # 或 uvicorn sebastian.gateway.app:app ...
+   sebastian serve
    ```
 
-## 自定义数据库路径
+## 自定义路径
 
-默认从 SEBASTIAN_DATA_DIR（或 ~/.sebastian）读取数据库路径。
-可通过 --db 参数指定：
+默认从 SEBASTIAN_DATA_DIR（或 ~/.sebastian）读取数据库和 secret.key。
+可通过参数指定：
 ```
-python scripts/re_encrypt_api_keys.py --db /custom/path/sebastian.db
+python scripts/re_encrypt_api_keys.py --db /path/to/sebastian.db --secret-key /path/to/secret.key
 ```
 
 ## 安全说明
@@ -72,18 +77,29 @@ def _make_fernet(secret: str):  # type: ignore[return]
     return Fernet(key)
 
 
-def _resolve_db_path(override: str | None) -> str:
+def _resolve_data_dir(override: str | None) -> Path:
     if override:
-        return str(Path(override).expanduser().resolve())
-    data_dir = os.environ.get("SEBASTIAN_DATA_DIR", str(Path.home() / ".sebastian"))
-    return str(Path(data_dir).expanduser().resolve() / "sebastian.db")
+        return Path(override).expanduser().resolve()
+    default = os.environ.get("SEBASTIAN_DATA_DIR", str(Path.home() / ".sebastian"))
+    return Path(default).expanduser().resolve()
+
+
+def _resolve_db_path(data_dir: Path, db_override: str | None) -> str:
+    if db_override:
+        return str(Path(db_override).expanduser().resolve())
+    return str(data_dir / "sebastian.db")
+
+
+def _resolve_secret_key_path(data_dir: Path, key_override: str | None) -> Path:
+    if key_override:
+        return Path(key_override).expanduser().resolve()
+    return data_dir / "secret.key"
 
 
 async def re_encrypt(old_secret: str, new_secret: str, db_path: str) -> int:
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    # Validate old secret decrypts something before touching the DB
     old_fernet = _make_fernet(old_secret)
     new_fernet = _make_fernet(new_secret)
 
@@ -96,8 +112,6 @@ async def re_encrypt(old_secret: str, new_secret: str, db_path: str) -> int:
 
     try:
         async with factory() as session:
-            # Import here so the script works without installing the package
-            # if run from the project root with PYTHONPATH set
             from sebastian.store.models import LLMProviderRecord  # noqa: PLC0415
 
             result = await session.execute(select(LLMProviderRecord))
@@ -133,30 +147,44 @@ async def re_encrypt(old_secret: str, new_secret: str, db_path: str) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="轮换 SEBASTIAN_JWT_SECRET 后重新加密 LLM Provider api_key_enc。"
+        description="轮换 secret.key 后重新加密 LLM Provider api_key_enc。"
     )
     parser.add_argument(
         "--db",
         metavar="PATH",
         help="数据库文件路径（默认从 SEBASTIAN_DATA_DIR 或 ~/.sebastian 推导）",
     )
+    parser.add_argument(
+        "--data-dir",
+        metavar="PATH",
+        help="数据目录（默认 SEBASTIAN_DATA_DIR 或 ~/.sebastian）",
+    )
+    parser.add_argument(
+        "--secret-key",
+        metavar="PATH",
+        help="新 secret.key 文件路径（默认 <data-dir>/secret.key）",
+    )
     args = parser.parse_args()
 
-    db_path = _resolve_db_path(args.db)
-    print(f"数据库：{db_path}")
+    data_dir = _resolve_data_dir(args.data_dir)
+    db_path = _resolve_db_path(data_dir, args.db)
+    secret_key_path = _resolve_secret_key_path(data_dir, args.secret_key)
+
+    print(f"数据目录：{data_dir}")
+    print(f"数据库：  {db_path}")
+    print(f"密钥文件：{secret_key_path}")
+
+    # Read new secret from secret.key file
+    if not secret_key_path.exists():
+        print(f"❌ 新密钥文件不存在：{secret_key_path}", file=sys.stderr)
+        print("   请先生成新的 secret.key 文件。", file=sys.stderr)
+        sys.exit(1)
+    new_secret = secret_key_path.read_text(encoding="utf-8").strip()
 
     # Read old secret securely (stdin, no echo)
-    old_secret = getpass.getpass("旧 SEBASTIAN_JWT_SECRET: ").strip()
+    old_secret = getpass.getpass("旧 secret.key 内容: ").strip()
     if not old_secret:
         print("❌ 旧 secret 不能为空。", file=sys.stderr)
-        sys.exit(1)
-
-    # Read new secret from env (already set before running this script)
-    new_secret = os.environ.get("SEBASTIAN_JWT_SECRET", "").strip()
-    if not new_secret:
-        new_secret = getpass.getpass("新 SEBASTIAN_JWT_SECRET（未在环境变量中找到）: ").strip()
-    if not new_secret:
-        print("❌ 新 secret 不能为空。", file=sys.stderr)
         sys.exit(1)
 
     if old_secret == new_secret:

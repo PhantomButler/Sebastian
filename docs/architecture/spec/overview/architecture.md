@@ -476,10 +476,11 @@ services:
 ### 最小启动配置
 
 ```env
-ANTHROPIC_API_KEY=...
 SEBASTIAN_OWNER_NAME=...
 SEBASTIAN_GATEWAY_HOST=127.0.0.1
 SEBASTIAN_GATEWAY_PORT=8823
+# LLM API Key 通过 App Settings 页面管理（加密存储在数据库）
+# JWT 签名密钥来自 <data_dir>/secret.key（setup wizard 自动生成）
 ```
 
 ---

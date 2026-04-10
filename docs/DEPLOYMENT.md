@@ -171,14 +171,32 @@ EOF
 
 # 5. 启动 Caddy
 # macOS
-caddy run --config ~/Caddyfile
+caddy start --config ~/Caddyfile
 # Linux
 sudo systemctl enable --now caddy
 ```
 
 </details>
 
-### B.3 启动 Sebastian
+### B.3 Caddy 管理命令（macOS）
+
+```bash
+# 后台启动（推荐，自动 fork 进程）
+caddy start --config ~/Caddyfile
+
+# 修改 Caddyfile 后热重载（不断开连接）
+caddy reload --config ~/Caddyfile
+
+# 停止
+caddy stop
+
+# 前台运行（调试用，Ctrl+C 停止）
+caddy run --config ~/Caddyfile
+```
+
+> Linux 上 Caddy 通过 systemd 管理：`sudo systemctl start/stop/reload caddy`。
+
+### B.4 启动 Sebastian
 
 ```bash
 sebastian serve -d
@@ -186,7 +204,7 @@ sebastian serve -d
 
 确认 Sebastian 监听在 `127.0.0.1:8823`（默认配置），Caddy 负责 HTTPS 终止。
 
-### B.4 App 连接
+### B.5 App 连接
 
 打开 Sebastian App → Settings → Server URL 填入：
 ```
@@ -310,7 +328,16 @@ cloudflared tunnel run sebastian
 ## 常见问题
 
 ### 我只想本地开发调试
-`npx expo run:android` 跑 debug build，直接用 `http://10.0.2.2:8823`（模拟器）或 `http://192.168.x.x:8823`（真机）。不需要配 HTTPS。
+
+源码开发用 `./scripts/dev.sh` 一键启动（独立数据目录 `~/.sebastian-dev`，端口 8824，与生产环境隔离）：
+
+```bash
+./scripts/dev.sh
+# Android 模拟器: http://10.0.2.2:8824
+# 真机: http://192.168.x.x:8824
+```
+
+`npx expo run:android` 跑 debug build，不需要配 HTTPS。
 
 ### SSE 长连接在反代下有问题吗
 Caddy `flush_interval -1` 已关闭缓冲，Cloudflare Tunnel 原生支持流式响应，Tailscale 只是 L3 网络不涉及反代。三种方案都支持 SSE。
