@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
-import { useTheme } from '../../theme/ThemeContext';
+import { useTheme, useIsDark } from '../../theme/ThemeContext';
 import { useComposerStore } from '../../store/composer';
 import type { ThinkingEffort } from '../../types';
 import { InputTextArea } from './InputTextArea';
@@ -23,6 +23,7 @@ export function Composer({
   onStop,
 }: ComposerProps) {
   const colors = useTheme();
+  const isDark = useIsDark();
 
   const [text, setText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -98,8 +99,11 @@ export function Composer({
         styles.container,
         {
           backgroundColor: colors.cardBackground,
-          borderColor: colors.borderLight,
-          shadowColor: colors.shadowColor,
+          shadowColor: '#000000',
+          ...(isDark
+            ? { borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }
+            : { borderWidth: 0 }
+          ),
         },
       ]}
     >
@@ -124,12 +128,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 24,
     padding: 12,
-    borderWidth: 0,
-    // iOS shadow
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 20,
-    // Android shadow
-    elevation: 8,
+    // iOS shadow (subtle drop shadow, not glow)
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    // Android shadow (keep low to avoid halo glow on dark backgrounds)
+    elevation: 3,
   },
 });

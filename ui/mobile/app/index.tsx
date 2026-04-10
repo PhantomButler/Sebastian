@@ -185,7 +185,10 @@ export default function ChatScreen() {
             ]}
             onPress={() => pagerRef.current?.goToLeft()}
           >
-            <Text style={[styles.menuIcon, { color: colors.text }]}>☰</Text>
+            <View style={styles.menuIconWrap}>
+              <View style={[styles.menuBar, styles.menuBarLong, { backgroundColor: colors.text }]} />
+              <View style={[styles.menuBar, styles.menuBarShort, { backgroundColor: colors.text }]} />
+            </View>
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Sebastian</Text>
         </View>
@@ -250,8 +253,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
   },
-  menuButton:  { padding: 8, borderRadius: 10 },
-  menuIcon:    { fontSize: 20 },
+  menuButton:      { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  menuIconWrap:    { gap: 5, alignItems: 'flex-start' },
+  menuBar:         { height: 2, borderRadius: 1 },
+  menuBarLong:     { width: 18 },
+  menuBarShort:    { width: 12 },
   headerTitle: {
     flex: 1,
     textAlign: 'center',

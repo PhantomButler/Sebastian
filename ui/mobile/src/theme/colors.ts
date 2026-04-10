@@ -83,7 +83,7 @@ export const lightColors: ThemeColors = {
 
 export const darkColors: ThemeColors = {
   background: '#000000',
-  secondaryBackground: '#2C2C2E',
+  secondaryBackground: '#111113',
   settingsBackground: '#000000',
   cardBackground: '#2C2C2E',
   inputBackground: '#2C2C2E',
