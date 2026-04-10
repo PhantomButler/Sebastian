@@ -20,10 +20,9 @@ import { Composer } from '../../../src/components/composer';
 import { ConversationView } from '../../../src/components/conversation';
 import { ErrorBanner } from '../../../src/components/conversation/ErrorBanner';
 import { COMPOSER_DEFAULT_HEIGHT } from '../../../src/components/composer/constants';
-import { ContentPanGestureArea } from '../../../src/components/common/ContentPanGestureArea';
+import { SwipePager, type SwipePagerRef } from '../../../src/components/common/SwipePager';
 import { BackButton } from '../../../src/components/common/BackButton';
 import { TodoSidebar } from '../../../src/components/chat/TodoSidebar';
-import { Sidebar } from '../../../src/components/common/Sidebar';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import type { ThinkingEffort } from '../../../src/types';
 
@@ -90,7 +89,7 @@ export default function SessionDetailScreen() {
   const queryClient = useQueryClient();
   const colors = useTheme();
   const [realSessionId, setRealSessionId] = useState<string | null>(null);
-  const [todoSidebarOpen, setTodoSidebarOpen] = useState(false);
+  const pagerRef = useRef<SwipePagerRef>(null);
   const sendingRef = useRef(false);
   const effectiveSessionId = realSessionId || (isNewSession ? null : sessionId);
   const sessionKey = effectiveSessionId ?? sessionId;
@@ -183,20 +182,29 @@ export default function SessionDetailScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: colors.secondaryBackground }]}>
-      <View
-        style={[
-          styles.header,
-          { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.borderLight },
-        ]}
+      <SwipePager
+        ref={pagerRef}
+        right={
+          <TodoSidebar
+            sessionId={effectiveSessionId}
+            agentType={agentName}
+            onClose={() => pagerRef.current?.goToCenter()}
+          />
+        }
       >
-        <BackButton style={styles.back} />
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-          {displayTitle}
-        </Text>
-        <View style={styles.back} />
-      </View>
+        <View
+          style={[
+            styles.header,
+            { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.borderLight },
+          ]}
+        >
+          <BackButton style={styles.back} />
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+            {displayTitle}
+          </Text>
+          <View style={styles.back} />
+        </View>
 
-      <ContentPanGestureArea onOpenRight={() => setTodoSidebarOpen(true)}>
         <KeyboardGestureArea
           style={styles.gestureArea}
           interpolator="ios"
@@ -229,20 +237,7 @@ export default function SessionDetailScreen() {
             />
           </KeyboardStickyView>
         </KeyboardGestureArea>
-      </ContentPanGestureArea>
-
-      <Sidebar
-        visible={todoSidebarOpen}
-        side="right"
-        onOpen={() => setTodoSidebarOpen(true)}
-        onClose={() => setTodoSidebarOpen(false)}
-      >
-        <TodoSidebar
-          sessionId={effectiveSessionId}
-          agentType={agentName}
-          onClose={() => setTodoSidebarOpen(false)}
-        />
-      </Sidebar>
+      </SwipePager>
     </SafeAreaView>
   );
 }
