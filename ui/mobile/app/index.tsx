@@ -24,11 +24,12 @@ import { ConversationView } from '@/src/components/conversation';
 import { ErrorBanner } from '@/src/components/conversation/ErrorBanner';
 import { useConversationStore } from '@/src/store/conversation';
 import { useComposerStore } from '@/src/store/composer';
-import { useTheme } from '@/src/theme/ThemeContext';
+import { useTheme, useIsDark } from '@/src/theme/ThemeContext';
 import { COMPOSER_DEFAULT_HEIGHT } from '@/src/components/composer/constants';
 
 export default function ChatScreen() {
   const colors = useTheme();
+  const isDark = useIsDark();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -176,7 +177,12 @@ export default function ChatScreen() {
           ]}
         >
           <TouchableOpacity
-            style={styles.menuButton}
+            style={[
+              styles.menuButton,
+              isDark
+                ? { backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)' }
+                : { backgroundColor: '#FFFFFF' },
+            ]}
             onPress={() => pagerRef.current?.goToLeft()}
           >
             <Text style={[styles.menuIcon, { color: colors.text }]}>☰</Text>
@@ -244,7 +250,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
   },
-  menuButton:  { padding: 8 },
+  menuButton:  { padding: 8, borderRadius: 10 },
   menuIcon:    { fontSize: 20 },
   headerTitle: {
     flex: 1,

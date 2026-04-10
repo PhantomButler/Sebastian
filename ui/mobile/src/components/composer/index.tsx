@@ -124,12 +124,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 24,
     padding: 12,
-    borderWidth: 1,
+    borderWidth: 0,
     // iOS shadow
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
     // Android shadow
-    elevation: 3,
+    elevation: 8,
   },
 });

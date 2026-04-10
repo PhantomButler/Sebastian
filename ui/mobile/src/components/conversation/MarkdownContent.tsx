@@ -13,7 +13,7 @@ export function MarkdownContent({ content }: Props) {
   const isDark = useIsDark();
 
   const mdStyles = {
-    body: { color: colors.text, fontSize: 15, lineHeight: 22 },
+    body: { color: colors.text, fontSize: 16, lineHeight: 26 },
     heading1: { color: colors.text, fontSize: 20, fontWeight: '700' as const, marginBottom: 8 },
     heading2: { color: colors.text, fontSize: 17, fontWeight: '600' as const, marginBottom: 6 },
     heading3: { color: colors.text, fontSize: 15, fontWeight: '600' as const, marginBottom: 4 },
