@@ -11,8 +11,6 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from sebastian.config import settings
-
 _pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 _bearer = HTTPBearer()
 
@@ -67,6 +65,8 @@ def get_signer() -> JwtSigner:
     """Lazy-loaded global JwtSigner, refreshed by reset_signer()."""
     global _signer
     if _signer is None:
+        from sebastian.config import settings
+
         _signer = JwtSigner(
             secret_key_path=settings.resolved_secret_key_path(),
             algorithm=settings.sebastian_jwt_algorithm,
