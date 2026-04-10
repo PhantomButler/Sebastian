@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -32,16 +32,25 @@ export interface SwipePagerRef {
 
 export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
   function SwipePager({ left, right, children, sidebarWidth = DEFAULT_SIDEBAR_RATIO, onPanelChange }, ref) {
-    const { width: screenWidth } = useWindowDimensions();
+    const { width: screenWidth, height: screenHeight } = useWindowDimensions();
     const hasLeft = left !== undefined;
     const hasRight = right !== undefined;
     const sidebarPx = Math.round(screenWidth * sidebarWidth);
 
+    // GestureDetector on Android adds an internal wrapper View whose height is
+    // auto-sized (content-height) rather than inheriting the parent's flex: 1.
+    // This breaks the FlatList height chain and prevents scrolling.
+    // Fix: measure the container's actual pixel height via onLayout and pass it
+    // explicitly to the track and panels so FlatList gets a bounded height.
+    const [containerHeight, setContainerHeight] = useState(screenHeight);
+
+    function handleContainerLayout(e: LayoutChangeEvent) {
+      const h = e.nativeEvent.layout.height;
+      if (h > 0) setContainerHeight(h);
+    }
+
     const snapPoints = useMemo(() => {
       if (hasLeft && hasRight) {
-        // [leftSnap, centerSnap, rightSnap]
-        // Track layout: [left(sidebarPx)] [center(screenWidth)] [right(sidebarPx)]
-        // rightSnap: translateX = -(sidebarPx + sidebarPx) so right panel left edge aligns at screenWidth - sidebarPx
         return [0, -sidebarPx, -(sidebarPx + sidebarPx)];
       }
       if (hasLeft) {
@@ -53,7 +62,6 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
       return [0];
     }, [hasLeft, hasRight, sidebarPx]);
 
-    // Center snap is always the "home" position
     const centerIndex = hasLeft ? 1 : 0;
     const translateX = useSharedValue(snapPoints[centerIndex]);
     const startX = useSharedValue(0);
@@ -82,24 +90,9 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
       runOnJS(fireOnPanelChange)(target);
     }
 
-    // JS-thread version for imperative API (called from useImperativeHandle)
     function navigateTo(target: number) {
       translateX.value = withSpring(target, SPRING_CONFIG);
       fireOnPanelChange(target);
-    }
-
-    function findNearestSnap(x: number): number {
-      'worklet';
-      let nearest = snapPoints[0];
-      let minDist = Math.abs(x - snapPoints[0]);
-      for (let i = 1; i < snapPoints.length; i++) {
-        const dist = Math.abs(x - snapPoints[i]);
-        if (dist < minDist) {
-          minDist = dist;
-          nearest = snapPoints[i];
-        }
-      }
-      return nearest;
     }
 
     function findCurrentIndex(x: number): number {
@@ -127,7 +120,6 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
       .onUpdate((e) => {
         'worklet';
         const raw = startX.value + e.translationX;
-        // Rubber band effect at boundaries
         if (raw > maxSnap) {
           translateX.value = maxSnap + (raw - maxSnap) * RUBBER_BAND_FACTOR;
         } else if (raw < minSnap) {
@@ -178,16 +170,16 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
     }));
 
     return (
-      <View style={styles.container}>
+      <View style={styles.container} onLayout={handleContainerLayout}>
         <GestureDetector gesture={panGesture}>
-          <Animated.View style={[styles.track, animatedStyle]}>
+          <Animated.View style={[styles.track, { height: containerHeight }, animatedStyle]}>
             {hasLeft && (
-              <View style={[styles.panel, { width: sidebarPx }]}>
+              <View style={{ width: sidebarPx, height: containerHeight, overflow: 'hidden' }}>
                 {left}
                 <View style={styles.panelSepRight} pointerEvents="none" />
               </View>
             )}
-            <View style={[styles.panel, { width: screenWidth }]}>
+            <View style={{ width: screenWidth, height: containerHeight, overflow: 'hidden' }}>
               {children}
               {(hasLeft || hasRight) && (
                 <Animated.View style={[styles.dimOverlay, dimStyle]} pointerEvents="none" />
@@ -200,7 +192,7 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
               )}
             </View>
             {hasRight && (
-              <View style={[styles.panel, { width: sidebarPx }]}>
+              <View style={{ width: sidebarPx, height: containerHeight, overflow: 'hidden' }}>
                 <View style={styles.panelSepLeft} pointerEvents="none" />
                 {right}
               </View>
@@ -218,12 +210,6 @@ const styles = StyleSheet.create({
   },
   track: {
     flexDirection: 'row',
-    flex: 1,
-  },
-  panel: {
-    // alignSelf: 'stretch' (default) handles height in the row track
-    overflow: 'hidden',
-    flexShrink: 0,
   },
   dimOverlay: {
     ...StyleSheet.absoluteFillObject,
