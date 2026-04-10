@@ -7,8 +7,8 @@
 Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑执事的塞巴斯蒂安与 Overlord 的 Sebas Tian，对标钢铁侠贾维斯愿景。
 核心定位：个人主用 + 受控多用户（家人/访客），自托管部署，Android App 为主要交互入口。
 
-**架构 Spec**：`docs/superpowers/specs/2026-04-01-sebastian-architecture-design.md`
-开始工作前必读，包含完整架构决策（双平面、Task 一等公民、BaseAgent 继承、A2A 协议、三层能力目录等）。
+**架构 Spec 索引**：`docs/architecture/spec/INDEX.md`
+开始工作前必读，包含完整架构决策的分模块索引（总体架构、三层 Agent 模型、核心运行时、LLM Provider、System Prompt、日志系统等）。
 
 **关系说明**：OpenJax（`/Users/ericw/work/code/ai/openJax`）是前驱技术探索，Sebastian 继承其设计经验，不继承代码。
 
