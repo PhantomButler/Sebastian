@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sebastian",
     "slug": "sebastian",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "scheme": "sebastian",
     "platforms": [
       "android",

@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-04-10
+
 ### Added
 - 新增自定义 App 图标（发光交叉环设计）与黑色 splash 背景，替换默认 Expo 图标。
 - `scripts/dev.sh`：开发环境一键启动脚本，使用独立数据目录 `~/.sebastian-dev` 和端口 8824，避免与生产环境冲突。
