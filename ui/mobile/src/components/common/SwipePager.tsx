@@ -155,28 +155,33 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
     }));
 
     return (
-      <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.track, animatedStyle]}>
-          {hasLeft && (
-            <View style={[styles.panel, { width: sidebarPx }]}>
-              {left}
+      <View style={styles.container}>
+        <GestureDetector gesture={panGesture}>
+          <Animated.View style={[styles.track, animatedStyle]}>
+            {hasLeft && (
+              <View style={[styles.panel, { width: sidebarPx }]}>
+                {left}
+              </View>
+            )}
+            <View style={[styles.panel, { width: screenWidth }]}>
+              {children}
             </View>
-          )}
-          <View style={[styles.panel, { width: screenWidth }]}>
-            {children}
-          </View>
-          {hasRight && (
-            <View style={[styles.panel, { width: sidebarPx }]}>
-              {right}
-            </View>
-          )}
-        </Animated.View>
-      </GestureDetector>
+            {hasRight && (
+              <View style={[styles.panel, { width: sidebarPx }]}>
+                {right}
+              </View>
+            )}
+          </Animated.View>
+        </GestureDetector>
+      </View>
     );
   },
 );
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   track: {
     flexDirection: 'row',
     flex: 1,
