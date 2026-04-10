@@ -27,20 +27,47 @@ git branch --show-current
 
 若不在 `dev`，**终止**并提示切换。
 
-同步 main 并 rebase：
+**这一步不可跳过。** 这是防止 PR 包含已合并 commit 的关键。
+
+#### 1a. Fetch 并检测已合并旧 commit
 
 ```bash
 git fetch origin main
+git log origin/main..HEAD --oneline   # dev 领先 main 的 commit
+```
+
+若 dev 领先 main 有旧 commit（即上次 PR squash merge 后 dev 没有同步回 main），需要特殊处理。
+
+**判断方法**：dev 领先的 commit 不为空，且这些 commit 的内容已被 main 上的 squash merge 包含。典型特征：这些 commit message 与上次已合并 PR 的 commit 一致。
+
+#### 1b. 同步策略（二选一）
+
+**情况 A — dev 没有领先 main 的旧 commit**（干净状态）：
+
+直接 rebase：
+
+```bash
 git rebase origin/main
 ```
 
-**这一步不可跳过。** 这是防止 PR 包含已合并 commit 的关键。
+**情况 B — dev 有已合并的旧 commit**（上次 PR 合并后未同步）：
 
-若 rebase 有冲突：
-- 展示冲突文件列表
-- 提示用户手动解决后再运行
+此时 `git rebase` 可能因 squash merge 与原始 commit 的文本差异产生无意义冲突。正确做法是先保护新改动，然后将 dev 直接对齐 main：
 
-rebase 成功后推送：
+```bash
+# 1. 保护工作区未提交的改动
+git stash   # 若有未提交改动
+
+# 2. 直接将 dev 对齐到 main（旧 commit 已通过 squash merge 进入 main）
+git reset --hard origin/main
+
+# 3. 恢复新改动
+git stash pop   # 若之前 stash 了
+```
+
+> **为什么不用 rebase？** squash merge 在 main 上产生的是一个合并 commit，与 dev 上的原始 commit 序列文本结构不同。rebase 逐个 replay 原始 commit 时，即使内容语义相同，也可能因文本差异触发冲突。`reset --hard` 直接跳过这些已无用的旧 commit，干净利落。
+
+#### 1c. 推送
 
 ```bash
 git push --force-with-lease
@@ -176,30 +203,34 @@ PR: {pr_url}
 
 ```bash
 git fetch origin main
-git rebase origin/main
+git stash                      # 若有未提交改动
+git reset --hard origin/main   # 直接对齐 main（squash merge 后 rebase 可能冲突）
+git stash pop                  # 恢复改动
 git push --force-with-lease
 ```
 
-**这一步防止下次 PR 出现重复 commit。** 若在 `/release` 之后执行，release workflow 产生的 version commit 也会在这一步同步进来。
+**这一步防止下次 PR 出现重复 commit 和无意义的 rebase 冲突。** 若在 `/release` 之后执行，release workflow 产生的 version commit 也会在这一步同步进来。
+
+> **为什么用 `reset --hard` 而不是 `rebase`？** squash merge 把多个 commit 压成一个，文本结构与原始 commit 不同。`rebase` 逐个 replay 旧 commit 时可能触发文本冲突（即使语义相同），而 `reset --hard` 直接跳过这些已无用的旧 commit。
 
 ## 常见问题
 
 ### PR 包含了已合并的 commit
 
-原因：dev 没 rebase 到最新 main。
+原因：dev 没在上次 PR 合并后同步回 main。
 
 修复：
 
 ```bash
 git fetch origin main
-git rebase origin/main
+git stash                      # 若有未提交改动
+git reset --hard origin/main
+git stash pop
 git push --force-with-lease
 ```
-
-squash merge 的 commit 会被 git 自动 skip（内容已在 main 中）。若有文件级冲突（如 CHANGELOG），解决后 `git rebase --continue`。
 
 ### CHANGELOG 冲突
 
 原因：release workflow 修改了 main 上的 CHANGELOG（翻转 Unreleased 段），而 dev 上也有 CHANGELOG 改动。
 
-处理：rebase 时保留 main 的版本（`git checkout --theirs CHANGELOG.md`），然后在 Unreleased 段重新添加新内容。
+处理：`reset --hard origin/main` 后 CHANGELOG 自动对齐 main 版本，在 Unreleased 段重新添加新内容即可。

@@ -30,15 +30,17 @@ sebastian/
 │   ├── tools/      → capabilities/tools/README.md
 │   ├── mcps/       → capabilities/mcps/README.md
 │   └── skills/     → capabilities/skills/README.md
+├── cli/            → cli/README.md
 ├── config/         → config/README.md
 ├── core/           → core/README.md
 ├── gateway/        → gateway/README.md
 │   └── routes/     → gateway/routes/README.md
 ├── identity/       → identity/README.md
 ├── llm/            → llm/README.md
+├── log/            → log/README.md
 ├── memory/         → memory/README.md
 ├── orchestrator/   → orchestrator/README.md
-│   └── tools/      → orchestrator/tools/README.md
+├── permissions/    → permissions/README.md
 ├── protocol/       → protocol/README.md
 │   ├── a2a/        → protocol/a2a/README.md
 │   └── events/     → protocol/events/README.md
@@ -156,6 +158,43 @@ Sub-Agent 插件目录。当前已有：
 
 执行危险或动态代码时的隔离边界。涉及命令执行、安全限制和容器/沙箱策略时应优先查看这里。
 
+### `cli/`
+
+Typer CLI 子命令与进程守护工具。
+
+- `daemon.py`：PID 文件管理与进程存活检测
+- `init_wizard.py`：无头初始化向导（`sebastian init --headless`）
+- `updater.py`：自升级逻辑（`sebastian update`），含 SHA256 校验、原子替换、失败回滚
+
+适合在以下场景进入：
+
+- 修改 CLI 命令或参数
+- 修改自升级/回滚策略
+- 修改守护进程管理逻辑
+
+### `log/`
+
+三层旋转文件日志系统。
+
+- `manager.py`：LogManager，管理 main.log（始终开启）、llm_stream.log、sse.log 三个 handler
+- `schema.py`：LogState / LogConfigPatch Pydantic 模型
+
+支持运行时通过 REST API 热切换 llm_stream 和 sse 日志。
+
+### `permissions/`
+
+三层权限审查与 workspace 边界强制执行。
+
+- `types.py`：PermissionTier 枚举（LOW / MODEL_DECIDES / HIGH_RISK）、ToolCallContext、ReviewDecision
+- `gate.py`：PolicyGate，权限执行代理，所有工具调用经过此 gate
+- `reviewer.py`：PermissionReviewer，LLM 审查器，对 MODEL_DECIDES 工具做 proceed/escalate 决策
+
+适合在以下场景进入：
+
+- 修改工具权限审查流程
+- 修改 workspace 边界规则
+- 调整 LLM 审查 prompt 或安全策略
+
 ### `config/`、`identity/`、`trigger/`
 
 这几个目录当前体量较小，但分别承载：
@@ -177,10 +216,13 @@ Sub-Agent 插件目录。当前已有：
 | 新增 MCP 集成 | [capabilities/README.md](capabilities/README.md) → `mcps/` |
 | 新增 Sub-Agent | [agents/README.md](agents/README.md) |
 | 修改 LLM 提供商适配 | [llm/README.md](llm/README.md) |
+| 修改日志系统或热切换 | [log/README.md](log/README.md) |
 | 修改记忆系统 | [memory/README.md](memory/README.md) |
+| 修改权限审查或 workspace 边界 | [permissions/README.md](permissions/README.md) |
 | 修改 A2A 协议或事件总线 | [protocol/README.md](protocol/README.md) |
 | 修改沙箱执行策略 | [sandbox/README.md](sandbox/README.md) |
 | 修改全局配置解析 | [config/README.md](config/README.md) |
+| 修改 CLI 命令或自升级逻辑 | [cli/README.md](cli/README.md) |
 
 ## 与前端的接口边界
 

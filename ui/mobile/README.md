@@ -26,7 +26,7 @@
 
 ```text
 ui/mobile/
-├── app/              # Expo Router 页面入口
+├── app/                  → [app/README.md](app/README.md)（Expo Router 页面入口）
 │   ├── _layout.tsx
 │   ├── index.tsx     # ChatScreen（Stack 根，直接渲染）
 │   ├── subagents/    # Sub-Agent 页面
