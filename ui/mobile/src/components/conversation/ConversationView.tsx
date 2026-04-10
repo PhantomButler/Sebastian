@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, View, StyleSheet, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewProps } from 'react-native';
+import { FlatList, View, StyleSheet, TouchableOpacity, Text, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewProps } from 'react-native';
 import { useConversation } from '../../hooks/useConversation';
 import { useConversationStore } from '../../store/conversation';
 import { useTheme } from '../../theme/ThemeContext';
@@ -36,6 +36,12 @@ export function ConversationView({
   const flatListRef = useRef<FlatList>(null);
   const isNearBottom = useRef(true);
   const isStreaming = useRef(false);
+  const [isFollowing, setIsFollowing] = useState(true);
+
+  const setNearBottom = useCallback((value: boolean) => {
+    isNearBottom.current = value;
+    setIsFollowing(value);
+  }, []);
 
   const [containerH, setContainerH] = useState(0);
   const handleContainerLayout = useCallback((e: LayoutChangeEvent) => {
@@ -57,10 +63,10 @@ export function ConversationView({
   const prevMessageCount = useRef(messageCount);
   useEffect(() => {
     if (messageCount > prevMessageCount.current) {
-      isNearBottom.current = true;
+      setNearBottom(true);
     }
     prevMessageCount.current = messageCount;
-  }, [messageCount]);
+  }, [messageCount, setNearBottom]);
 
   // True while the user's finger is on the screen dragging the list.
   // While dragging, onScroll must NOT re-enable isNearBottom — otherwise every
@@ -70,8 +76,8 @@ export function ConversationView({
 
   const handleScrollBeginDrag = useCallback(() => {
     userIsDraggingRef.current = true;
-    isNearBottom.current = false;
-  }, []);
+    setNearBottom(false);
+  }, [setNearBottom]);
 
   // Drag lifted: re-evaluate position. Momentum may still be running, so we
   // also check in onMomentumScrollEnd for the final resting place.
@@ -79,22 +85,22 @@ export function ConversationView({
     userIsDraggingRef.current = false;
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const dist = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    isNearBottom.current = dist < 200;
-  }, []);
+    setNearBottom(dist < 200);
+  }, [setNearBottom]);
 
   const handleMomentumScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const dist = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    isNearBottom.current = dist < 200;
-  }, []);
+    setNearBottom(dist < 200);
+  }, [setNearBottom]);
 
   // onScroll: only update isNearBottom during programmatic scrolls (not drag).
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (userIsDraggingRef.current) return;
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const dist = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    isNearBottom.current = dist < 200;
-  }, []);
+    setNearBottom(dist < 200);
+  }, [setNearBottom]);
 
   // Non-streaming: scroll to end when a completed message is appended.
   const handleContentSizeChange = useCallback((_w: number, h: number) => {
@@ -118,8 +124,12 @@ export function ConversationView({
     [activeTurn],
   );
   useEffect(() => {
-    if (!nowStreaming || !isNearBottom.current) return;
-    flatListRef.current?.scrollToOffset({ offset: 99999, animated: false });
+    if (!nowStreaming || !isNearBottom.current || userIsDraggingRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      if (!isNearBottom.current || userIsDraggingRef.current) return;
+      flatListRef.current?.scrollToOffset({ offset: 99999, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [streamingLen, nowStreaming]);
 
   const items: ListItem[] = [
@@ -147,6 +157,11 @@ export function ConversationView({
     }
     return <AssistantMessage blocks={item.blocks} />;
   }, []);
+
+  const handleScrollToBottom = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 99999, animated: true });
+    setNearBottom(true);
+  }, [setNearBottom]);
 
   return (
     <View
@@ -179,10 +194,39 @@ export function ConversationView({
           ) : null
         }
       />
+      {!isFollowing && (
+        <TouchableOpacity
+          style={[styles.scrollToBottomBtn, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+          onPress={handleScrollToBottom}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.scrollToBottomIcon, { color: colors.textSecondary }]}>↓</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scrollToBottomBtn: {
+    position: 'absolute',
+    bottom: LIST_BOTTOM_PADDING - 8,
+    alignSelf: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  scrollToBottomIcon: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
 });
