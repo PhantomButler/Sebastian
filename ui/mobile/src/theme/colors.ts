@@ -99,8 +99,8 @@ export const darkColors: ThemeColors = {
   error: '#FF453A',
   success: '#30D158',
 
-  userBubbleBg: '#E5E5E5',
-  userBubbleText: '#111111',
+  userBubbleBg: '#35353A',
+  userBubbleText: '#FFFFFF',
 
   inputBorder: '#38383A',
 

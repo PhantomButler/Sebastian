@@ -7,6 +7,7 @@ import { UserBubble } from './UserBubble';
 import { AssistantMessage } from './AssistantMessage';
 import { ErrorBanner } from './ErrorBanner';
 import { COMPOSER_DEFAULT_HEIGHT } from '../composer/constants';
+import { DownArrowIcon } from '../common/Icons';
 import type { ConvMessage, ErrorBanner as ErrorBannerType, RenderBlock } from '../../types';
 
 const LIST_BOTTOM_PADDING = COMPOSER_DEFAULT_HEIGHT + 72;
@@ -200,7 +201,7 @@ export function ConversationView({
           onPress={handleScrollToBottom}
           activeOpacity={0.8}
         >
-          <Text style={[styles.scrollToBottomIcon, { color: colors.textSecondary }]}>↓</Text>
+          <DownArrowIcon size={24} color={colors.textSecondary} />
         </TouchableOpacity>
       )}
     </View>
@@ -224,9 +225,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
-  },
-  scrollToBottomIcon: {
-    fontSize: 18,
-    lineHeight: 22,
   },
 });

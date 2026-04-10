@@ -26,8 +26,8 @@ export function ThinkButton({ current, onChange }: Props) {
   const isDark = useIsDark();
   const capability = useSettingsStore((s) => s.currentThinkingCapability);
   const [pickerVisible, setPickerVisible] = useState(false);
-  const activeBackground = isDark ? '#FFFFFF' : '#111111';
-  const activeForeground = isDark ? '#111111' : '#FFFFFF';
+  const activeBackground = isDark ? '#5F6672' : '#111111';
+  const activeForeground = '#FFFFFF';
 
   // Not loaded / not configured: disabled pill
   if (capability === null) {

@@ -53,6 +53,21 @@ export function RightArrowIcon({ size = 16, color = '#bbb', style }: IconProps) 
   );
 }
 
+// Path data from src/assets/icons/down_arrow.svg
+export function DownArrowIcon({ size = 16, color = '#979797', style }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 1024 1024" style={style}>
+      <Path
+        d="M537.6 760.490667l175.7184-175.7184a25.6 25.6 0 1 1 36.181333 36.215466l-219.409066 219.409067a25.6 25.6 0 0 1-36.181334 0L274.432 620.987733a25.6 25.6 0 0 1 36.215467-36.181333l175.7184 175.684267V186.197333a25.6 25.6 0 1 1 51.2 0V760.490667z"
+        fill={color}
+        stroke={color}
+        strokeWidth={20}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 // ========== 导航/操作 ==========
 
 // Path data from src/assets/icons/close.svg

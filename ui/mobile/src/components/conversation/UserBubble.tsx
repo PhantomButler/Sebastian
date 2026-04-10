@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { useTheme } from '../../theme/ThemeContext';
+import { useIsDark, useTheme } from '../../theme/ThemeContext';
 
 interface Props {
   content: string;
@@ -7,10 +7,17 @@ interface Props {
 
 export function UserBubble({ content }: Props) {
   const colors = useTheme();
+  const isDark = useIsDark();
 
   return (
     <View style={styles.row}>
-      <View style={[styles.bubble, { backgroundColor: colors.userBubbleBg }]}>
+      <View
+        style={[
+          styles.bubble,
+          { backgroundColor: colors.userBubbleBg },
+          isDark ? styles.bubbleDark : null,
+        ]}
+      >
         <Text style={[styles.text, { color: colors.userBubbleText }]}>{content}</Text>
       </View>
     </View>
@@ -29,6 +36,10 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
+  },
+  bubbleDark: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   text: {
     fontSize: 15,

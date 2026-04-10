@@ -98,7 +98,7 @@ export function Composer({
       style={[
         styles.container,
         isDark
-          ? { backgroundColor: 'rgba(38, 38, 42, 0.82)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }
+          ? { backgroundColor: 'rgba(38, 38, 42, 0.97)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }
           : { backgroundColor: 'rgba(242, 242, 247, 0.95)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
       ]}
       onStartShouldSetResponder={() => true}
