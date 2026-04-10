@@ -148,6 +148,7 @@ export default function ChatScreen() {
     >
       <SwipePager
         ref={pagerRef}
+        bottomExcludeHeight={COMPOSER_DEFAULT_HEIGHT + 24}
         left={
           <AppSidebar
             sessions={sessions}

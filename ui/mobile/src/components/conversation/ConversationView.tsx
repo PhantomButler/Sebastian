@@ -13,6 +13,17 @@ import type { ConvMessage, ErrorBanner as ErrorBannerType, RenderBlock } from '.
 // KeyboardChatScrollView automatically adds keyboard height on top of this.
 const LIST_BOTTOM_PADDING = COMPOSER_DEFAULT_HEIGHT + 72;
 
+// Streaming chunk-scroll: check every SCROLL_INTERVAL_MS whether content has
+// grown past the viewport bottom. When it has, scroll to max offset so that
+// the Footer Spacer (SPACER_RATIO of viewport) sits below actual content,
+// leaving a half-screen of breathing room and naturally anchoring the content
+// bottom to the viewport center.
+const SCROLL_INTERVAL_MS = 400;
+// A small negative tolerance: trigger just before content reaches viewport bottom.
+const SCROLL_TRIGGER_PX = -20;
+// Fraction of viewport height used as the footer spacer during streaming.
+const SPACER_RATIO = 0.5;
+
 interface Props {
   sessionId: string | null;
   errorBanner?: ErrorBannerType | null;
@@ -40,6 +51,11 @@ export function ConversationView({
   const flatListRef = useRef<FlatList>(null);
   const isNearBottom = useRef(true);
   const isStreaming = useRef(false);
+
+  // Live scroll metrics — updated by both onScroll and onContentSizeChange.
+  const scrollOffsetRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  const viewportHeightRef = useRef(0);
 
   // Measure the container's actual pixel height so FlatList always has
   // a bounded scroll region, even if the flex chain above is broken.
@@ -71,16 +87,44 @@ export function ConversationView({
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    scrollOffsetRef.current = contentOffset.y;
+    // onScroll always carries the latest contentSize — more reliable than waiting for
+    // onContentSizeChange alone, which can lag on async layout passes.
+    contentHeightRef.current = contentSize.height;
+    viewportHeightRef.current = layoutMeasurement.height;
     const distFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    isNearBottom.current = distFromBottom < 150;
+    isNearBottom.current = distFromBottom < 300;
   }, []);
 
-  const handleContentSizeChange = useCallback(() => {
-    if (isNearBottom.current) {
-      // During streaming use no animation to avoid queued animations conflicting
-      flatListRef.current?.scrollToEnd({ animated: !isStreaming.current });
+  // Non-streaming scroll: when a completed message is appended, scroll to end.
+  const handleContentSizeChange = useCallback((_w: number, h: number) => {
+    contentHeightRef.current = h;
+    if (isNearBottom.current && !isStreaming.current) {
+      flatListRef.current?.scrollToOffset({ offset: h, animated: true });
     }
   }, []);
+
+  // Streaming chunk-scroll with Footer Spacer technique:
+  // While streaming, a spacer (SPACER_RATIO * viewportH) is appended to the list footer.
+  // This means scrolling to offset 999999 (clamped by native to max) always leaves
+  // actual content sitting at the top ~50% of the screen — no offset math needed.
+  // Each interval tick checks whether actual content has grown past the viewport bottom;
+  // if so, we trigger one scroll-to-max.
+  const nowStreaming = !!activeTurn && activeTurn.blocks.length > 0;
+  useEffect(() => {
+    if (!nowStreaming) return;
+    const id = setInterval(() => {
+      if (!isNearBottom.current) return;
+      const viewportH = viewportHeightRef.current || containerH;
+      const spacerH = Math.round(viewportH * SPACER_RATIO);
+      // Actual content bottom relative to viewport bottom (spacer excluded).
+      const actualContentH = contentHeightRef.current - spacerH;
+      const dist = actualContentH - scrollOffsetRef.current - viewportH;
+      if (dist < SCROLL_TRIGGER_PX) return;
+      flatListRef.current?.scrollToOffset({ offset: 999999, animated: true });
+    }, SCROLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [nowStreaming, containerH]);
 
   const items: ListItem[] = [
     ...messages.map((m) => ({ kind: 'message' as const, message: m })),
@@ -127,13 +171,18 @@ export function ConversationView({
         scrollEventThrottle={64}
         onContentSizeChange={handleContentSizeChange}
         ListFooterComponent={
-          errorBanner ? (
-            <ErrorBanner
-              message={errorBanner.message}
-              actionLabel={bannerActionLabel}
-              onAction={onBannerAction ?? (() => {})}
-            />
-          ) : null
+          <>
+            {errorBanner && (
+              <ErrorBanner
+                message={errorBanner.message}
+                actionLabel={bannerActionLabel}
+                onAction={onBannerAction ?? (() => {})}
+              />
+            )}
+            {nowStreaming && containerH > 0 && (
+              <View style={{ height: Math.round((viewportHeightRef.current || containerH) * SPACER_RATIO) }} />
+            )}
+          </>
         }
       />
     </View>

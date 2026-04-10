@@ -22,6 +22,9 @@ export interface SwipePagerProps {
   children: ReactNode;
   sidebarWidth?: number;
   onPanelChange?: (panel: PanelPosition) => void;
+  /** Height (px) from the container bottom to exclude from swipe detection.
+   *  Use this to prevent the Composer / input area from triggering page swipes. */
+  bottomExcludeHeight?: number;
 }
 
 export interface SwipePagerRef {
@@ -31,7 +34,7 @@ export interface SwipePagerRef {
 }
 
 export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
-  function SwipePager({ left, right, children, sidebarWidth = DEFAULT_SIDEBAR_RATIO, onPanelChange }, ref) {
+  function SwipePager({ left, right, children, sidebarWidth = DEFAULT_SIDEBAR_RATIO, onPanelChange, bottomExcludeHeight = 0 }, ref) {
     const { width: screenWidth, height: screenHeight } = useWindowDimensions();
     const hasLeft = left !== undefined;
     const hasRight = right !== undefined;
@@ -89,8 +92,15 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
 
     // PanResponder only claims horizontal swipes; vertical touches pass through to FlatList.
     const panResponder = useMemo(() => PanResponder.create({
-      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-        Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD,
+      onMoveShouldSetPanResponder: (_evt, { dx, dy, y0 }) => {
+        // Ignore swipes originating inside the bottom exclusion zone (e.g. Composer).
+        // y0 is gestureState's initial pageY (absolute screen coords). SwipePager starts
+        // at pageY≈0, so comparing y0 against containerHeight works directly.
+        if (bottomExcludeHeight > 0 && y0 > containerHeight - bottomExcludeHeight) {
+          return false;
+        }
+        return Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD;
+      },
       onPanResponderGrant: () => {
         cancelAnimation(translateX);
         gesture.current.startX = translateX.value;
@@ -127,7 +137,7 @@ export const SwipePager = forwardRef<SwipePagerRef, SwipePagerProps>(
         fireOnPanelChange(snapPoints[targetIdx]);
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }), [snapPoints, sidebarPx, minSnap, maxSnap]);
+    }), [snapPoints, sidebarPx, minSnap, maxSnap, bottomExcludeHeight, containerHeight]);
 
     // Each panel's translateX reproduces the visual position it had in the old flex-row track,
     // but now every panel is absolutely positioned so its layout coordinates are fixed:
