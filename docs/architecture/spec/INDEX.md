@@ -28,15 +28,38 @@ AgentLoop 流式引擎、LLM Provider 抽象与 Thinking 控制、System Prompt 
 | [system-prompt.md](core/system-prompt.md) | Sebastian 人设提示词、BaseAgent 结构化 prompt 构造体系（persona/tools/skills/agents/knowledge 五段式）、per-agent 工具与 Skill 白名单 |
 | [logging.md](core/logging.md) | 三文件日志架构（main/llm_stream/sse）、RotatingFileHandler 轮转策略、LogManager 热切换、Gateway debug API、App Settings UI 集成 |
 
+### [agents/](agents/INDEX.md) — Agent 系统与权限体系
+
+权限三档体系、Workspace 边界强制、Sub-Agent 配置与知识加载。
+
+| Spec | 摘要 |
+|------|------|
+| [code-agent.md](agents/code-agent.md) | CodeAgent persona 与工程规范、BaseAgent 知识加载机制（`_knowledge_section`）、manifest.toml 配置 |
+| [permission.md](agents/permission.md) | PolicyGate + PermissionReviewer 三档权限（LOW/MODEL_DECIDES/HIGH_RISK）、reason 注入、ToolCallContext、Tool 目录重组 |
+| [workspace-boundary.md](agents/workspace-boundary.md) | `_path_utils.py` 路径解析、PolicyGate workspace 边界检查、`_guidelines_section()` 操作规范注入 |
+
+### [capabilities/](capabilities/INDEX.md) — 能力体系
+
+Tools / MCPs / Skills 三层能力注册与实现。
+
+| Spec | 摘要 |
+|------|------|
+| [core-tools.md](capabilities/core-tools.md) | 六个核心工具（Read/Write/Edit/Bash/Glob/Grep）规格、`_file_state.py` mtime 缓存、`_coerce_args` 类型强制转换 |
+
+### [infra/](infra/INDEX.md) — 基础设施
+
+发布流程、CI/CD 工作流、部署与安装。
+
+| Spec | 摘要 |
+|------|------|
+| [release-cicd.md](infra/release-cicd.md) | 首次配置 UX（Web 向导 + CLI）、版本管理、bootstrap.sh 一键安装、CI 质量门禁、release.yml 发版、分支保护 |
+
 ### 待建模块（后续批次）
 
 | 模块 | 预计内容 |
 |------|---------|
-| `agents/` | Sub-Agent 自动注册、manifest.toml 规范、AgentConfig、扩展目录机制 |
-| `capabilities/` | Tools/MCPs/Skills 三层能力体系、注册与扫描机制、Skill SKILL.md 格式 |
 | `mobile/` | Android App 设计（Chat UI、SubAgents 督导、Settings IA、Theme 系统、Composer 等） |
 | `gateway/` | Gateway REST API 完整路由表、SSE 管理、认证机制 |
-| `infra/` | 发布与 CI/CD 工作流、Docker 部署、Mac mini 原生部署 |
 
 ---
 
