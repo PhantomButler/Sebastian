@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, Alert, TouchableOpacity, Text, type ScrollViewProps } from 'react-native';
 import { ConfirmDialog } from '@/src/components/common/ConfirmDialog';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,8 +15,7 @@ import { sendTurn, cancelTurn } from '@/src/api/turns';
 import { deleteSession } from '@/src/api/sessions';
 import type { ThinkingEffort } from '@/src/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { Sidebar } from '@/src/components/common/Sidebar';
-import { ContentPanGestureArea } from '@/src/components/common/ContentPanGestureArea';
+import { SwipePager, type SwipePagerRef } from '@/src/components/common/SwipePager';
 import { EmptyState } from '@/src/components/common/EmptyState';
 import { AppSidebar } from '@/src/components/chat/AppSidebar';
 import { TodoSidebar } from '@/src/components/chat/TodoSidebar';
@@ -32,9 +31,8 @@ export default function ChatScreen() {
   const colors = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [todoSidebarOpen, setTodoSidebarOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const pagerRef = useRef<SwipePagerRef>(null);
 
   const {
     currentSessionId, draftSession,
@@ -147,29 +145,46 @@ export default function ChatScreen() {
       edges={['bottom']}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top,
-            backgroundColor: colors.background,
-            borderBottomColor: colors.borderLight,
-          },
-        ]}
+      <SwipePager
+        ref={pagerRef}
+        left={
+          <AppSidebar
+            sessions={sessions}
+            currentSessionId={currentSessionId}
+            draftSession={draftSession}
+            onSelect={(id) => { setCurrentSession(id); pagerRef.current?.goToCenter(); }}
+            onNewChat={() => { startDraft(); pagerRef.current?.goToCenter(); }}
+            onDelete={setDeleteTarget}
+            onClose={() => pagerRef.current?.goToCenter()}
+          />
+        }
+        right={
+          <TodoSidebar
+            sessionId={currentSessionId}
+            agentType="sebastian"
+            onClose={() => pagerRef.current?.goToCenter()}
+          />
+        }
       >
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={() => setSidebarOpen(true)}
+        <View
+          style={[
+            styles.header,
+            {
+              paddingTop: insets.top,
+              backgroundColor: colors.background,
+              borderBottomColor: colors.borderLight,
+            },
+          ]}
         >
-          <Text style={[styles.menuIcon, { color: colors.text }]}>☰</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Sebastian</Text>
-      </View>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => pagerRef.current?.goToLeft()}
+          >
+            <Text style={[styles.menuIcon, { color: colors.text }]}>☰</Text>
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Sebastian</Text>
+        </View>
 
-      <ContentPanGestureArea
-        onOpenLeft={() => setSidebarOpen(true)}
-        onOpenRight={() => setTodoSidebarOpen(true)}
-      >
         <KeyboardGestureArea
           style={styles.gestureArea}
           interpolator="ios"
@@ -207,36 +222,7 @@ export default function ChatScreen() {
             />
           </KeyboardStickyView>
         </KeyboardGestureArea>
-      </ContentPanGestureArea>
-
-      <Sidebar
-        visible={sidebarOpen}
-        onOpen={() => setSidebarOpen(true)}
-        onClose={() => setSidebarOpen(false)}
-      >
-        <AppSidebar
-          sessions={sessions}
-          currentSessionId={currentSessionId}
-          draftSession={draftSession}
-          onSelect={(id) => { setCurrentSession(id); setSidebarOpen(false); }}
-          onNewChat={() => { startDraft(); setSidebarOpen(false); }}
-          onDelete={setDeleteTarget}
-          onClose={() => setSidebarOpen(false)}
-        />
-      </Sidebar>
-
-      <Sidebar
-        visible={todoSidebarOpen}
-        side="right"
-        onOpen={() => setTodoSidebarOpen(true)}
-        onClose={() => setTodoSidebarOpen(false)}
-      >
-        <TodoSidebar
-          sessionId={currentSessionId}
-          agentType="sebastian"
-          onClose={() => setTodoSidebarOpen(false)}
-        />
-      </Sidebar>
+      </SwipePager>
       <ConfirmDialog
         visible={deleteTarget !== null}
         title="删除对话"
