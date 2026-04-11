@@ -48,7 +48,7 @@ React Native 版（`ui/mobile/`）在流式输出场景下触及架构上限：
 | 本地存储 | DataStore（设置）+ `EncryptedSharedPreferences`（JWT）| 替代 SharedPreferences，协程友好 |
 | Markdown 渲染 | Markwon（后台线程解析）| 在 IO 协程解析为 `Spanned`，Main Thread 只调用 `setText`，不阻塞 |
 | 图片加载 | Coil（Compose 原生支持）| 轻量，Compose 友好，支持 `AsyncImage` |
-| 最低 API | 26（Android 8.0）| 覆盖 95%+ 设备 |
+| 最低 API | 33（Android 13）| Sebastian 为个人主用，不追求覆盖广度；API 33 带来 Predictive Back 手势原生集成、Material You 完整支持 |
 
 ---
 

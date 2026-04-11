@@ -16,7 +16,7 @@ status: in-progress
 与 `ui/mobile/`（React Native 旧版）并列存在，旧版保留作为功能参考。
 
 **技术栈**：Kotlin + Jetpack Compose + Hilt + OkHttp + Retrofit  
-**最低支持**：Android 8.0（API 26）  
+**最低支持**：Android 13（API 33）  
 **设计原则**：性能优先，交互体验对标贾维斯式自然感，架构面向 Phase 3+ 扩展预留
 
 ---
