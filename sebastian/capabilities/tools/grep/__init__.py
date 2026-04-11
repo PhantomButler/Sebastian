@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 
+from sebastian.capabilities.tools._path_utils import resolve_path
 from sebastian.config import settings
 from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
@@ -85,7 +86,7 @@ async def grep(
     context_lines: int | None = None,
     head_limit: int | None = None,
 ) -> ToolResult:
-    search_path = path if path is not None else str(settings.workspace_dir)
+    search_path = str(resolve_path(path) if path is not None else settings.workspace_dir)
     effective_limit = head_limit if head_limit is not None else _DEFAULT_HEAD_LIMIT
     use_rg = _check_rg()
 
