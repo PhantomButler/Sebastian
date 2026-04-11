@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
@@ -47,7 +48,7 @@ export function ProviderEditorLayout({
                 opacity: doneDisabled ? 0.75 : 1,
               },
             ]}
-            onPress={onDone}
+            onPress={() => { Keyboard.dismiss(); onDone?.(); }}
             disabled={doneDisabled}
             activeOpacity={0.8}
           >

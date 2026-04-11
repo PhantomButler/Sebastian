@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -39,6 +39,7 @@ interface Props {
   initial?: LLMProvider;
   onSave: (data: LLMProviderCreate) => Promise<void>;
   onSubmittingChange?: (saving: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export interface ProviderFormHandle {
@@ -64,7 +65,7 @@ function SectionCard({ title, description, children }: SectionCardProps) {
 }
 
 export const ProviderForm = forwardRef<ProviderFormHandle, Props>(function ProviderForm(
-  { initial, onSave, onSubmittingChange },
+  { initial, onSave, onSubmittingChange, onDirtyChange },
   ref,
 ) {
   const colors = useTheme();
@@ -81,6 +82,23 @@ export const ProviderForm = forwardRef<ProviderFormHandle, Props>(function Provi
     initial?.thinking_capability ?? null,
   );
 
+  const isDirty = useMemo(
+    () =>
+      !initial ||
+      name.trim() !== initial.name ||
+      providerType !== initial.provider_type ||
+      apiKey.trim() !== initial.api_key ||
+      model.trim() !== initial.model ||
+      baseUrl.trim() !== initial.base_url ||
+      thinkingCapability !== initial.thinking_capability ||
+      isDefault !== initial.is_default,
+    [initial, name, providerType, apiKey, model, baseUrl, thinkingCapability, isDefault],
+  );
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
   function notifyClamped(from: string, to: string) {
     const msg = `${from} 在新模型下不可用，已切换为 ${to}`;
     if (Platform.OS === 'android') {
@@ -93,6 +111,10 @@ export const ProviderForm = forwardRef<ProviderFormHandle, Props>(function Provi
   async function submit() {
     if (!name.trim() || !apiKey.trim() || !model.trim() || !baseUrl.trim()) {
       Alert.alert('错误', '请填写名称、API Key、模型和 Base URL');
+      return;
+    }
+
+    if (!isDirty) {
       return;
     }
 

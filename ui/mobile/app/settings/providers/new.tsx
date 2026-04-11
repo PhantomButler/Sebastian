@@ -21,14 +21,18 @@ export default function NewProviderScreen() {
 
   async function handleSave(data: LLMProviderCreate) {
     await create(data);
-    router.replace('/settings/providers');
+  }
+
+  async function handleDone() {
+    await formRef.current?.submit();
+    router.back();
   }
 
   return (
     <ProviderEditorLayout
       title="添加 Provider"
       subtitle="新增一个可用模型提供商，并决定是否设为默认。"
-      onDone={jwtToken ? () => void formRef.current?.submit() : undefined}
+      onDone={jwtToken ? () => void handleDone() : undefined}
       doneDisabled={saving}
       doneLoading={saving}
     >
