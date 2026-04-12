@@ -26,3 +26,15 @@ data class CreateSessionRequest(
     @Json(name = "title") val title: String? = null,
     @Json(name = "agent_type") val agentType: String = "sebastian",
 )
+
+@JsonClass(generateAdapter = true)
+data class SessionListResponse(
+    @Json(name = "sessions") val sessions: List<SessionDto>,
+    @Json(name = "total") val total: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
+data class AgentSessionListResponse(
+    @Json(name = "agent_type") val agentType: String,
+    @Json(name = "sessions") val sessions: List<SessionDto>,
+)

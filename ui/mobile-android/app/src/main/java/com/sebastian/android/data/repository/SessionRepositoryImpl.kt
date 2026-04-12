@@ -19,7 +19,7 @@ class SessionRepositoryImpl @Inject constructor(
     override fun sessionsFlow(): Flow<List<Session>> = _sessions.asStateFlow()
 
     override suspend fun loadSessions(): Result<List<Session>> = runCatching {
-        val sessions = apiService.getSessions().map { it.toDomain() }
+        val sessions = apiService.getSessions().sessions.map { it.toDomain() }
         _sessions.value = sessions
         sessions
     }
@@ -31,12 +31,12 @@ class SessionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteSession(sessionId: String): Result<Unit> = runCatching {
+        apiService.deleteSession(sessionId)
         _sessions.value = _sessions.value.filter { it.id != sessionId }
-        // 后端暂无 delete session API，本地移除即可
     }
 
     override suspend fun getAgentSessions(agentType: String): Result<List<Session>> = runCatching {
-        apiService.getAgentSessions(agentType).map { it.toDomain() }
+        apiService.getAgentSessions(agentType).sessions.map { it.toDomain() }
     }
 
     override suspend fun createAgentSession(agentType: String, title: String?): Result<Session> = runCatching {

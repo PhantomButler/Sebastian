@@ -25,6 +25,8 @@ object NetworkModule {
 
     @Provides @Singleton
     fun provideMoshi(): Moshi = Moshi.Builder()
+        // KotlinJsonAdapterFactory required for Map<String, Any> deserialization
+        // used by getAgents(), getPendingApprovals(), and health() in ApiService
         .addLast(KotlinJsonAdapterFactory())
         .build()
 
@@ -45,16 +47,16 @@ object NetworkModule {
 
         // 动态 BaseUrl：每次请求从 DataStore 读取最新 serverUrl 替换
         val baseUrlInterceptor = Interceptor { chain ->
-            val serverUrl = runBlocking { settingsDataStore.serverUrl.first() }
-                .trimEnd('/')
+            val serverUrl = runBlocking { settingsDataStore.serverUrl.first() }.trimEnd('/')
             val original = chain.request()
-            val newUrl = if (serverUrl.isNotEmpty()) {
-                original.url.newBuilder()
-                    .scheme(if (serverUrl.startsWith("https")) "https" else "http")
-                    .host(serverUrl.removePrefix("http://").removePrefix("https://").substringBefore('/').substringBefore(':'))
-                    .port(serverUrl.removePrefix("http://").removePrefix("https://").substringBefore('/').substringAfter(':').toIntOrNull() ?: -1)
-                    .build()
-            } else original.url
+            if (serverUrl.isEmpty()) return@Interceptor chain.proceed(original)
+            val base = okhttp3.HttpUrl.parse("$serverUrl/")
+                ?: return@Interceptor chain.proceed(original)
+            val newUrl = original.url.newBuilder()
+                .scheme(base.scheme())
+                .host(base.host())
+                .port(base.port())
+                .build()
             chain.proceed(original.newBuilder().url(newUrl).build())
         }
 

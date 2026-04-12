@@ -21,17 +21,20 @@ interface ApiService {
 
     // Sessions
     @GET("api/v1/sessions")
-    suspend fun getSessions(): List<SessionDto>
+    suspend fun getSessions(): SessionListResponse
 
     @GET("api/v1/sessions/{sessionId}")
     suspend fun getSession(@Path("sessionId") sessionId: String): SessionDto
+
+    @DELETE("api/v1/sessions/{sessionId}")
+    suspend fun deleteSession(@Path("sessionId") sessionId: String): OkResponse
 
     @GET("api/v1/messages")
     suspend fun getMessages(@Query("session_id") sessionId: String): List<MessageDto>
 
     // SubAgent sessions
     @GET("api/v1/agents/{agentType}/sessions")
-    suspend fun getAgentSessions(@Path("agentType") agentType: String): List<SessionDto>
+    suspend fun getAgentSessions(@Path("agentType") agentType: String): AgentSessionListResponse
 
     @POST("api/v1/agents/{agentType}/sessions")
     suspend fun createAgentSession(

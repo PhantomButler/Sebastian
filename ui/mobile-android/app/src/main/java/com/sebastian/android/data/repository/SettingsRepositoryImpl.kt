@@ -7,6 +7,7 @@ import com.sebastian.android.data.remote.dto.ProviderDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import javax.inject.Inject
@@ -62,10 +63,14 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun testConnection(url: String): Result<Unit> = runCatching {
-        val trimmed = url.trimEnd('/')
-        val response = okHttpClient.newCall(
-            Request.Builder().url("$trimmed/api/v1/health").build()
-        ).execute()
-        if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
+        withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val trimmed = url.trimEnd('/')
+            val response = okHttpClient.newCall(
+                Request.Builder().url("$trimmed/api/v1/health").build()
+            ).execute()
+            response.use {
+                if (!it.isSuccessful) throw Exception("HTTP ${it.code}")
+            }
+        }
     }
 }
