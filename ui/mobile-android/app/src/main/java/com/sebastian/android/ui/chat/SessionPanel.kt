@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -39,7 +40,30 @@ fun SessionPanel(
     onNavigateToSubAgents: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().statusBarsPadding()) {
+        TextButton(
+            onClick = onNavigateToSubAgents,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+        ) {
+            Icon(Icons.Default.Person, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Sub-Agents", modifier = Modifier.weight(1f))
+        }
+        TextButton(
+            onClick = onNavigateToSettings,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+        ) {
+            Icon(Icons.Default.Settings, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("设置", modifier = Modifier.weight(1f))
+        }
+
+        HorizontalDivider()
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -79,29 +103,6 @@ fun SessionPanel(
                     } else ListItemDefaults.colors(),
                 )
             }
-        }
-
-        HorizontalDivider()
-
-        TextButton(
-            onClick = onNavigateToSubAgents,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-        ) {
-            Icon(Icons.Default.Person, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Sub-Agents", modifier = Modifier.weight(1f))
-        }
-        TextButton(
-            onClick = onNavigateToSettings,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-        ) {
-            Icon(Icons.Default.Settings, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("设置", modifier = Modifier.weight(1f))
         }
     }
 }
