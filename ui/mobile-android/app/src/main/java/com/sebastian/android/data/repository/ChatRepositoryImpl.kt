@@ -1,0 +1,55 @@
+package com.sebastian.android.data.repository
+
+import com.sebastian.android.data.model.Message
+import com.sebastian.android.data.model.StreamEvent
+import com.sebastian.android.data.model.ThinkingEffort
+import com.sebastian.android.data.remote.ApiService
+import com.sebastian.android.data.remote.SseClient
+import com.sebastian.android.data.remote.dto.SendTurnRequest
+import kotlinx.coroutines.flow.Flow
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class ChatRepositoryImpl @Inject constructor(
+    private val apiService: ApiService,
+    private val sseClient: SseClient,
+) : ChatRepository {
+
+    override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?): Flow<StreamEvent> =
+        sseClient.sessionStream(baseUrl, sessionId, lastEventId)
+
+    override fun globalStream(baseUrl: String, lastEventId: String?): Flow<StreamEvent> =
+        sseClient.globalStream(baseUrl, lastEventId)
+
+    override suspend fun getMessages(sessionId: String): Result<List<Message>> = runCatching {
+        apiService.getMessages(sessionId).map { it.toDomain() }
+    }
+
+    override suspend fun sendTurn(content: String, effort: ThinkingEffort): Result<Unit> = runCatching {
+        apiService.sendTurn(SendTurnRequest(content = content, thinkingEffort = effort.toApiString()))
+        Unit
+    }
+
+    override suspend fun sendSessionTurn(sessionId: String, content: String, effort: ThinkingEffort): Result<Unit> = runCatching {
+        apiService.sendSessionTurn(sessionId, SendTurnRequest(content = content, thinkingEffort = effort.toApiString()))
+        Unit
+    }
+
+    override suspend fun grantApproval(approvalId: String): Result<Unit> = runCatching {
+        apiService.grantApproval(approvalId)
+        Unit
+    }
+
+    override suspend fun denyApproval(approvalId: String): Result<Unit> = runCatching {
+        apiService.denyApproval(approvalId)
+        Unit
+    }
+
+    private fun ThinkingEffort.toApiString(): String? = when (this) {
+        ThinkingEffort.LOW -> "low"
+        ThinkingEffort.MEDIUM -> "medium"
+        ThinkingEffort.HIGH -> "high"
+        ThinkingEffort.AUTO -> null
+    }
+}
