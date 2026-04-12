@@ -162,7 +162,7 @@ fun ChatScreen(
             AnimatedPane {
                 SessionPanel(
                     sessions = sessionState.sessions,
-                    activeSessionId = null,
+                    activeSessionId = chatState.activeSessionId,
                     onSessionClick = { session ->
                         chatViewModel.switchSession(session.id)
                         scope.launch {
