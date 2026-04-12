@@ -44,13 +44,13 @@ fun SettingsScreen(navController: NavController) {
             SettingsItem(
                 title = "连接与账户",
                 subtitle = "服务器地址、登录状态",
-                onClick = { navController.navigate(Route.SettingsConnection) },
+                onClick = { navController.navigate(Route.SettingsConnection) { launchSingleTop = true } },
             )
             HorizontalDivider()
             SettingsItem(
                 title = "模型与 Provider",
                 subtitle = "LLM Provider 管理",
-                onClick = { navController.navigate(Route.SettingsProviders) },
+                onClick = { navController.navigate(Route.SettingsProviders) { launchSingleTop = true } },
             )
             HorizontalDivider()
         }

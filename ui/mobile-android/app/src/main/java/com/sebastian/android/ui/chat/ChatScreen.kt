@@ -65,8 +65,8 @@ fun ChatScreen(
                     activeSessionId = null,
                     onSessionClick = {},
                     onNewSession = sessionViewModel::createSession,
-                    onNavigateToSettings = { navController.navigate(Route.Settings) },
-                    onNavigateToSubAgents = { navController.navigate(Route.SubAgents) },
+                    onNavigateToSettings = { navController.navigate(Route.Settings) { launchSingleTop = true } },
+                    onNavigateToSubAgents = { navController.navigate(Route.SubAgents) { launchSingleTop = true } },
                 )
             }
         },

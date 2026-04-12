@@ -76,7 +76,7 @@ fun SessionListScreen(
                         },
                         supportingContent = session.lastMessageAt?.let { { Text(it) } },
                         modifier = Modifier.clickable {
-                            navController.navigate(Route.SessionDetail(session.id))
+                            navController.navigate(Route.SessionDetail(session.id)) { launchSingleTop = true }
                         },
                     )
                 }

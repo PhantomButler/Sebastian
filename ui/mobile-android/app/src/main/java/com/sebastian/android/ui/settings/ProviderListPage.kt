@@ -65,7 +65,7 @@ fun ProviderListPage(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { navController.navigate(Route.SettingsProvidersNew) }) {
+            FloatingActionButton(onClick = { navController.navigate(Route.SettingsProvidersNew) { launchSingleTop = true } }) {
                 Icon(Icons.Default.Add, contentDescription = "添加 Provider")
             }
         },
@@ -97,7 +97,7 @@ fun ProviderListPage(
                     items(uiState.providers, key = { it.id }) { provider ->
                         ProviderItem(
                             provider = provider,
-                            onEdit = { navController.navigate(Route.SettingsProvidersEdit(provider.id)) },
+                            onEdit = { navController.navigate(Route.SettingsProvidersEdit(provider.id)) { launchSingleTop = true } },
                             onDelete = { viewModel.deleteProvider(provider.id) },
                             onSetDefault = { viewModel.setDefaultProvider(provider.id) },
                         )
