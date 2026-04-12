@@ -60,9 +60,7 @@ class ChatViewModelTest {
             whenever(chatRepository.denyApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.cancelTurn(any())).thenReturn(Result.success(Unit))
         }
-        viewModel = object : ChatViewModel(chatRepository, settingsRepository, networkMonitor, dispatcher) {
-            override fun bindAppLifecycle() = Unit
-        }
+        viewModel = ChatViewModel(chatRepository, settingsRepository, networkMonitor, dispatcher)
         dispatcher.scheduler.advanceUntilIdle()
     }
 

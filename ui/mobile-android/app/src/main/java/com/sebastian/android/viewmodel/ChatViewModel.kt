@@ -1,8 +1,5 @@
 package com.sebastian.android.viewmodel
 
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sebastian.android.data.local.NetworkMonitor
@@ -49,7 +46,7 @@ data class ChatUiState(
 )
 
 @HiltViewModel
-open class ChatViewModel @Inject constructor(
+class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val networkMonitor: NetworkMonitor,
@@ -65,7 +62,6 @@ open class ChatViewModel @Inject constructor(
 
     init {
         observeNetwork()
-        bindAppLifecycle()
     }
 
     private fun observeNetwork() {
@@ -77,21 +73,6 @@ open class ChatViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    internal open fun bindAppLifecycle() {
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) {
-                if (sseJob?.isActive != true && !_uiState.value.isOffline) {
-                    startSseCollection()
-                }
-            }
-
-            override fun onStop(owner: LifecycleOwner) {
-                sseJob?.cancel()
-                sseJob = null
-            }
-        })
     }
 
     private fun startSseCollection() {
@@ -288,6 +269,17 @@ open class ChatViewModel @Inject constructor(
                     _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY, error = e.message) }
                 }
         }
+    }
+
+    fun onAppStart() {
+        if (sseJob?.isActive != true && !_uiState.value.isOffline) {
+            startSseCollection()
+        }
+    }
+
+    fun onAppStop() {
+        sseJob?.cancel()
+        sseJob = null
     }
 
     fun setEffort(effort: ThinkingEffort) {
