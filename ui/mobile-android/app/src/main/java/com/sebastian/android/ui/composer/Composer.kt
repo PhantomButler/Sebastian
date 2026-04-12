@@ -1,6 +1,7 @@
 // com/sebastian/android/ui/composer/Composer.kt
 package com.sebastian.android.ui.composer
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -64,8 +65,8 @@ fun Composer(
     ) {
         Column {
             // 附件预览区（Phase 2 填充）
-            attachmentPreviewSlot?.let {
-                it()
+            AnimatedVisibility(visible = attachmentPreviewSlot != null) {
+                attachmentPreviewSlot?.invoke()
             }
 
             // 文字输入区

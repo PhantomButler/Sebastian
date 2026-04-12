@@ -87,7 +87,7 @@ fun SendButton(
                     ComposerState.IDLE_EMPTY, ComposerState.IDLE_READY -> Icon(
                         imageVector = Icons.Default.Send,
                         contentDescription = "发送",
-                        tint = if (state == ComposerState.IDLE_EMPTY)
+                        tint = if (targetState == ComposerState.IDLE_EMPTY)
                             MaterialTheme.colorScheme.onSurfaceVariant
                         else
                             MaterialTheme.colorScheme.onPrimary,
