@@ -21,9 +21,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 enum class ComposerState { IDLE_EMPTY, IDLE_READY, SENDING, STREAMING, CANCELLING }
@@ -60,12 +62,43 @@ class ChatViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    private val pendingDeltas = ConcurrentHashMap<String, StringBuilder>()
+
     private var sseJob: Job? = null
     private var currentAssistantMessageId: String? = null
     private var pendingTurnSessionId: String? = null
 
     init {
         observeNetwork()
+        startDeltaFlusher()
+    }
+
+    private fun startDeltaFlusher() {
+        viewModelScope.launch(dispatcher) {
+            while (true) {
+                delay(50L)
+                if (pendingDeltas.isEmpty()) continue
+                val snapshot = pendingDeltas.entries.map { it.key to it.value.toString() }
+                pendingDeltas.clear()
+                val msgId = currentAssistantMessageId ?: continue
+                _uiState.update { state ->
+                    state.copy(
+                        messages = state.messages.map { msg ->
+                            if (msg.id != msgId) return@map msg
+                            msg.copy(
+                                blocks = msg.blocks.map { block ->
+                                    val pending = snapshot.find { it.first == block.blockId }
+                                        ?: return@map block
+                                    if (block is ContentBlock.TextBlock)
+                                        block.copy(text = block.text + pending.second)
+                                    else block
+                                },
+                            )
+                        },
+                    )
+                }
+            }
+        }
     }
 
     private fun observeNetwork() {
@@ -132,11 +165,7 @@ class ChatViewModel @Inject constructor(
             }
 
             is StreamEvent.TextDelta -> {
-                updateBlockInCurrentMessage(event.blockId) { existing ->
-                    if (existing is ContentBlock.TextBlock) {
-                        existing.copy(text = existing.text + event.delta)
-                    } else existing
-                }
+                pendingDeltas.getOrPut(event.blockId) { StringBuilder() }.append(event.delta)
             }
 
             is StreamEvent.TextBlockStop -> {
