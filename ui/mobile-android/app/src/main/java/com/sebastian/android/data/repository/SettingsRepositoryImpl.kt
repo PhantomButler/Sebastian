@@ -7,6 +7,8 @@ import com.sebastian.android.data.remote.dto.ProviderDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,6 +16,7 @@ import javax.inject.Singleton
 class SettingsRepositoryImpl @Inject constructor(
     private val dataStore: SettingsDataStore,
     private val apiService: ApiService,
+    private val okHttpClient: OkHttpClient,
 ) : SettingsRepository {
 
     override val serverUrl: Flow<String> = dataStore.serverUrl
@@ -60,8 +63,8 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun testConnection(url: String): Result<Unit> = runCatching {
         val trimmed = url.trimEnd('/')
-        val response = okhttp3.OkHttpClient().newCall(
-            okhttp3.Request.Builder().url("$trimmed/api/v1/health").build()
+        val response = okHttpClient.newCall(
+            Request.Builder().url("$trimmed/api/v1/health").build()
         ).execute()
         if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
     }
