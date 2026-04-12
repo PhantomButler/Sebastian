@@ -6,13 +6,13 @@ sealed class ContentBlock {
     data class TextBlock(
         override val blockId: String,
         val text: String,
-        val done: Boolean,
+        val done: Boolean = false,
     ) : ContentBlock()
 
     data class ThinkingBlock(
         override val blockId: String,
         val text: String,
-        val done: Boolean,
+        val done: Boolean = false,
         val expanded: Boolean = false,
     ) : ContentBlock()
 
