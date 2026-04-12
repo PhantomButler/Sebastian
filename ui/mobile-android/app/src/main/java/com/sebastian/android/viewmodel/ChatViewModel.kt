@@ -48,6 +48,9 @@ data class ChatUiState(
     val isOffline: Boolean = false,
     val pendingApprovals: List<PendingApproval> = emptyList(),
     val error: String? = null,
+    val isServerNotConfigured: Boolean = false,   // serverUrl 为空时显示配置提示
+    val connectionFailed: Boolean = false,        // SSE 重试耗尽时显示失败提示
+    val flushTick: Long = 0L,                     // 每次 delta flush 后递增，驱动 MessageList 滚动
 )
 
 @HiltViewModel
