@@ -1,0 +1,2 @@
+# 解除根 .gitignore 的 data/ 规则，允许 Android data 包目录被追踪
+!data/
