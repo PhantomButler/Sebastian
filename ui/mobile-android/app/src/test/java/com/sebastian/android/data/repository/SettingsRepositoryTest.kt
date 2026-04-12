@@ -7,7 +7,7 @@ import org.junit.Test
 class SettingsDataStoreTest {
 
     @Test
-    fun `saveServerUrl stores and retrieves value`() {
+    fun `SERVER_URL key name is server_url`() {
         // 验证 DataStore key 常量定义正确
         val key = stringPreferencesKey("server_url")
         assertEquals("server_url", key.name)
