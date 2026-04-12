@@ -28,8 +28,13 @@ async def check_sub_agents() -> ToolResult:
     all_sessions = await state.index_store.list_all()
 
     if ctx.depth == 1:
-        # Sebastian: show all depth=2 sessions
-        sessions = [s for s in all_sessions if s.get("depth") == 2]
+        # Sebastian: show only depth=2 sessions spawned in this conversation session
+        sessions = [
+            s
+            for s in all_sessions
+            if s.get("depth") == 2
+            and s.get("parent_session_id") == ctx.session_id
+        ]
     else:
         # Leader: show only this leader's own depth=3 children
         sessions = [

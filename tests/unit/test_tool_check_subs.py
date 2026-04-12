@@ -14,15 +14,33 @@ async def test_check_sub_agents_as_sebastian():
     mock_state.index_store = AsyncMock()
     mock_state.index_store.list_all = AsyncMock(
         return_value=[
-            {"id": "s1", "agent_type": "code", "depth": 2, "status": "active", "title": "写代码"},
+            {
+                "id": "s1",
+                "agent_type": "code",
+                "depth": 2,
+                "parent_session_id": "seb1",
+                "status": "active",
+                "title": "写代码",
+            },
             {
                 "id": "s2",
                 "agent_type": "stock",
                 "depth": 2,
+                "parent_session_id": "seb1",
                 "status": "completed",
                 "title": "看行情",
             },
-            {"id": "s3", "agent_type": "code", "depth": 3, "status": "active", "title": "子任务"},
+            # depth=3 — should be excluded
+            {"id": "s3", "agent_type": "code", "depth": 3, "parent_session_id": "seb1", "status": "active", "title": "子任务"},
+            # Different parent session — should be excluded
+            {
+                "id": "s4",
+                "agent_type": "code",
+                "depth": 2,
+                "parent_session_id": "other_seb",
+                "status": "active",
+                "title": "历史任务",
+            },
         ]
     )
 
@@ -46,7 +64,8 @@ async def test_check_sub_agents_as_sebastian():
     assert result.ok is True
     assert "写代码" in result.output
     assert "看行情" in result.output
-    assert "子任务" not in result.output
+    assert "子任务" not in result.output  # wrong depth
+    assert "历史任务" not in result.output  # different parent session
 
 
 @pytest.mark.asyncio
