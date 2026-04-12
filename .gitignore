@@ -14,7 +14,7 @@ build/
 .superpowers/
 
 # Data & secrets
-data/
+/data/
 *.db
 *.sqlite
 .env.local
@@ -41,6 +41,12 @@ ui/mobile/android/.gradle/
 ui/mobile/android/build/
 ui/mobile/ios/Pods/
 ui/mobile/ios/build/
+
+# Android native client
+ui/mobile-android/.gradle/
+ui/mobile-android/local.properties
+ui/mobile-android/build/
+ui/mobile-android/app/build/
 
 # Web
 ui/web/node_modules/
