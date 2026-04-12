@@ -255,7 +255,7 @@ private fun SessionItem(
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            session.lastMessageAt?.let { dateStr ->
+            session.lastActivityAt?.let { dateStr ->
                 Text(
                     text = dateStr.take(10),
                     style = MaterialTheme.typography.labelSmall,

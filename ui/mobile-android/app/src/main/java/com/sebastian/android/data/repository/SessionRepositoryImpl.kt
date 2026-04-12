@@ -25,9 +25,17 @@ class SessionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun createSession(title: String?): Result<Session> = runCatching {
-        val session = apiService.createAgentSession("sebastian", CreateSessionRequest(title = title)).toDomain()
-        _sessions.value = listOf(session) + _sessions.value
-        session
+        val response = apiService.createAgentSession(
+            "sebastian",
+            CreateSessionRequest(content = title ?: "新对话"),
+        )
+        val domain = Session(
+            id = response.sessionId,
+            title = title ?: "新对话",
+            agentType = "sebastian",
+        )
+        _sessions.value = listOf(domain) + _sessions.value
+        domain
     }
 
     override suspend fun deleteSession(sessionId: String): Result<Unit> = runCatching {
@@ -40,6 +48,14 @@ class SessionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun createAgentSession(agentType: String, title: String?): Result<Session> = runCatching {
-        apiService.createAgentSession(agentType, CreateSessionRequest(title = title)).toDomain()
+        val response = apiService.createAgentSession(
+            agentType,
+            CreateSessionRequest(content = title ?: "新对话"),
+        )
+        Session(
+            id = response.sessionId,
+            title = title ?: "新对话",
+            agentType = agentType,
+        )
     }
 }

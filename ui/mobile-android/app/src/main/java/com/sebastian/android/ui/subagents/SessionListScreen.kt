@@ -74,7 +74,7 @@ fun SessionListScreen(
                         headlineContent = {
                             Text(session.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
-                        supportingContent = session.lastMessageAt?.let { { Text(it) } },
+                        supportingContent = session.lastActivityAt?.let { { Text(it.take(16)) } },
                         modifier = Modifier.clickable {
                             navController.navigate(Route.SessionDetail(session.id)) { launchSingleTop = true }
                         },

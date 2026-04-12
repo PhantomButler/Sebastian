@@ -90,7 +90,7 @@ fun ChatScreen(
                     chatViewModel.switchSession(session.id)
                     activePane = SidePane.NONE
                 },
-                onNewSession = sessionViewModel::createSession,
+                onNewSession = chatViewModel::newSession,
                 onNavigateToSettings = {
                     navController.navigate(Route.Settings) { launchSingleTop = true }
                 },

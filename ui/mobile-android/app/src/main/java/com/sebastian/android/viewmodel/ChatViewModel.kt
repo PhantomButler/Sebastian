@@ -11,6 +11,7 @@ import com.sebastian.android.data.model.StreamEvent
 import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.model.ToolStatus
 import com.sebastian.android.data.repository.ChatRepository
+import com.sebastian.android.data.repository.SessionRepository
 import com.sebastian.android.data.repository.SettingsRepository
 import com.sebastian.android.di.IoDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,18 +46,19 @@ data class ChatUiState(
     val scrollFollowState: ScrollFollowState = ScrollFollowState.FOLLOWING,
     val agentAnimState: AgentAnimState = AgentAnimState.IDLE,
     val activeThinkingEffort: ThinkingEffort = ThinkingEffort.AUTO,
-    val activeSessionId: String = "main",
+    val activeSessionId: String? = null,       // null = 新对话
     val isOffline: Boolean = false,
     val pendingApprovals: List<PendingApproval> = emptyList(),
     val error: String? = null,
-    val isServerNotConfigured: Boolean = false,   // serverUrl 为空时显示配置提示
-    val connectionFailed: Boolean = false,        // SSE 重试耗尽时显示失败提示
-    val flushTick: Long = 0L,                     // 每次 delta flush 后递增，驱动 MessageList 滚动
+    val isServerNotConfigured: Boolean = false,
+    val connectionFailed: Boolean = false,
+    val flushTick: Long = 0L,
 )
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
+    private val sessionRepository: SessionRepository,
     private val settingsRepository: SettingsRepository,
     private val networkMonitor: NetworkMonitor,
     private val markdownParser: MarkdownParser,
@@ -75,6 +77,26 @@ class ChatViewModel @Inject constructor(
     init {
         observeNetwork()
         startDeltaFlusher()
+        loadLatestSession()
+    }
+
+    /** On startup, load sessions and auto-select the most recent one. */
+    private fun loadLatestSession() {
+        viewModelScope.launch(dispatcher) {
+            sessionRepository.loadSessions()
+                .onSuccess { sessions ->
+                    val latest = sessions.firstOrNull()
+                    if (latest != null) {
+                        _uiState.update { it.copy(activeSessionId = latest.id) }
+                        chatRepository.getMessages(latest.id)
+                            .onSuccess { history ->
+                                _uiState.update { it.copy(messages = history) }
+                            }
+                        startSseCollection()
+                    }
+                    // If no sessions, activeSessionId stays null (new conversation)
+                }
+        }
     }
 
     private fun startDeltaFlusher() {
@@ -113,7 +135,7 @@ class ChatViewModel @Inject constructor(
                 _uiState.update { it.copy(isOffline = !isOnline) }
                 if (isOnline) {
                     _uiState.update { it.copy(connectionFailed = false) }
-                    if (sseJob?.isActive != true) {
+                    if (sseJob?.isActive != true && _uiState.value.activeSessionId != null) {
                         startSseCollection()
                     }
                 }
@@ -122,20 +144,21 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * 根据当前消息列表的最后一条消息决定 SSE Last-Event-ID：
-     * - 空列表或最后消息为 USER → "0"，请求全量回放
-     * - 最后消息为 ASSISTANT → ""，只订阅新事件
+     * Determine Last-Event-ID based on current messages:
+     * - Empty or last message is USER → "0" (replay to catch active turn)
+     * - Last message is ASSISTANT → "" (subscribe to new events only)
      */
     private fun determineLastEventId(): String {
         val lastMessage = _uiState.value.messages.lastOrNull() ?: return "0"
         return when (lastMessage.role) {
             MessageRole.USER -> "0"
             MessageRole.ASSISTANT -> ""
-            else -> "0"
         }
     }
 
     private fun startSseCollection() {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        sseJob?.cancel()
         sseJob = viewModelScope.launch(dispatcher) {
             val baseUrl = settingsRepository.serverUrl.first()
             if (baseUrl.isEmpty()) {
@@ -143,13 +166,12 @@ class ChatViewModel @Inject constructor(
                 return@launch
             }
             _uiState.update { it.copy(isServerNotConfigured = false, connectionFailed = false) }
-            val sessionId = _uiState.value.activeSessionId
             val lastEventId = determineLastEventId()
             try {
                 chatRepository.sessionStream(baseUrl, sessionId, lastEventId).collect { event ->
                     handleEvent(event)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 if (!_uiState.value.isOffline) {
                     _uiState.update { it.copy(connectionFailed = true) }
                 }
@@ -160,8 +182,6 @@ class ChatViewModel @Inject constructor(
     private fun handleEvent(event: StreamEvent) {
         when (event) {
             is StreamEvent.TurnReceived -> {
-                // Defer message creation until the first block arrives to avoid
-                // emitting an intermediate IDLE_EMPTY state with an empty message.
                 pendingTurnSessionId = event.sessionId
                 currentAssistantMessageId = UUID.randomUUID().toString()
             }
@@ -234,7 +254,6 @@ class ChatViewModel @Inject constructor(
                 updateBlockInCurrentMessage(event.blockId) { existing ->
                     if (existing is ContentBlock.ToolBlock) existing.copy(inputs = event.inputs) else existing
                 }
-                // Status stays PENDING until ToolRunning event
             }
 
             is StreamEvent.ToolRunning -> {
@@ -306,9 +325,10 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage(text: String) {
         if (text.isBlank()) return
+        val currentSessionId = _uiState.value.activeSessionId
         val userMsg = Message(
             id = UUID.randomUUID().toString(),
-            sessionId = _uiState.value.activeSessionId,
+            sessionId = currentSessionId ?: "pending",
             role = MessageRole.USER,
             text = text,
         )
@@ -320,7 +340,16 @@ class ChatViewModel @Inject constructor(
             )
         }
         viewModelScope.launch(dispatcher) {
-            chatRepository.sendTurn(text, _uiState.value.activeThinkingEffort)
+            chatRepository.sendTurn(currentSessionId, text, _uiState.value.activeThinkingEffort)
+                .onSuccess { returnedSessionId ->
+                    if (currentSessionId == null || currentSessionId != returnedSessionId) {
+                        // New session created by backend — switch to it
+                        _uiState.update { it.copy(activeSessionId = returnedSessionId) }
+                        startSseCollection()
+                        // Refresh session list so the sidebar picks up the new session
+                        sessionRepository.loadSessions()
+                    }
+                }
                 .onFailure { e ->
                     _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
                 }
@@ -340,10 +369,11 @@ class ChatViewModel @Inject constructor(
     }
 
     fun cancelTurn() {
+        val sessionId = _uiState.value.activeSessionId ?: return
         _uiState.update { it.copy(composerState = ComposerState.CANCELLING) }
         viewModelScope.launch(dispatcher) {
             withTimeoutOrNull(5_000L) {
-                chatRepository.cancelTurn(_uiState.value.activeSessionId)
+                chatRepository.cancelTurn(sessionId)
                     .onFailure { e ->
                         _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY, error = e.message) }
                     }
@@ -378,13 +408,32 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** Start a new conversation (no session yet). */
+    fun newSession() {
+        sseJob?.cancel()
+        sseJob = null
+        pendingDeltas.clear()
+        currentAssistantMessageId = null
+        pendingTurnSessionId = null
+        _uiState.update {
+            it.copy(
+                activeSessionId = null,
+                messages = emptyList(),
+                composerState = ComposerState.IDLE_EMPTY,
+                agentAnimState = AgentAnimState.IDLE,
+                pendingApprovals = emptyList(),
+                connectionFailed = false,
+            )
+        }
+    }
+
     fun retryConnection() {
         _uiState.update { it.copy(connectionFailed = false) }
         startSseCollection()
     }
 
     fun onAppStart() {
-        if (sseJob?.isActive != true && !_uiState.value.isOffline) {
+        if (sseJob?.isActive != true && !_uiState.value.isOffline && _uiState.value.activeSessionId != null) {
             startSseCollection()
         }
     }
@@ -440,7 +489,6 @@ class ChatViewModel @Inject constructor(
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    /** Update a block by [blockId] across all messages. */
     private fun updateBlock(blockId: String, transform: (ContentBlock) -> ContentBlock) {
         _uiState.update { state ->
             state.copy(
@@ -461,7 +509,6 @@ class ChatViewModel @Inject constructor(
         pendingTurnSessionId = null
         _uiState.update { state ->
             val messages = if (sessionId != null && state.messages.none { it.id == msgId }) {
-                // Message hasn't been added yet — create it now with the first block
                 val newMsg = Message(
                     id = msgId,
                     sessionId = sessionId,

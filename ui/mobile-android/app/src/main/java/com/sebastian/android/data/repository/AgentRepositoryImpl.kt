@@ -16,16 +16,7 @@ class AgentRepositoryImpl @Inject constructor(
 
     override suspend fun getAgents(): Result<List<AgentInfo>> = runCatching {
         withContext(dispatcher) {
-            apiService.getAgents()
-                .map { map ->
-                    AgentInfo(
-                        agentType = map["agent_type"]?.toString() ?: "",
-                        name = map["name"]?.toString() ?: "",
-                        description = map["description"]?.toString() ?: "",
-                        isActive = map["is_active"] as? Boolean ?: false,
-                    )
-                }
-                .filter { it.agentType.isNotEmpty() }
+            apiService.getAgents().agents.map { it.toDomain() }
         }
     }
 }

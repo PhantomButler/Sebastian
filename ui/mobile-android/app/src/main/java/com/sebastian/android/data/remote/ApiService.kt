@@ -43,11 +43,11 @@ interface ApiService {
     suspend fun createAgentSession(
         @Path("agentType") agentType: String,
         @Body body: CreateSessionRequest,
-    ): SessionDto
+    ): TurnDto  // Backend returns {"session_id": "...", "ts": "..."}
 
     // Agents
     @GET("api/v1/agents")
-    suspend fun getAgents(): List<Map<String, Any>>
+    suspend fun getAgents(): AgentListResponse
 
     // Providers
     @GET("api/v1/llm-providers")
@@ -57,7 +57,7 @@ interface ApiService {
     suspend fun createProvider(@Body body: ProviderDto): ProviderDto
 
     @PUT("api/v1/llm-providers/{id}")
-    suspend fun updateProvider(@Path("id") id: String, @Body body: ProviderDto): ProviderDto
+    suspend fun updateProvider(@Path("id") id: String, @Body body: Map<String, @JvmSuppressWildcards Any>): ProviderDto
 
     @DELETE("api/v1/llm-providers/{id}")
     suspend fun deleteProvider(@Path("id") id: String): OkResponse

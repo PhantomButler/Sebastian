@@ -9,22 +9,28 @@ data class SessionDto(
     @Json(name = "id") val id: String,
     @Json(name = "title") val title: String?,
     @Json(name = "agent_type") val agentType: String,
-    @Json(name = "last_message_at") val lastMessageAt: String?,
-    @Json(name = "is_active") val isActive: Boolean = false,
+    @Json(name = "status") val status: String = "active",
+    @Json(name = "depth") val depth: Int = 1,
+    @Json(name = "parent_session_id") val parentSessionId: String? = null,
+    @Json(name = "last_activity_at") val lastActivityAt: String? = null,
+    @Json(name = "updated_at") val updatedAt: String? = null,
+    @Json(name = "task_count") val taskCount: Int = 0,
+    @Json(name = "active_task_count") val activeTaskCount: Int = 0,
 ) {
     fun toDomain() = Session(
         id = id,
         title = title ?: "新对话",
         agentType = agentType,
-        lastMessageAt = lastMessageAt,
-        isActive = isActive,
+        status = status,
+        lastActivityAt = lastActivityAt,
+        updatedAt = updatedAt,
     )
 }
 
 @JsonClass(generateAdapter = true)
 data class CreateSessionRequest(
-    @Json(name = "title") val title: String? = null,
-    @Json(name = "agent_type") val agentType: String = "sebastian",
+    @Json(name = "content") val content: String,
+    @Json(name = "thinking_effort") val thinkingEffort: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

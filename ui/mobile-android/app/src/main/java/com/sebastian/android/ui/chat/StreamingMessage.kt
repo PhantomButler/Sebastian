@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,10 +51,12 @@ private fun UserMessageBubble(text: String, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 48.dp, end = 16.dp),
+        contentAlignment = Alignment.CenterEnd,
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier
                 .background(
                     color = MaterialTheme.colorScheme.primaryContainer,
