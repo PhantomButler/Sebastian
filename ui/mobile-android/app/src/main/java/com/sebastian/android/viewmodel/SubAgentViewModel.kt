@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.sebastian.android.data.model.Session
 import com.sebastian.android.data.remote.ApiService
 import com.sebastian.android.data.repository.SessionRepository
+import com.sebastian.android.di.IoDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,13 +35,14 @@ data class SubAgentUiState(
 class SubAgentViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val apiService: ApiService,
+    @IoDispatcher private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SubAgentUiState())
     val uiState: StateFlow<SubAgentUiState> = _uiState.asStateFlow()
 
     fun loadAgents() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(dispatcher) {
             _uiState.update { it.copy(isLoading = true) }
             runCatching { apiService.getAgents() }
                 .onSuccess { raw ->
@@ -60,7 +63,7 @@ class SubAgentViewModel @Inject constructor(
     }
 
     fun loadAgentSessions(agentType: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(dispatcher) {
             _uiState.update { it.copy(isLoading = true) }
             sessionRepository.getAgentSessions(agentType)
                 .onSuccess { sessions -> _uiState.update { it.copy(isLoading = false, agentSessions = sessions) } }
