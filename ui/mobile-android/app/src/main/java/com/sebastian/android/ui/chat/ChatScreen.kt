@@ -18,6 +18,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.material3.adaptive.layout.ThreePaneScaffoldDestinationItem
 import androidx.compose.material3.adaptive.navigation.NavigableListDetailPaneScaffold
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
@@ -51,7 +52,11 @@ fun ChatScreen(
     val chatState by chatViewModel.uiState.collectAsState()
     val sessionState by sessionViewModel.uiState.collectAsState()
     val settingsState by settingsViewModel.uiState.collectAsState()
-    val navigator = rememberListDetailPaneScaffoldNavigator<Nothing>()
+    val navigator = rememberListDetailPaneScaffoldNavigator<Nothing>(
+        initialDestinationHistory = listOf(
+            ThreePaneScaffoldDestinationItem(ListDetailPaneScaffoldRole.Detail)
+        )
+    )
     val scope = rememberCoroutineScope()
 
     val lifecycleOwner = LocalLifecycleOwner.current
