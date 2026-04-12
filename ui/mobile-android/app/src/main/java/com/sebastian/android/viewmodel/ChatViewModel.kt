@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -80,9 +81,10 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch(dispatcher) {
             while (true) {
                 delay(50L)
-                if (pendingDeltas.isEmpty()) continue
-                val snapshot = pendingDeltas.entries.map { it.key to it.value.toString() }
-                pendingDeltas.clear()
+                val snapshot = pendingDeltas.keys.toList().mapNotNull { key ->
+                    pendingDeltas.remove(key)?.toString()?.let { key to it }
+                }
+                if (snapshot.isEmpty()) continue
                 val msgId = currentAssistantMessageId ?: continue
                 _uiState.update { state ->
                     state.copy(
@@ -98,6 +100,7 @@ class ChatViewModel @Inject constructor(
                                 },
                             )
                         },
+                        flushTick = state.flushTick + 1,
                     )
                 }
             }
@@ -108,23 +111,48 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch(dispatcher) {
             networkMonitor.isOnline.collect { isOnline ->
                 _uiState.update { it.copy(isOffline = !isOnline) }
-                if (isOnline && sseJob?.isActive != true) {
-                    startSseCollection()
+                if (isOnline) {
+                    _uiState.update { it.copy(connectionFailed = false) }
+                    if (sseJob?.isActive != true) {
+                        startSseCollection()
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * 根据当前消息列表的最后一条消息决定 SSE Last-Event-ID：
+     * - 空列表或最后消息为 USER → "0"，请求全量回放
+     * - 最后消息为 ASSISTANT → ""，只订阅新事件
+     */
+    private fun determineLastEventId(): String {
+        val lastMessage = _uiState.value.messages.lastOrNull() ?: return "0"
+        return when (lastMessage.role) {
+            MessageRole.USER -> "0"
+            MessageRole.ASSISTANT -> ""
+            else -> "0"
         }
     }
 
     private fun startSseCollection() {
         sseJob = viewModelScope.launch(dispatcher) {
             val baseUrl = settingsRepository.serverUrl.first()
+            if (baseUrl.isEmpty()) {
+                _uiState.update { it.copy(isServerNotConfigured = true) }
+                return@launch
+            }
+            _uiState.update { it.copy(isServerNotConfigured = false, connectionFailed = false) }
             val sessionId = _uiState.value.activeSessionId
+            val lastEventId = determineLastEventId()
             try {
-                chatRepository.sessionStream(baseUrl, sessionId, "").collect { event ->
+                chatRepository.sessionStream(baseUrl, sessionId, lastEventId).collect { event ->
                     handleEvent(event)
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isOffline = true) }
+                if (!_uiState.value.isOffline) {
+                    _uiState.update { it.copy(connectionFailed = true) }
+                }
             }
         }
     }
@@ -174,16 +202,18 @@ class ChatViewModel @Inject constructor(
             is StreamEvent.TextBlockStop -> {
                 viewModelScope.launch(dispatcher) {
                     val msgId = currentAssistantMessageId ?: return@launch
-                    val rawText = _uiState.value.messages
+                    val pendingText = pendingDeltas.remove(event.blockId)?.toString() ?: ""
+                    val baseText = _uiState.value.messages
                         .find { it.id == msgId }
                         ?.blocks?.find { it.blockId == event.blockId }
                         ?.let { (it as? ContentBlock.TextBlock)?.text } ?: ""
+                    val rawText = baseText + pendingText
                     val rendered = withContext(dispatcher) {
                         markdownParser.parse(rawText)
                     }
                     updateBlockInCurrentMessage(event.blockId) { existing ->
                         if (existing is ContentBlock.TextBlock)
-                            existing.copy(done = true, renderedMarkdown = rendered)
+                            existing.copy(text = rawText, done = true, renderedMarkdown = rendered)
                         else existing
                     }
                 }
@@ -312,16 +342,19 @@ class ChatViewModel @Inject constructor(
     fun cancelTurn() {
         _uiState.update { it.copy(composerState = ComposerState.CANCELLING) }
         viewModelScope.launch(dispatcher) {
-            chatRepository.cancelTurn(_uiState.value.activeSessionId)
-                .onFailure { e ->
-                    _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY, error = e.message) }
-                }
+            withTimeoutOrNull(5_000L) {
+                chatRepository.cancelTurn(_uiState.value.activeSessionId)
+                    .onFailure { e ->
+                        _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY, error = e.message) }
+                    }
+            } ?: _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
         }
     }
 
     fun switchSession(sessionId: String) {
         sseJob?.cancel()
         sseJob = null
+        pendingDeltas.clear()
         currentAssistantMessageId = null
         pendingTurnSessionId = null
         _uiState.update {
@@ -343,6 +376,11 @@ class ChatViewModel @Inject constructor(
                 }
             startSseCollection()
         }
+    }
+
+    fun retryConnection() {
+        _uiState.update { it.copy(connectionFailed = false) }
+        startSseCollection()
     }
 
     fun onAppStart() {
