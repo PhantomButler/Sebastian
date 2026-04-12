@@ -1,6 +1,7 @@
 package com.sebastian.android.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import kotlinx.coroutines.launch
 fun MessageList(
     messages: List<Message>,
     scrollFollowState: ScrollFollowState,
+    flushTick: Long,
     onUserScrolled: () -> Unit,
     onScrolledNearBottom: () -> Unit,
     onScrolledToBottom: () -> Unit,
@@ -41,8 +43,6 @@ fun MessageList(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    val isScrollInProgress by remember { derivedStateOf { listState.isScrollInProgress } }
-
     val isNearBottom by remember {
         derivedStateOf {
             val info = listState.layoutInfo
@@ -52,17 +52,22 @@ fun MessageList(
     }
 
     val showFab by remember {
-        derivedStateOf {
-            scrollFollowState == ScrollFollowState.DETACHED
+        derivedStateOf { scrollFollowState == ScrollFollowState.DETACHED }
+    }
+
+    // Use DragInteraction.Start to detect ONLY real user touch drags.
+    // Unlike isScrollInProgress, this does NOT fire for programmatic scrollToItem() calls.
+    LaunchedEffect(Unit) {
+        listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start &&
+                scrollFollowState == ScrollFollowState.FOLLOWING
+            ) {
+                onUserScrolled()
+            }
         }
     }
 
-    LaunchedEffect(isScrollInProgress) {
-        if (isScrollInProgress && scrollFollowState == ScrollFollowState.FOLLOWING) {
-            onUserScrolled()
-        }
-    }
-
+    // Near-bottom detection for restoring FOLLOWING
     LaunchedEffect(isNearBottom) {
         if (isNearBottom) {
             onScrolledToBottom()
@@ -71,8 +76,8 @@ fun MessageList(
         }
     }
 
-    // 流式时自动滚到底
-    LaunchedEffect(messages.size, messages.lastOrNull()?.blocks?.size) {
+    // Auto-scroll when FOLLOWING: triggered by message count, block count, or delta flush
+    LaunchedEffect(messages.size, messages.lastOrNull()?.blocks?.size, flushTick) {
         if (scrollFollowState == ScrollFollowState.FOLLOWING && messages.isNotEmpty()) {
             listState.scrollToItem(messages.size - 1)
         }

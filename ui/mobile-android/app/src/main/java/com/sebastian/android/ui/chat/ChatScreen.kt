@@ -136,6 +136,7 @@ fun ChatScreen(
                         MessageList(
                             messages = chatState.messages,
                             scrollFollowState = chatState.scrollFollowState,
+                            flushTick = chatState.flushTick,
                             onUserScrolled = chatViewModel::onUserScrolled,
                             onScrolledNearBottom = chatViewModel::onScrolledNearBottom,
                             onScrolledToBottom = chatViewModel::onScrolledToBottom,
