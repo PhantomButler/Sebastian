@@ -36,6 +36,11 @@ class ChatRepositoryImpl @Inject constructor(
         Unit
     }
 
+    override suspend fun cancelTurn(sessionId: String): Result<Unit> = runCatching {
+        apiService.cancelSession(sessionId)
+        Unit
+    }
+
     override suspend fun grantApproval(approvalId: String): Result<Unit> = runCatching {
         apiService.grantApproval(approvalId)
         Unit

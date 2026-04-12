@@ -29,6 +29,9 @@ interface ApiService {
     @DELETE("api/v1/sessions/{sessionId}")
     suspend fun deleteSession(@Path("sessionId") sessionId: String): OkResponse
 
+    @POST("api/v1/sessions/{sessionId}/cancel")
+    suspend fun cancelSession(@Path("sessionId") sessionId: String): OkResponse
+
     @GET("api/v1/messages")
     suspend fun getMessages(@Query("session_id") sessionId: String): List<MessageDto>
 
