@@ -1,7 +1,6 @@
 // com/sebastian/android/ui/chat/ChatScreen.kt
 package com.sebastian.android.ui.chat
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -27,9 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.sebastian.android.ui.common.ApprovalDialog
+import com.sebastian.android.ui.composer.Composer
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.viewmodel.ChatViewModel
 import com.sebastian.android.viewmodel.SessionViewModel
+import com.sebastian.android.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -38,6 +39,7 @@ fun ChatScreen(
     navController: NavController,
     chatViewModel: ChatViewModel = hiltViewModel(),
     sessionViewModel: SessionViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val chatState by chatViewModel.uiState.collectAsState()
     val sessionState by sessionViewModel.uiState.collectAsState()
@@ -102,10 +104,16 @@ fun ChatScreen(
                             onToggleTool = chatViewModel::toggleToolBlock,
                             modifier = Modifier.weight(1f),
                         )
-                        // Composer 占位（Plan 4 填充）
-                        Box(modifier = Modifier) {
-                            Text("Composer TODO")
-                        }
+                        val providers by settingsViewModel.uiState.collectAsState()
+
+                        Composer(
+                            state = chatState.composerState,
+                            activeProvider = providers.providers.firstOrNull { it.isDefault },
+                            effort = chatState.activeThinkingEffort,
+                            onEffortChange = chatViewModel::setEffort,
+                            onSend = chatViewModel::sendMessage,
+                            onStop = chatViewModel::cancelTurn,
+                        )
                     }
                 }
             }
