@@ -230,6 +230,18 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun sendSessionMessage(sessionId: String, text: String) {
+        if (text.isBlank()) return
+        val userMsg = Message(id = UUID.randomUUID().toString(), sessionId = sessionId, role = MessageRole.USER, text = text)
+        _uiState.update { state ->
+            state.copy(messages = state.messages + userMsg, composerState = ComposerState.SENDING, scrollFollowState = ScrollFollowState.FOLLOWING)
+        }
+        viewModelScope.launch(dispatcher) {
+            chatRepository.sendSessionTurn(sessionId, text, _uiState.value.activeThinkingEffort)
+                .onFailure { e -> _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) } }
+        }
+    }
+
     fun cancelTurn() {
         _uiState.update { it.copy(composerState = ComposerState.CANCELLING) }
     }
