@@ -4,9 +4,12 @@ import com.sebastian.android.data.local.SettingsDataStore
 import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.remote.ApiService
 import com.sebastian.android.data.remote.dto.ProviderDto
+import com.sebastian.android.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,12 +21,17 @@ class SettingsRepositoryImpl @Inject constructor(
     private val dataStore: SettingsDataStore,
     private val apiService: ApiService,
     private val okHttpClient: OkHttpClient,
+    @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : SettingsRepository {
 
     override val serverUrl: Flow<String> = dataStore.serverUrl
     override val theme: Flow<String> = dataStore.theme
 
     private val _providers = MutableStateFlow<List<Provider>>(emptyList())
+
+    override val currentProvider: Flow<Provider?> = _providers.map { list ->
+        list.firstOrNull { it.isDefault }
+    }
 
     override fun providersFlow(): Flow<List<Provider>> = _providers.asStateFlow()
 
@@ -63,7 +71,7 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun testConnection(url: String): Result<Unit> = runCatching {
-        withContext(kotlinx.coroutines.Dispatchers.IO) {
+        withContext(dispatcher) {
             val trimmed = url.trimEnd('/')
             val response = okHttpClient.newCall(
                 Request.Builder().url("$trimmed/api/v1/health").build()

@@ -19,6 +19,7 @@ data class SettingsUiState(
     val serverUrl: String = "",
     val theme: String = "system",
     val providers: List<Provider> = emptyList(),
+    val currentProvider: Provider? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
     val connectionTestResult: ConnectionTestResult? = null,
@@ -44,11 +45,17 @@ class SettingsViewModel @Inject constructor(
                 repository.serverUrl,
                 repository.theme,
                 repository.providersFlow(),
-            ) { url, theme, providers ->
-                Triple(url, theme, providers)
-            }.collect { (url, theme, providers) ->
-                _uiState.update { it.copy(serverUrl = url, theme = theme, providers = providers) }
-            }
+                repository.currentProvider,
+            ) { url, theme, providers, currentProvider ->
+                _uiState.update {
+                    it.copy(
+                        serverUrl = url,
+                        theme = theme,
+                        providers = providers,
+                        currentProvider = currentProvider,
+                    )
+                }
+            }.collect {}
         }
         loadProviders()
     }

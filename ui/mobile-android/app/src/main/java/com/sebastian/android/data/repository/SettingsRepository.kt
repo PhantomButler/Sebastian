@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 interface SettingsRepository {
     val serverUrl: Flow<String>
     val theme: Flow<String>
+    val currentProvider: Flow<Provider?>          // 当前激活 Provider
     suspend fun saveServerUrl(url: String)
     suspend fun saveTheme(theme: String)
     fun providersFlow(): Flow<List<Provider>>
