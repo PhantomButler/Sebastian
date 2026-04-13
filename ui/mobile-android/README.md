@@ -76,8 +76,11 @@ Data Layer（Repository Pattern）
 ## 导航信息架构
 
 ```
-App 启动 → ChatScreen（默认页）
-    ├── List Pane（左栏）：SessionPanel
+GlobalApprovalBanner（悬浮，覆盖所有页面）
+    └── onNavigateToSession → Route.Chat / Route.AgentChat
+
+App 启动 → ChatScreen（主对话，agentId=null）
+    ├── List Pane（左栏）：SessionPanel（完整模式）
     │   ├── 历史 Session 列表 → 点击切换 session
     │   ├── 新建对话按钮
     │   ├── → navController.navigate(Route.Settings)
@@ -86,8 +89,10 @@ App 启动 → ChatScreen（默认页）
     └── Extra Pane（右栏）：TodoPanel
 
 Route.SubAgents → AgentListScreen
-    └── → Route.AgentSessions(agentId) → SessionListScreen
-            └── → Route.SessionDetail(sessionId) → SessionDetailScreen
+    └── → Route.AgentChat(agentId, agentName) → ChatScreen（SubAgent 模式）
+            ├── List Pane（左栏）：SessionPanel（精简模式，仅该 agent 的 session 列表）
+            ├── Detail Pane（中栏）：MessageList + Composer
+            └── Extra Pane（右栏）：TodoPanel
 
 Route.Settings → SettingsScreen
     ├── → Route.SettingsConnection → ConnectionPage
@@ -156,13 +161,18 @@ uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8823 --reload
 
 ## SSE 连接机制
 
-App 使用 OkHttp SSE 订阅 `GET /api/v1/sessions/{sessionId}/stream`：
+App 有两条 SSE 连接：
 
-- 进入前台（`ON_START`）→ 启动 SSE 连接
-- 退入后台（`ON_STOP`）→ 取消 SSE Job，释放连接
-- 网络恢复 → 自动重连
-- 连接失败 → 指数退避重连（1s / 2s / 4s，最多 3 次），耗尽后显示 `connectionFailed` Banner
+**Per-session SSE**（`GET /api/v1/sessions/{sessionId}/stream`）：
+- 由 `ChatViewModel` 管理，负责当前对话的流式消息
+- 进入前台（`ON_START`）→ 启动连接；退入后台（`ON_STOP`）→ 取消 Job
+- 网络恢复 → 自动重连；连接失败 → 显示 `connectionFailed` Banner
 - Last-Event-ID 跨连接持久化，服务端可断点续传
+
+**全局 SSE**（`GET /api/v1/stream`）：
+- 由 `GlobalApprovalViewModel` 管理，接收所有 session 的审批事件
+- 生命周期绑定到 `SebastianNavHost`，与页面导航无关
+- 审批事件入队，`GlobalApprovalBanner` 显示队首，处理后自动弹出下一条
 
 增量渲染优化：`TextDelta` 事件先缓存到 `pendingDeltas`，每 50ms 批量合并到消息列表，降低 Compose recomposition 频率。
 
@@ -175,11 +185,11 @@ App 使用 OkHttp SSE 订阅 `GET /api/v1/sessions/{sessionId}/stream`：
 | 改输入框（Composer） | `ui/composer/Composer.kt`、`SendButton.kt`、`ThinkButton.kt` |
 | 改 Session 列表面板 | `ui/chat/SessionPanel.kt` |
 | 改 Todo 面板 | `ui/chat/TodoPanel.kt` |
-| 改审批弹窗 | `ui/common/ApprovalDialog.kt` |
+| 改全局审批横幅 | `ui/common/GlobalApprovalBanner.kt`、`viewmodel/GlobalApprovalViewModel.kt` |
 | 改错误 Banner | `ui/common/ErrorBanner.kt` |
 | 新增路由 | `ui/navigation/Route.kt` + `MainActivity.kt` |
 | 改设置页 | `ui/settings/` |
-| 改 Sub-Agent 页面 | `ui/subagents/` |
+| 改 Sub-Agent 列表 | `ui/subagents/AgentListScreen.kt` |
 | 改主题/品牌色 | `ui/theme/Color.kt`、`ui/theme/SebastianTheme.kt` |
 | 改 SSE 事件处理 | `viewmodel/ChatViewModel.handleEvent()` |
 | 改 SSE 重连策略 | `data/remote/SseClient.kt` |
