@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from sebastian.core.base_agent import BaseAgent
 from sebastian.core.stream_events import (
     ProviderCallEnd,
     TextBlockStart,
@@ -13,17 +15,15 @@ from sebastian.core.stream_events import (
     ThinkingBlockStop,
     ThinkingDelta,
 )
+from sebastian.memory.episodic_memory import EpisodicMemory
+from sebastian.store.session_store import SessionStore
 from tests.unit.test_agent_loop import MockLLMProvider
 
 
 @pytest.mark.asyncio
 async def test_thinking_block_stop_includes_duration_ms() -> None:
     """ThinkingBlockStop SSE payload 应包含正值 duration_ms。"""
-    from sebastian.core.base_agent import BaseAgent
-    from sebastian.store.session_store import SessionStore
-    from sebastian.memory.episodic_memory import EpisodicMemory
-
-    published: list[dict] = []
+    published: list[dict[str, Any]] = []
 
     provider = MockLLMProvider(
         [

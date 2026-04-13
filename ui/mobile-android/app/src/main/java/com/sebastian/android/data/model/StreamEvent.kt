@@ -12,7 +12,7 @@ sealed class StreamEvent {
     data class ThinkingBlockStop(
         val sessionId: String,
         val blockId: String,
-        val durationMs: Long = 0,
+        val durationMs: Long? = null,
     ) : StreamEvent()
 
     // Text block
