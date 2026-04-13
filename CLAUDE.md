@@ -361,3 +361,12 @@ SEBASTIAN_GATEWAY_PORT=8823
 - 绝不硬编码密钥，通过环境变量注入（参考 `.env.example`）
 - 沙箱执行（Dynamic Tool Factory 生成的代码）必须走 `sebastian/sandbox/executor.py`，不允许直接 `exec()`
 - 高危操作（文件删除、网络请求、系统命令）需要 Approval 机制
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `python3 -c "from graphify.watch import _rebuild_code; from pathlib import Path; _rebuild_code(Path('.'))"` to keep the graph current
