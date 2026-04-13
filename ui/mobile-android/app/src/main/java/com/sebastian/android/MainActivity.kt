@@ -24,6 +24,7 @@ import com.sebastian.android.data.local.SettingsDataStore
 import com.sebastian.android.ui.chat.ChatScreen
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.ui.settings.AppearancePage
+import com.sebastian.android.ui.settings.DebugLoggingPage
 import com.sebastian.android.ui.settings.ProviderFormPage
 import com.sebastian.android.ui.settings.ProviderListPage
 import com.sebastian.android.ui.settings.ConnectionPage
@@ -106,6 +107,9 @@ fun SebastianNavHost() {
         }
         composable<Route.SettingsAppearance> {
             AppearancePage(navController = navController)
+        }
+        composable<Route.SettingsDebugLogging> {
+            DebugLoggingPage(navController = navController)
         }
         composable<Route.SettingsProvidersNew> {
             ProviderFormPage(navController = navController, providerId = null)

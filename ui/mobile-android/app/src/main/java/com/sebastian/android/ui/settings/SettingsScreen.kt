@@ -58,6 +58,12 @@ fun SettingsScreen(navController: NavController) {
                 onClick = { navController.navigate(Route.SettingsAppearance) { launchSingleTop = true } },
             )
             HorizontalDivider()
+            SettingsItem(
+                title = "调试日志",
+                subtitle = "LLM Stream、SSE 日志开关",
+                onClick = { navController.navigate(Route.SettingsDebugLogging) { launchSingleTop = true } },
+            )
+            HorizontalDivider()
         }
     }
 }

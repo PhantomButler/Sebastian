@@ -4,6 +4,8 @@ import com.sebastian.android.data.local.SecureTokenStore
 import com.sebastian.android.data.local.SettingsDataStore
 import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.remote.ApiService
+import com.sebastian.android.data.remote.dto.LogConfigPatchDto
+import com.sebastian.android.data.remote.dto.LogStateDto
 import com.sebastian.android.data.remote.dto.ProviderDto
 import com.sebastian.android.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
@@ -129,5 +131,13 @@ class SettingsRepositoryImpl @Inject constructor(
                 if (!it.isSuccessful) throw Exception("HTTP ${it.code}")
             }
         }
+    }
+
+    override suspend fun getLogState(): Result<LogStateDto> = runCatching {
+        apiService.getLogState()
+    }
+
+    override suspend fun patchLogState(llmStreamEnabled: Boolean?, sseEnabled: Boolean?): Result<LogStateDto> = runCatching {
+        apiService.patchLogState(LogConfigPatchDto(llmStreamEnabled = llmStreamEnabled, sseEnabled = sseEnabled))
     }
 }

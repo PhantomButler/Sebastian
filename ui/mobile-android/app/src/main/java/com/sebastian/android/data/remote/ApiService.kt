@@ -72,6 +72,13 @@ interface ApiService {
     @POST("api/v1/approvals/{approvalId}/deny")
     suspend fun denyApproval(@Path("approvalId") approvalId: String): OkResponse
 
+    // Debug
+    @GET("api/v1/debug/logging")
+    suspend fun getLogState(): LogStateDto
+
+    @PATCH("api/v1/debug/logging")
+    suspend fun patchLogState(@Body body: LogConfigPatchDto): LogStateDto
+
     // Health
     @GET("api/v1/health")
     suspend fun health(): Map<String, Any>

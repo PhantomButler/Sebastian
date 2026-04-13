@@ -24,6 +24,9 @@ data class SettingsUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val connectionTestResult: ConnectionTestResult? = null,
+    val llmStreamLogEnabled: Boolean = false,
+    val sseLogEnabled: Boolean = false,
+    val logStateLoading: Boolean = false,
 )
 
 sealed class ConnectionTestResult {
@@ -141,6 +144,65 @@ class SettingsViewModel @Inject constructor(
                             connectionTestResult = ConnectionTestResult.Failure(e.message ?: "连接失败"),
                         )
                     }
+                }
+        }
+    }
+
+    fun loadLogState() {
+        viewModelScope.launch(dispatcher) {
+            _uiState.update { it.copy(logStateLoading = true) }
+            repository.getLogState()
+                .onSuccess { state ->
+                    _uiState.update {
+                        it.copy(
+                            llmStreamLogEnabled = state.llmStreamEnabled,
+                            sseLogEnabled = state.sseEnabled,
+                            logStateLoading = false,
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(logStateLoading = false) }
+                }
+        }
+    }
+
+    fun toggleLlmStreamLog(enabled: Boolean) {
+        val prev = _uiState.value.llmStreamLogEnabled
+        _uiState.update { it.copy(llmStreamLogEnabled = enabled, logStateLoading = true) }
+        viewModelScope.launch(dispatcher) {
+            repository.patchLogState(llmStreamEnabled = enabled)
+                .onSuccess { state ->
+                    _uiState.update {
+                        it.copy(
+                            llmStreamLogEnabled = state.llmStreamEnabled,
+                            sseLogEnabled = state.sseEnabled,
+                            logStateLoading = false,
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(llmStreamLogEnabled = prev, logStateLoading = false, error = "更新日志开关失败") }
+                }
+        }
+    }
+
+    fun toggleSseLog(enabled: Boolean) {
+        val prev = _uiState.value.sseLogEnabled
+        _uiState.update { it.copy(sseLogEnabled = enabled, logStateLoading = true) }
+        viewModelScope.launch(dispatcher) {
+            repository.patchLogState(sseEnabled = enabled)
+                .onSuccess { state ->
+                    _uiState.update {
+                        it.copy(
+                            llmStreamLogEnabled = state.llmStreamEnabled,
+                            sseLogEnabled = state.sseEnabled,
+                            logStateLoading = false,
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(sseLogEnabled = prev, logStateLoading = false, error = "更新日志开关失败") }
                 }
         }
     }

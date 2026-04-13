@@ -33,4 +33,7 @@ sealed class Route {
 
     @Serializable
     data object SettingsAppearance : Route()
+
+    @Serializable
+    data object SettingsDebugLogging : Route()
 }
