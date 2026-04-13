@@ -424,8 +424,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -511,7 +511,7 @@ fun ThinkingCard(
 
             Icon(
                 imageVector = when {
-                    !block.done -> Icons.Default.KeyboardArrowRight
+                    !block.done -> Icons.AutoMirrored.Filled.KeyboardArrowRight
                     block.expanded -> Icons.Default.KeyboardArrowUp
                     else -> Icons.Default.KeyboardArrowDown
                 },
