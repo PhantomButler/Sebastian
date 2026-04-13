@@ -141,7 +141,16 @@ class ChatViewModel @Inject constructor(
                 throw e
             } catch (_: Exception) {
                 if (!_uiState.value.isOffline) {
-                    _uiState.update { it.copy(connectionFailed = true) }
+                    _uiState.update { state ->
+                        state.copy(
+                            connectionFailed = true,
+                            // If we lost the connection mid-turn, reset the composer so the
+                            // button doesn't stay spinning with no way to dismiss.
+                            composerState = if (state.composerState == ComposerState.SENDING ||
+                                state.composerState == ComposerState.STREAMING
+                            ) ComposerState.IDLE_EMPTY else state.composerState,
+                        )
+                    }
                 }
             }
         }
@@ -156,7 +165,7 @@ class ChatViewModel @Inject constructor(
 
             is StreamEvent.ThinkingBlockStart -> {
                 val block = ContentBlock.ThinkingBlock(blockId = event.blockId, text = "")
-                appendBlockToCurrentMessage(block, agentAnimState = AgentAnimState.THINKING)
+                appendBlockToCurrentMessage(block, composerState = ComposerState.STREAMING, agentAnimState = AgentAnimState.THINKING)
             }
 
             is StreamEvent.ThinkingDelta -> {
@@ -188,20 +197,26 @@ class ChatViewModel @Inject constructor(
             }
 
             is StreamEvent.TextBlockStop -> {
+                // Capture msgId synchronously — TurnResponse may clear it before any coroutine runs.
+                val msgId = currentAssistantMessageId ?: return
+                // Flush remaining pending text synchronously so no delta is ever lost.
+                val pendingText = pendingDeltas.remove(event.blockId)?.toString() ?: ""
+                if (pendingText.isNotEmpty()) {
+                    updateBlockById(msgId, event.blockId) { existing ->
+                        if (existing is ContentBlock.TextBlock) existing.copy(text = existing.text + pendingText)
+                        else existing
+                    }
+                }
+                // Async: only markdown rendering — uses captured msgId, not currentAssistantMessageId.
                 viewModelScope.launch(dispatcher) {
-                    val msgId = currentAssistantMessageId ?: return@launch
-                    val pendingText = pendingDeltas.remove(event.blockId)?.toString() ?: ""
-                    val baseText = _uiState.value.messages
+                    val rawText = _uiState.value.messages
                         .find { it.id == msgId }
                         ?.blocks?.find { it.blockId == event.blockId }
                         ?.let { (it as? ContentBlock.TextBlock)?.text } ?: ""
-                    val rawText = baseText + pendingText
-                    val rendered = withContext(dispatcher) {
-                        markdownParser.parse(rawText)
-                    }
-                    updateBlockInCurrentMessage(event.blockId) { existing ->
+                    val rendered = withContext(dispatcher) { markdownParser.parse(rawText) }
+                    updateBlockById(msgId, event.blockId) { existing ->
                         if (existing is ContentBlock.TextBlock)
-                            existing.copy(text = rawText, done = true, renderedMarkdown = rendered)
+                            existing.copy(done = true, renderedMarkdown = rendered)
                         else existing
                     }
                 }
@@ -215,7 +230,7 @@ class ChatViewModel @Inject constructor(
                     inputs = "",
                     status = ToolStatus.PENDING,
                 )
-                appendBlockToCurrentMessage(block, agentAnimState = AgentAnimState.WORKING)
+                appendBlockToCurrentMessage(block, composerState = ComposerState.STREAMING, agentAnimState = AgentAnimState.WORKING)
             }
 
             is StreamEvent.ToolBlockStop -> {
@@ -243,6 +258,8 @@ class ChatViewModel @Inject constructor(
             }
 
             is StreamEvent.TurnResponse -> {
+                // Flush any deltas that arrived between the last flusher tick and now.
+                flushPendingDeltasForCurrentMessage()
                 currentAssistantMessageId = null
                 pendingTurnSessionId = null
                 _uiState.update {
@@ -254,6 +271,7 @@ class ChatViewModel @Inject constructor(
             }
 
             is StreamEvent.TurnInterrupted -> {
+                flushPendingDeltasForCurrentMessage()
                 currentAssistantMessageId = null
                 pendingTurnSessionId = null
                 _uiState.update {
@@ -289,6 +307,8 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch(dispatcher) {
             chatRepository.sendTurn(currentSessionId, text, _uiState.value.activeThinkingEffort)
                 .onSuccess { returnedSessionId ->
+                    // REST returned — clear SENDING immediately; SSE events drive the rest of the turn.
+                    _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
                     if (currentSessionId == null || currentSessionId != returnedSessionId) {
                         // New session created by backend — switch to it
                         _uiState.update { it.copy(activeSessionId = returnedSessionId) }
@@ -331,7 +351,7 @@ class ChatViewModel @Inject constructor(
                 // New agent session: create + start SSE
                 sessionRepository.createAgentSession(agentId, text)
                     .onSuccess { session ->
-                        _uiState.update { it.copy(activeSessionId = session.id) }
+                        _uiState.update { it.copy(activeSessionId = session.id, composerState = ComposerState.IDLE_EMPTY) }
                         startSseCollection(replayFromStart = true)
                         sessionRepository.loadAgentSessions(agentId)
                     }
@@ -342,6 +362,7 @@ class ChatViewModel @Inject constructor(
                 // Existing session: send turn
                 chatRepository.sendSessionTurn(currentSessionId, text, _uiState.value.activeThinkingEffort)
                     .onSuccess {
+                        _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
                         if (sseJob?.isActive != true) {
                             startSseCollection(replayFromStart = true)
                         }
@@ -361,6 +382,7 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch(dispatcher) {
             chatRepository.sendSessionTurn(sessionId, text, _uiState.value.activeThinkingEffort)
+                .onSuccess { _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) } }
                 .onFailure { e -> _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) } }
         }
     }
@@ -471,6 +493,56 @@ class ChatViewModel @Inject constructor(
     fun clearError() = _uiState.update { it.copy(error = null) }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Like [updateBlockInCurrentMessage] but takes an explicit [msgId] instead of reading
+     * [currentAssistantMessageId]. Use this in async coroutines where the assistant message
+     * reference must be captured before [currentAssistantMessageId] is cleared by TurnResponse.
+     */
+    private fun updateBlockById(
+        msgId: String,
+        blockId: String,
+        transform: (ContentBlock) -> ContentBlock,
+    ) {
+        _uiState.update { state ->
+            state.copy(
+                messages = state.messages.map { msg ->
+                    if (msg.id != msgId) return@map msg
+                    msg.copy(blocks = msg.blocks.map { b -> if (b.blockId == blockId) transform(b) else b })
+                },
+            )
+        }
+    }
+
+    /**
+     * Synchronously drain [pendingDeltas] into the current assistant message.
+     * Must be called before clearing [currentAssistantMessageId] (e.g. in TurnResponse handler)
+     * to avoid losing the last batch of deltas that the 50ms flusher hasn't yet applied.
+     */
+    private fun flushPendingDeltasForCurrentMessage() {
+        val msgId = currentAssistantMessageId ?: return
+        if (pendingDeltas.isEmpty()) return
+        val snapshot = pendingDeltas.keys.toList().mapNotNull { key ->
+            pendingDeltas.remove(key)?.toString()?.let { key to it }
+        }
+        if (snapshot.isEmpty()) return
+        _uiState.update { state ->
+            state.copy(
+                messages = state.messages.map { msg ->
+                    if (msg.id != msgId) return@map msg
+                    msg.copy(
+                        blocks = msg.blocks.map { block ->
+                            val pending = snapshot.find { it.first == block.blockId }
+                                ?: return@map block
+                            if (block is ContentBlock.TextBlock)
+                                block.copy(text = block.text + pending.second)
+                            else block
+                        },
+                    )
+                },
+            )
+        }
+    }
 
     private fun updateBlock(blockId: String, transform: (ContentBlock) -> ContentBlock) {
         _uiState.update { state ->

@@ -51,8 +51,8 @@ class SessionViewModel @Inject constructor(
         viewModelScope.launch(dispatcher) {
             _uiState.update { it.copy(isLoading = true) }
             repository.loadAgentSessions(agentType)
+                .onSuccess { sessions -> _uiState.update { it.copy(isLoading = false, sessions = sessions) } }
                 .onFailure { e -> _uiState.update { it.copy(isLoading = false, error = e.message) } }
-                .onSuccess { _uiState.update { it.copy(isLoading = false) } }
         }
     }
 

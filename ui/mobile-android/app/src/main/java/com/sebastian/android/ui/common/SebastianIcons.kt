@@ -515,6 +515,58 @@ object SebastianIcons {
         }.build()
     }
 
+    /** Upward-arrow only (no outer circle). Use inside a CircleShape Surface for SendButton. */
+    val SendAction: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "SendAction",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 1024f,
+            viewportHeight = 1024f,
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(480.73f, 292.91f)
+                lineTo(316.16f, 457.47f)
+                curveToRelative(-18.15f, 18.15f, -4.72f, 49.12f, 21.31f, 49.12f)
+                curveToRelative(7.94f, 0f, 15.88f, -3.03f, 21.93f, -9.08f)
+                lineToRelative(87.47f, -87.47f)
+                lineToRelative(0f, 336.17f)
+                curveToRelative(0f, 25.68f, 20.82f, 46.51f, 46.51f, 46.51f)
+                curveToRelative(25.68f, 0f, 46.55f, -20.82f, 46.55f, -46.51f)
+                verticalLineToRelative(-331.52f)
+                lineToRelative(82.77f, 82.77f)
+                curveToRelative(18.15f, 18.15f, 47.68f, 18.15f, 65.83f, 0f)
+                curveToRelative(18.15f, -18.22f, 18.15f, -47.61f, 0f, -65.79f)
+                lineTo(546.56f, 292.91f)
+                curveToRelative(-18.15f, -18.15f, -47.68f, -18.15f, -65.83f, 0f)
+                close()
+            }
+        }.build()
+    }
+
+    /** Rounded square only (no outer circle). Use inside a CircleShape Surface for SendButton stop state. */
+    val StopAction: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "StopAction",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 1024f,
+            viewportHeight = 1024f,
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(725.33f, 688f)
+                curveToRelative(0f, 20.62f, -16.71f, 37.33f, -37.33f, 37.33f)
+                horizontalLineTo(336f)
+                curveToRelative(-20.62f, 0f, -37.33f, -16.71f, -37.33f, -37.33f)
+                verticalLineTo(336f)
+                curveToRelative(0f, -20.62f, 16.71f, -37.33f, 37.33f, -37.33f)
+                horizontalLineToRelative(352f)
+                curveToRelative(20.62f, 0f, 37.33f, 16.71f, 37.33f, 37.33f)
+                close()
+            }
+        }.build()
+    }
+
     val Think: ImageVector by lazy {
         ImageVector.Builder(
             name = "Think",

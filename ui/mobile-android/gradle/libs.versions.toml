@@ -1,6 +1,7 @@
 [versions]
 agp = "9.1.0"
 kotlin = "2.2.10"
+backdrop = "1.0.6"
 ksp = "2.2.10-2.0.2"
 hilt = "2.57.1"
 compose-bom = "2025.04.00"
@@ -52,6 +53,8 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
 markwon-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
 markwon-tables = { group = "io.noties.markwon", name = "ext-tables", version.ref = "markwon" }
+# Backdrop (liquid glass effect)
+backdrop = { group = "io.github.kyant0", name = "backdrop", version.ref = "backdrop" }
 # Storage
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "security-crypto" }

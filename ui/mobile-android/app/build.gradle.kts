@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(libs.datastore.preferences)
     implementation(libs.security.crypto)
+    implementation(libs.backdrop)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.mockito.kotlin)

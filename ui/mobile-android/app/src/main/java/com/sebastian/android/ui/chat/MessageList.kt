@@ -3,6 +3,7 @@ package com.sebastian.android.ui.chat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -38,6 +39,7 @@ fun MessageList(
     onScrollToBottom: () -> Unit,
     onToggleThinking: (String) -> Unit,
     onToggleTool: (String) -> Unit,
+    contentPadding: PaddingValues = PaddingValues(),
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -86,6 +88,7 @@ fun MessageList(
     Box(modifier = modifier) {
         LazyColumn(
             state = listState,
+            contentPadding = contentPadding,
             modifier = Modifier.fillMaxSize(),
         ) {
             item { Spacer(Modifier.height(16.dp)) }

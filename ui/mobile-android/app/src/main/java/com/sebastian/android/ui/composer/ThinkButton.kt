@@ -4,8 +4,7 @@ package com.sebastian.android.ui.composer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.model.ThinkingCapability
 import com.sebastian.android.data.model.ThinkingEffort
+import com.sebastian.android.ui.common.SebastianIcons
 import kotlinx.coroutines.launch
 
 /**
@@ -85,9 +85,10 @@ fun ThinkButton(
         },
         label = { Text(label, style = MaterialTheme.typography.labelMedium) },
         leadingIcon = {
-            Icon(Icons.Default.Psychology, contentDescription = null)
+            Icon(SebastianIcons.Think, contentDescription = null)
         },
         enabled = capability != null && capability != ThinkingCapability.ALWAYS_ON,
+        shape = RoundedCornerShape(percent = 50),
         colors = if (currentEffort != ThinkingEffort.AUTO && capability == ThinkingCapability.TOGGLE)
             AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         else AssistChipDefaults.assistChipColors(),

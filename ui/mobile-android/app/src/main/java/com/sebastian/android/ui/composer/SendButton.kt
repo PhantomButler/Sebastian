@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.sebastian.android.ui.common.AnimationTokens
+import com.sebastian.android.ui.common.SebastianIcons
 import com.sebastian.android.viewmodel.ComposerState
 
 /**
@@ -85,7 +83,7 @@ fun SendButton(
             ) { targetState ->
                 when (targetState) {
                     ComposerState.IDLE_EMPTY, ComposerState.IDLE_READY -> Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        imageVector = SebastianIcons.SendAction,
                         contentDescription = "发送",
                         tint = if (targetState == ComposerState.IDLE_EMPTY)
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -93,7 +91,7 @@ fun SendButton(
                             MaterialTheme.colorScheme.onPrimary,
                     )
                     ComposerState.STREAMING -> Icon(
-                        imageVector = Icons.Default.Stop,
+                        imageVector = SebastianIcons.StopAction,
                         contentDescription = "停止",
                         tint = MaterialTheme.colorScheme.onPrimary,
                     )

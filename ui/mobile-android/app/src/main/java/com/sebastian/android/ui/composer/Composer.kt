@@ -56,9 +56,12 @@ fun Composer(
         else -> ComposerState.IDLE_EMPTY
     }
 
+    val shape = RoundedCornerShape(24.dp)
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        tonalElevation = 2.dp,
+        shape = shape,
+        color = Color.Transparent,   // drawBackdrop 负责绘制背景，Surface 只裁剪内容
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 8.dp),

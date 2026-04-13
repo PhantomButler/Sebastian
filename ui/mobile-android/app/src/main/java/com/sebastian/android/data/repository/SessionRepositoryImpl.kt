@@ -48,9 +48,7 @@ class SessionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun loadAgentSessions(agentType: String): Result<List<Session>> = runCatching {
-        val sessions = apiService.getAgentSessions(agentType).sessions.map { it.toDomain() }
-        _sessions.value = sessions
-        sessions
+        apiService.getAgentSessions(agentType).sessions.map { it.toDomain() }
     }
 
     override suspend fun createAgentSession(agentType: String, title: String?): Result<Session> = runCatching {
