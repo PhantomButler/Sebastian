@@ -51,10 +51,21 @@ class SseFrameParserTest {
     }
 
     @Test
-    fun `parses approval_requested event`() {
-        val json = """{"type":"approval.requested","data":{"session_id":"s1","approval_id":"ap_1","description":"删除文件"},"ts":"2026-04-12T10:00:00Z"}"""
+    fun `parses approval_requested event with agent_type`() {
+        val json = """{"type":"approval.requested","data":{"session_id":"s1","approval_id":"ap_1","agent_type":"code_agent","description":"删除文件"},"ts":"2026-04-12T10:00:00Z"}"""
         val event = SseFrameParser.parse(json)
         assertTrue(event is StreamEvent.ApprovalRequested)
-        assertEquals("ap_1", (event as StreamEvent.ApprovalRequested).approvalId)
+        val approval = event as StreamEvent.ApprovalRequested
+        assertEquals("ap_1", approval.approvalId)
+        assertEquals("code_agent", approval.agentType)
+        assertEquals("删除文件", approval.description)
+    }
+
+    @Test
+    fun `parses approval_requested event defaults agent_type to sebastian`() {
+        val json = """{"type":"approval.requested","data":{"session_id":"s1","approval_id":"ap_2","description":"运行命令"},"ts":"2026-04-12T10:00:00Z"}"""
+        val event = SseFrameParser.parse(json)
+        assertTrue(event is StreamEvent.ApprovalRequested)
+        assertEquals("sebastian", (event as StreamEvent.ApprovalRequested).agentType)
     }
 }

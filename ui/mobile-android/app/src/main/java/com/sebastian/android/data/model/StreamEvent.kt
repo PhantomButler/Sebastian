@@ -31,7 +31,7 @@ sealed class StreamEvent {
     data class TaskCancelled(val sessionId: String, val taskId: String) : StreamEvent()
 
     // Approval
-    data class ApprovalRequested(val sessionId: String, val approvalId: String, val description: String) : StreamEvent()
+    data class ApprovalRequested(val sessionId: String, val approvalId: String, val agentType: String, val description: String) : StreamEvent()
     data class ApprovalGranted(val approvalId: String) : StreamEvent()
     data class ApprovalDenied(val approvalId: String) : StreamEvent()
 

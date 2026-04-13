@@ -9,6 +9,7 @@ import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.StreamEvent
 import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.repository.ChatRepository
+import com.sebastian.android.data.repository.SessionRepository
 import com.sebastian.android.data.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -37,6 +38,7 @@ import org.mockito.kotlin.whenever
 class ChatViewModelTest {
 
     private lateinit var chatRepository: ChatRepository
+    private lateinit var sessionRepository: SessionRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var networkMonitor: NetworkMonitor
     private lateinit var markdownParser: MarkdownParser
@@ -50,6 +52,7 @@ class ChatViewModelTest {
     fun setup() {
         Dispatchers.setMain(dispatcher)
         chatRepository = mock()
+        sessionRepository = mock()
         settingsRepository = mock()
         networkMonitor = mock()
         markdownParser = mock()
@@ -59,13 +62,13 @@ class ChatViewModelTest {
         whenever(chatRepository.sessionStream(any(), any(), any())).thenReturn(sseFlow)
         whenever(chatRepository.globalStream(any(), any())).thenReturn(flowOf())
         runBlocking {
-            whenever(chatRepository.sendTurn(any(), any())).thenReturn(Result.success(Unit))
+            whenever(chatRepository.sendTurn(any(), any(), any())).thenReturn(Result.success("s1"))
             whenever(chatRepository.grantApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.denyApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.cancelTurn(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.getMessages(any())).thenReturn(Result.success(emptyList()))
         }
-        viewModel = ChatViewModel(chatRepository, settingsRepository, networkMonitor, markdownParser, dispatcher)
+        viewModel = ChatViewModel(chatRepository, sessionRepository, settingsRepository, networkMonitor, markdownParser, dispatcher)
         dispatcher.scheduler.advanceUntilIdle()
     }
 
@@ -198,7 +201,7 @@ class ChatViewModelTest {
     fun `approval_requested creates pending approval`() = runTest(dispatcher) {
         viewModel.uiState.test {
             awaitItem()
-            sseFlow.emit(StreamEvent.ApprovalRequested("s1", "ap_1", "删除文件 foo.txt"))
+            sseFlow.emit(StreamEvent.ApprovalRequested("s1", "ap_1", "sebastian", "删除文件 foo.txt"))
             dispatcher.scheduler.advanceUntilIdle()
 
             val state = awaitItem()
@@ -239,7 +242,7 @@ class ChatViewModelTest {
 
             // Inject an error via sendMessage failure
             runBlocking {
-                whenever(chatRepository.sendTurn(any(), any()))
+                whenever(chatRepository.sendTurn(any(), any(), any()))
                     .thenReturn(Result.failure(RuntimeException("网络错误")))
             }
             viewModel.sendMessage("test")
