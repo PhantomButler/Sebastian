@@ -77,7 +77,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `providers list reflects repository flow`() = runTest(dispatcher) {
-        val provider = Provider("p1", "Claude", "anthropic", null, true, ThinkingCapability.EFFORT)
+        val provider = Provider("p1", "Claude", "anthropic", null, null, true, ThinkingCapability.EFFORT)
         viewModel.uiState.test {
             awaitItem() // initial empty
             providersFlow.emit(listOf(provider))
@@ -89,7 +89,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `deleteProvider removes from list on success`() = runTest(dispatcher) {
-        val provider = Provider("p1", "Claude", "anthropic", null, true, ThinkingCapability.EFFORT)
+        val provider = Provider("p1", "Claude", "anthropic", null, null, true, ThinkingCapability.EFFORT)
         providersFlow.emit(listOf(provider))
         whenever(repository.deleteProvider("p1")).thenReturn(Result.success(Unit))
         viewModel.deleteProvider("p1")

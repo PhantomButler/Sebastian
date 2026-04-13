@@ -58,11 +58,17 @@ class ProviderFormViewModelTest {
             repository.createProvider(
                 name = "TestProvider",
                 type = "anthropic",
-                baseUrl = null,
-                apiKey = null,
+                baseUrl = "http://api.anthropic.com",
+                apiKey = "sk-test",
+                model = "claude-3-5-sonnet-20241022",
+                thinkingCapability = "none",
+                isDefault = false,
             )
-        }.thenReturn(Result.success(Provider("id1", "TestProvider", "anthropic", null, false, ThinkingCapability.NONE)))
+        }.thenReturn(Result.success(Provider("id1", "TestProvider", "anthropic", "http://api.anthropic.com", "claude-3-5-sonnet-20241022", false, ThinkingCapability.NONE)))
         viewModel.onNameChange("TestProvider")
+        viewModel.onApiKeyChange("sk-test")
+        viewModel.onModelChange("claude-3-5-sonnet-20241022")
+        viewModel.onBaseUrlChange("http://api.anthropic.com")
         viewModel.save(null)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.isSaved)
