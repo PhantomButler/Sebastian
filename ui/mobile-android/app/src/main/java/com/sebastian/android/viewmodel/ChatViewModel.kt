@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -77,26 +78,7 @@ class ChatViewModel @Inject constructor(
     init {
         observeNetwork()
         startDeltaFlusher()
-        loadLatestSession()
-    }
-
-    /** On startup, load sessions and auto-select the most recent one. */
-    private fun loadLatestSession() {
-        viewModelScope.launch(dispatcher) {
-            sessionRepository.loadSessions()
-                .onSuccess { sessions ->
-                    val latest = sessions.firstOrNull()
-                    if (latest != null) {
-                        _uiState.update { it.copy(activeSessionId = latest.id) }
-                        chatRepository.getMessages(latest.id)
-                            .onSuccess { history ->
-                                _uiState.update { it.copy(messages = history) }
-                            }
-                        startSseCollection()
-                    }
-                    // If no sessions, activeSessionId stays null (new conversation)
-                }
-        }
+        // activeSessionId starts as null → blank new conversation
     }
 
     private fun startDeltaFlusher() {
@@ -143,19 +125,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Determine Last-Event-ID based on current messages:
-     * - Empty or last message is USER → "0" (replay to catch active turn)
-     * - Last message is ASSISTANT → "" (subscribe to new events only)
-     */
-    private fun determineLastEventId(): String {
-        val lastMessage = _uiState.value.messages.lastOrNull() ?: return "0"
-        return when (lastMessage.role) {
-            MessageRole.USER -> "0"
-            MessageRole.ASSISTANT -> ""
-        }
-    }
-
     private fun startSseCollection() {
         val sessionId = _uiState.value.activeSessionId ?: return
         sseJob?.cancel()
@@ -166,11 +135,12 @@ class ChatViewModel @Inject constructor(
                 return@launch
             }
             _uiState.update { it.copy(isServerNotConfigured = false, connectionFailed = false) }
-            val lastEventId = determineLastEventId()
             try {
-                chatRepository.sessionStream(baseUrl, sessionId, lastEventId).collect { event ->
+                chatRepository.sessionStream(baseUrl, sessionId).collect { event ->
                     handleEvent(event)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 if (!_uiState.value.isOffline) {
                     _uiState.update { it.copy(connectionFailed = true) }
