@@ -25,7 +25,11 @@ object SseFrameParser {
         "turn.interrupted" -> StreamEvent.TurnInterrupted(data.getString("session_id"), data.optString("partial_content", ""))
         "thinking_block.start" -> StreamEvent.ThinkingBlockStart(data.getString("session_id"), data.getString("block_id"))
         "turn.thinking_delta" -> StreamEvent.ThinkingDelta(data.getString("session_id"), data.getString("block_id"), data.getString("delta"))
-        "thinking_block.stop" -> StreamEvent.ThinkingBlockStop(data.getString("session_id"), data.getString("block_id"))
+        "thinking_block.stop" -> StreamEvent.ThinkingBlockStop(
+            sessionId  = data.getString("session_id"),
+            blockId    = data.getString("block_id"),
+            durationMs = data.optLong("duration_ms", -1L).takeIf { it >= 0L },
+        )
         "text_block.start" -> StreamEvent.TextBlockStart(data.getString("session_id"), data.getString("block_id"))
         "turn.delta" -> StreamEvent.TextDelta(data.getString("session_id"), data.getString("block_id"), data.getString("delta"))
         "text_block.stop" -> StreamEvent.TextBlockStop(data.getString("session_id"), data.getString("block_id"))
