@@ -32,7 +32,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.mockito.kotlin.any
-import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -81,9 +80,9 @@ class ChatViewModelTest {
     }
 
     /**
-     * Wraps [runTest] so that [viewModel]'s infinite delta-flusher coroutine is
-     * cancelled before [runTest]'s internal [advanceUntilIdle] cleanup runs.
-     * Without this, [advanceUntilIdle] spins forever on the `while(true) { delay(50) }` loop.
+     * Wraps [runTest] so that the ViewModel's infinite delta-flusher coroutine
+     * (`while(true) { delay(50) }`) is cancelled before [runTest]'s internal
+     * `advanceUntilIdle` cleanup, which would otherwise spin forever.
      */
     private fun vmTest(testBody: suspend TestScope.() -> Unit) = runTest(dispatcher) {
         try {
@@ -91,6 +90,12 @@ class ChatViewModelTest {
         } finally {
             viewModel.viewModelScope.cancel()
         }
+    }
+
+    /** Activate a session so SSE collection starts. Call before `test {}`. */
+    private fun activateSession(sessionId: String = "s1") {
+        viewModel.switchSession(sessionId)
+        dispatcher.scheduler.advanceTimeBy(200)
     }
 
     @Test
@@ -104,8 +109,9 @@ class ChatViewModelTest {
 
     @Test
     fun `text_block_start creates new streaming TextBlock`() = vmTest {
+        activateSession()
         viewModel.uiState.test {
-            awaitItem() // initial
+            awaitItem() // post-session state
 
             sseFlow.emit(StreamEvent.TurnReceived("s1"))
             sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
@@ -117,11 +123,13 @@ class ChatViewModelTest {
             val block = assistantMsg!!.blocks.find { it.blockId == "b0_0" }
             assertTrue(block is ContentBlock.TextBlock)
             assertFalse((block as ContentBlock.TextBlock).done)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun `text_delta appends to TextBlock`() = vmTest {
+        activateSession()
         viewModel.uiState.test {
             awaitItem()
             sseFlow.emit(StreamEvent.TurnReceived("s1"))
@@ -140,11 +148,13 @@ class ChatViewModelTest {
                     assertEquals("好的，我来帮你", block.text)
                 }
             }
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun `text_block_stop marks block as done`() = vmTest {
+        activateSession()
         viewModel.uiState.test {
             awaitItem()
             sseFlow.emit(StreamEvent.TurnReceived("s1"))
@@ -163,11 +173,13 @@ class ChatViewModelTest {
                 }
             }
             assertTrue(found)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun `thinking_block_start creates ThinkingBlock`() = vmTest {
+        activateSession()
         viewModel.uiState.test {
             awaitItem()
             sseFlow.emit(StreamEvent.TurnReceived("s1"))
@@ -178,11 +190,13 @@ class ChatViewModelTest {
             val block = state.messages.lastOrNull { it.role == MessageRole.ASSISTANT }
                 ?.blocks?.find { it.blockId == "b0_0" }
             assertTrue(block is ContentBlock.ThinkingBlock)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun `composerState becomes STREAMING during text block`() = vmTest {
+        activateSession()
         viewModel.uiState.test {
             awaitItem()
             sseFlow.emit(StreamEvent.TurnReceived("s1"))
@@ -191,11 +205,13 @@ class ChatViewModelTest {
 
             val state = awaitItem()
             assertEquals(ComposerState.STREAMING, state.composerState)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun `composerState returns to IDLE_EMPTY after turn_response`() = vmTest {
+        activateSession()
         viewModel.uiState.test {
             awaitItem()
             sseFlow.emit(StreamEvent.TurnReceived("s1"))
@@ -210,6 +226,7 @@ class ChatViewModelTest {
                 if (state.composerState == ComposerState.IDLE_EMPTY) found = true
             }
             assertTrue(found)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -227,33 +244,51 @@ class ChatViewModelTest {
             val userMsg = state.messages.lastOrNull { it.role == MessageRole.USER }
             assertTrue(userMsg != null)
             assertEquals("你好", userMsg!!.text)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `clearError clears error from uiState`() = vmTest {
-        viewModel.uiState.test {
-            awaitItem() // initial
+    fun `clearError clears error from uiState`() {
+        // Cancel old ViewModel's infinite flusher before creating a new one
+        viewModel.viewModelScope.cancel()
+        // Anonymous fake: Mockito cannot reliably return Kotlin Result (inline class)
+        val failingRepo = object : ChatRepository {
+            override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?) = sseFlow
+            override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<StreamEvent>()
+            override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
+            override suspend fun sendTurn(sessionId: String?, content: String, effort: com.sebastian.android.data.model.ThinkingEffort) =
+                Result.failure<String>(RuntimeException("网络错误"))
+            override suspend fun sendSessionTurn(sessionId: String, content: String, effort: com.sebastian.android.data.model.ThinkingEffort) =
+                Result.success(Unit)
+            override suspend fun cancelTurn(sessionId: String) = Result.success(Unit)
+            override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
+            override suspend fun denyApproval(approvalId: String) = Result.success(Unit)
+        }
+        viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, markdownParser, dispatcher)
+        dispatcher.scheduler.advanceTimeBy(200)
 
-            // Inject an error via sendMessage failure
-            runBlocking {
-                whenever(chatRepository.sendTurn(any(), any(), any()))
-                    .thenReturn(Result.failure(RuntimeException("网络错误")))
+        vmTest {
+            viewModel.uiState.test {
+                awaitItem() // initial
+
+                viewModel.sendMessage("test")
+                dispatcher.scheduler.advanceTimeBy(200)
+
+                // Consume states until we find the error
+                var errorState: ChatUiState? = null
+                while (errorState?.error == null) {
+                    errorState = awaitItem()
+                }
+                assertEquals("网络错误", errorState!!.error)
+
+                viewModel.clearError()
+                dispatcher.scheduler.advanceTimeBy(200)
+
+                val clearedState = awaitItem()
+                assertNull(clearedState.error)
+                cancelAndIgnoreRemainingEvents()
             }
-            viewModel.sendMessage("test")
-            dispatcher.scheduler.advanceTimeBy(200)
-
-            // Consume SENDING state
-            awaitItem()
-            // Consume error state
-            val errorState = awaitItem()
-            assertEquals("网络错误", errorState.error)
-
-            viewModel.clearError()
-            dispatcher.scheduler.advanceTimeBy(200)
-
-            val clearedState = awaitItem()
-            assertNull(clearedState.error)
         }
     }
 
@@ -272,15 +307,17 @@ class ChatViewModelTest {
 
     @Test
     fun `cancelTurn sets state CANCELLING and calls repository`() = vmTest {
+        activateSession()
         viewModel.uiState.test {
-            awaitItem() // initial
+            awaitItem()
 
             viewModel.cancelTurn()
             dispatcher.scheduler.advanceTimeBy(200)
 
             val state = awaitItem()
             assertEquals(ComposerState.CANCELLING, state.composerState)
-            runBlocking { verify(chatRepository).cancelTurn("main") }
+            runBlocking { verify(chatRepository).cancelTurn("s1") }
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -299,10 +336,11 @@ class ChatViewModelTest {
 
     @Test
     fun `switchSession clears messages and sets activeSessionId`() = vmTest {
+        activateSession()
         viewModel.uiState.test {
-            awaitItem() // initial
+            awaitItem() // post-activation state
 
-            // Pre-populate a message
+            // Pre-populate a message via SSE
             sseFlow.emit(StreamEvent.TurnReceived("s1"))
             sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
             dispatcher.scheduler.advanceTimeBy(200)
@@ -317,10 +355,10 @@ class ChatViewModelTest {
                 if (state.activeSessionId == "session-42") {
                     found = true
                     assertTrue(state.messages.isEmpty())
-                    cancelAndIgnoreRemainingEvents()
                 }
             }
             assertTrue(found)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 }

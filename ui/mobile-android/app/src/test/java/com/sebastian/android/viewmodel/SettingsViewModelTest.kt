@@ -4,10 +4,13 @@ import app.cash.turbine.test
 import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.model.ThinkingCapability
 import com.sebastian.android.data.repository.SettingsRepository
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -29,6 +32,8 @@ class SettingsViewModelTest {
     private lateinit var serverUrlFlow: MutableStateFlow<String>
     private lateinit var themeFlow: MutableStateFlow<String>
     private lateinit var providersFlow: MutableStateFlow<List<Provider>>
+    private val currentProviderFlow = MutableStateFlow<Provider?>(null)
+    private val isLoggedInFlow = MutableStateFlow(false)
     private val dispatcher = StandardTestDispatcher()
 
     @Before
@@ -41,8 +46,11 @@ class SettingsViewModelTest {
         whenever(repository.serverUrl).thenReturn(serverUrlFlow)
         whenever(repository.theme).thenReturn(themeFlow)
         whenever(repository.providersFlow()).thenReturn(providersFlow)
+        whenever(repository.currentProvider).thenReturn(currentProviderFlow)
+        whenever(repository.isLoggedIn).thenReturn(isLoggedInFlow)
         wheneverBlocking { repository.getProviders() }.thenReturn(Result.success(emptyList()))
         viewModel = SettingsViewModel(repository, dispatcher)
+        dispatcher.scheduler.advanceTimeBy(200)
     }
 
     @After
@@ -50,8 +58,16 @@ class SettingsViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun vmTest(testBody: suspend TestScope.() -> Unit) = runTest(dispatcher) {
+        try {
+            testBody()
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
+    }
+
     @Test
-    fun `initial state has empty serverUrl`() = runTest(dispatcher) {
+    fun `initial state has empty serverUrl`() = vmTest {
         viewModel.uiState.test {
             val state = awaitItem()
             assertEquals("", state.serverUrl)
@@ -59,7 +75,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `serverUrl updates when flow emits`() = runTest(dispatcher) {
+    fun `serverUrl updates when flow emits`() = vmTest {
         viewModel.uiState.test {
             awaitItem() // initial
             serverUrlFlow.emit("http://192.168.1.1:8823")
@@ -69,14 +85,14 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `saveServerUrl calls repository`() = runTest(dispatcher) {
+    fun `saveServerUrl calls repository`() = vmTest {
         viewModel.saveServerUrl("http://10.0.2.2:8823")
         advanceUntilIdle()
         verify(repository).saveServerUrl("http://10.0.2.2:8823")
     }
 
     @Test
-    fun `providers list reflects repository flow`() = runTest(dispatcher) {
+    fun `providers list reflects repository flow`() = vmTest {
         val provider = Provider("p1", "Claude", "anthropic", null, null, true, ThinkingCapability.EFFORT)
         viewModel.uiState.test {
             awaitItem() // initial empty
@@ -88,20 +104,20 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `deleteProvider removes from list on success`() = runTest(dispatcher) {
+    fun `deleteProvider removes from list on success`() = vmTest {
         val provider = Provider("p1", "Claude", "anthropic", null, null, true, ThinkingCapability.EFFORT)
         providersFlow.emit(listOf(provider))
         whenever(repository.deleteProvider("p1")).thenReturn(Result.success(Unit))
         viewModel.deleteProvider("p1")
-        dispatcher.scheduler.advanceUntilIdle()
+        advanceUntilIdle()
         verify(repository).deleteProvider("p1")
     }
 
     @Test
-    fun `deleteProvider propagates error to uiState on failure`() = runTest(dispatcher) {
+    fun `deleteProvider propagates error to uiState on failure`() = vmTest {
         whenever(repository.deleteProvider("p1")).thenReturn(Result.failure(Exception("删除失败")))
         viewModel.deleteProvider("p1")
-        dispatcher.scheduler.advanceUntilIdle()
+        advanceUntilIdle()
         assertEquals("删除失败", viewModel.uiState.value.error)
     }
 }

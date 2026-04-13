@@ -4,15 +4,23 @@ import app.cash.turbine.test
 import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.model.ThinkingCapability
 import com.sebastian.android.data.repository.SettingsRepository
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.mockito.kotlin.wheneverBlocking
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -25,13 +33,28 @@ class ProviderFormViewModelTest {
 
     @Before
     fun setup() {
+        Dispatchers.setMain(dispatcher)
         repository = mock()
-        org.mockito.kotlin.whenever(repository.providersFlow()).thenReturn(providersFlow)
+        whenever(repository.providersFlow()).thenReturn(providersFlow)
         viewModel = ProviderFormViewModel(repository, dispatcher)
+        dispatcher.scheduler.advanceTimeBy(200)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    private fun vmTest(testBody: suspend TestScope.() -> Unit) = runTest(dispatcher) {
+        try {
+            testBody()
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
     }
 
     @Test
-    fun `initial state has anthropic type and empty fields`() = runTest(dispatcher) {
+    fun `initial state has anthropic type and empty fields`() = vmTest {
         viewModel.uiState.test {
             val state = awaitItem()
             assertEquals("anthropic", state.type)
@@ -41,19 +64,29 @@ class ProviderFormViewModelTest {
     }
 
     @Test
-    fun `onNameChange updates name in state`() = runTest(dispatcher) {
-        viewModel.onNameChange("Claude API")
-        assertEquals("Claude API", viewModel.uiState.value.name)
+    fun `onNameChange updates name in state`() = vmTest {
+        viewModel.uiState.test {
+            awaitItem() // initial
+            viewModel.onNameChange("Claude API")
+            dispatcher.scheduler.advanceTimeBy(200)
+            val state = awaitItem()
+            assertEquals("Claude API", state.name)
+        }
     }
 
     @Test
-    fun `save with blank name sets error`() = runTest(dispatcher) {
-        viewModel.save(null)
-        assertEquals("名称不能为空", viewModel.uiState.value.error)
+    fun `save with blank name sets error`() = vmTest {
+        viewModel.uiState.test {
+            awaitItem() // initial (starts stateIn subscription)
+            viewModel.save(null)
+            dispatcher.scheduler.advanceTimeBy(200)
+            val state = awaitItem()
+            assertEquals("名称不能为空", state.error)
+        }
     }
 
     @Test
-    fun `save create calls repository and sets isSaved`() = runTest(dispatcher) {
+    fun `save create calls repository and sets isSaved`() = vmTest {
         wheneverBlocking {
             repository.createProvider(
                 name = "TestProvider",
@@ -65,12 +98,25 @@ class ProviderFormViewModelTest {
                 isDefault = false,
             )
         }.thenReturn(Result.success(Provider("id1", "TestProvider", "anthropic", "http://api.anthropic.com", "claude-3-5-sonnet-20241022", false, ThinkingCapability.NONE)))
-        viewModel.onNameChange("TestProvider")
-        viewModel.onApiKeyChange("sk-test")
-        viewModel.onModelChange("claude-3-5-sonnet-20241022")
-        viewModel.onBaseUrlChange("http://api.anthropic.com")
-        viewModel.save(null)
-        dispatcher.scheduler.advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.isSaved)
+
+        viewModel.uiState.test {
+            awaitItem() // initial (starts stateIn subscription)
+
+            viewModel.onNameChange("TestProvider")
+            viewModel.onApiKeyChange("sk-test")
+            viewModel.onModelChange("claude-3-5-sonnet-20241022")
+            viewModel.onBaseUrlChange("http://api.anthropic.com")
+            viewModel.save(null)
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            // Skip intermediate states until isSaved
+            var found = false
+            while (!found) {
+                val state = awaitItem()
+                if (state.isSaved) found = true
+            }
+            assertTrue(found)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }
