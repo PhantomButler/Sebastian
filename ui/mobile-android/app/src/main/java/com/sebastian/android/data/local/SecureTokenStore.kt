@@ -10,7 +10,7 @@ import javax.inject.Singleton
 
 @Singleton
 class SecureTokenStore @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) {
     private val prefs: SharedPreferences by lazy {
         val masterKey = MasterKey.Builder(context)

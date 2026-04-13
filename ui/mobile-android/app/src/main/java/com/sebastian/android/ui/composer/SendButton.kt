@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -85,7 +85,7 @@ fun SendButton(
             ) { targetState ->
                 when (targetState) {
                     ComposerState.IDLE_EMPTY, ComposerState.IDLE_READY -> Icon(
-                        imageVector = Icons.Default.Send,
+                        imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "发送",
                         tint = if (targetState == ComposerState.IDLE_EMPTY)
                             MaterialTheme.colorScheme.onSurfaceVariant

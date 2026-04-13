@@ -10,7 +10,7 @@ import javax.inject.Singleton
 
 @Singleton
 class MarkwonMarkdownParser @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : MarkdownParser {
     private val markwon: Markwon = Markwon.builder(context)
         .usePlugin(StrikethroughPlugin.create())

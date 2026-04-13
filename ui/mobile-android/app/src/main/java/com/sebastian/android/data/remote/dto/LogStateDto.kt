@@ -5,12 +5,12 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class LogStateDto(
-    @Json(name = "llm_stream_enabled") val llmStreamEnabled: Boolean,
-    @Json(name = "sse_enabled") val sseEnabled: Boolean,
+    @param:Json(name ="llm_stream_enabled") val llmStreamEnabled: Boolean,
+    @param:Json(name ="sse_enabled") val sseEnabled: Boolean,
 )
 
 @JsonClass(generateAdapter = true)
 data class LogConfigPatchDto(
-    @Json(name = "llm_stream_enabled") val llmStreamEnabled: Boolean? = null,
-    @Json(name = "sse_enabled") val sseEnabled: Boolean? = null,
+    @param:Json(name ="llm_stream_enabled") val llmStreamEnabled: Boolean? = null,
+    @param:Json(name ="sse_enabled") val sseEnabled: Boolean? = null,
 )

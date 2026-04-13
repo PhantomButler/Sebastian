@@ -15,10 +15,10 @@ import com.squareup.moshi.JsonClass
  */
 @JsonClass(generateAdapter = true)
 data class MessageDto(
-    @Json(name = "role") val role: String,
-    @Json(name = "content") val content: String = "",
-    @Json(name = "ts") val ts: String = "",
-    @Json(name = "blocks") val blocks: List<BlockDto>? = null,
+    @param:Json(name ="role") val role: String,
+    @param:Json(name ="content") val content: String = "",
+    @param:Json(name ="ts") val ts: String = "",
+    @param:Json(name ="blocks") val blocks: List<BlockDto>? = null,
 ) {
     fun toDomain(sessionId: String, index: Int): Message {
         val msgId = "$sessionId-$index"
@@ -78,12 +78,12 @@ data class MessageDto(
 
 @JsonClass(generateAdapter = true)
 data class BlockDto(
-    @Json(name = "type") val type: String,
-    @Json(name = "thinking") val thinking: String? = null,
-    @Json(name = "signature") val signature: String? = null,
-    @Json(name = "tool_id") val toolId: String? = null,
-    @Json(name = "name") val name: String? = null,
-    @Json(name = "input") val input: String? = null,
-    @Json(name = "status") val status: String? = null,
-    @Json(name = "result") val result: String? = null,
+    @param:Json(name ="type") val type: String,
+    @param:Json(name ="thinking") val thinking: String? = null,
+    @param:Json(name ="signature") val signature: String? = null,
+    @param:Json(name ="tool_id") val toolId: String? = null,
+    @param:Json(name ="name") val name: String? = null,
+    @param:Json(name ="input") val input: String? = null,
+    @param:Json(name ="status") val status: String? = null,
+    @param:Json(name ="result") val result: String? = null,
 )

@@ -17,7 +17,7 @@ import javax.inject.Singleton
 
 @Singleton
 class NetworkMonitor @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) {
     /** Emits `true` when internet is available, `false` when lost. Distinct-until-changed. */
     val isOnline: Flow<Boolean> = callbackFlow {

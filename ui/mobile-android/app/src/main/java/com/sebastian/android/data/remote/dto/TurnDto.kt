@@ -5,18 +5,18 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class SendTurnRequest(
-    @Json(name = "content") val content: String,
-    @Json(name = "session_id") val sessionId: String? = null,
-    @Json(name = "thinking_effort") val thinkingEffort: String? = null,
+    @param:Json(name ="content") val content: String,
+    @param:Json(name ="session_id") val sessionId: String? = null,
+    @param:Json(name ="thinking_effort") val thinkingEffort: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class TurnDto(
-    @Json(name = "session_id") val sessionId: String,
-    @Json(name = "ts") val ts: String,
+    @param:Json(name ="session_id") val sessionId: String,
+    @param:Json(name ="ts") val ts: String,
 )
 
 @JsonClass(generateAdapter = true)
 data class CancelResponse(
-    @Json(name = "ok") val ok: Boolean,
+    @param:Json(name ="ok") val ok: Boolean,
 )

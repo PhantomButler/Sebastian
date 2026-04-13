@@ -11,7 +11,7 @@ import javax.inject.Singleton
 @Singleton
 class AgentRepositoryImpl @Inject constructor(
     private val apiService: ApiService,
-    @IoDispatcher private val dispatcher: CoroutineDispatcher,
+    @param:IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : AgentRepository {
 
     override suspend fun getAgents(): Result<List<AgentInfo>> = runCatching {

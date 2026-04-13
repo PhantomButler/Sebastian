@@ -23,7 +23,7 @@ data class SessionUiState(
 @HiltViewModel
 class SessionViewModel @Inject constructor(
     private val repository: SessionRepository,
-    @IoDispatcher private val dispatcher: CoroutineDispatcher,
+    @param:IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SessionUiState())

@@ -25,7 +25,7 @@ class SettingsRepositoryImpl @Inject constructor(
     private val apiService: ApiService,
     private val tokenStore: SecureTokenStore,
     private val okHttpClient: OkHttpClient,
-    @IoDispatcher private val dispatcher: CoroutineDispatcher,
+    @param:IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : SettingsRepository {
 
     override val serverUrl: Flow<String> = dataStore.serverUrl

@@ -35,7 +35,7 @@ data class ProviderFormUiState(
 @HiltViewModel
 class ProviderFormViewModel @Inject constructor(
     private val repository: SettingsRepository,
-    @IoDispatcher private val dispatcher: CoroutineDispatcher,
+    @param:IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _formState = MutableStateFlow(ProviderFormUiState())
