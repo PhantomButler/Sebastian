@@ -30,8 +30,6 @@ import com.sebastian.android.ui.settings.ProviderListPage
 import com.sebastian.android.ui.settings.ConnectionPage
 import com.sebastian.android.ui.settings.SettingsScreen
 import com.sebastian.android.ui.subagents.AgentListScreen
-import com.sebastian.android.ui.subagents.SessionDetailScreen
-import com.sebastian.android.ui.subagents.SessionListScreen
 import com.sebastian.android.ui.theme.SebastianTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -87,14 +85,6 @@ fun SebastianNavHost() {
         }
         composable<Route.SubAgents> {
             AgentListScreen(navController = navController)
-        }
-        composable<Route.AgentSessions> { backStackEntry ->
-            val route = backStackEntry.toRoute<Route.AgentSessions>()
-            SessionListScreen(agentId = route.agentId, navController = navController)
-        }
-        composable<Route.SessionDetail> { backStackEntry ->
-            val route = backStackEntry.toRoute<Route.SessionDetail>()
-            SessionDetailScreen(sessionId = route.sessionId, navController = navController)
         }
         composable<Route.Settings> {
             SettingsScreen(navController = navController)

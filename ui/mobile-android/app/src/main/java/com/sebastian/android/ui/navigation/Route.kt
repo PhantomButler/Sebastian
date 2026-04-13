@@ -11,10 +11,7 @@ sealed class Route {
     data object SubAgents : Route()
 
     @Serializable
-    data class AgentSessions(val agentId: String) : Route()
-
-    @Serializable
-    data class SessionDetail(val sessionId: String) : Route()
+    data class AgentChat(val agentId: String, val agentName: String) : Route()
 
     @Serializable
     data object Settings : Route()

@@ -63,7 +63,7 @@ fun AgentListScreen(
                         headlineContent = { Text(agent.name) },
                         supportingContent = { Text(agent.description) },
                         modifier = Modifier.clickable {
-                            navController.navigate(Route.AgentSessions(agent.agentType)) { launchSingleTop = true }
+                            navController.navigate(Route.AgentChat(agentId = agent.agentType, agentName = agent.name)) { launchSingleTop = true }
                         },
                     )
                 }
