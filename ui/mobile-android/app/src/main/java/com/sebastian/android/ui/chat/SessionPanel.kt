@@ -41,9 +41,11 @@ fun SessionPanel(
     isNewSession: Boolean = false,
     onSessionClick: (Session) -> Unit,
     onNewSession: () -> Unit,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToSubAgents: () -> Unit,
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToSubAgents: () -> Unit = {},
     onClose: () -> Unit = {},
+    /** 非 null 时进入精简模式：显示 agent 名称，隐藏功能区 */
+    agentName: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -52,38 +54,40 @@ fun SessionPanel(
         Column(modifier = Modifier.fillMaxSize()) {
             // Header
             Text(
-                text = "Sebastian",
+                text = agentName ?: "Sebastian",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             )
 
-            // Feature section
-            Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-                Text(
-                    text = "功能",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-                )
-                FeatureItem(
-                    label = "Sub-Agents",
-                    onClick = onNavigateToSubAgents,
-                )
-                Spacer(Modifier.height(6.dp))
-                FeatureItem(
-                    label = "设置",
-                    onClick = onNavigateToSettings,
-                )
-                Spacer(Modifier.height(6.dp))
-                FeatureItem(
-                    label = "系统总览",
-                    enabled = false,
-                    badgeText = "即将推出",
-                    onClick = {},
-                )
-            }
+            // Feature section — 精简模式下隐藏
+            if (agentName == null) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    Text(
+                        text = "功能",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+                    )
+                    FeatureItem(
+                        label = "Sub-Agents",
+                        onClick = onNavigateToSubAgents,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    FeatureItem(
+                        label = "设置",
+                        onClick = onNavigateToSettings,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    FeatureItem(
+                        label = "系统总览",
+                        enabled = false,
+                        badgeText = "即将推出",
+                        onClick = {},
+                    )
+                }
 
-            HorizontalDivider(modifier = Modifier.padding(top = 12.dp))
+                HorizontalDivider(modifier = Modifier.padding(top = 12.dp))
+            }
 
             // History section
             Column(
