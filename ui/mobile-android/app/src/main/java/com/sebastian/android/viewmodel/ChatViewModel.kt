@@ -178,7 +178,11 @@ class ChatViewModel @Inject constructor(
 
             is StreamEvent.ThinkingBlockStop -> {
                 updateBlockInCurrentMessage(event.blockId) { existing ->
-                    if (existing is ContentBlock.ThinkingBlock) existing.copy(done = true)
+                    if (existing is ContentBlock.ThinkingBlock)
+                        existing.copy(
+                            done = true,
+                            durationMs = event.durationMs,
+                        )
                     else existing
                 }
             }
