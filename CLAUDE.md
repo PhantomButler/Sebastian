@@ -288,8 +288,9 @@ SEBASTIAN_GATEWAY_PORT=8823
 - 必须确保方案的逻辑正确，必须经过全链路的逻辑验证
 
 ### 其他
-- (重要)在处理 python 项目文件时，优先使用 JetBrains pycharm MCP 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于“未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
-- (重要)在分派subagent 任务时记得告知subagent 也可以使用JetBrains pycharm MCP
+- (重要)在处理 python 项目文件时，优先使用 JetBrains pycharm MCP 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于”未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
+- (重要)在处理 Kotlin/Android 项目文件时，优先使用 Android Studio MCP (android-studio-index) 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于”未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
+- (重要)在分派subagent 任务时记得告知subagent 也可以使用JetBrains pycharm MCP 和 Android Studio MCP
 - 尽量使用 Read/Edit/Write 等内置工具编辑文件，非必要不使用 echo/cat heredoc/sed 等 shell命令写文件，除非系统内置工具一直出问题得不到解决
 - 在修改过程中如果发现某个文件内容过多，记得提醒用户规划拆分计划
 - 在针对某部分做修改时优先根据 README 了解对应模块上下文
