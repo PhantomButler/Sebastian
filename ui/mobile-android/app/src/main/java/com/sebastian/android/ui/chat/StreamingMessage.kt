@@ -2,6 +2,7 @@ package com.sebastian.android.ui.chat
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
@@ -25,6 +27,11 @@ import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.ui.common.AnimationTokens
 import com.sebastian.android.ui.common.MarkdownView
+import com.sebastian.android.ui.theme.OnUserBubbleDark
+import com.sebastian.android.ui.theme.OnUserBubbleLight
+import com.sebastian.android.ui.theme.UserBubbleBorderDark
+import com.sebastian.android.ui.theme.UserBubbleDark
+import com.sebastian.android.ui.theme.UserBubbleLight
 
 @Composable
 fun MessageBubble(
@@ -47,6 +54,8 @@ fun MessageBubble(
 
 @Composable
 private fun UserMessageBubble(text: String, modifier: Modifier = Modifier) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val bubbleShape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -56,11 +65,18 @@ private fun UserMessageBubble(text: String, modifier: Modifier = Modifier) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            color = if (isDark) OnUserBubbleDark else OnUserBubbleLight,
             modifier = Modifier
                 .background(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp),
+                    color = if (isDark) UserBubbleDark else UserBubbleLight,
+                    shape = bubbleShape,
+                )
+                .then(
+                    if (isDark) Modifier.border(
+                        width = 0.5.dp,
+                        color = UserBubbleBorderDark,
+                        shape = bubbleShape,
+                    ) else Modifier
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         )

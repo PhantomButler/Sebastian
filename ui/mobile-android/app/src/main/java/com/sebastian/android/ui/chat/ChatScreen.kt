@@ -5,20 +5,26 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +43,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.sebastian.android.ui.common.ErrorBanner
+import com.sebastian.android.ui.common.glass.GlassSurface
 import com.sebastian.android.ui.common.glass.rememberGlassState
 import com.sebastian.android.ui.composer.Composer
 import com.sebastian.android.ui.navigation.Route
@@ -114,48 +121,44 @@ fun ChatScreen(
             )
         },
         mainPane = {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text(agentName ?: "Sebastian") },
-                        navigationIcon = {
-                            if (agentId != null) {
-                                IconButton(onClick = { navController.popBackStack() }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                                }
-                            } else {
-                                IconButton(onClick = {
-                                    activePane = if (activePane == SidePane.LEFT) SidePane.NONE else SidePane.LEFT
-                                }) {
-                                    Icon(Icons.Default.Menu, contentDescription = "会话列表")
-                                }
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = {
-                                activePane = if (activePane == SidePane.RIGHT) SidePane.NONE else SidePane.RIGHT
-                            }) {
-                                Icon(Icons.Default.Checklist, contentDescription = "待办事项")
-                            }
-                        },
-                    )
-                },
-            ) { innerPadding ->
-                Column(
+            val glassState = rememberGlassState(MaterialTheme.colorScheme.background)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding()
+                    .imePadding(),
+            ) {
+                // 内容层：MessageList 铺满全屏，顶部留出悬浮栏空间
+                MessageList(
+                    messages = chatState.messages,
+                    scrollFollowState = chatState.scrollFollowState,
+                    flushTick = chatState.flushTick,
+                    onUserScrolled = chatViewModel::onUserScrolled,
+                    onScrolledNearBottom = chatViewModel::onScrolledNearBottom,
+                    onScrolledToBottom = chatViewModel::onScrolledToBottom,
+                    onScrollToBottom = chatViewModel::onScrolledToBottom,
+                    onToggleThinking = chatViewModel::toggleThinkingBlock,
+                    onToggleTool = chatViewModel::toggleToolBlock,
+                    contentPadding = PaddingValues(top = 88.dp, bottom = 112.dp),
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding)
-                        .imePadding(),
+                        .then(glassState.contentModifier),
+                )
+
+                // Error banners：显示在悬浮顶部栏下方
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(top = 72.dp),
                 ) {
-                    // 未配置服务器地址
                     AnimatedVisibility(visible = chatState.isServerNotConfigured) {
                         ErrorBanner(message = "请先在设置中配置服务器地址")
                     }
-                    // 网络断开
                     AnimatedVisibility(visible = chatState.isOffline && !chatState.isServerNotConfigured) {
                         ErrorBanner(message = "网络已断开，重连中…")
                     }
-                    // SSE 连接失败
                     AnimatedVisibility(
                         visible = chatState.connectionFailed &&
                             !chatState.isOffline &&
@@ -167,45 +170,111 @@ fun ChatScreen(
                             onAction = chatViewModel::retryConnection,
                         )
                     }
+                }
 
-                    val glassState = rememberGlassState(MaterialTheme.colorScheme.background)
-                    Box(modifier = Modifier.weight(1f)) {
-                        MessageList(
-                            messages = chatState.messages,
-                            scrollFollowState = chatState.scrollFollowState,
-                            flushTick = chatState.flushTick,
-                            onUserScrolled = chatViewModel::onUserScrolled,
-                            onScrolledNearBottom = chatViewModel::onScrolledNearBottom,
-                            onScrolledToBottom = chatViewModel::onScrolledToBottom,
-                            onScrollToBottom = chatViewModel::onScrolledToBottom,
-                            onToggleThinking = chatViewModel::toggleThinkingBlock,
-                            onToggleTool = chatViewModel::toggleToolBlock,
-                            contentPadding = PaddingValues(bottom = 112.dp),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(glassState.contentModifier),
-                        )
-
-                        Composer(
-                            state = chatState.composerState,
-                            glassState = glassState,
-                            activeProvider = settingsState.currentProvider,
-                            effort = chatState.activeThinkingEffort,
-                            onEffortChange = chatViewModel::setEffort,
-                            onSend = { text ->
+                // 悬浮顶部栏：左按钮 | 中间 title | 右按钮
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable {
                                 if (agentId != null) {
-                                    chatViewModel.sendAgentMessage(agentId, text)
+                                    navController.popBackStack()
                                 } else {
-                                    chatViewModel.sendMessage(text)
+                                    activePane = if (activePane == SidePane.LEFT) SidePane.NONE else SidePane.LEFT
                                 }
                             },
-                            onStop = chatViewModel::cancelTurn,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
+                    ) {
+                        GlassSurface(
+                            state = glassState,
+                            shape = CircleShape,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                Icon(
+                                    imageVector = if (agentId != null) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
+                                    contentDescription = if (agentId != null) "返回" else "会话列表",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    }
+
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                    ) {
+                        GlassSurface(
+                            state = glassState,
+                            shape = RoundedCornerShape(20.dp),
+                        ) {
+                            Text(
+                                text = agentName ?: "Sebastian",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                activePane = if (activePane == SidePane.RIGHT) SidePane.NONE else SidePane.RIGHT
+                            },
+                    ) {
+                        GlassSurface(
+                            state = glassState,
+                            shape = CircleShape,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Checklist,
+                                    contentDescription = "待办事项",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
                     }
                 }
+
+                Composer(
+                    state = chatState.composerState,
+                    glassState = glassState,
+                    activeProvider = settingsState.currentProvider,
+                    effort = chatState.activeThinkingEffort,
+                    onEffortChange = chatViewModel::setEffort,
+                    onSend = { text ->
+                        if (agentId != null) {
+                            chatViewModel.sendAgentMessage(agentId, text)
+                        } else {
+                            chatViewModel.sendMessage(text)
+                        }
+                    },
+                    onStop = chatViewModel::cancelTurn,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                )
             }
         },
         rightPane = {

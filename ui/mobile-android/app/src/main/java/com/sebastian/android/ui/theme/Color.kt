@@ -14,3 +14,10 @@ val OnPrimaryDark = Color(0xFF1A3A5C)
 val SurfaceDark = Color(0xFF202124)
 val OnSurfaceDark = Color(0xFFE8EAED)
 val BackgroundDark = Color(0xFF171717)
+
+// 用户消息气泡
+val UserBubbleLight = Color(0xFF96EFA0)
+val OnUserBubbleLight = Color(0xFF1A3A1A)
+val UserBubbleDark = Color(0xFF2E2E2E)
+val OnUserBubbleDark = Color(0xFFE0E0E0)
+val UserBubbleBorderDark = Color(0xFF505050)
