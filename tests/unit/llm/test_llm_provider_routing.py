@@ -92,7 +92,7 @@ async def test_base_agent_run_streaming_uses_injected_llm_registry() -> None:
     )
     from sebastian.llm.registry import LLMProviderRegistry
     from sebastian.store.session_store import SessionStore
-    from tests.unit.test_agent_loop import MockLLMProvider
+    from tests.unit.core.test_agent_loop import MockLLMProvider
 
     # ProviderCallEnd is needed for the mock to complete
     try:

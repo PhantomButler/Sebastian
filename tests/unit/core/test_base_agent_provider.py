@@ -10,7 +10,7 @@ from sebastian.core.stream_events import (
     TextBlockStop,
     TextDelta,
 )
-from tests.unit.test_agent_loop import MockLLMProvider
+from tests.unit.core.test_agent_loop import MockLLMProvider
 
 
 @pytest.mark.asyncio
