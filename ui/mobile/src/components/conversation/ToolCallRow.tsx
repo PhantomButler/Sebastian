@@ -34,10 +34,33 @@ const KEY_PRIORITY: Record<string, string[]> = {
   Edit:              ['file_path'],
   Grep:              ['pattern', 'path'],
   Glob:              ['pattern', 'path'],
-  delegate_to_agent: ['goal'],
+  delegate_to_agent: ['agent_type'],
+  spawn_sub_agent:   ['goal'],
 };
 
-const GENERIC_KEYS = ['command', 'file_path', 'path', 'goal', 'pattern', 'query'];
+const GENERIC_KEYS = ['command', 'file_path', 'path', 'pattern', 'query'];
+
+/**
+ * 工具名 → header 展示的 (title, summary) 映射，与 Android `ToolDisplayName.kt` 对齐。
+ * 大多数工具名本身是 PascalCase（Read/Write/Bash…），直接用作标题；少数 snake_case
+ * 工具（delegate_to_agent / spawn_sub_agent）改写成「类别 + 目标」的形式，并把
+ * agent_type 做 capitalize 显示。
+ */
+function resolveToolDisplay(
+  toolName: string,
+  rawSummary: string,
+): { title: string; summary: string } {
+  if (toolName === 'delegate_to_agent') {
+    const capitalized = rawSummary
+      ? rawSummary.charAt(0).toUpperCase() + rawSummary.slice(1)
+      : '';
+    return { title: `Agent: ${capitalized}`, summary: '' };
+  }
+  if (toolName === 'spawn_sub_agent') {
+    return { title: 'Worker', summary: rawSummary };
+  }
+  return { title: toolName, summary: rawSummary };
+}
 
 /** Extract a human-readable one-line summary from the JSON input string. */
 function extractInputSummary(name: string, input: string): string {
@@ -102,7 +125,8 @@ function extractKeyParams(name: string, input: string): string {
 export function ToolCallRow({ name, input, status, result, isFirst, isLast, showLine }: Props) {
   const colors = useTheme();
   const [expanded, setExpanded] = useState(false);
-  const inputSummary = extractInputSummary(name, input);
+  const rawSummary = extractInputSummary(name, input);
+  const { title: displayTitle, summary: inputSummary } = resolveToolDisplay(name, rawSummary);
 
   const hasResult = result != null && result.trim().length > 0;
   const showOutput = status === 'running' || hasResult;
@@ -134,7 +158,7 @@ export function ToolCallRow({ name, input, status, result, isFirst, isLast, show
           onPress={() => setExpanded((prev) => !prev)}
           hitSlop={4}
         >
-          <Text style={[styles.name, { color: colors.textSecondary }]}>{name}</Text>
+          <Text style={[styles.name, { color: colors.textSecondary }]}>{displayTitle}</Text>
           {inputSummary ? (
             <Text style={[styles.summary, { color: colors.textMuted }]} numberOfLines={1}>
               {inputSummary}
