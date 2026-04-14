@@ -60,6 +60,11 @@ async def bash(command: str, timeout: int | None = None) -> ToolResult:
         else None
     )
 
+    if proc.returncode != 0 and stderr:
+        display = f"{stdout}\n--- stderr ---\n{stderr}" if stdout else f"--- stderr ---\n{stderr}"
+    else:
+        display = stdout
+
     return ToolResult(
         ok=True,
         output={
@@ -68,5 +73,6 @@ async def bash(command: str, timeout: int | None = None) -> ToolResult:
             "returncode": proc.returncode,
             "truncated": truncated,
         },
+        display=display,
         empty_hint=empty_hint,
     )
