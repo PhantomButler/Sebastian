@@ -63,6 +63,10 @@ async def edit(
             f.write(new_content)
 
         _file_state.invalidate(path)
-        return ToolResult(ok=True, output={"file_path": path, "replacements": replacements})
+        return ToolResult(
+            ok=True,
+            output={"file_path": path, "replacements": replacements},
+            display=f"Replaced {replacements} occurrence(s) in {path}",
+        )
     except Exception as e:
         return ToolResult(ok=False, error=str(e))

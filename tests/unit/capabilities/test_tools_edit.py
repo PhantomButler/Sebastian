@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 
@@ -222,3 +224,17 @@ async def test_edit_relative_path_resolves_to_workspace(tmp_path):
 
     assert result.ok
     assert target.read_text() == "x = 42\n"
+
+
+@pytest.mark.asyncio
+async def test_edit_display_is_summary_line(tmp_path: Path) -> None:
+    from sebastian.capabilities.tools import _file_state
+    from sebastian.capabilities.tools.edit import edit as edit_tool
+
+    target = tmp_path / "src.py"
+    target.write_text("hello world")
+    _file_state.record_read(str(target))
+
+    r = await edit_tool(file_path=str(target), old_string="hello", new_string="bye")
+    assert r.ok
+    assert r.display == f"Replaced 1 occurrence(s) in {target}"
