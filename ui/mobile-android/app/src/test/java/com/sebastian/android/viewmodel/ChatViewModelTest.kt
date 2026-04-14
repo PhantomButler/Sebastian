@@ -361,4 +361,52 @@ class ChatViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    /**
+     * 回归保护：后端 `block_id_prefix=f"b{iteration}_"` 跨 turn 重复（turn1/turn2 都会发 `b0_1`），
+     * toggleToolBlock 必须按 (msgId, blockId) 精确定位，不能把两个 turn 的 tool card 一起翻。
+     */
+    @Test
+    fun `toggleToolBlock scoped by msgId does not collide across turns`() = vmTest {
+        activateSession()
+
+        // Turn 1：tool block blockId=b0_1
+        sseFlow.emit(StreamEvent.TurnReceived("s1"))
+        sseFlow.emit(StreamEvent.ToolBlockStart("s1", "b0_1", "t1", "Bash"))
+        sseFlow.emit(StreamEvent.ToolBlockStop("s1", "b0_1", "t1", "Bash", """{"command":"ls"}"""))
+        sseFlow.emit(StreamEvent.ToolExecuted("s1", "t1", "Bash", "ok"))
+        sseFlow.emit(StreamEvent.TurnResponse("s1", ""))
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Turn 2：同样的 blockId=b0_1（后端 iteration 重置）
+        sseFlow.emit(StreamEvent.TurnReceived("s1"))
+        sseFlow.emit(StreamEvent.ToolBlockStart("s1", "b0_1", "t2", "Bash"))
+        sseFlow.emit(StreamEvent.ToolBlockStop("s1", "b0_1", "t2", "Bash", """{"command":"pwd"}"""))
+        sseFlow.emit(StreamEvent.ToolExecuted("s1", "t2", "Bash", "ok"))
+        sseFlow.emit(StreamEvent.TurnResponse("s1", ""))
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        val assistants = viewModel.uiState.value.messages.filter { it.role == MessageRole.ASSISTANT }
+        assertEquals(2, assistants.size)
+        val msg1 = assistants[0]
+        val msg2 = assistants[1]
+        // 两条消息各自持有一个 blockId 相同的 ToolBlock
+        val block1 = msg1.blocks.first { it is ContentBlock.ToolBlock } as ContentBlock.ToolBlock
+        val block2 = msg2.blocks.first { it is ContentBlock.ToolBlock } as ContentBlock.ToolBlock
+        assertEquals("b0_1", block1.blockId)
+        assertEquals("b0_1", block2.blockId)
+        assertFalse(block1.expanded)
+        assertFalse(block2.expanded)
+
+        viewModel.toggleToolBlock(msg1.id, "b0_1")
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        val after = viewModel.uiState.value
+        val after1 = after.messages.first { it.id == msg1.id }
+            .blocks.first { it is ContentBlock.ToolBlock } as ContentBlock.ToolBlock
+        val after2 = after.messages.first { it.id == msg2.id }
+            .blocks.first { it is ContentBlock.ToolBlock } as ContentBlock.ToolBlock
+        assertTrue(after1.expanded)
+        assertFalse(after2.expanded)
+    }
 }

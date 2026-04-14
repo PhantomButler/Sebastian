@@ -37,8 +37,8 @@ fun MessageList(
     onScrolledNearBottom: () -> Unit,
     onScrolledToBottom: () -> Unit,
     onScrollToBottom: () -> Unit,
-    onToggleThinking: (String) -> Unit,
-    onToggleTool: (String) -> Unit,
+    onToggleThinking: (String, String) -> Unit,
+    onToggleTool: (String, String) -> Unit,
     contentPadding: PaddingValues = PaddingValues(),
     modifier: Modifier = Modifier,
 ) {

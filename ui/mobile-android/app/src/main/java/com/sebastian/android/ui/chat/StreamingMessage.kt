@@ -36,14 +36,15 @@ import com.sebastian.android.ui.theme.UserBubbleLight
 @Composable
 fun MessageBubble(
     message: Message,
-    onToggleThinking: (String) -> Unit,
-    onToggleTool: (String) -> Unit,
+    onToggleThinking: (String, String) -> Unit,
+    onToggleTool: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (message.role == MessageRole.USER) {
         UserMessageBubble(text = message.text, modifier = modifier)
     } else {
         AssistantMessageBlocks(
+            msgId = message.id,
             blocks = message.blocks,
             onToggleThinking = onToggleThinking,
             onToggleTool = onToggleTool,
@@ -85,9 +86,10 @@ private fun UserMessageBubble(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun AssistantMessageBlocks(
+    msgId: String,
     blocks: List<ContentBlock>,
-    onToggleThinking: (String) -> Unit,
-    onToggleTool: (String) -> Unit,
+    onToggleThinking: (String, String) -> Unit,
+    onToggleTool: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val knownIds = remember { mutableStateListOf<String>() }
@@ -122,14 +124,14 @@ private fun AssistantMessageBlocks(
             when (block) {
                 is ContentBlock.ThinkingBlock -> ThinkingCard(
                     block = block,
-                    onToggle = { onToggleThinking(block.blockId) },
+                    onToggle = { onToggleThinking(msgId, block.blockId) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .alpha(alpha),
                 )
                 is ContentBlock.ToolBlock -> ToolCallCard(
                     block = block,
-                    onToggle = { onToggleTool(block.blockId) },
+                    onToggle = { onToggleTool(msgId, block.blockId) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .alpha(alpha),

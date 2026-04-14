@@ -482,14 +482,14 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(scrollFollowState = ScrollFollowState.FOLLOWING) }
     }
 
-    fun toggleThinkingBlock(blockId: String) {
-        updateBlock(blockId) { block ->
+    fun toggleThinkingBlock(msgId: String, blockId: String) {
+        updateBlockById(msgId, blockId) { block ->
             if (block is ContentBlock.ThinkingBlock) block.copy(expanded = !block.expanded) else block
         }
     }
 
-    fun toggleToolBlock(blockId: String) {
-        updateBlock(blockId) { block ->
+    fun toggleToolBlock(msgId: String, blockId: String) {
+        updateBlockById(msgId, blockId) { block ->
             if (block is ContentBlock.ToolBlock) block.copy(expanded = !block.expanded) else block
         }
     }
@@ -543,16 +543,6 @@ class ChatViewModel @Inject constructor(
                             else block
                         },
                     )
-                },
-            )
-        }
-    }
-
-    private fun updateBlock(blockId: String, transform: (ContentBlock) -> ContentBlock) {
-        _uiState.update { state ->
-            state.copy(
-                messages = state.messages.map { msg ->
-                    msg.copy(blocks = msg.blocks.map { b -> if (b.blockId == blockId) transform(b) else b })
                 },
             )
         }
