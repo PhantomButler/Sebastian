@@ -16,12 +16,12 @@ class ToolCallInputExtractorTest {
     }
 
     @Test
-    fun `delegate_to_agent summary shows capitalized agent_type, not goal`() {
+    fun `delegate_to_agent summary shows raw agent_type, not goal`() {
         val summary = ToolCallInputExtractor.extractInputSummary(
             "delegate_to_agent",
-            """{"agent_type":"coder","goal":"write tests"}""",
+            """{"agent_type":"forge","goal":"write tests"}""",
         )
-        assertEquals("Coder", summary)
+        assertEquals("forge", summary)
     }
 
     @Test

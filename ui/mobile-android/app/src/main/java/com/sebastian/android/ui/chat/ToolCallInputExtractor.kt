@@ -10,7 +10,6 @@ import org.json.JSONObject
  * - 每个工具维护一个优先键表，按顺序取第一个非空字符串
  * - 未知工具走通用键兜底
  * - 非法 JSON 直接把原始输入（截断 80 字）作为摘要
- * - `delegate_to_agent` 摘要显示子代理名（首字母大写），而不是 goal
  */
 internal object ToolCallInputExtractor {
     private const val SUMMARY_MAX_LEN = 80
@@ -36,12 +35,7 @@ internal object ToolCallInputExtractor {
         val keys = KEY_PRIORITY[name] ?: GENERIC_KEYS
         for (key in keys) {
             val value = parsed.optStringOrNull(key) ?: continue
-            val shaped = if (name == "delegate_to_agent" && key == "agent_type") {
-                value.replaceFirstChar { it.uppercase() }
-            } else {
-                value
-            }
-            return truncate(shaped)
+            return truncate(value)
         }
 
         val iter = parsed.keys()
