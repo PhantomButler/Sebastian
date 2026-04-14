@@ -12,14 +12,12 @@ data class AgentListResponse(
 @JsonClass(generateAdapter = true)
 data class AgentDto(
     @param:Json(name ="agent_type") val agentType: String,
-    @param:Json(name ="name") val name: String,
     @param:Json(name ="description") val description: String,
     @param:Json(name ="active_session_count") val activeSessionCount: Int = 0,
     @param:Json(name ="max_children") val maxChildren: Int = 0,
 ) {
     fun toDomain() = AgentInfo(
         agentType = agentType,
-        name = name.ifEmpty { agentType },
         description = description,
         activeSessionCount = activeSessionCount,
         maxChildren = maxChildren,
