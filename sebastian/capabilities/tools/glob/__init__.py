@@ -46,4 +46,5 @@ async def glob(pattern: str, path: str | None = None) -> ToolResult:
             "count": len(files),
             "truncated": truncated,
         },
+        display="\n".join(files),
     )

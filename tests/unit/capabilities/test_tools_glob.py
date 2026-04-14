@@ -68,3 +68,16 @@ async def test_glob_invalid_path_returns_error(tmp_path, isolated_registry) -> N
     result = await call_tool("Glob", pattern="*.py", path=nonexistent)
     assert not result.ok
     assert "not a directory" in result.error.lower()
+
+
+@pytest.mark.asyncio
+async def test_glob_display_is_newline_joined_files(tmp_path) -> None:
+    from sebastian.capabilities.tools.glob import glob as glob_tool
+
+    (tmp_path / "a.py").write_text("x")
+    (tmp_path / "b.py").write_text("y")
+    r = await glob_tool(pattern="*.py", path=str(tmp_path))
+    assert r.ok
+    assert r.display is not None
+    lines = set(r.display.split("\n"))
+    assert lines == {"a.py", "b.py"}
