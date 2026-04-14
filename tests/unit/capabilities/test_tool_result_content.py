@@ -88,7 +88,24 @@ class TestToolResultContent:
         r = _make_result(output="some text")
         assert _tool_result_content(r) == "some text"
 
-    def test_nonempty_dict_output_uses_str(self) -> None:
-        output = {"stdout": "", "returncode": 0}
+    def test_nonempty_dict_output_uses_json(self) -> None:
+        output = {"stdout": "hello", "returncode": 0}
         r = _make_result(output=output)
-        assert _tool_result_content(r) == str(output)
+        assert _tool_result_content(r) == '{"stdout": "hello", "returncode": 0}'
+
+    def test_nonempty_dict_output_preserves_chinese(self) -> None:
+        output = {"msg": "你好"}
+        r = _make_result(output=output)
+        assert _tool_result_content(r) == '{"msg": "你好"}'
+
+    def test_nonempty_list_output_uses_json(self) -> None:
+        r = _make_result(output=["a", "b"])
+        assert _tool_result_content(r) == '["a", "b"]'
+
+    def test_unserializable_output_falls_back_to_str(self) -> None:
+        class Opaque:
+            def __str__(self) -> str:
+                return "opaque-value"
+        r = _make_result(output=Opaque())
+        # json.dumps(default=str) 把 Opaque 实例转成字符串，最终是 JSON 字符串字面量
+        assert _tool_result_content(r) == '"opaque-value"'

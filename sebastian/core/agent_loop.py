@@ -43,7 +43,13 @@ def _tool_result_content(result: ToolResult) -> str:
         return result.empty_hint
     if _is_empty_output(result.output):
         return "<empty output>"
-    return str(result.output)
+    output = result.output
+    if isinstance(output, str):
+        return output
+    try:
+        return json.dumps(output, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return str(output)
 
 
 def _validate_injected_tool_result(
