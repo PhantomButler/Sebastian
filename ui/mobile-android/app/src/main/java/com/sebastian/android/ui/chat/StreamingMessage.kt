@@ -1,6 +1,7 @@
 package com.sebastian.android.ui.chat
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
@@ -94,22 +97,22 @@ private fun AssistantMessageBlocks(
 ) {
     val knownIds = remember { mutableStateListOf<String>() }
     val alphaMap = remember { mutableStateMapOf<String, Animatable<Float, *>>() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(blocks.size) {
         val newBlocks = blocks.filter { it.blockId !in knownIds }
-        // 顺序淡入（staggered reveal）：每个 block 等前一个完成后再淡入，营造逐步展开感
-        // 并行淡入可将 animateTo 改为并发 launch { } 块
         for (block in newBlocks) {
             knownIds.add(block.blockId)
             if (!block.isDone) {
                 val anim = Animatable(0f)
                 alphaMap[block.blockId] = anim
-                anim.animateTo(
-                    targetValue = 1f,
-                    animationSpec = androidx.compose.animation.core.tween(
-                        durationMillis = AnimationTokens.STREAMING_CHUNK_FADE_IN_MS,
-                    ),
-                )
+                // 在 rememberCoroutineScope 上独立启动，不受 LaunchedEffect 重启影响
+                scope.launch {
+                    anim.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(durationMillis = AnimationTokens.STREAMING_CHUNK_FADE_IN_MS),
+                    )
+                }
             }
         }
     }
