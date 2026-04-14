@@ -10,10 +10,10 @@ async def test_delegate_to_agent_creates_session_and_dispatches():
 
     mock_state = MagicMock()
     mock_agent = MagicMock()
-    mock_agent.name = "code"
-    mock_state.agent_instances = {"code": mock_agent}
+    mock_agent.name = "forge"
+    mock_state.agent_instances = {"forge": mock_agent}
     mock_state.agent_registry = {
-        "code": MagicMock(display_name="铁匠", max_children=5),
+        "forge": MagicMock(max_children=5),
     }
     mock_state.session_store = AsyncMock()
     mock_state.index_store = AsyncMock()
@@ -23,13 +23,13 @@ async def test_delegate_to_agent_creates_session_and_dispatches():
         "sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state
     ):
         result = await delegate_to_agent(
-            agent_type="code",
+            agent_type="forge",
             goal="write auth module",
             context="",
         )
 
     assert result.ok is True
-    assert "铁匠" in result.output
+    assert "Forge" in result.output
     mock_state.session_store.create_session.assert_awaited_once()
     mock_state.index_store.upsert.assert_awaited_once()
 
@@ -62,9 +62,9 @@ async def test_delegate_creates_background_task() -> None:
 
     mock_state = MagicMock()
     mock_agent = MagicMock()
-    mock_state.agent_instances = {"code": mock_agent}
+    mock_state.agent_instances = {"forge": mock_agent}
     mock_state.agent_registry = {
-        "code": MagicMock(display_name="铁匠", max_children=5),
+        "forge": MagicMock(max_children=5),
     }
     mock_state.session_store = AsyncMock()
     mock_state.index_store = AsyncMock()
@@ -78,7 +78,7 @@ async def test_delegate_creates_background_task() -> None:
     ):
         with patch("asyncio.create_task", return_value=mock_task) as mock_create_task:
             result = await delegate_to_agent(
-                agent_type="code",
+                agent_type="forge",
                 goal="write auth module",
                 context="",
             )

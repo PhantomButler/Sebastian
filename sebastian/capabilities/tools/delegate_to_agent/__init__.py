@@ -41,9 +41,6 @@ async def delegate_to_agent(
     if agent_type not in state.agent_instances:
         return ToolResult(ok=False, error=f"未知的 Agent 类型: {agent_type}")
 
-    config = state.agent_registry.get(agent_type)
-    display_name = config.display_name if config else agent_type
-
     session = Session(
         agent_type=agent_type,
         title=goal[:40],
@@ -70,4 +67,4 @@ async def delegate_to_agent(
     )
     task.add_done_callback(_log_task_failure)
 
-    return ToolResult(ok=True, output=f"已安排{display_name}处理：{goal}")
+    return ToolResult(ok=True, output=f"已安排 {agent_type.capitalize()} 处理：{goal}")
