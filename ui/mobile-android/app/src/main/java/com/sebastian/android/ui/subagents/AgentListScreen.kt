@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.sebastian.android.data.model.displayName
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.viewmodel.SubAgentViewModel
 
@@ -60,10 +61,10 @@ fun AgentListScreen(
             else -> LazyColumn(modifier = Modifier.padding(innerPadding)) {
                 items(state.agents, key = { it.agentType }) { agent ->
                     ListItem(
-                        headlineContent = { Text(agent.name) },
+                        headlineContent = { Text(agent.displayName) },
                         supportingContent = { Text(agent.description) },
                         modifier = Modifier.clickable {
-                            navController.navigate(Route.AgentChat(agentId = agent.agentType, agentName = agent.name)) { launchSingleTop = true }
+                            navController.navigate(Route.AgentChat(agentId = agent.agentType, agentName = agent.displayName)) { launchSingleTop = true }
                         },
                     )
                 }
