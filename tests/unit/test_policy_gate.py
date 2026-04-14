@@ -14,8 +14,13 @@ def _make_context(task_goal: str = "test goal") -> ToolCallContext:
 
 
 @pytest.mark.asyncio
-async def test_low_tier_bypasses_reviewer_and_approval() -> None:
+async def test_low_tier_bypasses_reviewer_and_approval(tmp_path) -> None:
+    """LOW tier workspace 内路径 → 直接执行，不走 reviewer 和 approval_manager。"""
+    from unittest.mock import patch
+
     from sebastian.permissions.gate import PolicyGate
+
+    inside_path = tmp_path / "notes.txt"
 
     registry = MagicMock()
     registry.call = AsyncMock(return_value=ToolResult(ok=True, output="result"))
@@ -24,17 +29,22 @@ async def test_low_tier_bypasses_reviewer_and_approval() -> None:
 
     gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
 
-    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+    with (
+        patch("sebastian.permissions.gate.get_tool") as mock_get_tool,
+        patch("sebastian.permissions.gate.resolve_path", return_value=inside_path),
+        patch("sebastian.permissions.gate.settings") as mock_settings,
+    ):
+        mock_settings.workspace_dir = tmp_path
         mock_spec = MagicMock()
         mock_spec.permission_tier = PermissionTier.LOW
         mock_get_tool.return_value = (mock_spec, MagicMock())
 
-        result = await gate.call("file_read", {"path": "/tmp/f.txt"}, _make_context())
+        result = await gate.call("file_read", {"path": str(inside_path)}, _make_context())
 
     assert result.ok
     reviewer.review.assert_not_called()
     approval_manager.request_approval.assert_not_called()
-    registry.call.assert_awaited_once_with("file_read", path="/tmp/f.txt")
+    registry.call.assert_awaited_once_with("file_read", path=str(inside_path))
 
 
 @pytest.mark.asyncio
@@ -126,7 +136,7 @@ async def test_model_decides_escalate_user_denies() -> None:
         )
 
     assert not result.ok
-    assert "denied" in (result.error or "").lower()
+    assert "拒绝" in (result.error or "")
     registry.call.assert_not_called()
 
 
@@ -246,7 +256,7 @@ async def test_low_tier_sets_and_resets_tool_context() -> None:
         mock_spec.permission_tier = PermissionTier.LOW
         mock_get_tool.return_value = (mock_spec, MagicMock())
 
-        await gate.call("file_read", {"path": "/tmp/f.txt"}, ctx)
+        await gate.call("file_read", {}, ctx)
 
     # ContextVar was set to ctx during the call
     assert captured[0] is ctx
@@ -400,11 +410,91 @@ async def test_model_decides_file_path_inside_workspace_uses_reviewer(tmp_path) 
 
 
 @pytest.mark.asyncio
-async def test_low_tier_with_file_path_no_workspace_check(tmp_path) -> None:
-    """LOW tier（Read）含 file_path → 不触发 workspace 检查，直接执行。"""
+async def test_low_tier_file_path_outside_workspace_requests_approval(tmp_path) -> None:
+    """LOW tier（Read）含 file_path 且路径在 workspace 外 → 触发用户审批。"""
+    from pathlib import Path
     from unittest.mock import patch
 
     from sebastian.permissions.gate import PolicyGate
+
+    outside_path = "/etc/hosts"
+
+    registry = MagicMock()
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="content"))
+    reviewer = MagicMock()
+    approval_manager = MagicMock()
+    approval_manager.request_approval = AsyncMock(return_value=True)
+
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+
+    with (
+        patch("sebastian.permissions.gate.get_tool") as mock_get_tool,
+        patch("sebastian.permissions.gate.resolve_path", return_value=Path(outside_path)),
+        patch("sebastian.permissions.gate.settings") as mock_settings,
+    ):
+        mock_settings.workspace_dir = tmp_path
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.LOW
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = await gate.call(
+            "Read",
+            {"file_path": outside_path},
+            _make_context("read system file"),
+        )
+
+    assert result.ok
+    reviewer.review.assert_not_called()
+    approval_manager.request_approval.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_low_tier_path_param_outside_workspace_requests_approval(tmp_path) -> None:
+    """LOW tier（Glob/Grep）含 path 参数且路径在 workspace 外 → 触发用户审批。"""
+    from pathlib import Path
+    from unittest.mock import patch
+
+    from sebastian.permissions.gate import PolicyGate
+
+    outside_path = "/tmp/search_root"
+
+    registry = MagicMock()
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output={"files": []}))
+    reviewer = MagicMock()
+    approval_manager = MagicMock()
+    approval_manager.request_approval = AsyncMock(return_value=True)
+
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+
+    with (
+        patch("sebastian.permissions.gate.get_tool") as mock_get_tool,
+        patch("sebastian.permissions.gate.resolve_path", return_value=Path(outside_path)),
+        patch("sebastian.permissions.gate.settings") as mock_settings,
+    ):
+        mock_settings.workspace_dir = tmp_path
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.LOW
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = await gate.call(
+            "Glob",
+            {"pattern": "**/*", "path": outside_path},
+            _make_context("list files"),
+        )
+
+    assert result.ok
+    reviewer.review.assert_not_called()
+    approval_manager.request_approval.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_low_tier_file_path_inside_workspace_no_approval(tmp_path) -> None:
+    """LOW tier（Read）含 file_path 且路径在 workspace 内 → 直接执行，无审批。"""
+    from unittest.mock import patch
+
+    from sebastian.permissions.gate import PolicyGate
+
+    inside_path = tmp_path / "notes.txt"
 
     registry = MagicMock()
     registry.call = AsyncMock(return_value=ToolResult(ok=True, output="content"))
@@ -413,15 +503,20 @@ async def test_low_tier_with_file_path_no_workspace_check(tmp_path) -> None:
 
     gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
 
-    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+    with (
+        patch("sebastian.permissions.gate.get_tool") as mock_get_tool,
+        patch("sebastian.permissions.gate.resolve_path", return_value=inside_path),
+        patch("sebastian.permissions.gate.settings") as mock_settings,
+    ):
+        mock_settings.workspace_dir = tmp_path
         mock_spec = MagicMock()
         mock_spec.permission_tier = PermissionTier.LOW
         mock_get_tool.return_value = (mock_spec, MagicMock())
 
         result = await gate.call(
             "Read",
-            {"file_path": "/etc/hosts"},
-            _make_context("read system file"),
+            {"file_path": "notes.txt"},
+            _make_context("read file"),
         )
 
     assert result.ok

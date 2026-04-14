@@ -16,7 +16,11 @@ _DEFAULT_LIMIT = 2000
     description=(
         "Read the contents of a file. Supports optional offset (1-indexed start line) "
         "and limit (number of lines to read). Defaults to first 2000 lines. "
-        "Returns content, total_lines, lines_read, and truncated flag."
+        "Returns content, total_lines, lines_read, start_line, and truncated flag. "
+        "Each line in the returned content is prefixed with its line number in "
+        "`cat -n` format (`{line_number}\\t{line_content}`). The line number prefix "
+        "is NOT part of the file content — when passing content to Edit/Write tools, "
+        "strip the `{N}\\t` prefix first."
     ),
     permission_tier=PermissionTier.LOW,
 )
@@ -42,12 +46,17 @@ async def read(
 
         _file_state.record_read(path)
 
-        content = "".join(selected)
-        empty_hint = (
-            f"File exists but is empty (0 lines): {path}"
-            if not content and total_lines == 0
-            else None
-        )
+        content = "".join(f"{start + i + 1}\t{line}" for i, line in enumerate(selected))
+
+        if not content and total_lines == 0:
+            empty_hint = f"File exists but is empty (0 lines): {path}"
+        elif not content and start >= total_lines:
+            empty_hint = (
+                f"File exists but is shorter than the provided offset ({offset}). "
+                f"The file has {total_lines} lines: {path}"
+            )
+        else:
+            empty_hint = None
 
         return ToolResult(
             ok=True,
@@ -55,6 +64,7 @@ async def read(
                 "content": content,
                 "total_lines": total_lines,
                 "lines_read": len(selected),
+                "start_line": start + 1,
                 "truncated": (start + max_lines) < total_lines,
             },
             empty_hint=empty_hint,

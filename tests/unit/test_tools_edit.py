@@ -178,6 +178,28 @@ async def test_edit_rejects_stale_mtime(tmp_path, isolated_registry) -> None:
 
 
 @pytest.mark.asyncio
+async def test_edit_old_string_with_line_prefix_fails(tmp_path):
+    """Edit 不会默默 strip Read 输出的 cat -n 行号前缀 —— 传入带前缀的
+    old_string 必须匹配失败，LLM 需自行剥除前缀。"""
+    from sebastian.capabilities.tools._file_state import record_read
+    from sebastian.core.tool import call_tool
+
+    f = tmp_path / "code.py"
+    f.write_text("def foo():\n    return 1\n")
+    record_read(str(f))
+
+    # 模拟 LLM 误把 Read 输出的 "1\tdef foo():" 直接当 old_string
+    result = await call_tool(
+        "Edit",
+        file_path=str(f),
+        old_string="1\tdef foo():",
+        new_string="def bar():",
+    )
+    assert not result.ok
+    assert "not found" in result.error.lower()
+
+
+@pytest.mark.asyncio
 async def test_edit_relative_path_resolves_to_workspace(tmp_path):
     """相对路径应解析到 workspace_dir。"""
     from unittest.mock import patch

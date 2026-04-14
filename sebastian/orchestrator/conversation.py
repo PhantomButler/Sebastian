@@ -31,6 +31,7 @@ class ConversationManager:
         tool_input: dict[str, Any],
         reason: str,
         session_id: str = "",
+        agent_type: str = "",
     ) -> bool:
         """Persist approval record, then suspend until user grants or denies."""
         from sebastian.store.models import ApprovalRecord
@@ -56,11 +57,12 @@ class ConversationManager:
 
         await self._bus.publish(
             Event(
-                type=EventType.USER_APPROVAL_REQUESTED,
+                type=EventType.APPROVAL_REQUESTED,
                 data={
                     "approval_id": approval_id,
                     "task_id": task_id,
                     "session_id": session_id,
+                    "agent_type": agent_type,
                     "tool_name": tool_name,
                     "tool_input": tool_input,
                     "reason": reason,
@@ -84,7 +86,7 @@ class ConversationManager:
             )
             return
         future.set_result(granted)
-        event_type = EventType.USER_APPROVAL_GRANTED if granted else EventType.USER_APPROVAL_DENIED
+        event_type = EventType.APPROVAL_GRANTED if granted else EventType.APPROVAL_DENIED
         await self._bus.publish(
             Event(
                 type=event_type,

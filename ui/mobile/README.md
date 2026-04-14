@@ -1,5 +1,9 @@
 # UI Mobile Guide
 
+> **[已废弃]** 本目录为原 React Native 实现，已由 Android 原生版本取代。  
+> 新文档请看：[ui/mobile-android/README.md](../mobile-android/README.md)  
+> 本目录暂时保留，待原生版本稳定后删除。
+
 > 上级：[项目根](../../INDEX.md)
 
 本 README 面向 `ui/mobile/` 目录，帮助快速理解当前 React Native / Expo App 的目录结构、页面信息架构与主要功能模块。

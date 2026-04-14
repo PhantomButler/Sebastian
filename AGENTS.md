@@ -14,7 +14,7 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 **目录 README 索引**：
 - `sebastian/README.md`：后端主包结构、模块职责、常见开发入口
-- `ui/mobile/README.md`：移动端目录结构、页面导航、前端模块说明
+- `ui/mobile-android/README.md`：Android 原生 App 目录结构、页面导航、前端模块说明
 
 **踩坑记录**：
 - `docs/mobile-dev-gotchas.md`：移动端平台行为坑与修复结论（Android touch、布局等）
@@ -40,14 +40,14 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 - `sebastian/identity/` — 身份与权限（Phase 5，当前仅 JWT）
 - `sebastian/trigger/` — 主动触发引擎（Phase 4）
 - `sebastian/sandbox/` — 代码执行沙箱（Docker 隔离）
-- `ui/mobile/` — React Native App（Android 优先）
+- `ui/mobile-android/` — Android 原生 App（Kotlin + Jetpack Compose）
 - `ui/web/` — React Web UI（辅助管理）
 
 ### 模块 README 导航
 
 在针对某模块工作前，优先读对应 README（若存在）以快速获取上下文，避免全量搜索引入无关内容：
 - `sebastian/README.md`
-- `ui/mobile/README.md`
+- `ui/mobile-android/README.md`
 - `sebastian/core/README.md`
 - `sebastian/llm/README.md`
 - `sebastian/gateway/README.md`
@@ -288,8 +288,9 @@ SEBASTIAN_GATEWAY_PORT=8823
 - 必须确保方案的逻辑正确，必须经过全链路的逻辑验证
 
 ### 其他
-- (重要)在处理 python 项目文件时，优先使用 JetBrains pycharm MCP 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于“未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
-- (重要)在分派subagent 任务时记得告知subagent 也可以使用JetBrains pycharm MCP
+- (重要)在处理 python 项目文件时，优先使用 JetBrains pycharm MCP 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于”未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
+- (重要)在处理 Kotlin/Android 项目文件时，优先使用 Android Studio MCP (android-studio-index) 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于”未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
+- (重要)在分派subagent 任务时记得告知subagent 也可以使用JetBrains pycharm MCP 和 Android Studio MCP
 - 尽量使用 Read/Edit/Write 等内置工具编辑文件，非必要不使用 echo/cat heredoc/sed 等 shell命令写文件，除非系统内置工具一直出问题得不到解决
 - 在修改过程中如果发现某个文件内容过多，记得提醒用户规划拆分计划
 - 在针对某部分做修改时优先根据 README 了解对应模块上下文

@@ -4,7 +4,7 @@ from sebastian.core.types import Session, SessionStatus
 
 
 def test_session_status_values():
-    expected = {"active", "idle", "completed", "failed", "stalled", "cancelled"}
+    expected = {"active", "idle", "completed", "failed", "stalled", "waiting", "cancelled"}
     assert {s.value for s in SessionStatus} == expected
 
 

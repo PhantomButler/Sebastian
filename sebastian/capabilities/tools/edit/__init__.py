@@ -16,7 +16,10 @@ from sebastian.permissions.types import PermissionTier
         "By default (replace_all=false), old_string must appear exactly once — "
         "if it appears 0 times the tool errors, if it appears more than once the tool "
         "errors and asks you to provide more context to make it unique. "
-        "Set replace_all=true to replace every occurrence."
+        "Set replace_all=true to replace every occurrence. "
+        "IMPORTANT: old_string must match the raw file content exactly. Do NOT "
+        "include the `{N}\\t` line-number prefixes that appear in Read tool output — "
+        "those are display decoration, not file content."
     ),
     permission_tier=PermissionTier.MODEL_DECIDES,
 )

@@ -5,6 +5,7 @@ import dataclasses
 import inspect
 import json
 import logging
+import time
 from abc import ABC
 from collections.abc import Mapping
 from pathlib import Path
@@ -345,6 +346,7 @@ class BaseAgent(ABC):
         gen = self._loop.stream(
             effective_system_prompt, messages, task_id=task_id, thinking_effort=thinking_effort
         )
+        _thinking_start: dict[str, float] = {}
         send_value: StreamToolResult | None = None
 
         try:
@@ -358,6 +360,14 @@ class BaseAgent(ABC):
                 if isinstance(event, TextDelta):
                     full_text += event.delta
                     self._partial_buffer[session_id] = full_text
+
+                if isinstance(event, ThinkingBlockStart):
+                    _thinking_start[event.block_id] = time.monotonic()
+
+                if isinstance(event, ThinkingBlockStop):
+                    start = _thinking_start.pop(event.block_id, None)
+                    if start is not None:
+                        event.duration_ms = int((time.monotonic() - start) * 1000)
 
                 stream_event_type = _STREAM_EVENT_TYPES.get(type(event))
                 if stream_event_type is not None:

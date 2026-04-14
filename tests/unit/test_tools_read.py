@@ -20,8 +20,10 @@ async def test_read_basic(tmp_path):
 
     result = await call_tool("Read", file_path=str(f))
     assert result.ok
-    assert "line1" in result.output["content"]
+    content = result.output["content"]
+    assert content == "1\tline1\n2\tline2\n3\tline3\n"
     assert result.output["total_lines"] == 3
+    assert result.output["start_line"] == 1
     assert result.output["truncated"] is False
 
 
@@ -36,10 +38,44 @@ async def test_read_with_offset_and_limit(tmp_path):
     result = await call_tool("Read", file_path=str(f), offset=3, limit=2)
     assert result.ok
     content = result.output["content"]
-    assert "line3" in content
-    assert "line4" in content
+    assert "3\tline3" in content
+    assert "4\tline4" in content
     assert "line5" not in content
     assert result.output["lines_read"] == 2
+    assert result.output["start_line"] == 3
+
+
+@pytest.mark.asyncio
+async def test_read_empty_file(tmp_path):
+    from sebastian.capabilities.tools.read import read  # noqa: F401
+    from sebastian.core.tool import call_tool
+
+    f = tmp_path / "empty.txt"
+    f.write_text("")
+
+    result = await call_tool("Read", file_path=str(f))
+    assert result.ok
+    assert result.output["content"] == ""
+    assert result.output["total_lines"] == 0
+    assert result.empty_hint is not None
+    assert "empty" in result.empty_hint.lower()
+
+
+@pytest.mark.asyncio
+async def test_read_offset_beyond_eof(tmp_path):
+    from sebastian.capabilities.tools.read import read  # noqa: F401
+    from sebastian.core.tool import call_tool
+
+    f = tmp_path / "short.txt"
+    f.write_text("line1\nline2\nline3\n")
+
+    result = await call_tool("Read", file_path=str(f), offset=100)
+    assert result.ok
+    assert result.output["content"] == ""
+    assert result.output["total_lines"] == 3
+    assert result.empty_hint is not None
+    assert "shorter than the provided offset" in result.empty_hint
+    assert "100" in result.empty_hint
 
 
 @pytest.mark.asyncio

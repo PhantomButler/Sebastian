@@ -145,6 +145,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         agent_registry=state.agent_registry,
     )
 
+    from sebastian.gateway.completion_notifier import CompletionNotifier
+
+    completion_notifier = CompletionNotifier(
+        event_bus=state.event_bus,
+        session_store=state.session_store,
+        index_store=state.index_store,
+        sebastian=state.sebastian,
+        agent_instances=state.agent_instances,
+        agent_registry=state.agent_registry,
+    )
+
     # Setup mode detection: triggered when no owner OR no secret.key
     from sebastian.gateway.setup.secret_key import SecretKeyManager
     from sebastian.gateway.setup.security import SetupSecurity
@@ -181,6 +192,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Sebastian gateway started")
     yield
     watchdog_task.cancel()
+    await completion_notifier.aclose()
     logger.info("Sebastian gateway shutdown")
 
 

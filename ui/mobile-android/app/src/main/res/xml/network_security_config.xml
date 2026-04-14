@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 自托管场景：允许所有明文 HTTP（局域网 IP 无法穷举） -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

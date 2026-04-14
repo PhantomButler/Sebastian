@@ -1,3 +1,4 @@
+import { Text } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useTheme, useIsDark } from '../../theme/ThemeContext';
 import { CodeBlock } from './CodeBlock';
@@ -8,9 +9,18 @@ interface Props {
   streaming?: boolean;
 }
 
-export function MarkdownContent({ content }: Props) {
+export function MarkdownContent({ content, streaming }: Props) {
   const colors = useTheme();
   const isDark = useIsDark();
+
+  // During streaming, skip markdown parsing to avoid saturating the JS thread.
+  // Every SSE delta triggers a re-render; react-native-markdown-display does a
+  // full tokenize + AST build on each render, which blocks touch events.
+  if (streaming) {
+    return (
+      <Text style={{ color: colors.text, fontSize: 16, lineHeight: 26 }}>{content}</Text>
+    );
+  }
 
   const mdStyles = {
     body: { color: colors.text, fontSize: 16, lineHeight: 26 },

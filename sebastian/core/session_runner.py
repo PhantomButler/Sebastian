@@ -29,7 +29,9 @@ async def run_agent_session(
     """Run an agent on a session asynchronously. Sets status on completion/failure."""
     try:
         await agent.run_streaming(goal, session.id, thinking_effort=thinking_effort)
-        session.status = SessionStatus.COMPLETED
+        # ask_parent 工具会把 session.status 设为 WAITING；此时不覆盖为 COMPLETED
+        if session.status != SessionStatus.WAITING:
+            session.status = SessionStatus.COMPLETED
     except asyncio.CancelledError:
         session.status = SessionStatus.CANCELLED
         raise  # finally block runs first, then CancelledError propagates
@@ -41,7 +43,8 @@ async def run_agent_session(
         session.last_activity_at = datetime.now(UTC)
         await session_store.update_session(session)
         await index_store.upsert(session)
-        if event_bus is not None:
+        if event_bus is not None and session.status != SessionStatus.WAITING:
+            # WAITING 状态由 ask_parent 工具自己发布 SESSION_WAITING 事件，此处跳过
             event_type = (
                 EventType.SESSION_COMPLETED
                 if session.status == SessionStatus.COMPLETED
@@ -54,7 +57,9 @@ async def run_agent_session(
                     type=event_type,
                     data={
                         "session_id": session.id,
+                        "parent_session_id": session.parent_session_id,
                         "agent_type": session.agent_type,
+                        "goal": session.goal,
                         "status": session.status.value,
                     },
                 )

@@ -33,27 +33,25 @@ export function ThinkingBlock({ text, done }: Props) {
   }
 
   return (
-    <View
+    <TouchableOpacity
       style={[
         styles.container,
         { backgroundColor: colors.background, borderColor: colors.border },
       ]}
+      onPress={() => setExpanded(false)}
+      activeOpacity={0.85}
     >
-      {/* Header — same pill style, click to collapse */}
-      <TouchableOpacity
-        style={[styles.header, { backgroundColor: colors.secondaryBackground }]}
-        onPress={() => setExpanded(false)}
-        activeOpacity={0.7}
-      >
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.secondaryBackground }]}>
         <Text style={styles.pillIcon}>💭</Text>
         <Text style={[styles.pillLabel, { color: colors.textMuted }]}>{label}</Text>
         <RightArrowIcon size={12} color={colors.textMuted} style={{ transform: [{ rotate: '90deg' }] }} />
-      </TouchableOpacity>
-      {/* Content — connected to header, same container */}
+      </View>
+      {/* Content */}
       <View style={styles.body}>
         <MarkdownContent content={text} streaming={!done} />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

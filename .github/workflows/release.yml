@@ -45,13 +45,14 @@ jobs:
           s = re.sub(r'^version = \"[^\"]*\"', 'version = \"${{ inputs.version }}\"', s, count=1, flags=re.M)
           open(p, 'w').write(s)
           "
-      - name: Update ui/mobile/app.json version
+      - name: Update Android versionName
         run: |
           python -c "
-          import json
-          with open('ui/mobile/app.json') as f: d = json.load(f)
-          d['expo']['version'] = '${{ inputs.version }}'
-          with open('ui/mobile/app.json', 'w') as f: json.dump(d, f, indent=2); f.write('\n')
+          import re
+          p = 'ui/mobile-android/app/build.gradle.kts'
+          s = open(p).read()
+          s = re.sub(r'versionName = \"[^\"]*\"', 'versionName = \"${{ inputs.version }}\"', s, count=1)
+          open(p, 'w').write(s)
           "
       - name: Update CHANGELOG.md
         run: |
@@ -71,7 +72,7 @@ jobs:
       - name: Commit and tag
         id: tagout
         run: |
-          git add pyproject.toml ui/mobile/app.json CHANGELOG.md
+          git add pyproject.toml ui/mobile-android/app/build.gradle.kts CHANGELOG.md
           git commit -m "chore(release): v${{ inputs.version }}"
           git tag "v${{ inputs.version }}"
           git push origin main
@@ -103,106 +104,26 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ needs.sync-version.outputs.tag }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: ui/mobile/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
-      - name: Install JS deps
-        working-directory: ui/mobile
-        run: npm ci --legacy-peer-deps
-      - name: Prebuild Android project
-        working-directory: ui/mobile
-        run: npx expo prebuild --platform android --no-install
+      - uses: gradle/actions/setup-gradle@v4
       - name: Restore keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/sebastian-release.keystore
-      - name: Inject release signing config into build.gradle
-        working-directory: ui/mobile/android/app
-        run: |
-          python - <<'PY'
-          import re
-          from pathlib import Path
-
-          p = Path("build.gradle")
-          src = p.read_text()
-
-
-          def find_block(text: str, header_re: str, start: int = 0) -> tuple[int, int, int]:
-              """Return (header_start, body_start, body_end) for the first block matching
-              header_re after `start`. body_start points right after the opening '{',
-              body_end points at the matching closing '}'."""
-              m = re.search(header_re, text[start:])
-              if not m:
-                  raise SystemExit(f"Could not locate block: {header_re}")
-              header_start = start + m.start()
-              body_start = start + m.end()  # just after '{'
-              depth = 1
-              i = body_start
-              while i < len(text) and depth > 0:
-                  c = text[i]
-                  if c == "{":
-                      depth += 1
-                  elif c == "}":
-                      depth -= 1
-                      if depth == 0:
-                          return header_start, body_start, i
-                  i += 1
-              raise SystemExit(f"Unbalanced braces while scanning block: {header_re}")
-
-
-          # 1) Inject release signingConfig inside signingConfigs {...} (idempotent).
-          if "signingConfigs.release" not in src:
-              _, sc_body_start, sc_body_end = find_block(src, r"signingConfigs\s*\{")
-              release_block = (
-                  "\n        release {\n"
-                  "            if (System.getenv(\"ANDROID_KEYSTORE_FILE\")) {\n"
-                  "                storeFile file(System.getenv(\"ANDROID_KEYSTORE_FILE\"))\n"
-                  "                storePassword System.getenv(\"ANDROID_KEYSTORE_PASSWORD\")\n"
-                  "                keyAlias System.getenv(\"ANDROID_KEY_ALIAS\")\n"
-                  "                keyPassword System.getenv(\"ANDROID_KEY_PASSWORD\")\n"
-                  "            }\n"
-                  "        }\n"
-              )
-              src = src[:sc_body_end] + release_block + src[sc_body_end:]
-
-          # 2) Switch buildTypes.release from signingConfigs.debug to signingConfigs.release.
-          _, bt_body_start, bt_body_end = find_block(src, r"buildTypes\s*\{")
-          _, rel_body_start, rel_body_end = find_block(
-              src, r"\brelease\s*\{", start=bt_body_start
-          )
-          release_body = src[rel_body_start:rel_body_end]
-          if "signingConfigs.debug" in release_body:
-              release_body = release_body.replace(
-                  "signingConfigs.debug", "signingConfigs.release", 1
-              )
-          elif "signingConfigs.release" not in release_body:
-              # No explicit signingConfig at all — append one.
-              release_body = (
-                  release_body.rstrip()
-                  + "\n            signingConfig signingConfigs.release\n        "
-              )
-          src = src[:rel_body_start] + release_body + src[rel_body_end:]
-
-          p.write_text(src)
-          print("Injected release signingConfig")
-          PY
       - name: Gradle assembleRelease
-        working-directory: ui/mobile/android
+        working-directory: ui/mobile-android
         env:
           ANDROID_KEYSTORE_FILE: /tmp/sebastian-release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease
+        run: ./gradlew :app:assembleRelease
       - name: Rename APK
         run: |
-          APK="$(find ui/mobile/android/app/build/outputs/apk/release -name '*.apk' | head -1)"
+          APK="$(find ui/mobile-android/app/build/outputs/apk/release -name '*.apk' | head -1)"
           cp "$APK" "sebastian-app-v${{ inputs.version }}.apk"
       - name: Cleanup keystore
         if: always()

@@ -1,0 +1,1 @@
+{"nodes": [], "edges": [{"source": "spec_index_infra_module", "target": "infra_release_cicd", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/architecture/spec/infra/INDEX.md", "source_location": null, "weight": 1.0}], "hyperedges": []}

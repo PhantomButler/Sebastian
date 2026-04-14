@@ -20,6 +20,7 @@ export default function EditProviderScreen() {
   const resolvedProviderId = Array.isArray(providerId) ? providerId[0] : providerId;
   const formRef = useRef<ProviderFormHandle>(null);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (jwtToken && !initialized && !loading) {
@@ -32,7 +33,11 @@ export default function EditProviderScreen() {
       return;
     }
     await update(resolvedProviderId, data);
-    router.replace('/settings/providers');
+  }
+
+  async function handleDone() {
+    await formRef.current?.submit();
+    router.back();
   }
 
   const provider = providers.find((item) => item.id === resolvedProviderId);
@@ -41,8 +46,8 @@ export default function EditProviderScreen() {
     <ProviderEditorLayout
       title="编辑 Provider"
       subtitle="更新模型提供商配置，并保持默认项设置清晰。"
-      onDone={jwtToken && provider ? () => void formRef.current?.submit() : undefined}
-      doneDisabled={saving}
+      onDone={jwtToken && provider ? () => void handleDone() : undefined}
+      doneDisabled={saving || !dirty}
       doneLoading={saving}
     >
       {!jwtToken ? (
@@ -62,7 +67,7 @@ export default function EditProviderScreen() {
           <Text style={[styles.feedbackText, { color: colors.textSecondary }]}>正在加载 Provider…</Text>
         </View>
       ) : provider ? (
-        <ProviderForm ref={formRef} initial={provider} onSave={handleSave} onSubmittingChange={setSaving} />
+        <ProviderForm ref={formRef} initial={provider} onSave={handleSave} onSubmittingChange={setSaving} onDirtyChange={setDirty} />
       ) : (
         <View style={[styles.feedbackCard, { backgroundColor: colors.cardBackground }]}>
           <Text style={[styles.feedbackTitle, { color: colors.text }]}>未找到 Provider</Text>

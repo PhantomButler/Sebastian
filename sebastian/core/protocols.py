@@ -15,6 +15,7 @@ class ApprovalManagerProtocol(Protocol):
         tool_input: dict[str, Any],
         reason: str,
         session_id: str = "",
+        agent_type: str = "",
     ) -> bool: ...
 
 

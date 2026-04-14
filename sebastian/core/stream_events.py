@@ -20,6 +20,7 @@ class ThinkingBlockStop:
     block_id: str
     thinking: str  # full accumulated thinking text for this block
     signature: str | None = None
+    duration_ms: int | None = None
 
 
 @dataclass

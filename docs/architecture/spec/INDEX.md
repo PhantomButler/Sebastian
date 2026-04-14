@@ -54,11 +54,22 @@ Tools / MCPs / Skills 三层能力注册与实现。
 |------|------|
 | [release-cicd.md](infra/release-cicd.md) | 首次配置 UX（Web 向导 + CLI）、版本管理、bootstrap.sh 一键安装、CI 质量门禁、release.yml 发版、分支保护 |
 
+### [mobile/](mobile/INDEX.md) — Android 原生客户端
+
+Kotlin + Jetpack Compose 原生 Android 客户端架构（替代 React Native 版）。
+
+| Spec | 摘要 |
+|------|------|
+| [overview.md](mobile/overview.md) | 项目定位、技术栈决策、目录结构、Phase 功能规划、与后端协议对接约定 |
+| [navigation.md](mobile/navigation.md) | ThreePaneScaffold 三面板导航、WindowSizeClass 自适应（手机覆盖/平板常驻）、页面路由结构 |
+| [streaming.md](mobile/streaming.md) | SSE 连接稳定性架构、流式 Markdown 渲染（块级增量）、逐块淡入动画、滚动跟随逻辑 |
+| [composer.md](mobile/composer.md) | Composer 插槽架构、Phase 1 实现、Phase 2-3 预留扩展路径（语音/附件/全双工）|
+| [data-layer.md](mobile/data-layer.md) | Repository 分层、ViewModel + StateFlow、Hilt 注入、本地持久化（DataStore）|
+
 ### 待建模块（后续批次）
 
 | 模块 | 预计内容 |
 |------|---------|
-| `mobile/` | Android App 设计（Chat UI、SubAgents 督导、Settings IA、Theme 系统、Composer 等） |
 | `gateway/` | Gateway REST API 完整路由表、SSE 管理、认证机制 |
 
 ---

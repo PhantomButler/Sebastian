@@ -17,6 +17,7 @@ capabilities/
 │   ├── __init__.py
 │   ├── _loader.py       # 启动时自动扫描 tools/ 目录，触发 @tool 自注册
 │   ├── _file_state.py   # 文件读取状态追踪（Write/Edit 的前置保护）
+│   ├── ask_parent/      # 子代理主动暂停并向上级请求指示（状态置 WAITING）
 │   ├── bash/            # Shell 命令执行工具
 │   ├── check_sub_agents/  # 查询当前 Sub-Agent 会话状态
 │   ├── delegate_to_agent/ # Sebastian 委派任务给 Sub-Agent（工具调用形式）
@@ -25,6 +26,7 @@ capabilities/
 │   ├── grep/            # 文件内容搜索工具（优先 ripgrep）
 │   ├── inspect_session/ # 查看指定 session 的最近消息与状态
 │   ├── read/            # 文件读取工具
+│   ├── reply_to_agent/  # 向 waiting 子代理发送指示并恢复其任务执行
 │   ├── spawn_sub_agent/ # Sebastian 创建新的 Sub-Agent session
 │   └── write/           # 文件写入工具（含 mtime 保护）
 ├── mcps/                # MCP server 配置目录，每个子目录一个 config.toml，启动时自动连接
