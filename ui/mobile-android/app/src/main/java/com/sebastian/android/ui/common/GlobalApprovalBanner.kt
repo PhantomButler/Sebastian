@@ -61,7 +61,7 @@ fun GlobalApprovalBanner(
                 summarizeApproval(current.toolName, current.toolInputJson)
             }
             val clippedReason = remember(current.reason) { clipReason(current.reason) }
-            var lastDetailsClickMs by remember { mutableLongStateOf(0L) }
+            val lastDetailsClickMs = remember { mutableLongStateOf(0L) }
 
             Box(
                 modifier = Modifier
@@ -153,8 +153,8 @@ fun GlobalApprovalBanner(
                         ) {
                             TextButton(onClick = {
                                 val now = System.currentTimeMillis()
-                                if (now - lastDetailsClickMs < 500L) return@TextButton
-                                lastDetailsClickMs = now
+                                if (now - lastDetailsClickMs.longValue < 500L) return@TextButton
+                                lastDetailsClickMs.longValue = now
                                 onNavigateToSession(current)
                             }) {
                                 Text("Details")
