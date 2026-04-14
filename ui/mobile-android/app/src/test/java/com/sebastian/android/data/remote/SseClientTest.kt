@@ -51,21 +51,25 @@ class SseFrameParserTest {
     }
 
     @Test
-    fun `parses approval_requested event with agent_type`() {
-        val json = """{"type":"approval.requested","data":{"session_id":"s1","approval_id":"ap_1","agent_type":"code_agent","description":"删除文件"},"ts":"2026-04-12T10:00:00Z"}"""
+    fun `parses approval_requested event with tool details`() {
+        val json = """{"type":"approval.requested","data":{"session_id":"s1","approval_id":"ap_1","agent_type":"code_agent","tool_name":"bash_run","tool_input":{"command":"rm -rf build"},"reason":"清理构建"},"ts":"2026-04-12T10:00:00Z"}"""
         val event = SseFrameParser.parse(json)
         assertTrue(event is StreamEvent.ApprovalRequested)
         val approval = event as StreamEvent.ApprovalRequested
         assertEquals("ap_1", approval.approvalId)
         assertEquals("code_agent", approval.agentType)
-        assertEquals("删除文件", approval.description)
+        assertEquals("bash_run", approval.toolName)
+        assertEquals("清理构建", approval.reason)
+        assertTrue(approval.toolInputJson.contains("rm -rf build"))
     }
 
     @Test
     fun `parses approval_requested event defaults agent_type to sebastian`() {
-        val json = """{"type":"approval.requested","data":{"session_id":"s1","approval_id":"ap_2","description":"运行命令"},"ts":"2026-04-12T10:00:00Z"}"""
+        val json = """{"type":"approval.requested","data":{"session_id":"s1","approval_id":"ap_2","tool_name":"shell"},"ts":"2026-04-12T10:00:00Z"}"""
         val event = SseFrameParser.parse(json)
         assertTrue(event is StreamEvent.ApprovalRequested)
-        assertEquals("sebastian", (event as StreamEvent.ApprovalRequested).agentType)
+        val approval = event as StreamEvent.ApprovalRequested
+        assertEquals("sebastian", approval.agentType)
+        assertEquals("{}", approval.toolInputJson)
     }
 }

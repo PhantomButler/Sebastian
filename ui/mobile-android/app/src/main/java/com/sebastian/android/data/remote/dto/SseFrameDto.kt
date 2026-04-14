@@ -43,7 +43,14 @@ object SseFrameParser {
         "task.completed" -> StreamEvent.TaskCompleted(data.getString("session_id"), data.getString("task_id"))
         "task.failed" -> StreamEvent.TaskFailed(data.getString("session_id"), data.getString("task_id"), data.optString("error", ""))
         "task.cancelled" -> StreamEvent.TaskCancelled(data.getString("session_id"), data.getString("task_id"))
-        "approval.requested" -> StreamEvent.ApprovalRequested(data.getString("session_id"), data.getString("approval_id"), data.optString("agent_type", "sebastian"), data.optString("description", ""))
+        "approval.requested" -> StreamEvent.ApprovalRequested(
+            sessionId = data.getString("session_id"),
+            approvalId = data.getString("approval_id"),
+            agentType = data.optString("agent_type", "sebastian"),
+            toolName = data.optString("tool_name", ""),
+            toolInputJson = data.optJSONObject("tool_input")?.toString() ?: "{}",
+            reason = data.optString("reason", ""),
+        )
         "approval.granted" -> StreamEvent.ApprovalGranted(data.getString("approval_id"))
         "approval.denied" -> StreamEvent.ApprovalDenied(data.getString("approval_id"))
         else -> StreamEvent.Unknown

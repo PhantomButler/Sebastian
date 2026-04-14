@@ -33,6 +33,7 @@ import androidx.navigation.toRoute
 import com.sebastian.android.data.local.SettingsDataStore
 import com.sebastian.android.ui.chat.ChatScreen
 import com.sebastian.android.ui.common.GlobalApprovalBanner
+import com.sebastian.android.ui.common.glass.rememberGlassState
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.ui.settings.AppearancePage
 import com.sebastian.android.ui.settings.DebugLoggingPage
@@ -88,10 +89,13 @@ fun SebastianNavHost() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val glassState = rememberGlassState(MaterialTheme.colorScheme.background)
+
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = Route.Chat,
+            modifier = Modifier.fillMaxSize().then(glassState.contentModifier),
             enterTransition = {
                 slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) +
                     fadeIn(tween(animDuration))
@@ -150,6 +154,7 @@ fun SebastianNavHost() {
         // Global approval banner — floats above all screens
         GlobalApprovalBanner(
             approval = approvalState.approvals.firstOrNull(),
+            glassState = glassState,
             onGrant = globalApprovalViewModel::grantApproval,
             onDeny = globalApprovalViewModel::denyApproval,
             onNavigateToSession = { approval ->

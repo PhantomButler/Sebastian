@@ -22,7 +22,9 @@ data class GlobalApproval(
     val approvalId: String,
     val sessionId: String,
     val agentType: String,
-    val description: String,
+    val toolName: String,
+    val toolInputJson: String,
+    val reason: String,
 )
 
 data class GlobalApprovalUiState(
@@ -70,7 +72,9 @@ class GlobalApprovalViewModel @Inject constructor(
                     approvalId = event.approvalId,
                     sessionId = event.sessionId,
                     agentType = event.agentType,
-                    description = event.description,
+                    toolName = event.toolName,
+                    toolInputJson = event.toolInputJson,
+                    reason = event.reason,
                 )
                 _uiState.update { it.copy(approvals = it.approvals + approval) }
             }
