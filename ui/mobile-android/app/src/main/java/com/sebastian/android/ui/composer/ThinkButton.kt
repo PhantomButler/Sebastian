@@ -1,12 +1,17 @@
 // com/sebastian/android/ui/composer/ThinkButton.kt
 package com.sebastian.android.ui.composer
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -21,8 +26,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.model.ThinkingCapability
@@ -76,28 +84,55 @@ fun ThinkButton(
         ThinkingCapability.NONE -> return
     }
 
-    AssistChip(
-        onClick = {
-            when (capability) {
-                null, ThinkingCapability.ALWAYS_ON -> { /* 不可点击 */ }
-                ThinkingCapability.TOGGLE -> {
-                    onEffortChange(if (isActive) ThinkingEffort.OFF else ThinkingEffort.ON)
+    val isEnabled = capability != null && capability != ThinkingCapability.ALWAYS_ON
+    val chipShape = RoundedCornerShape(percent = 50)
+
+    // 关闭/不可交互：浅灰；开启：淡蓝
+    val backgroundColor = if (isActive && capability != ThinkingCapability.ALWAYS_ON)
+        Color(0xFF007AFF).copy(alpha = 0.12f)
+    else
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+
+    val borderColor = if (isActive && capability != ThinkingCapability.ALWAYS_ON)
+        Color(0xFF007AFF).copy(alpha = 0.32f)
+    else
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+
+    val contentColor = if (isActive && capability != ThinkingCapability.ALWAYS_ON)
+        Color(0xFF007AFF)
+    else
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .alpha(if (capability == null) 0.5f else 1f)
+            .clip(chipShape)
+            .background(backgroundColor)
+            .border(0.5.dp, borderColor, chipShape)
+            .clickable(enabled = isEnabled) {
+                when (capability) {
+                    ThinkingCapability.TOGGLE ->
+                        onEffortChange(if (isActive) ThinkingEffort.OFF else ThinkingEffort.ON)
+                    ThinkingCapability.EFFORT, ThinkingCapability.ADAPTIVE -> showSheet = true
+                    else -> {}
                 }
-                ThinkingCapability.EFFORT, ThinkingCapability.ADAPTIVE -> showSheet = true
-                ThinkingCapability.NONE -> {}
             }
-        },
-        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-        leadingIcon = {
-            Icon(SebastianIcons.Think, contentDescription = null)
-        },
-        enabled = capability != null && capability != ThinkingCapability.ALWAYS_ON,
-        shape = RoundedCornerShape(percent = 50),
-        colors = if (isActive && capability != ThinkingCapability.ALWAYS_ON)
-            AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-        else AssistChipDefaults.assistChipColors(),
-        modifier = modifier.alpha(if (capability == null) 0.5f else 1f),
-    )
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Icon(
+            imageVector = SebastianIcons.Think,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = contentColor,
+        )
+    }
 
     if (showSheet) {
         ModalBottomSheet(

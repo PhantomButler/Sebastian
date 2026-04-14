@@ -2,6 +2,8 @@ package com.sebastian.android.ui.common
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
@@ -609,8 +611,14 @@ object SebastianIcons {
             viewportWidth = 1024f,
             viewportHeight = 1024f,
         ).apply {
-            path(fill = SolidColor(Color.Black)) {
-                // Main brain outline (simplified from the detailed path data)
+            // Right brain half — outline only (stroke, no fill)
+            path(
+                fill = SolidColor(Color.Transparent),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 68f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
                 moveTo(780.83f, 178.74f)
                 curveToRelative(17.17f, 23.17f, 25.22f, 51.87f, 22.69f, 80.6f)
                 curveToRelative(-0.22f, 1.46f, -0.38f, 2.91f, -0.65f, 4.37f)
@@ -637,8 +645,14 @@ object SebastianIcons {
                 curveToRelative(35.76f, 16.24f, 65.37f, 40.81f, 85.96f, 71.17f)
                 close()
             }
-            path(fill = SolidColor(Color.Black)) {
-                // Left brain half (simplified)
+            // Left brain half — outline only (stroke, no fill)
+            path(
+                fill = SolidColor(Color.Transparent),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 68f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
                 moveTo(94.96f, 340.88f)
                 curveToRelative(14.65f, -28.25f, 35.85f, -48.93f, 61.44f, -62.52f)
                 curveToRelative(19.33f, -10.26f, 40.92f, -14.55f, 64.03f, -14.55f)
@@ -663,8 +677,14 @@ object SebastianIcons {
                 curveToRelative(-3.61f, -35.03f, 2.8f, -70.36f, 18.54f, -101.86f)
                 close()
             }
-            // Eyes
-            path(fill = SolidColor(Color.Black)) {
+            // Left inner ridge — stroke only
+            path(
+                fill = SolidColor(Color.Transparent),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 68f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
                 moveTo(264.3f, 407.79f)
                 curveToRelative(4.97f, -10.55f, 17.11f, -17.43f, 32.28f, -17.95f)
                 curveToRelative(48.8f, 13.93f, 81.3f, 72.19f, 81.3f, 138.24f)
@@ -678,7 +698,14 @@ object SebastianIcons {
                 curveToRelative(-10.55f, -4.97f, -17.43f, -17.11f, -17.95f, -32.28f)
                 close()
             }
-            path(fill = SolidColor(Color.Black)) {
+            // Right inner ridge — stroke only
+            path(
+                fill = SolidColor(Color.Transparent),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 68f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
                 moveTo(745.53f, 407.79f)
                 curveToRelative(-4.97f, -10.55f, -17.11f, -17.43f, -32.28f, -17.95f)
                 curveToRelative(-48.83f, 13.93f, -81.33f, 72.19f, -81.33f, 138.24f)
