@@ -37,6 +37,19 @@ async def test_bash_description_accepted_as_parameter() -> None:
     assert r.display == "hi"
 
 
+async def test_bash_description_logged() -> None:
+    """description 出现在 logger.debug 调用中，但不泄露到 output/display。"""
+    from unittest.mock import patch
+
+    with patch("sebastian.capabilities.tools.bash.logger") as mock_logger:
+        r = await bash(command="echo hello", description="build the project")
+
+    debug_calls = mock_logger.debug.call_args_list
+    assert any("build the project" in str(call) for call in debug_calls)
+    assert "build the project" not in str(r.output)
+    assert "build the project" not in (r.display or "")
+
+
 # ── noOutputExpected ──────────────────────────────────────────────────────────
 
 async def test_bash_silent_command_empty_hint_is_done() -> None:
