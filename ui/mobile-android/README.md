@@ -183,7 +183,7 @@ App 有两条 SSE 连接：
 | 改主对话三栏布局 | `ui/chat/ChatScreen.kt` |
 | 改消息渲染（文本/思考/工具块） | `ui/chat/StreamingMessage.kt`、`ThinkingCard.kt`、`ToolCallCard.kt` |
 | 改输入框（Composer） | `ui/composer/Composer.kt`、`SendButton.kt`、`ThinkButton.kt` |
-| 改 Session 列表面板 | `ui/chat/SessionPanel.kt` |
+| 改 Session 列表面板 | `ui/chat/SessionPanel.kt`（UI）+ `ui/chat/SessionGrouping.kt`（按日期分桶纯逻辑，有单测） |
 | 改 Todo 面板 | `ui/chat/TodoPanel.kt` |
 | 改全局审批横幅 | `ui/common/GlobalApprovalBanner.kt`、`viewmodel/GlobalApprovalViewModel.kt` |
 | 改错误 Banner | `ui/common/ErrorBanner.kt` |
