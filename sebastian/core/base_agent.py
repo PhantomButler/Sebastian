@@ -60,6 +60,8 @@ def _format_tool_display(result: ToolResult) -> str:
     """
     if result.display is not None:
         text = result.display
+    elif result.empty_hint is not None:
+        text = result.empty_hint
     elif result.output is not None:
         text = str(result.output)
     else:
