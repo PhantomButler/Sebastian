@@ -102,10 +102,20 @@ class TestToolResultContent:
         r = _make_result(output=["a", "b"])
         assert _tool_result_content(r) == '["a", "b"]'
 
-    def test_unserializable_output_falls_back_to_str(self) -> None:
+    def test_unserializable_output_uses_default_str_path(self) -> None:
         class Opaque:
             def __str__(self) -> str:
                 return "opaque-value"
         r = _make_result(output=Opaque())
-        # json.dumps(default=str) 把 Opaque 实例转成字符串，最终是 JSON 字符串字面量
+        # json.dumps(default=str) calls str() on the unknown type → JSON string literal
         assert _tool_result_content(r) == '"opaque-value"'
+
+    def test_circular_reference_falls_back_to_raw_str(self) -> None:
+        circular: dict = {}
+        circular["self"] = circular
+        r = _make_result(output=circular)
+        # json.dumps raises ValueError on circular ref → fallback to str(output)
+        content = _tool_result_content(r)
+        # Python repr 会显示 {'self': {...}}
+        assert "self" in content
+        assert "..." in content  # Python's repr of circular dict marks the cycle

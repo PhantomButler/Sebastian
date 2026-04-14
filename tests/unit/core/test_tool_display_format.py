@@ -30,3 +30,10 @@ class TestFormatToolDisplay:
         formatted = _format_tool_display(r)
         assert len(formatted) == _DISPLAY_MAX + 1
         assert formatted.endswith("…")
+
+    def test_exact_max_length_display_not_truncated(self) -> None:
+        exact = "z" * _DISPLAY_MAX
+        r = ToolResult(ok=True, display=exact)
+        formatted = _format_tool_display(r)
+        assert formatted == exact
+        assert not formatted.endswith("…")

@@ -51,6 +51,11 @@ def _format_tool_display(result: ToolResult) -> str:
 
     优先使用 tool 自己提供的 display；否则回退 str(output)。
     任意一种都会截断到 _DISPLAY_MAX 字符，超长加 `…`。
+
+    注意：这里的 fallback 用 str()（Python repr）不是 JSON，和 LLM-facing 的
+    agent_loop._tool_result_content 不对称是有意的——前者是 UI 显示路径，
+    只在 tool 未填 display 时起兜底作用；后者是模型输入，必须是规范 JSON。
+    不要把两者合并。
     """
     if result.display is not None:
         text = result.display
