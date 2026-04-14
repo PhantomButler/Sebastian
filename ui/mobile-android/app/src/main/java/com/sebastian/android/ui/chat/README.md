@@ -15,7 +15,9 @@ chat/
 ├── StreamingMessage.kt       # 流式消息气泡（逐块渲染）
 ├── ThinkingCard.kt           # 思考块卡片（可展开/折叠）
 ├── TodoPanel.kt              # 右栏：Todo 面板（Extra Pane）
-└── ToolCallCard.kt           # 工具调用块卡片（含状态 badge）
+├── ToolCallCard.kt           # 工具调用块卡片（含状态 badge）
+├── ToolCallInputExtractor.kt # 从 tool inputs JSON 抽 summary / 参数列表
+└── ToolDisplayName.kt        # tool 名 → 卡片 header (title, summary) 的自定义映射
 ```
 
 ## 模块说明
@@ -58,7 +60,26 @@ chat/
 
 ### `ToolCallCard`
 
-工具调用块卡片，含状态 badge（`RUNNING` / `SUCCESS` / `ERROR`）。
+工具调用块卡片，含状态 badge（`RUNNING` / `SUCCESS` / `ERROR`）。header 显示的标题与右侧一行 summary 由 [`ToolDisplayName`](ToolDisplayName.kt) 根据 tool 名决定，展开区的参数列表由 [`ToolCallInputExtractor`](ToolCallInputExtractor.kt) 从 inputs JSON 抽取。
+
+### `ToolDisplayName`
+
+tool 名 → 卡片 header 显示的集中映射。默认规则：`title = toolName`、`summary = ToolCallInputExtractor.extractInputSummary(...)`，对少数工具做自定义覆盖：
+
+| Tool | Title | Summary |
+|------|-------|---------|
+| `delegate_to_agent` | `Agent: <子代理名>` | 空（信息已并入 title） |
+| `spawn_sub_agent` | `Worker` | goal（inputs.goal） |
+| 其他 | 原 tool 名 | `ToolCallInputExtractor` 抽取结果 |
+
+新增映射：
+1. 如需用到的 inputs 字段不在 [`ToolCallInputExtractor.KEY_PRIORITY`](ToolCallInputExtractor.kt) 里，先加进去，保证抽取顺序确定。
+2. 在 `ToolDisplayName.resolve` 的 `when` 里追加 case，返回 `Display(title, summary)`。
+3. 仅做展示层改动；如需依赖非 inputs 字段，请先扩展 `ContentBlock.ToolBlock`。
+
+### `ToolCallInputExtractor`
+
+从 tool inputs JSON 抽 header 右侧一行 summary 和展开态参数列表。`KEY_PRIORITY` 指定每个 tool 的字段优先级；未命中时走 `GENERIC_KEYS` 兜底；JSON 解析失败时回退成原文截断到 80 字。
 
 ### `SessionPanel`
 
@@ -80,6 +101,8 @@ chat/
 | 改消息渲染分发逻辑 | `StreamingMessage.kt` |
 | 改思考块展开/折叠 | `ThinkingCard.kt` |
 | 改工具调用块样式/状态 | `ToolCallCard.kt` |
+| 新增/修改 tool 名在卡片 header 的显示规则 | `ToolDisplayName.kt` |
+| 改 tool inputs 摘要字段优先级 | `ToolCallInputExtractor.kt` |
 | 改 Session 列表面板 | `SessionPanel.kt` |
 | 改 Todo 面板 | `TodoPanel.kt` |
 
