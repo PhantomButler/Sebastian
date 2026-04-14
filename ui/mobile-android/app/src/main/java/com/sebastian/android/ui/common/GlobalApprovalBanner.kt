@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +61,7 @@ fun GlobalApprovalBanner(
                 summarizeApproval(current.toolName, current.toolInputJson)
             }
             val clippedReason = remember(current.reason) { clipReason(current.reason) }
+            var lastDetailsClickMs by remember { mutableLongStateOf(0L) }
 
             Box(
                 modifier = Modifier
@@ -149,7 +151,12 @@ fun GlobalApprovalBanner(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            TextButton(onClick = { onNavigateToSession(current) }) {
+                            TextButton(onClick = {
+                                val now = System.currentTimeMillis()
+                                if (now - lastDetailsClickMs < 500L) return@TextButton
+                                lastDetailsClickMs = now
+                                onNavigateToSession(current)
+                            }) {
                                 Text("Details")
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

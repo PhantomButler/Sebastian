@@ -73,6 +73,7 @@ fun ChatScreen(
     agentId: String? = null,
     agentName: String? = null,
     sessionId: String? = null,
+    onActiveSessionChanged: ((String?) -> Unit)? = null,
     chatViewModel: ChatViewModel = hiltViewModel(),
     sessionViewModel: SessionViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
@@ -86,6 +87,11 @@ fun ChatScreen(
         if (sessionId != null) {
             chatViewModel.switchSession(sessionId)
         }
+    }
+
+    // 实时上报当前显示的 session，供全局审批横幅做精确判断
+    LaunchedEffect(chatState.activeSessionId) {
+        onActiveSessionChanged?.invoke(chatState.activeSessionId)
     }
     var activePane by rememberSaveable(
         stateSaver = Saver<SidePane, String>(
