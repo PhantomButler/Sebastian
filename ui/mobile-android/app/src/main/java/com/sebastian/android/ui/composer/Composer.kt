@@ -40,6 +40,7 @@ fun Composer(
     activeProvider: Provider?,
     effort: ThinkingEffort,
     onEffortChange: (ThinkingEffort) -> Unit,
+    onShowEffortPicker: () -> Unit,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
     // Phase 2 插槽预留
@@ -95,6 +96,7 @@ fun Composer(
                     activeProvider = activeProvider,
                     currentEffort = effort,
                     onEffortChange = onEffortChange,
+                    onShowPicker = onShowEffortPicker,
                 )
                 voiceSlot?.let {
                     Spacer(Modifier.width(4.dp))
