@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +29,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.sebastian.android.ui.common.SebastianIcons
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sebastian.android.data.model.Session
+import java.time.LocalDate
 
 @Composable
 fun SessionPanel(
@@ -52,6 +61,40 @@ fun SessionPanel(
     modifier: Modifier = Modifier,
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
+    val grouped = remember(sessions) { groupSessions(sessions) }
+    val defaults = remember(grouped) { defaultExpanded(grouped, LocalDate.now()) }
+    val expanded: SnapshotStateMap<String, Boolean> = rememberSaveable(
+        grouped,
+        saver = Saver(
+            save = { it.toMap() },
+            restore = { restored ->
+                mutableStateMapOf<String, Boolean>().apply {
+                    @Suppress("UNCHECKED_CAST")
+                    putAll(restored as Map<String, Boolean>)
+                }
+            },
+        ),
+    ) {
+        mutableStateMapOf<String, Boolean>().apply { putAll(defaults) }
+    }
+
+    LaunchedEffect(grouped) {
+        defaults.forEach { (k, v) -> if (!expanded.containsKey(k)) expanded[k] = v }
+    }
+
+    LaunchedEffect(activeSessionId, grouped) {
+        if (activeSessionId == null) return@LaunchedEffect
+        for (year in grouped.years) {
+            for (month in year.months) {
+                if (month.sessions.any { it.id == activeSessionId }) {
+                    expanded[year.key] = true
+                    expanded[month.key] = true
+                    return@LaunchedEffect
+                }
+            }
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize().statusBarsPadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -102,16 +145,63 @@ fun SessionPanel(
                     text = "历史对话",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 4.dp),
                 )
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(sessions, key = { it.id }) { session ->
-                        SessionItem(
-                            session = session,
-                            isActive = session.id == activeSessionId,
-                            onClick = { onSessionClick(session) },
-                            onDelete = { onDeleteSession(session) },
-                        )
+                    grouped.recent.forEach { bucket ->
+                        val isOpen = expanded[bucket.key] ?: true
+                        item(key = "h-${bucket.key}") {
+                            GroupHeader(
+                                label = bucket.label,
+                                expanded = isOpen,
+                                level = 0,
+                                onToggle = { expanded[bucket.key] = !isOpen },
+                            )
+                        }
+                        if (isOpen) {
+                            items(bucket.sessions, key = { it.id }) { session ->
+                                SessionItem(
+                                    session = session,
+                                    isActive = session.id == activeSessionId,
+                                    onClick = { onSessionClick(session) },
+                                    onDelete = { onDeleteSession(session) },
+                                )
+                            }
+                        }
+                    }
+                    grouped.years.forEach { year ->
+                        val yearOpen = expanded[year.key] ?: false
+                        item(key = "h-${year.key}") {
+                            GroupHeader(
+                                label = year.label,
+                                expanded = yearOpen,
+                                level = 0,
+                                onToggle = { expanded[year.key] = !yearOpen },
+                            )
+                        }
+                        if (yearOpen) {
+                            year.months.forEach { month ->
+                                val monthOpen = expanded[month.key] ?: false
+                                item(key = "h-${month.key}") {
+                                    GroupHeader(
+                                        label = month.label,
+                                        expanded = monthOpen,
+                                        level = 1,
+                                        onToggle = { expanded[month.key] = !monthOpen },
+                                    )
+                                }
+                                if (monthOpen) {
+                                    items(month.sessions, key = { it.id }) { session ->
+                                        SessionItem(
+                                            session = session,
+                                            isActive = session.id == activeSessionId,
+                                            onClick = { onSessionClick(session) },
+                                            onDelete = { onDeleteSession(session) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -269,14 +359,6 @@ private fun SessionItem(
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                session.lastActivityAt?.let { dateStr ->
-                    Text(
-                        text = dateStr.take(10),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
             }
             IconButton(onClick = onDelete) {
                 Icon(
@@ -287,6 +369,44 @@ private fun SessionItem(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun GroupHeader(
+    label: String,
+    expanded: Boolean,
+    level: Int,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(
+                start = (4 + level * 16).dp,
+                end = 4.dp,
+                top = 8.dp,
+                bottom = 8.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (expanded) {
+                androidx.compose.material.icons.Icons.Default.KeyboardArrowDown
+            } else {
+                androidx.compose.material.icons.Icons.Default.KeyboardArrowRight
+            },
+            contentDescription = if (expanded) "折叠" else "展开",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
