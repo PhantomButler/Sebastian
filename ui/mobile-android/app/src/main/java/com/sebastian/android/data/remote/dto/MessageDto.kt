@@ -26,6 +26,7 @@ data class MessageDto(
 
         if (msgRole == MessageRole.ASSISTANT) {
             val contentBlocks = mutableListOf<ContentBlock>()
+            var hasTextBlock = false
             blocks?.forEachIndexed { i, b ->
                 when (b.type) {
                     "thinking" -> contentBlocks.add(
@@ -36,6 +37,16 @@ data class MessageDto(
                             durationMs = b.durationMs,
                         )
                     )
+                    "text" -> {
+                        hasTextBlock = true
+                        contentBlocks.add(
+                            ContentBlock.TextBlock(
+                                blockId = "$msgId-text-$i",
+                                text = b.text ?: "",
+                                done = true,
+                            )
+                        )
+                    }
                     "tool" -> contentBlocks.add(
                         ContentBlock.ToolBlock(
                             blockId = "$msgId-tool-$i",
@@ -48,7 +59,8 @@ data class MessageDto(
                     )
                 }
             }
-            if (content.isNotEmpty()) {
+            // 历史数据兼容：老消息的 blocks 只存 thinking/tool，text 全在 content 字段
+            if (!hasTextBlock && content.isNotEmpty()) {
                 contentBlocks.add(
                     ContentBlock.TextBlock(
                         blockId = "$msgId-text",
@@ -80,6 +92,7 @@ data class MessageDto(
 @JsonClass(generateAdapter = true)
 data class BlockDto(
     @param:Json(name ="type") val type: String,
+    @param:Json(name ="text") val text: String? = null,
     @param:Json(name ="thinking") val thinking: String? = null,
     @param:Json(name ="signature") val signature: String? = null,
     @param:Json(name ="duration_ms") val durationMs: Long? = null,

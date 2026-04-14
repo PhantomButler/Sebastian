@@ -414,6 +414,9 @@ class BaseAgent(ABC):
                         block["duration_ms"] = event.duration_ms
                     assistant_blocks.append(block)
 
+                if isinstance(event, TextBlockStop):
+                    assistant_blocks.append({"type": "text", "text": event.text})
+
                 if isinstance(event, ToolCallReady):
                     await self._publish(
                         session_id,
