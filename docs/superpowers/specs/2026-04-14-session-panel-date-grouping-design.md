@@ -103,7 +103,7 @@ fun groupSessions(
 
 规则：
 
-1. 解析 `session.lastActivityAt`（ISO 字符串，取前 10 位 `YYYY-MM-DD` 转 `LocalDate`）。
+1. **分桶**按日期粒度：取 `session.lastActivityAt` 前 10 位 `YYYY-MM-DD` 转 `LocalDate`。
 2. 按优先级归桶，一个 session 只进一个桶：
    - 日期 == now → `today`
    - 日期 == now - 1 → `yesterday`
@@ -111,7 +111,7 @@ fun groupSessions(
    - now - 30 ≤ 日期 < now - 7 → `within30`
    - 日期 < now - 30 → 按 `(year, month)` 进入对应 `Month`，`Month` 再聚合到 `Year`
 3. `lastActivityAt` 为 null 或解析失败 → 兜底归到 `today`，避免丢失。
-4. 组内 sessions 按 `lastActivityAt desc` 排序；null 值排在最后。
+4. **组内排序**使用完整 `lastActivityAt`（ISO 字符串字典序 == 时间序，天然精确到秒），desc；null 值排在最后。
 5. 月份在年内按 `month desc` 排；年份按 `year desc` 排。
 6. Recent 桶按固定顺序输出：today / yesterday / within7 / within30；空桶不输出。
 7. Year/Month 空的也不输出。
@@ -218,7 +218,7 @@ LazyColumn {
 5. 31 天前：`now - 31` 归 year/month
 6. 跨年：`2025-12-31` 归 `Year(2025).Month(12)`
 7. `lastActivityAt` 为 null → 归 today
-8. 组内排序 desc；月份 desc；年份 desc
+8. 组内排序 desc（同一天内不同秒的 session 也能正确排序）；月份 desc；年份 desc
 9. 空列表 → `GroupedSessions(emptyList(), emptyList())`
 10. `defaultExpanded`：所有 Recent = true；当年 Year = true；往年 Year = false；所有 Month = false
 
