@@ -60,3 +60,35 @@ async def test_list_by_agent_type(tmp_sessions_dir: Path) -> None:
 
     assert len(by_type) == 2
     assert all(s["agent_type"] == "stock" for s in by_type)
+
+
+@pytest.mark.asyncio
+async def test_prune_orphans(tmp_sessions_dir: Path) -> None:
+    """剔除磁盘目录不存在的索引条目；保留有目录的；返回被剔除条目。"""
+    store = IndexStore(tmp_sessions_dir)
+    alive = Session(agent_type="sebastian", title="alive")
+    orphan = Session(agent_type="forge", title="orphan")
+    await store.upsert(alive)
+    await store.upsert(orphan)
+
+    # 仅给 alive 建磁盘目录，orphan 没有
+    (tmp_sessions_dir / alive.agent_type / alive.id).mkdir(parents=True)
+
+    dropped = await store.prune_orphans(tmp_sessions_dir)
+
+    assert [d["id"] for d in dropped] == [orphan.id]
+    remaining = await store.list_all()
+    assert [s["id"] for s in remaining] == [alive.id]
+
+
+@pytest.mark.asyncio
+async def test_prune_orphans_noop_when_all_alive(tmp_sessions_dir: Path) -> None:
+    store = IndexStore(tmp_sessions_dir)
+    s = Session(agent_type="sebastian", title="x")
+    await store.upsert(s)
+    (tmp_sessions_dir / s.agent_type / s.id).mkdir(parents=True)
+
+    dropped = await store.prune_orphans(tmp_sessions_dir)
+
+    assert dropped == []
+    assert len(await store.list_all()) == 1

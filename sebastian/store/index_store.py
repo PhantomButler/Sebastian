@@ -124,6 +124,23 @@ class IndexStore:
         if self._session_store is not None and agent_type is not None:
             await self._session_store.update_activity(session_id, agent_type)
 
+    async def prune_orphans(self, sessions_dir: Path) -> list[dict[str, Any]]:
+        """剔除磁盘目录不存在的索引条目，返回被剔除条目列表。
+
+        启动时调用：sub-agent 重命名或目录被人为删除后，index 里残留的死引用
+        会让 UI 列表显示出点不开的会话。这里一次性对齐磁盘真实状态。
+        """
+        async with self._lock:
+            sessions = await self._read()
+            kept: list[dict[str, Any]] = []
+            dropped: list[dict[str, Any]] = []
+            for entry in sessions:
+                disk_dir = sessions_dir / entry["agent_type"] / entry["id"]
+                (kept if disk_dir.exists() else dropped).append(entry)
+            if dropped:
+                await self._write(kept)
+            return dropped
+
     async def remove(self, session_id: str) -> None:
         async with self._lock:
             sessions = await self._read()
