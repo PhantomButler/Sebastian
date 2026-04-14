@@ -1,9 +1,10 @@
 # sebastian/permissions/types.py
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 
 class PermissionTier(StrEnum):
@@ -19,6 +20,9 @@ class ToolCallContext:
     task_id: str | None
     agent_type: str = ""
     depth: int = 1
+    progress_cb: Callable[[dict[str, Any]], Awaitable[None]] | None = field(
+        default=None, repr=False
+    )
 
 
 @dataclass

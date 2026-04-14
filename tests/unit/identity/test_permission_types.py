@@ -35,3 +35,26 @@ def test_review_decision_fields() -> None:
 
     d2 = ReviewDecision(decision="escalate", explanation="Risky operation detected.")
     assert d2.decision == "escalate"
+
+
+def test_tool_call_context_progress_cb_defaults_to_none() -> None:
+    from sebastian.permissions.types import ToolCallContext
+
+    ctx = ToolCallContext(task_goal="goal", session_id="s1", task_id=None)
+    assert ctx.progress_cb is None
+
+
+def test_tool_call_context_progress_cb_accepts_callable() -> None:
+    import asyncio
+    from sebastian.permissions.types import ToolCallContext
+
+    async def fake_cb(data: dict) -> None:
+        pass
+
+    ctx = ToolCallContext(
+        task_goal="goal",
+        session_id="s1",
+        task_id=None,
+        progress_cb=fake_cb,
+    )
+    assert ctx.progress_cb is fake_cb
