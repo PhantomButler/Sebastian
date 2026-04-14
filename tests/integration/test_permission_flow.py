@@ -10,7 +10,7 @@ from sebastian.permissions.types import PermissionTier, ToolCallContext
 
 
 @pytest.mark.asyncio
-async def test_policy_gate_low_tier_end_to_end() -> None:
+async def test_policy_gate_low_tier_end_to_end(tmp_path) -> None:
     """LOW tier tool executes without touching reviewer or approval."""
     from sebastian.capabilities.registry import CapabilityRegistry
     from sebastian.permissions.gate import PolicyGate
@@ -23,14 +23,20 @@ async def test_policy_gate_low_tier_end_to_end() -> None:
 
     gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
 
-    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+    target_file = tmp_path / "test.txt"
+
+    with (
+        patch("sebastian.permissions.gate.get_tool") as mock_get_tool,
+        patch("sebastian.permissions.gate.settings") as mock_settings,
+    ):
         spec = MagicMock()
         spec.permission_tier = PermissionTier.LOW
         mock_get_tool.return_value = (spec, MagicMock())
+        mock_settings.workspace_dir = tmp_path
 
         result = await gate.call(
             "file_read",
-            {"path": "/tmp/test.txt"},
+            {"path": str(target_file)},
             ToolCallContext(task_goal="Read file", session_id="s1", task_id=None),
         )
 
