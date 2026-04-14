@@ -136,7 +136,7 @@ async def test_model_decides_escalate_user_denies() -> None:
         )
 
     assert not result.ok
-    assert "denied" in (result.error or "").lower()
+    assert "拒绝" in (result.error or "")
     registry.call.assert_not_called()
 
 
