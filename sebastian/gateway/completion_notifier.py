@@ -105,13 +105,12 @@ class CompletionNotifier:
         agent_type = data.get("agent_type", "")
         goal = data.get("goal", "未知目标")
 
-        config = self._agent_registry.get(agent_type)
-        display_name = config.display_name if config else agent_type
+        display = agent_type.capitalize() if agent_type else ""
 
         if event_type == EventType.SESSION_WAITING:
             question = data.get("question", "（未提供问题内容）")
             return (
-                f"[内部通知] 子代理 {display_name} 遇到问题，需要你的指示\n"
+                f"[内部通知] 子代理 {display} 遇到问题，需要你的指示\n"
                 f"目标：{goal}\n"
                 f"问题：{question}\n"
                 f"session_id：{session_id}（回复请使用 reply_to_agent 工具）"
@@ -121,7 +120,7 @@ class CompletionNotifier:
         last_report = await self._get_last_assistant_message(session_id, agent_type)
         status_label = "完成" if event_type == EventType.SESSION_COMPLETED else "失败"
         return (
-            f"[内部通知] 子代理 {display_name} 已{status_label}任务\n"
+            f"[内部通知] 子代理 {display} 已{status_label}任务\n"
             f"目标：{goal}\n"
             f"状态：{data.get('status', '')}\n"
             f"汇报：{last_report}\n"
