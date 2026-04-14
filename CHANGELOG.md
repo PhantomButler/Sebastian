@@ -9,14 +9,32 @@
 - 升级前请处理历史会话数据：
 
   ```bash
-  # 选项 A：保留历史
-  mv ~/.sebastian/sessions/code ~/.sebastian/sessions/forge
-  python3 -c "import json, pathlib; p = pathlib.Path.home()/'.sebastian/sessions/index.json'; d = json.loads(p.read_text()); [e.__setitem__('agent_type','forge') for e in d if e.get('agent_type')=='code']; p.write_text(json.dumps(d, ensure_ascii=False, indent=2))"
-  # ~/.sebastian-dev/ 同理
+  # 选项 A：保留历史（生产 + 开发数据目录）
+  mv ~/.sebastian/sessions/code ~/.sebastian/sessions/forge 2>/dev/null
+  mv ~/.sebastian-dev/sessions/code ~/.sebastian-dev/sessions/forge 2>/dev/null
+  python3 -c "
+  import json, pathlib
+  for base in ['.sebastian', '.sebastian-dev']:
+      p = pathlib.Path.home() / base / 'sessions/index.json'
+      if not p.exists(): continue
+      d = json.loads(p.read_text())
+      for e in d.get('sessions', []):
+          if e.get('agent_type') == 'code':
+              e['agent_type'] = 'forge'
+      p.write_text(json.dumps(d, ensure_ascii=False, indent=2))
+  "
 
   # 选项 B：放弃历史
   rm -rf ~/.sebastian/sessions/code ~/.sebastian-dev/sessions/code
-  # （需要同步从 index.json 删除相应条目）
+  python3 -c "
+  import json, pathlib
+  for base in ['.sebastian', '.sebastian-dev']:
+      p = pathlib.Path.home() / base / 'sessions/index.json'
+      if not p.exists(): continue
+      d = json.loads(p.read_text())
+      d['sessions'] = [e for e in d.get('sessions', []) if e.get('agent_type') != 'code']
+      p.write_text(json.dumps(d, ensure_ascii=False, indent=2))
+  "
   ```
 
 - Gateway 启动时会对 `sessions/` 下的孤儿目录（注册表里没有 agent_type）打 warning 日志。
