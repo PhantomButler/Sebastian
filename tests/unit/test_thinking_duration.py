@@ -62,7 +62,9 @@ async def test_thinking_block_stop_includes_duration_ms() -> None:
 
     await agent.run("hi", session_id="test_sess_01")
 
-    stop_events = [e for e in published if "thinking_block" in str(e["type"]) and "stop" in str(e["type"])]
+    stop_events = [
+        e for e in published if "thinking_block" in str(e["type"]) and "stop" in str(e["type"])
+    ]
     assert len(stop_events) == 1
     duration_ms = stop_events[0]["data"].get("duration_ms")
     assert duration_ms is not None

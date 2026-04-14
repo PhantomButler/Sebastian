@@ -33,7 +33,7 @@ class SessionStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     STALLED = "stalled"
-    WAITING = "waiting"    # 子代理主动暂停等待指示（主动）
+    WAITING = "waiting"  # 子代理主动暂停等待指示（主动）
     CANCELLED = "cancelled"
 
 

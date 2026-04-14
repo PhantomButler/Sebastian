@@ -32,8 +32,7 @@ async def check_sub_agents() -> ToolResult:
         sessions = [
             s
             for s in all_sessions
-            if s.get("depth") == 2
-            and s.get("parent_session_id") == ctx.session_id
+            if s.get("depth") == 2 and s.get("parent_session_id") == ctx.session_id
         ]
     else:
         # Leader: show only this leader's own depth=3 children

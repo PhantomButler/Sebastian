@@ -103,7 +103,7 @@ class SSEManager:
                     queued_event = await asyncio.wait_for(
                         subscription.queue.get(), timeout=_KEEPALIVE_INTERVAL_S
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": keepalive\n\n"
                     continue
                 if queued_event is None:

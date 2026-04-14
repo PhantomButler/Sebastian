@@ -46,9 +46,7 @@ async def read(
 
         _file_state.record_read(path)
 
-        content = "".join(
-            f"{start + i + 1}\t{line}" for i, line in enumerate(selected)
-        )
+        content = "".join(f"{start + i + 1}\t{line}" for i, line in enumerate(selected))
 
         if not content and total_lines == 0:
             empty_hint = f"File exists but is empty (0 lines): {path}"

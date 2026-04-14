@@ -71,7 +71,8 @@ class PolicyGate:
 
     审批流顺序
     ----------
-    1. Workspace 边界检查（所有 tier）：含 file_path/path 参数且路径在 workspace 外 → 直接请求用户审批。
+    1. Workspace 边界检查（所有 tier）：含 file_path/path 参数且路径在 workspace 外
+       → 直接请求用户审批。
     2. LOW tier：直接执行。
     3. MODEL_DECIDES tier：
        a. Bash 静态高危模式匹配 → 直接请求用户审批（不走 LLM 审查）。
