@@ -125,3 +125,16 @@ async def test_read_updates_file_state(tmp_path):
     assert str(f) not in _file_state._file_mtimes
     await call_tool("Read", file_path=str(f))
     assert str(f) in _file_state._file_mtimes
+
+
+@pytest.mark.asyncio
+async def test_read_display_is_content_field(tmp_path) -> None:
+    from pathlib import Path
+    from sebastian.capabilities.tools.read import read as read_tool
+    f = tmp_path / "hi.txt"
+    f.write_text("Hello\nWorld\n")
+    result = await read_tool(file_path=str(f))
+    assert result.ok
+    # display 仅包含 content 文本（带 cat -n 前缀），不含 total_lines 等元数据
+    assert result.display == result.output["content"]
+    assert "total_lines" not in (result.display or "")

@@ -58,15 +58,17 @@ async def read(
         else:
             empty_hint = None
 
+        output = {
+            "content": content,
+            "total_lines": total_lines,
+            "lines_read": len(selected),
+            "start_line": start + 1,
+            "truncated": (start + max_lines) < total_lines,
+        }
         return ToolResult(
             ok=True,
-            output={
-                "content": content,
-                "total_lines": total_lines,
-                "lines_read": len(selected),
-                "start_line": start + 1,
-                "truncated": (start + max_lines) < total_lines,
-            },
+            output=output,
+            display=content,
             empty_hint=empty_hint,
         )
     except Exception as e:
