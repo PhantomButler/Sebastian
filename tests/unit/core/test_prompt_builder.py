@@ -57,6 +57,30 @@ async def test_persona_section_injects_owner_name(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_sebastian_agents_section_renders_agent_type_only(tmp_path: Path) -> None:
+    from dataclasses import dataclass
+
+    from sebastian.orchestrator.sebas import Sebastian
+
+    @dataclass
+    class FakeCfg:
+        agent_type: str
+        description: str
+
+    registry = {"forge": FakeCfg(agent_type="forge", description="编写代码")}
+
+    # _agents_section does not access self._agent_registry when registry arg is provided;
+    # __new__ is enough (avoids Sebastian's heavy dependency-injected __init__).
+    obj = Sebastian.__new__(Sebastian)
+    section = obj._agents_section(registry)
+
+    assert "- forge:" in section
+    assert "编写代码" in section
+    assert "display name" not in section.lower()
+    assert 'agent_type="' not in section
+
+
+@pytest.mark.asyncio
 async def test_tools_section_filtered_by_allowed_tools(tmp_path: Path) -> None:
     from sebastian.core.base_agent import BaseAgent
     from sebastian.store.session_store import SessionStore

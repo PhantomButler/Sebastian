@@ -105,13 +105,12 @@ class Sebastian(BaseAgent):
             return ""
         lines = ["## Available Sub-Agents", ""]
         for config in registry.values():
-            display = getattr(config, "display_name", config.agent_type)
             desc = getattr(config, "description", "")
-            lines.append(f"- {display} (`agent_type=\"{config.agent_type}\"`): {desc}")
+            lines.append(f"- {config.agent_type}: {desc}")
         lines.append("")
         lines.append(
             "Use the `delegate_to_agent` tool to assign tasks. "
-            "Pass the exact `agent_type` value shown above (not the display name)."
+            "Pass the agent name as `agent_type`."
         )
         return "\n".join(lines)
 
