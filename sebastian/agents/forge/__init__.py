@@ -3,8 +3,8 @@ from __future__ import annotations
 from sebastian.core.base_agent import BaseAgent
 
 
-class CodeAgent(BaseAgent):
-    name = "code"
+class ForgeAgent(BaseAgent):
+    name = "forge"
     persona = (
         "You are a senior software engineer serving {owner_name}.\n"
         "You are precise, methodical, and pragmatic — you write clean code that solves "
