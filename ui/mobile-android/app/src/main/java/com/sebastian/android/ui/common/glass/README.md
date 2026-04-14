@@ -14,6 +14,7 @@
 | `GlassKit.kt` | 核心：`GlassState`、`rememberGlassState` |
 | `GlassSurface.kt` | 带模糊采样的玻璃容器（大面积面板） |
 | `GlassButton.kt` | 圆形玻璃按钮（`GlassCircleButton`） |
+| `UniformShadow.kt` | `Modifier.uniformShadow()` 均匀四周投影扩展 |
 
 ---
 
@@ -75,6 +76,37 @@ GlassSurface(
 | `shape` | `Shape` | `RoundedCornerShape(24.dp)` | 玻璃形状，同时用于裁剪和模糊边界 |
 | `blurRadius` | `Float` | `GlassDefaults.BlurRadius`（20f） | 背景模糊强度，值越大越虚化 |
 | `surfaceAlpha` | `Float` | `GlassDefaults.SurfaceAlpha`（0.5f） | 表面颜色叠加层透明度 |
+| `shadowElevation` | `Dp` | `6.dp` | 均匀四周阴影半径（0 = 无阴影） |
+| `shadowCornerRadius` | `Dp` | `24.dp` | 阴影圆角，**需与 `shape` 圆角对齐**（否则阴影不贴边） |
+| `shadowColor` | `Color` | `Black α=0.18` | 阴影颜色 |
+
+> ⚠️ **外层不要再 `.clip()`**：若调用方在 `GlassSurface` 外再套一层 `Modifier.clip(...)`，会把阴影裁掉。需要裁剪点击区域时，把 `.clip().clickable()` 放到 `GlassSurface` 的 **content 内部**（参见 [ChatScreen.kt](../../chat/ChatScreen.kt) 顶部左右按钮实现）。
+
+---
+
+### `Modifier.uniformShadow` — 均匀四周投影
+
+独立可用的阴影扩展，适合给非 `GlassSurface` 的控件（如 `GlassCircleButton`、自定义浮动按钮）添加四周均匀阴影。
+
+与 Android 原生 `Modifier.shadow` 的区别：
+- 原生 `shadow` 基于 elevation 光源模型，**顶部阴影极淡**
+- `uniformShadow` 用 `Paint.setShadowLayer(dx=0, dy=0)` 自绘，**四周等强度**
+
+```kotlin
+GlassCircleButton(
+    onClick = { … },
+    modifier = Modifier.uniformShadow(
+        elevation = 4.dp,
+        cornerRadius = 22.dp,   // CircleShape 44dp → size/2
+    ),
+) { Icon(…) }
+```
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `elevation` | `Dp` | **必填** | 阴影模糊半径（0 = 不绘制） |
+| `cornerRadius` | `Dp` | **必填** | 阴影圆角，需与控件 clip 形状一致 |
+| `color` | `Color` | `Black α=0.18` | 阴影颜色 |
 
 ---
 

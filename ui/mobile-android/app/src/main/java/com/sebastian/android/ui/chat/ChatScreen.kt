@@ -187,33 +187,30 @@ fun ChatScreen(
                         .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                if (agentId != null) {
-                                    navController.popBackStack()
-                                } else {
-                                    activePane = if (activePane == SidePane.LEFT) SidePane.NONE else SidePane.LEFT
-                                }
-                            },
+                    GlassSurface(
+                        state = glassState,
+                        shape = CircleShape,
+                        shadowCornerRadius = 22.dp,
+                        modifier = Modifier.size(44.dp),
                     ) {
-                        GlassSurface(
-                            state = glassState,
-                            shape = CircleShape,
-                            modifier = Modifier.fillMaxSize(),
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .clickable {
+                                    if (agentId != null) {
+                                        navController.popBackStack()
+                                    } else {
+                                        activePane = if (activePane == SidePane.LEFT) SidePane.NONE else SidePane.LEFT
+                                    }
+                                },
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.fillMaxSize(),
-                            ) {
-                                Icon(
-                                    imageVector = if (agentId != null) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
-                                    contentDescription = if (agentId != null) "返回" else "会话列表",
-                                    tint = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
+                            Icon(
+                                imageVector = if (agentId != null) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
+                                contentDescription = if (agentId != null) "返回" else "会话列表",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
                         }
                     }
 
@@ -226,6 +223,7 @@ fun ChatScreen(
                         GlassSurface(
                             state = glassState,
                             shape = RoundedCornerShape(20.dp),
+                            shadowCornerRadius = 20.dp,
                         ) {
                             Text(
                                 text = agentName ?: "Sebastian",
@@ -236,29 +234,26 @@ fun ChatScreen(
                         }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                activePane = if (activePane == SidePane.RIGHT) SidePane.NONE else SidePane.RIGHT
-                            },
+                    GlassSurface(
+                        state = glassState,
+                        shape = CircleShape,
+                        shadowCornerRadius = 22.dp,
+                        modifier = Modifier.size(44.dp),
                     ) {
-                        GlassSurface(
-                            state = glassState,
-                            shape = CircleShape,
-                            modifier = Modifier.fillMaxSize(),
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .clickable {
+                                    activePane = if (activePane == SidePane.RIGHT) SidePane.NONE else SidePane.RIGHT
+                                },
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.fillMaxSize(),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Checklist,
-                                    contentDescription = "待办事项",
-                                    tint = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Checklist,
+                                contentDescription = "待办事项",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
                         }
                     }
                 }

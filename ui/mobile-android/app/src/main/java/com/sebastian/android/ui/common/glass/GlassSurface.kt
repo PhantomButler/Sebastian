@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -25,8 +26,13 @@ import com.kyant.backdrop.effects.vibrancy
  *
  * @param state         由 [rememberGlassState] 创建的玻璃状态
  * @param shape         玻璃形状，同时用于内容裁剪与模糊边界
- * @param blurRadius    背景模糊半径，值越大越虚化
- * @param surfaceAlpha  表面叠加颜色的透明度（0 = 完全透明，1 = 不透明）
+ * @param blurRadius      背景模糊半径，值越大越虚化
+ * @param surfaceAlpha    表面叠加颜色的透明度（0 = 完全透明，1 = 不透明）
+ * @param shadowElevation     阴影模糊半径（0 = 无阴影）。用 Paint.setShadowLayer
+ *                            自绘，dx=dy=0，四周均匀（含顶部），避开 Android
+ *                            原生 elevation 光源模型只照亮底部的问题
+ * @param shadowCornerRadius  阴影圆角半径，需与 shape 的圆角一致才贴合
+ * @param shadowColor         阴影颜色（含 alpha）
  */
 @Composable
 fun GlassSurface(
@@ -35,6 +41,9 @@ fun GlassSurface(
     shape: Shape = RoundedCornerShape(24.dp),
     blurRadius: Float = GlassDefaults.BlurRadius,
     surfaceAlpha: Float = GlassDefaults.SurfaceAlpha,
+    shadowElevation: Dp = 6.dp,
+    shadowCornerRadius: Dp = 24.dp,
+    shadowColor: Color = Color.Black.copy(alpha = 0.18f),
     content: @Composable () -> Unit,
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -44,6 +53,11 @@ fun GlassSurface(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = modifier
+            .uniformShadow(
+                elevation = shadowElevation,
+                cornerRadius = shadowCornerRadius,
+                color = shadowColor,
+            )
             .clip(shape)
             .drawBackdrop(
                 backdrop = state.backdrop,
