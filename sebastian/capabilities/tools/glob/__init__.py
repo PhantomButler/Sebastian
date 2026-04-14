@@ -46,5 +46,6 @@ async def glob(pattern: str, path: str | None = None) -> ToolResult:
             "count": len(files),
             "truncated": truncated,
         },
-        display="\n".join(files),
+        display="\n".join(files) if files else None,
+        empty_hint="No files found" if not files else None,
     )
