@@ -4,14 +4,20 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,8 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.ui.common.AnimationTokens
@@ -77,58 +82,93 @@ fun ThinkingCard(
         "Thinking"
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onToggle,
+            ),
+    ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggle)
-                .padding(vertical = 4.dp),
+            modifier = Modifier.padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (!block.done) {
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(6.dp)
                         .alpha(pulseAlpha.value)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                        .background(Color(0xFF22C55E), CircleShape),
                 )
                 Spacer(Modifier.width(8.dp))
             }
 
+            val titleColor = mutedColor.copy(alpha = 0.6f)
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                color = titleColor,
             )
 
+            Spacer(Modifier.width(6.dp))
+
             Icon(
-                imageVector = when {
-                    !block.done -> Icons.AutoMirrored.Filled.KeyboardArrowRight
-                    block.expanded -> Icons.Default.KeyboardArrowUp
-                    else -> Icons.Default.KeyboardArrowDown
+                imageVector = if (block.expanded) {
+                    Icons.Default.KeyboardArrowDown
+                } else {
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight
                 },
                 contentDescription = if (block.expanded) "折叠" else "展开",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
+                tint = titleColor,
+                modifier = Modifier.size(20.dp),
             )
         }
 
         AnimatedVisibility(
             visible = block.expanded,
-            enter = expandVertically(),
-            exit = shrinkVertically(),
+            enter = fadeIn(animationSpec = tween(durationMillis = 360)) +
+                expandVertically(animationSpec = tween(durationMillis = 300)),
+            exit = fadeOut(animationSpec = tween(durationMillis = 200)) +
+                shrinkVertically(animationSpec = tween(durationMillis = 300)),
         ) {
-            Column {
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                    thickness = 1.dp,
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+            ) {
+                // 左侧：小圆点 + 竖线
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .width(20.dp)
+                        .fillMaxHeight()
+                        .padding(top = 10.dp, bottom = 2.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(mutedColor.copy(alpha = 0.45f), CircleShape),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .weight(1f)
+                            .background(mutedColor.copy(alpha = 0.25f)),
+                    )
+                }
+
                 Text(
                     text = block.text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = mutedColor,
+                    modifier = Modifier
+                        .padding(start = 10.dp, top = 6.dp, bottom = 4.dp),
                 )
             }
         }
