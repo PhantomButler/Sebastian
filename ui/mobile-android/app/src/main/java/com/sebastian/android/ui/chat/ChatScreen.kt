@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,7 +27,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,8 +37,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -47,7 +49,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.sebastian.android.data.model.Session
 import com.sebastian.android.ui.common.ErrorBanner
+import com.sebastian.android.ui.common.SebastianIcons
 import com.sebastian.android.ui.common.glass.GlassSurface
+import com.sebastian.android.ui.common.glass.pressScale
 import com.sebastian.android.ui.common.glass.rememberGlassState
 import com.sebastian.android.ui.composer.Composer
 import com.sebastian.android.ui.navigation.Route
@@ -106,14 +110,9 @@ fun ChatScreen(
             SessionPanel(
                 sessions = sessionState.sessions,
                 activeSessionId = chatState.activeSessionId,
-                isNewSession = chatState.messages.isEmpty(),
                 agentName = agentName,
                 onSessionClick = { session ->
                     chatViewModel.switchSession(session.id)
-                    activePane = SidePane.NONE
-                },
-                onNewSession = {
-                    chatViewModel.newSession()
                     activePane = SidePane.NONE
                 },
                 onDeleteSession = { deleteTarget = it },
@@ -128,6 +127,9 @@ fun ChatScreen(
         },
         mainPane = {
             val glassState = rememberGlassState(MaterialTheme.colorScheme.background)
+            val context = LocalContext.current
+            // 单例 Toast：连点时先 cancel 上一个，避免排队连续弹
+            var newSessionToast by remember { mutableStateOf<Toast?>(null) }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -187,18 +189,23 @@ fun ChatScreen(
                         .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
+                    val leftButtonSource = remember { MutableInteractionSource() }
                     GlassSurface(
                         state = glassState,
                         shape = CircleShape,
                         shadowCornerRadius = 22.dp,
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier
+                            .size(44.dp)
+                            .pressScale(leftButtonSource),
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(CircleShape)
-                                .clickable {
+                                .clickable(
+                                    interactionSource = leftButtonSource,
+                                    indication = null,
+                                ) {
                                     if (agentId != null) {
                                         navController.popBackStack()
                                     } else {
@@ -207,7 +214,7 @@ fun ChatScreen(
                                 },
                         ) {
                             Icon(
-                                imageVector = if (agentId != null) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
+                                imageVector = if (agentId != null) Icons.AutoMirrored.Filled.ArrowBack else SebastianIcons.Sidebar,
                                 contentDescription = if (agentId != null) "返回" else "会话列表",
                                 tint = MaterialTheme.colorScheme.onSurface,
                             )
@@ -215,15 +222,15 @@ fun ChatScreen(
                     }
 
                     Box(
-                        contentAlignment = Alignment.Center,
+                        contentAlignment = Alignment.CenterStart,
                         modifier = Modifier
                             .weight(1f)
                             .padding(horizontal = 8.dp),
                     ) {
                         GlassSurface(
                             state = glassState,
-                            shape = RoundedCornerShape(20.dp),
-                            shadowCornerRadius = 20.dp,
+                            shape = CircleShape,
+                            shadowCornerRadius = 100.dp,
                         ) {
                             Text(
                                 text = agentName ?: "Sebastian",
@@ -236,24 +243,67 @@ fun ChatScreen(
 
                     GlassSurface(
                         state = glassState,
-                        shape = CircleShape,
+                        shape = RoundedCornerShape(22.dp),
                         shadowCornerRadius = 22.dp,
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier.size(width = 92.dp, height = 44.dp),
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(CircleShape)
-                                .clickable {
-                                    activePane = if (activePane == SidePane.RIGHT) SidePane.NONE else SidePane.RIGHT
-                                },
+                                .padding(horizontal = 6.dp),
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Checklist,
-                                contentDescription = "待办事项",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
+                            // 新对话：若已在空白新对话，弹 Toast 提示而非重复创建
+                            val newChatSource = remember { MutableInteractionSource() }
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxSize()
+                                    .pressScale(newChatSource)
+                                    .clickable(
+                                        interactionSource = newChatSource,
+                                        indication = null,
+                                    ) {
+                                        if (chatState.messages.isEmpty()) {
+                                            newSessionToast?.cancel()
+                                            newSessionToast = Toast.makeText(
+                                                context,
+                                                "Already in a new chat",
+                                                Toast.LENGTH_SHORT,
+                                            ).also { it.show() }
+                                        } else {
+                                            chatViewModel.newSession()
+                                        }
+                                    },
+                            ) {
+                                Icon(
+                                    imageVector = SebastianIcons.Edit,
+                                    contentDescription = "新对话",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            // 待办
+                            val todoSource = remember { MutableInteractionSource() }
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxSize()
+                                    .pressScale(todoSource)
+                                    .clickable(
+                                        interactionSource = todoSource,
+                                        indication = null,
+                                    ) {
+                                        activePane = if (activePane == SidePane.RIGHT) SidePane.NONE else SidePane.RIGHT
+                                    },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Checklist,
+                                    contentDescription = "待办事项",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
                         }
                     }
                 }

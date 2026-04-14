@@ -73,6 +73,40 @@ object SebastianIcons {
         }.build()
     }
 
+    /** 两条横杠的侧栏/菜单图标（仿 ChatGPT 顶栏左按钮） */
+    val Sidebar: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "Sidebar",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 1024f,
+            viewportHeight = 1024f,
+        ).apply {
+            // 上横
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(220f, 340f)
+                horizontalLineToRelative(584f)
+                curveToRelative(22f, 0f, 40f, 18f, 40f, 40f)
+                curveToRelative(0f, 22f, -18f, 40f, -40f, 40f)
+                horizontalLineTo(220f)
+                curveToRelative(-22f, 0f, -40f, -18f, -40f, -40f)
+                curveToRelative(0f, -22f, 18f, -40f, 40f, -40f)
+                close()
+            }
+            // 下横（短，约上横 60% 长）
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(220f, 604f)
+                horizontalLineToRelative(340f)
+                curveToRelative(22f, 0f, 40f, 18f, 40f, 40f)
+                curveToRelative(0f, 22f, -18f, 40f, -40f, 40f)
+                horizontalLineTo(220f)
+                curveToRelative(-22f, 0f, -40f, -18f, -40f, -40f)
+                curveToRelative(0f, -22f, 18f, -40f, 40f, -40f)
+                close()
+            }
+        }.build()
+    }
+
     val Edit: ImageVector by lazy {
         ImageVector.Builder(
             name = "Edit",

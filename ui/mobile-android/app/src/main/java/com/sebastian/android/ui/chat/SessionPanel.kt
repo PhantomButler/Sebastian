@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,9 +47,7 @@ import java.time.LocalDate
 fun SessionPanel(
     sessions: List<Session>,
     activeSessionId: String?,
-    isNewSession: Boolean = false,
     onSessionClick: (Session) -> Unit,
-    onNewSession: () -> Unit,
     onDeleteSession: (Session) -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onNavigateToSubAgents: () -> Unit = {},
@@ -59,8 +56,6 @@ fun SessionPanel(
     agentName: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-
     val grouped = remember(sessions) { groupSessions(sessions) }
     val defaults = remember(grouped) { defaultExpanded(grouped, LocalDate.now()) }
     val expanded: SnapshotStateMap<String, Boolean> = rememberSaveable(
@@ -210,63 +205,6 @@ fun SessionPanel(
             }
         }
 
-        // New chat FAB - bottom right
-        NewChatButton(
-            enabled = !isNewSession,
-            isDark = isDark,
-            onClick = onNewSession,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 40.dp),
-        )
-    }
-}
-
-@Composable
-private fun NewChatButton(
-    enabled: Boolean,
-    isDark: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val containerColor = when {
-        !enabled -> if (isDark) Color(0xFF333333) else Color(0xFF888888)
-        isDark -> Color(0xB3464646) // rgba(70,70,70,0.95)
-        else -> Color(0xFF111111)
-    }
-    val border = if (isDark && enabled) {
-        BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
-    } else {
-        null
-    }
-
-    Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = containerColor,
-        border = border,
-        shadowElevation = if (enabled) 4.dp else 0.dp,
-        modifier = modifier
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Default.Edit,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "新对话",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.2.sp,
-            )
-        }
     }
 }
 
@@ -414,9 +352,3 @@ private fun GroupHeader(
     }
 }
 
-private fun Color.luminance(): Float {
-    val r = red
-    val g = green
-    val b = blue
-    return 0.299f * r + 0.587f * g + 0.114f * b
-}
