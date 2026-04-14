@@ -5,13 +5,13 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed class Route {
     @Serializable
-    data object Chat : Route()
+    data class Chat(val sessionId: String? = null) : Route()
 
     @Serializable
     data object SubAgents : Route()
 
     @Serializable
-    data class AgentChat(val agentId: String, val agentName: String) : Route()
+    data class AgentChat(val agentId: String, val agentName: String, val sessionId: String? = null) : Route()
 
     @Serializable
     data object Settings : Route()

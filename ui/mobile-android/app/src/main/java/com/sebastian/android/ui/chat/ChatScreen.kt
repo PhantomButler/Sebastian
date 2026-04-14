@@ -72,6 +72,7 @@ fun ChatScreen(
     navController: NavController,
     agentId: String? = null,
     agentName: String? = null,
+    sessionId: String? = null,
     chatViewModel: ChatViewModel = hiltViewModel(),
     sessionViewModel: SessionViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
@@ -79,6 +80,13 @@ fun ChatScreen(
     val chatState by chatViewModel.uiState.collectAsState()
     val sessionState by sessionViewModel.uiState.collectAsState()
     val settingsState by settingsViewModel.uiState.collectAsState()
+
+    // 从审批横幅跳转过来时，切换到指定 session
+    LaunchedEffect(sessionId) {
+        if (sessionId != null) {
+            chatViewModel.switchSession(sessionId)
+        }
+    }
     var activePane by rememberSaveable(
         stateSaver = Saver<SidePane, String>(
             save = { it.name },

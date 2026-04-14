@@ -94,7 +94,7 @@ fun SebastianNavHost() {
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = Route.Chat,
+            startDestination = Route.Chat(),
             modifier = Modifier.fillMaxSize().then(glassState.contentModifier),
             enterTransition = {
                 slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) +
@@ -113,8 +113,9 @@ fun SebastianNavHost() {
                     fadeOut(tween(animDuration))
             },
         ) {
-            composable<Route.Chat> {
-                ChatScreen(navController = navController)
+            composable<Route.Chat> { backStackEntry ->
+                val route = backStackEntry.toRoute<Route.Chat>()
+                ChatScreen(navController = navController, sessionId = route.sessionId)
             }
             composable<Route.SubAgents> {
                 AgentListScreen(navController = navController)
@@ -125,6 +126,7 @@ fun SebastianNavHost() {
                     navController = navController,
                     agentId = route.agentId,
                     agentName = route.agentName,
+                    sessionId = route.sessionId,
                 )
             }
             composable<Route.Settings> {
@@ -158,15 +160,40 @@ fun SebastianNavHost() {
             onGrant = globalApprovalViewModel::grantApproval,
             onDeny = globalApprovalViewModel::denyApproval,
             onNavigateToSession = { approval ->
+                // 已在目标 session → 不跳转
+                val alreadyInSession = try {
+                    if (approval.agentType == "sebastian") {
+                        navController.currentBackStackEntry
+                            ?.toRoute<Route.Chat>()
+                            ?.sessionId == approval.sessionId
+                    } else {
+                        navController.currentBackStackEntry
+                            ?.toRoute<Route.AgentChat>()
+                            ?.sessionId == approval.sessionId
+                    }
+                } catch (_: Exception) { false }
+                if (alreadyInSession) return@GlobalApprovalBanner
+
                 if (approval.agentType == "sebastian") {
-                    navController.navigate(Route.Chat) {
-                        popUpTo(Route.Chat) { inclusive = true }
+                    navController.navigate(Route.Chat(sessionId = approval.sessionId)) {
+                        // 弹出 Chat 之上的页面（如 Settings），保留 Chat 自身；
+                        // launchSingleTop 检测到栈顶是 Chat 则复用实例（触发 LaunchedEffect 切 session），
+                        // 不销毁 ViewModel，避免产生空白新对话
+                        popUpTo<Route.Chat> { inclusive = false }
                         launchSingleTop = true
                     }
                 } else {
                     navController.navigate(
-                        Route.AgentChat(agentId = approval.agentType, agentName = approval.agentType)
-                    ) { launchSingleTop = true }
+                        Route.AgentChat(
+                            agentId = approval.agentType,
+                            agentName = approval.agentType,
+                            sessionId = approval.sessionId,
+                        )
+                    ) {
+                        // 弹出已有 AgentChat 之上的页面，防止不同 sessionId 导致回栈堆叠
+                        popUpTo<Route.AgentChat> { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
             },
             modifier = Modifier
