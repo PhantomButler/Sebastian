@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from sebastian.core.types import ToolResult
+from sebastian.permissions.gate import PolicyGate
 from sebastian.permissions.types import PermissionTier, ReviewDecision, ToolCallContext
 
 
@@ -190,7 +191,7 @@ def test_get_all_tool_specs_injects_reason_for_model_decides() -> None:
     from sebastian.permissions.gate import PolicyGate
 
     registry = MagicMock()
-    registry.get_all_tool_specs.return_value = [
+    registry.get_callable_specs.return_value = [
         {
             "name": "shell",
             "description": "Run shell command",
@@ -269,7 +270,7 @@ def test_get_all_tool_specs_unknown_tool_defaults_to_model_decides() -> None:
     from sebastian.permissions.gate import PolicyGate
 
     registry = MagicMock()
-    registry.get_all_tool_specs.return_value = [
+    registry.get_callable_specs.return_value = [
         {
             "name": "mcp_tool",
             "description": "An MCP tool",
@@ -522,3 +523,207 @@ async def test_low_tier_file_path_inside_workspace_no_approval(tmp_path) -> None
     assert result.ok
     reviewer.review.assert_not_called()
     approval_manager.request_approval.assert_not_called()
+
+
+def _make_gate_with_specs(
+    native_specs: list[dict],
+) -> PolicyGate:
+    """构造一个 PolicyGate，注入 registry 返回指定 native_specs。"""
+    registry = MagicMock()
+    registry.get_callable_specs = MagicMock(
+        side_effect=lambda allowed_tools, allowed_skills: [
+            spec for spec in native_specs if allowed_tools is None or spec["name"] in allowed_tools
+        ]
+    )
+    reviewer = MagicMock()
+    approval_manager = MagicMock()
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+    return gate
+
+
+def test_get_callable_specs_filters_by_allowed_tools() -> None:
+    """给定 allowed_tools={'Read'}，只返回 Read 的 spec。"""
+    specs = [
+        {"name": "Read", "description": "read", "input_schema": {"properties": {}}},
+        {"name": "Bash", "description": "bash", "input_schema": {"properties": {}}},
+    ]
+    gate = _make_gate_with_specs(specs)
+
+    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.LOW
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = gate.get_callable_specs(allowed_tools={"Read"}, allowed_skills=None)
+
+    names = [s["name"] for s in result]
+    assert names == ["Read"]
+
+
+def test_get_callable_specs_injects_reason_for_model_decides() -> None:
+    """MODEL_DECIDES tier 的工具 spec 应被注入 required 的 reason 字段。"""
+    specs = [
+        {
+            "name": "Bash",
+            "description": "bash",
+            "input_schema": {
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"],
+            },
+        },
+    ]
+    gate = _make_gate_with_specs(specs)
+
+    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.MODEL_DECIDES
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = gate.get_callable_specs(allowed_tools=None, allowed_skills=None)
+
+    assert len(result) == 1
+    schema = result[0]["input_schema"]
+    assert "reason" in schema["properties"]
+    assert "reason" in schema["required"]
+
+
+def test_get_all_tool_specs_still_works_as_shim() -> None:
+    """get_all_tool_specs() 调用 get_callable_specs(None, None)，行为保持不变。"""
+    specs = [
+        {"name": "Read", "description": "read", "input_schema": {"properties": {}}},
+    ]
+    gate = _make_gate_with_specs(specs)
+
+    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.LOW
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = gate.get_all_tool_specs()
+
+    assert [s["name"] for s in result] == ["Read"]
+
+
+def test_get_callable_specs_forwards_allowed_skills() -> None:
+    """PolicyGate.get_callable_specs 应把 allowed_skills 如实转发给 registry。"""
+    from sebastian.permissions.gate import PolicyGate
+
+    registry = MagicMock()
+    registry.get_callable_specs = MagicMock(return_value=[])
+    reviewer = MagicMock()
+    approval_manager = MagicMock()
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+
+    result = gate.get_callable_specs(
+        allowed_tools={"Read"},
+        allowed_skills={"code-review"},
+    )
+
+    assert result == []
+    registry.get_callable_specs.assert_called_once_with({"Read"}, {"code-review"})
+
+
+@pytest.mark.asyncio
+async def test_call_rejects_tool_outside_allowed_tools() -> None:
+    """context.allowed_tools 限制外的工具应被 Stage 0 拒绝，不到 registry。"""
+    from sebastian.permissions.gate import PolicyGate
+
+    registry = MagicMock()
+    registry.call = AsyncMock()
+    reviewer = MagicMock()
+    approval_manager = MagicMock()
+
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+
+    context = ToolCallContext(
+        task_goal="test",
+        session_id="s1",
+        task_id="t1",
+        agent_type="forge",
+        depth=2,
+        allowed_tools=frozenset({"Read"}),
+    )
+
+    result = await gate.call("Bash", {"command": "ls"}, context)
+
+    assert result.ok is False
+    assert "'Bash'" in (result.error or "")
+    assert "'forge'" in (result.error or "")
+    registry.call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_call_allows_tool_inside_allowed_tools(tmp_path) -> None:
+    """白名单内的工具应通过 Stage 0，正常走后续流程。"""
+    from sebastian.permissions.gate import PolicyGate
+
+    inside_path = tmp_path / "notes.txt"
+
+    registry = MagicMock()
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="ok"))
+    reviewer = MagicMock()
+    approval_manager = MagicMock()
+
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+
+    context = ToolCallContext(
+        task_goal="test",
+        session_id="s1",
+        task_id="t1",
+        agent_type="forge",
+        depth=2,
+        allowed_tools=frozenset({"file_read"}),
+    )
+
+    with (
+        patch("sebastian.permissions.gate.get_tool") as mock_get_tool,
+        patch("sebastian.permissions.gate.resolve_path", return_value=inside_path),
+        patch("sebastian.permissions.gate.settings") as mock_settings,
+    ):
+        mock_settings.workspace_dir = tmp_path
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.LOW
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = await gate.call("file_read", {"path": str(inside_path)}, context)
+
+    assert result.ok
+    registry.call.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_call_none_allowed_tools_means_unrestricted(tmp_path) -> None:
+    """context.allowed_tools=None 表示不限制，任意合法工具可调用（回归）。"""
+    from sebastian.permissions.gate import PolicyGate
+
+    inside_path = tmp_path / "notes.txt"
+
+    registry = MagicMock()
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="ok"))
+    reviewer = MagicMock()
+    approval_manager = MagicMock()
+
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+
+    context = ToolCallContext(
+        task_goal="test",
+        session_id="s1",
+        task_id="t1",
+        agent_type="forge",
+        depth=2,
+        allowed_tools=None,
+    )
+
+    with (
+        patch("sebastian.permissions.gate.get_tool") as mock_get_tool,
+        patch("sebastian.permissions.gate.resolve_path", return_value=inside_path),
+        patch("sebastian.permissions.gate.settings") as mock_settings,
+    ):
+        mock_settings.workspace_dir = tmp_path
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.LOW
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = await gate.call("file_read", {"path": str(inside_path)}, context)
+
+    assert result.ok

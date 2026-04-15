@@ -22,7 +22,14 @@ def _get_state() -> ModuleType:
 async def check_sub_agents() -> ToolResult:
     ctx = get_tool_context()
     if ctx is None:
-        return ToolResult(ok=False, error="缺少调用上下文")
+        return ToolResult(
+            ok=False,
+            error=(
+                "工具未从 agent 执行上下文中调用（内部 ToolCallContext 缺失）。"
+                "这是运行时异常，请向上汇报'内部上下文缺失，无法执行 check_sub_agents'，"
+                "不要重试此工具。"
+            ),
+        )
 
     state = _get_state()
     all_sessions = await state.index_store.list_all()

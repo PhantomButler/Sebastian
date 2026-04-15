@@ -167,3 +167,11 @@ async def test_get_or_create_session_reloads_existing_sebastian_session(
     assert loaded.id == "existing-session"
     assert loaded.agent_type == "sebastian"
     assert loaded.title == "Persisted title"
+
+
+def test_sebastian_allowed_tools_includes_reply_to_agent() -> None:
+    """Sebastian 作为主管家，需要 reply_to_agent 来回复组长的 ask_parent。"""
+    from sebastian.orchestrator.sebas import Sebastian
+
+    assert Sebastian.allowed_tools is not None
+    assert "reply_to_agent" in Sebastian.allowed_tools

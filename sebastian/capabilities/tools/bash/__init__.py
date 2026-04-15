@@ -123,10 +123,19 @@ async def bash(
         proc.kill()
         await proc.wait()
         return ToolResult(ok=False, error=f"Command timed out after {effective_timeout}s")
+    except asyncio.CancelledError:
+        proc.kill()
+        # 用独立 task 回收僵尸进程，不受当前 cancel 影响
+        reap = asyncio.create_task(proc.wait())
+        reap.add_done_callback(lambda _: None)
+        raise
     finally:
         stop_event.set()
         if heartbeat_task is not None:
-            await heartbeat_task
+            try:
+                await heartbeat_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     stdout = stdout_bytes.decode(errors="replace")
     stderr = stderr_bytes.decode(errors="replace")

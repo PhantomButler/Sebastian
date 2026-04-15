@@ -24,3 +24,9 @@ class ToolSpecProvider(Protocol):
     CapabilityRegistry (tests/legacy) and PolicyGate (production)."""
 
     def get_all_tool_specs(self) -> list[dict[str, Any]]: ...
+
+    def get_callable_specs(
+        self,
+        allowed_tools: set[str] | None = None,
+        allowed_skills: set[str] | None = None,
+    ) -> list[dict[str, Any]]: ...

@@ -63,22 +63,62 @@ description = "做什么用的一句话描述"
 class_name = "MyAgent"                     # __init__.py 中的类名（必须精确匹配）
 max_children = 5                           # 最大并发 depth=3 子任务数（默认 5）
 stalled_threshold_minutes = 5             # 多少分钟无活动判定为 stalled（默认 5）
-allowed_tools = ["Read", "Bash", "Glob"]  # 允许使用的工具名列表；不写则不限制
+allowed_tools = ["Read", "Bash", "Glob"]  # 能力工具白名单；不写则不限制（见下）
 allowed_skills = []                        # 允许使用的 skill 列表
 ```
 
-**可用工具名**（`capabilities/tools/` 下的全局工具）：
+**`allowed_tools` 只需声明能力工具，协议工具由系统自动注入。**
+
+| 类别 | 工具 | 声明方式 |
+|------|------|---------|
+| **能力工具**（领域执行） | Read / Write / Edit / Bash / Glob / Grep | 在 `allowed_tools` 里显式列出 |
+| **协议工具**（层级通信） | `ask_parent` 等 | `_loader.py` 自动追加，**无需写入 manifest** |
+
+`allowed_tools = null`（不写此字段）表示不限制，Agent 可用所有工具（含协议工具）。
+
+`spawn_sub_agent` 和 `ask_parent` 同为协议工具，均自动注入，无需手动声明。
+
+## `allowed_tools` 白名单语义
+
+Sub-agent 在 `manifest.toml` 中通过 `allowed_tools` 声明能力边界。
+该白名单在两层强制生效：
+
+1. **LLM 可见性层**：传给 LLM 的 `tools` 参数按白名单过滤，LLM 看不到白名单外的工具。
+2. **执行校验层**：`PolicyGate.call()` Stage 0 前置校验 `tool_name`，即使 LLM 幻觉出白名单外的工具名也会被拒绝。
+
+### 三种取值
+
+| manifest 声明 | Sub-agent 最终白名单 | 含义 |
+|---|---|---|
+| 未声明（缺省） | `None` | 不限制，可用全量工具（含协议工具） |
+| `allowed_tools = []` | 5 个协议工具 | 仅具备通信能力，无领域工具 |
+| `allowed_tools = ["Read"]` | `Read` + 5 个协议工具 | Read + 通信能力 |
+
+### 协议工具（5 个，由 `_loader.py` 自动追加）
 
 | 工具 | 用途 |
-|------|------|
-| `Read` | 读取文件 |
-| `Write` | 写入文件（需先 Read） |
-| `Edit` | 精准替换文件内容（需先 Read） |
-| `Bash` | 执行 Shell 命令 |
-| `Glob` | 文件模式匹配 |
-| `Grep` | 文件内容搜索 |
+|---|---|
+| `ask_parent` | 向上级请示，暂停等待回复 |
+| `reply_to_agent` | 回复等待中的下属，恢复其执行 |
+| `spawn_sub_agent` | 向下分派 depth=3 组员 |
+| `check_sub_agents` | 查看自己组员的任务状态 |
+| `inspect_session` | 查看指定 session 的详细进展 |
 
-`allowed_tools = null`（不写此字段）表示不限制，Agent 可用所有工具。
+这 5 个工具决定 sub-agent 在层级中的通信能力，不属于领域能力范畴，所以自动注入，不需要每个 manifest 手动声明。
+
+### Sebastian vs Sub-agent 协议工具对比
+
+Sebastian 主管家**不经过 `_loader.py`**，`allowed_tools` 在 `sebastian/orchestrator/sebas.py` 中手工维护，不享受自动协议注入。
+
+| 能力 | Sebastian (depth=1) | 组长 (depth=2) | 组员 (depth=3) |
+|---|---|---|---|
+| 向下派活 | `delegate_to_agent` | `spawn_sub_agent` | — |
+| 回复下属 | `reply_to_agent` | `reply_to_agent` | — |
+| 问上级 | — (无上级) | `ask_parent` | `ask_parent` |
+| 查下属进度 | `check_sub_agents` | `check_sub_agents` | — |
+| 查 session | `inspect_session` | `inspect_session` | `inspect_session` |
+
+> 当前实现中 depth=2 和 depth=3 共用同一套协议 5 工具，是已知的简化（组员事实上不会用 `spawn_sub_agent` / `check_sub_agents`）。
 
 ### 3. 重启服务
 

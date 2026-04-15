@@ -20,6 +20,7 @@ class ToolCallContext:
     task_id: str | None
     agent_type: str = ""
     depth: int = 1
+    allowed_tools: frozenset[str] | None = None
     progress_cb: Callable[[dict[str, Any]], Awaitable[None]] | None = field(
         default=None, repr=False
     )

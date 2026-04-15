@@ -74,6 +74,19 @@ return ToolResult(
 
 给模型的 `tool_result` 仍然是完整 `output`，display 不会泄漏给 LLM。
 
+## 工具分类：能力工具 vs 协议工具
+
+工具在设计上分为两类，面向不同的控制维度：
+
+| 类别 | 工具 | 控制方式 | 说明 |
+|------|------|---------|------|
+| **能力工具** | Read / Write / Edit / Bash / Glob / Grep / todo_write 等 | manifest `allowed_tools` 白名单 | 决定 Agent 的领域执行范围 |
+| **协议工具** | ask_parent / reply_to_agent / spawn_sub_agent / check_sub_agents / inspect_session / delegate_to_agent 等 | 按 Agent 层级角色自动注入 | 决定 Agent 在层级中的通信与监控方式 |
+
+**`manifest.toml` 的 `allowed_tools` 只需声明能力工具。**
+协议工具由 `_loader.py` 根据 Agent 角色自动追加，无需手动填写。
+当前自动注入规则见 `sebastian/agents/_loader.py` 的 `_SUBAGENT_PROTOCOL_TOOLS`。
+
 ## 三档权限详解
 
 | 档位 | 常量 | 行为 | 适用场景 |

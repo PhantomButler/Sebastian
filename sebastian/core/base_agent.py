@@ -133,6 +133,8 @@ class BaseAgent(ABC):
             provider,
             gate,
             resolved_model,
+            allowed_tools=(set(self.allowed_tools) if self.allowed_tools is not None else None),
+            allowed_skills=(set(self.allowed_skills) if self.allowed_skills is not None else None),
         )
         self.system_prompt = self.build_system_prompt(gate)
 
@@ -451,6 +453,11 @@ class BaseAgent(ABC):
                             task_id=task_id,
                             agent_type=agent_context,
                             depth=getattr(self, "_current_depth", {}).get(session_id, 1),
+                            allowed_tools=(
+                                frozenset(self.allowed_tools)
+                                if self.allowed_tools is not None
+                                else None
+                            ),
                             progress_cb=functools.partial(
                                 self._publish, session_id, EventType.TOOL_RUNNING
                             ),

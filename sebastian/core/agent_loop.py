@@ -76,10 +76,14 @@ class AgentLoop:
         tool_provider: ToolSpecProvider,
         model: str = "claude-opus-4-6",
         max_tokens: int | None = None,
+        allowed_tools: set[str] | None = None,
+        allowed_skills: set[str] | None = None,
     ) -> None:
         self._provider = provider
         self._registry = tool_provider
         self._model = model
+        self._allowed_tools = allowed_tools
+        self._allowed_skills = allowed_skills
         if max_tokens is not None:
             self._max_tokens = max_tokens
         else:
@@ -98,7 +102,10 @@ class AgentLoop:
         if self._provider is None:
             raise RuntimeError("No LLM provider configured. Add one via the Settings page.")
         working = list(messages)
-        tools = self._registry.get_all_tool_specs()
+        tools = self._registry.get_callable_specs(
+            allowed_tools=self._allowed_tools,
+            allowed_skills=self._allowed_skills,
+        )
         full_text_parts: list[str] = []
         is_openai = self._provider.message_format == "openai"
 

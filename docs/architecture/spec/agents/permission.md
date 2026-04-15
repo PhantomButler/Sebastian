@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-04-10
+version: "1.1"
+last_updated: 2026-04-15
 status: implemented
 ---
 
@@ -117,6 +117,9 @@ class PolicyGate:
 
 ```
 call(tool_name, inputs, context)
+    │
+    ├─ Stage 0: agent 身份白名单校验（所有 tier）
+    │       context.allowed_tools 非 None 且 tool_name 不在其中 → 立即返回错误
     │
     ├─ workspace 边界前置检查（见 workspace-boundary.md）
     │
@@ -302,6 +305,68 @@ sebastian_agent = Sebastian(gate=policy_gate, ...)
 ```
 
 SubAgent 实例化时也传入同一个 `policy_gate`。
+
+---
+
+## 10. 工具可见性与白名单
+
+Sub-agent 的 `allowed_tools` 白名单在两层强制生效：
+
+1. **LLM 可见性层**（`AgentLoop.stream()`）
+   - `AgentLoop` 在 `__init__` 存储 `allowed_tools` / `allowed_skills`。
+   - 每轮调用 LLM 前通过 `PolicyGate.get_callable_specs(allowed_tools, allowed_skills)` 获取过滤后的 spec 列表。
+   - LLM 只"看到"白名单内的工具，避免误调用。
+
+2. **执行校验层**（`PolicyGate.call()` Stage 0）
+   - `BaseAgent._stream_inner` 创建 `ToolCallContext` 时把 `allowed_tools` 传入（`frozenset[str] | None`）。
+   - `PolicyGate.call()` 在路径规范化之前即做身份白名单校验，拒绝白名单外的调用。
+   - 防御 LLM 幻觉工具名——即使模型编造不存在于 `tools` 列表的名字也会被拒绝。
+
+两层之所以同时存在：
+- 可见性层降低幻觉概率（LLM 看不到的工具，幻觉率显著下降）。
+- 校验层提供硬保证（无论 LLM 怎么调用，身份边界不会被突破）。
+
+白名单取值语义参见 `sebastian/agents/README.md` 的 "`allowed_tools` 白名单语义" 一节。
+
+---
+
+## 11. 工具可见性：能力白名单与协议工具自动注入
+
+### 背景
+
+`manifest.toml` 的 `allowed_tools` 字段是一个白名单：若声明了此字段，子代理只能看到（并调用）白名单内的工具。问题在于：白名单只表达"领域能力"，而 `ask_parent` 这类"协议工具"是所有子代理都需要的层级通信手段，不应要求每个 manifest 手动声明——否则遗漏就是 bug。
+
+### 工具两类划分
+
+| 类别 | 说明 | 控制方式 |
+|------|------|---------|
+| **能力工具** | 决定 Agent 能做什么（Read / Write / Bash 等） | manifest `allowed_tools` 白名单 |
+| **协议工具** | 决定 Agent 如何在层级中通信（ask_parent / reply_to_agent / spawn_sub_agent / check_sub_agents / inspect_session） | 按角色自动注入，不受白名单影响 |
+
+### 实现：`_loader.py` 自动追加
+
+```python
+# sebastian/agents/_loader.py
+_SUBAGENT_PROTOCOL_TOOLS: tuple[str, ...] = ("ask_parent",)
+
+if raw_tools is not None:
+    protocol_extra = [t for t in _SUBAGENT_PROTOCOL_TOOLS if t not in raw_tools]
+    effective_tools = list(raw_tools) + protocol_extra
+else:
+    effective_tools = None  # 不限制，全量工具已含协议工具
+```
+
+- 仅影响经 `_loader.py` 加载的子代理（`agents/` 目录）
+- Sebastian 在 `app.py` 直接实例化，不经过此路径，完全不受影响
+- `spawn_sub_agent` / `check_sub_agents` / `inspect_session` 同属协议工具：`check_sub_agents` 内部按 depth 分支（depth=1 看 depth=2，depth=2 看 depth=3），天然支持组长使用；`inspect_session` 按 session_id 查询，层级无关
+
+### 决策依据
+
+单一白名单把"领域能力"和"层级通信权利"混在一起管，导致两个问题：
+1. 每个 manifest 都需要手动维护协议工具，遗漏即 bug（Forge 曾经漏掉 `ask_parent`）
+2. 新增子代理时需要知道哪些协议工具是必须的，隐式知识变成显式负担
+
+分离之后，manifest 只表达一件事：这个 Agent 能用哪些执行能力。
 
 ---
 

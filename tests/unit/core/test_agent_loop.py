@@ -394,3 +394,70 @@ async def test_agent_loop_preserves_thinking_signature_across_iterations() -> No
     assert len(thinking_blocks) == 1
     assert thinking_blocks[0]["thinking"] == "thought"
     assert thinking_blocks[0]["signature"] == "sig_1"
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_passes_allowed_tools_to_provider() -> None:
+    """AgentLoop 存的 allowed_tools 应传给 registry.get_callable_specs，
+    过滤后的 tools 传给 provider.stream。"""
+    from unittest.mock import MagicMock
+
+    from sebastian.core.agent_loop import AgentLoop
+
+    registry = MagicMock()
+    registry.get_callable_specs = MagicMock(
+        return_value=[{"name": "Read", "description": "read", "input_schema": {}}]
+    )
+
+    provider = MockLLMProvider(
+        [
+            TextBlockStart(block_id="b0_0"),
+            TextBlockStop(block_id="b0_0", text="ok"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ]
+    )
+    captured_tools: list[Any] = []
+    original_stream = provider.stream
+
+    async def spy_stream(**kwargs: Any) -> Any:
+        captured_tools.append(kwargs["tools"])
+        async for event in original_stream(**kwargs):
+            yield event
+
+    provider.stream = spy_stream  # type: ignore[method-assign]
+
+    loop = AgentLoop(
+        provider,
+        registry,
+        model="test",
+        allowed_tools={"Read"},
+        allowed_skills=None,
+    )
+    await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
+
+    registry.get_callable_specs.assert_called_once_with(allowed_tools={"Read"}, allowed_skills=None)
+    assert captured_tools == [[{"name": "Read", "description": "read", "input_schema": {}}]]
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_none_allowed_tools_means_unrestricted() -> None:
+    """allowed_tools=None 表示不限制，registry 收到 None。"""
+    from unittest.mock import MagicMock
+
+    from sebastian.core.agent_loop import AgentLoop
+
+    registry = MagicMock()
+    registry.get_callable_specs = MagicMock(return_value=[])
+
+    provider = MockLLMProvider(
+        [
+            TextBlockStart(block_id="b0_0"),
+            TextBlockStop(block_id="b0_0", text="ok"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ]
+    )
+
+    loop = AgentLoop(provider, registry, model="test")
+    await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
+
+    registry.get_callable_specs.assert_called_once_with(allowed_tools=None, allowed_skills=None)
