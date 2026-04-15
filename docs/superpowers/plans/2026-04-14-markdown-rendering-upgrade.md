@@ -24,7 +24,7 @@
 | 修改 | `app/src/test/java/com/sebastian/android/viewmodel/ChatViewModelTest.kt` |
 | 重写 | `app/src/main/java/com/sebastian/android/ui/common/MarkdownView.kt` |
 | 新建 | `app/src/main/java/com/sebastian/android/ui/common/MarkdownDefaults.kt` |
-| 新建 | `app/src/main/java/com/sebastian/android/ui/common/CodeBlockView.kt` |
+| ~~新建~~ | ~~`app/src/main/java/com/sebastian/android/ui/common/CodeBlockView.kt`~~ — **取消**，用库内置 `MarkdownHighlightedCodeFence` 替代 |
 | 修改 | `app/src/main/java/com/sebastian/android/ui/chat/StreamingMessage.kt` |
 
 所有路径相对于 `ui/mobile-android/`。
@@ -315,6 +315,8 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 
 ## Task 6: 新建 MarkdownDefaults.kt
 
+> **设计调整（2026-04-15）**：`-code` 模块内置了 `MarkdownHighlightedCodeFence`（语言标签 + 语法高亮 + 复制按钮），直接使用，取消手写 `CodeBlockView.kt`。同时 `MarkdownView` 改用 `rememberMarkdownState(retainState = true)` 以避免流式更新时闪白屏。
+
 **Files:**
 - Create: `ui/mobile-android/app/src/main/java/com/sebastian/android/ui/common/MarkdownDefaults.kt`
 
@@ -323,17 +325,22 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ```kotlin
 package com.sebastian.android.ui.common
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
+import com.mikepenz.markdown.code.MarkdownHighlightedCodeFence
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import com.mikepenz.markdown.model.MarkdownColors
 import com.mikepenz.markdown.model.MarkdownComponents
 import com.mikepenz.markdown.model.MarkdownTypography
+import dev.snipme.highlights.Highlights
+import dev.snipme.highlights.model.SyntaxThemes
 
 object MarkdownDefaults {
 
@@ -366,170 +373,32 @@ object MarkdownDefaults {
     )
 
     @Composable
-    fun components(): MarkdownComponents = markdownComponents(
-        codeFence = { model ->
-            // 从 AST 节点提取语言标识和代码内容
-            // intellij-markdown token type names: FENCE_LANG, CODE_FENCE_CONTENT
-            val language = model.node.children
-                ?.firstOrNull { it.type.name == "FENCE_LANG" }
-                ?.getTextInNode(model.content)
-                ?.trim()
-                ?.toString() ?: ""
-            val code = model.node.children
-                ?.filter { it.type.name == "CODE_FENCE_CONTENT" }
-                ?.joinToString("") { it.getTextInNode(model.content) }
-                ?.trimEnd() ?: ""
-            CodeBlockView(code = code, language = language)
-        },
-    )
-}
-```
-
-> **注意**：`model.node.children` 和 `getTextInNode` 来自 intellij-markdown 库（已被 multiplatform-markdown-renderer 传递依赖）。如果编译时找不到这些符号，检查实际的 `MarkdownComponentModel` 类定义，通常可以通过 `model.node` 访问 ASTNode 以及 `model.content` 获取完整 markdown 文本。如果库版本提供了更高层级的 utility extension，优先用那个。
-
-- [ ] **Step 2: 编译验证（允许 CodeBlockView 尚未创建时报错）**
-
-```bash
-cd ui/mobile-android
-./gradlew :app:compileDebugKotlin 2>&1 | grep -v "^w:" | grep -E "error:|CodeBlockView" | head -10
-```
-
-预期：只有 `CodeBlockView unresolved reference` 的错误（Task 7 解决），其余无编译错误。
-
----
-
-## Task 7: 新建 CodeBlockView.kt
-
-**Files:**
-- Create: `ui/mobile-android/app/src/main/java/com/sebastian/android/ui/common/CodeBlockView.kt`
-
-- [ ] **Step 1: 创建文件**
-
-```kotlin
-package com.sebastian.android.ui.common
-
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-
-private val CodeBackground = Color(0xFF1E1E1E)
-private val CodeTextColor = Color(0xFFD4D4D4)
-private val CodeLabelAlpha = 0.6f
-
-@Composable
-fun CodeBlockView(
-    code: String,
-    language: String,
-    modifier: Modifier = Modifier,
-) {
-    var isCopied by remember { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
-    val scope = rememberCoroutineScope()
-    val scrollState = rememberScrollState()
-    val displayLanguage = language.ifEmpty { "code" }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(CodeBackground),
-    ) {
-        // ── Header: language label + copy button ──────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(36.dp)
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = displayLanguage,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    color = CodeTextColor.copy(alpha = CodeLabelAlpha),
-                ),
-            )
-            IconButton(
-                onClick = {
-                    clipboardManager.setText(AnnotatedString(code))
-                    isCopied = true
-                    scope.launch {
-                        delay(1_500L)
-                        isCopied = false
-                    }
-                },
-                modifier = Modifier.size(28.dp),
-            ) {
-                Icon(
-                    imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
-                    contentDescription = if (isCopied) "已复制" else "复制代码",
-                    tint = CodeTextColor.copy(alpha = CodeLabelAlpha),
-                    modifier = Modifier.size(14.dp),
-                )
-            }
+    fun components(): MarkdownComponents {
+        // 代码块永远用深色主题（不随系统 Light/Dark 切换）
+        val highlightsBuilder = remember {
+            Highlights.Builder().theme(SyntaxThemes.atom(darkMode = true))
         }
-
-        // ── Code content: horizontal scroll, monospace ────────────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            SelectionContainer {
-                Text(
-                    text = code,
-                    style = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp,
-                        color = CodeTextColor,
-                    ),
-                    softWrap = false,
+        return markdownComponents(
+            codeBlock = {
+                MarkdownHighlightedCodeFence(
+                    content = it.content,
+                    node = it.node,
+                    highlightsBuilder = highlightsBuilder,
+                    showHeader = true,
                 )
-            }
-        }
+            },
+            codeFence = {
+                MarkdownHighlightedCodeFence(
+                    content = it.content,
+                    node = it.node,
+                    highlightsBuilder = highlightsBuilder,
+                    showHeader = true,
+                )
+            },
+        )
     }
 }
 ```
-
-> **语法高亮 TODO**：`-code` 模块（`multiplatform-markdown-renderer-code`）提供 `rememberHighlighter()` 等 API 来生成带颜色 span 的 `AnnotatedString`。当前实现先用纯色文本确保结构正确，可在此 PR 后单独添加高亮：将 `Text(text = code, ...)` 替换为 `Text(text = highlighter.highlight(code, language), ...)`。
 
 - [ ] **Step 2: 编译验证**
 
@@ -538,11 +407,17 @@ cd ui/mobile-android
 ./gradlew :app:compileDebugKotlin 2>&1 | grep -v "^w:" | grep "error:" | head -10
 ```
 
-预期：无编译错误。
+预期：无编译错误。如果 `MarkdownHighlightedCodeFence` 的 import 路径不对，在 `~/.gradle/caches/modules-2/files-2.1/com.mikepenz/multiplatform-markdown-renderer-code*/` 目录下的 jar 解压后检查实际包名，常见路径为 `com.mikepenz.markdown.code.*`。
 
 ---
 
-## Task 8: 重写 MarkdownView.kt
+## ~~Task 7: 新建 CodeBlockView.kt~~ — 已取消
+
+**取消原因**：`-code` 模块的 `MarkdownHighlightedCodeFence(showHeader = true)` 已内置语言标签 + 语法高亮 + 复制按钮，功能完整，无需手写。
+
+---
+
+## Task 7（原 Task 8）: 重写 MarkdownView.kt
 
 **Files:**
 - Modify: `ui/mobile-android/app/src/main/java/com/sebastian/android/ui/common/MarkdownView.kt`
@@ -553,22 +428,25 @@ cd ui/mobile-android
 package com.sebastian.android.ui.common
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.compose.rememberMarkdownState
 
 /**
  * 渲染 Markdown 字符串。
  * 底层使用 multiplatform-markdown-renderer（纯 Compose，无 AndroidView 包装）。
- * 样式配置统一在 [MarkdownDefaults] 中定义。
- * 库内部对 content 做 remember(content) 缓存，50ms 节流下重解析开销可忽略。
+ * - rememberMarkdownState(retainState = true)：流式更新时保留旧内容，不闪白屏/loading
+ * - 样式配置统一在 [MarkdownDefaults] 中定义
  */
 @Composable
 fun MarkdownView(
     text: String,
     modifier: Modifier = Modifier,
 ) {
+    val markdownState = rememberMarkdownState(text, retainState = true)
     Markdown(
-        content = text,
+        markdownState = markdownState,
         modifier = modifier,
         colors = MarkdownDefaults.colors(),
         typography = MarkdownDefaults.typography(),
@@ -669,13 +547,12 @@ BUILD SUCCESSFUL
 cd ui/mobile-android
 git add app/src/main/java/com/sebastian/android/ui/common/MarkdownView.kt \
         app/src/main/java/com/sebastian/android/ui/common/MarkdownDefaults.kt \
-        app/src/main/java/com/sebastian/android/ui/common/CodeBlockView.kt \
         app/src/main/java/com/sebastian/android/ui/chat/StreamingMessage.kt
 git commit -m "feat(android): 替换 Markdown 渲染引擎为 multiplatform-markdown-renderer
 
-- MarkdownView 重写为纯 Compose，消除 AndroidView 包装
+- MarkdownView 重写为纯 Compose + rememberMarkdownState(retainState=true)
 - MarkdownDefaults 集中管理颜色/排版/组件配置
-- CodeBlockView 深色背景 + 复制按钮代码块
+- 代码块使用内置 MarkdownHighlightedCodeFence（语法高亮 + 复制按钮）
 - StreamingMessage 流式和历史加载统一走 MarkdownView
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
