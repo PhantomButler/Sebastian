@@ -53,6 +53,17 @@ object SseFrameParser {
         )
         "approval.granted" -> StreamEvent.ApprovalGranted(data.getString("approval_id"))
         "approval.denied" -> StreamEvent.ApprovalDenied(data.getString("approval_id"))
+        "session.completed" -> StreamEvent.SessionCompleted(
+            sessionId = data.getString("session_id"),
+            agentType = data.optString("agent_type", ""),
+            goal = data.optString("goal", ""),
+        )
+        "session.failed" -> StreamEvent.SessionFailed(
+            sessionId = data.getString("session_id"),
+            agentType = data.optString("agent_type", ""),
+            goal = data.optString("goal", ""),
+            error = data.optString("error", ""),
+        )
         else -> StreamEvent.Unknown
     }
 }

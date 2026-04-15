@@ -46,6 +46,19 @@ sealed class StreamEvent {
     data class ApprovalGranted(val approvalId: String) : StreamEvent()
     data class ApprovalDenied(val approvalId: String) : StreamEvent()
 
+    // Session lifecycle
+    data class SessionCompleted(
+        val sessionId: String,
+        val agentType: String,
+        val goal: String,
+    ) : StreamEvent()
+    data class SessionFailed(
+        val sessionId: String,
+        val agentType: String,
+        val goal: String,
+        val error: String,
+    ) : StreamEvent()
+
     // 未识别事件（忽略）
     object Unknown : StreamEvent()
 }
