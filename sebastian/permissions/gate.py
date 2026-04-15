@@ -104,14 +104,18 @@ class PolicyGate:
         """Delegate to registry for skill specs."""
         return self._registry.get_skill_specs(allowed)
 
-    def get_all_tool_specs(self) -> list[dict[str, Any]]:
-        """Return tool specs in Anthropic API format.
+    def get_callable_specs(
+        self,
+        allowed_tools: set[str] | None = None,
+        allowed_skills: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Filtered tool+skill specs for LLM API calls.
 
         For MODEL_DECIDES tools (including unrecognised MCP tools), inject
         a required `reason` field so the LLM must state its intent.
         """
         specs: list[dict[str, Any]] = []
-        for spec_dict in self._registry.get_all_tool_specs():
+        for spec_dict in self._registry.get_callable_specs(allowed_tools, allowed_skills):
             tool_name = spec_dict["name"]
             native = get_tool(tool_name)
             tier = native[0].permission_tier if native else PermissionTier.MODEL_DECIDES
@@ -127,6 +131,10 @@ class PolicyGate:
 
             specs.append(spec_dict)
         return specs
+
+    def get_all_tool_specs(self) -> list[dict[str, Any]]:
+        """Backward-compat shim for ToolSpecProvider protocol."""
+        return self.get_callable_specs(None, None)
 
     async def call(
         self,
