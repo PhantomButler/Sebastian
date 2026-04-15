@@ -260,6 +260,8 @@ class ChatViewModelTest {
             override suspend fun cancelTurn(sessionId: String) = Result.success(Unit)
             override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
             override suspend fun denyApproval(approvalId: String) = Result.success(Unit)
+            override suspend fun getPendingApprovals() = Result.success(emptyList<ApprovalSnapshot>())
+            override suspend fun getSessionRecent(sessionId: String, limit: Int) = Result.success(emptyList<Message>())
         }
         viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, dispatcher)
         dispatcher.scheduler.advanceTimeBy(200)

@@ -101,6 +101,20 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 用 REST 快照整体替换消息列表；清理 pendingDeltas 防止旧 delta 叠到新消息上。 */
+    fun replaceMessages(messages: List<Message>) {
+        pendingDeltas.clear()
+        _uiState.update { state -> state.copy(messages = messages) }
+    }
+
+    /** 回前台 / SSE 重连时调用；若 activeSessionId 为空则不操作。 */
+    suspend fun reconcileCurrentSession() {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        chatRepository.getSessionRecent(sessionId)
+            .onSuccess { replaceMessages(it) }
+            .onFailure { /* 拉失败不致命，保持现有内存状态 */ }
+    }
+
     private fun observeNetwork() {
         viewModelScope.launch(dispatcher) {
             networkMonitor.isOnline.collect { isOnline ->
