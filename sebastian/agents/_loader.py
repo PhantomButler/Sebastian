@@ -12,6 +12,19 @@ if TYPE_CHECKING:
     from sebastian.core.base_agent import BaseAgent
 
 
+# 每个子代理无论 capability 白名单如何，都必须具备的协议工具。
+# 这些工具决定子代理在层级中的通信能力，不属于领域能力范畴，
+# 不应该要求每个 manifest 手动声明。
+# 注意：Sebastian 不经过 _loader.py，因此不受此影响。
+_SUBAGENT_PROTOCOL_TOOLS: tuple[str, ...] = (
+    "ask_parent",  # 向上级请示，暂停等待回复
+    "reply_to_agent",  # 回复等待中的下属，恢复其执行（ask_parent 的对称操作）
+    "spawn_sub_agent",  # 向下分派 depth=3 组员
+    "check_sub_agents",  # 查看自己的组员任务状态
+    "inspect_session",  # 查看指定 session 的详细进展
+)
+
+
 @dataclass
 class AgentConfig:
     agent_type: str
@@ -72,6 +85,14 @@ def load_agents(extra_dirs: list[Path] | None = None) -> list[AgentConfig]:
             raw_tools = agent_section.get("allowed_tools")
             raw_skills = agent_section.get("allowed_skills")
 
+            # 若声明了 capability 白名单，自动追加协议工具（去重）。
+            # None 表示不限制，不需要追加（全量工具已包含协议工具）。
+            if raw_tools is not None:
+                protocol_extra = [t for t in _SUBAGENT_PROTOCOL_TOOLS if t not in raw_tools]
+                effective_tools: list[str] | None = list(raw_tools) + protocol_extra
+            else:
+                effective_tools = None
+
             configs[agent_type] = AgentConfig(
                 agent_type=agent_type,
                 name=agent_section.get("class_name", agent_type),
@@ -79,7 +100,7 @@ def load_agents(extra_dirs: list[Path] | None = None) -> list[AgentConfig]:
                 max_children=int(agent_section.get("max_children", 5)),
                 stalled_threshold_minutes=int(agent_section.get("stalled_threshold_minutes", 5)),
                 agent_class=agent_class,
-                allowed_tools=list(raw_tools) if raw_tools is not None else None,
+                allowed_tools=effective_tools,
                 allowed_skills=list(raw_skills) if raw_skills is not None else None,
             )
 
