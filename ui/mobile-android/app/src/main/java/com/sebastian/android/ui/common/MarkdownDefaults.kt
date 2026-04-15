@@ -1,5 +1,6 @@
 package com.sebastian.android.ui.common
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -54,8 +55,9 @@ object MarkdownDefaults {
 
     @Composable
     fun components(): MarkdownComponents {
-        val highlightsBuilder = remember {
-            Highlights.Builder().theme(SyntaxThemes.atom(darkMode = true))
+        val isDark = isSystemInDarkTheme()
+        val highlightsBuilder = remember(isDark) {
+            Highlights.Builder().theme(SyntaxThemes.atom(darkMode = isDark))
         }
         return markdownComponents(
             codeBlock = {
