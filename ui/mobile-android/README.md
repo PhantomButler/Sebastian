@@ -176,6 +176,19 @@ App 有两条 SSE 连接：
 
 增量渲染优化：`TextDelta` 事件先缓存到 `pendingDeltas`，每 50ms 批量合并到消息列表，降低 Compose recomposition 频率。
 
+### 状态恢复与本地通知
+
+`GlobalSseDispatcher`（Singleton）持有唯一的全局 SSE 连接并通过 `SharedFlow` 分发给：
+- `GlobalApprovalViewModel`（原订阅逻辑迁移至此）
+- `NotificationDispatcher`（后台时发本地通知）
+- `AppStateReconciler`（监听 `connectionState` 的 `Connected` 转换，触发 reconcile）
+
+`AppStateReconciler` 在 `ProcessLifecycleOwner.ON_START` 或 SSE `onOpen` 时 150ms debounce 并行拉取：
+- `GET /api/v1/approvals` → `GlobalApprovalViewModel.replaceAll`
+- `GET /api/v1/sessions/{id}/recent` → `ChatViewModel.replaceMessages`
+
+`NotificationDispatcher` 仅在 App 处于后台时发通知（`ProcessLifecycleOwner.currentState < STARTED`）；通知点击携带 `sebastian://session/{id}` deep link 回到对应 session。
+
 ## 修改导航
 
 | 修改场景 | 优先看 |
@@ -193,6 +206,9 @@ App 有两条 SSE 连接：
 | 改主题/品牌色 | `ui/theme/Color.kt`、`ui/theme/SebastianTheme.kt` |
 | 改 SSE 事件处理 | `viewmodel/ChatViewModel.handleEvent()` |
 | 改 SSE 重连策略 | `data/remote/SseClient.kt` |
+| 改全局 SSE 分发 | `data/remote/GlobalSseDispatcher.kt` |
+| 改状态恢复 / reconcile | `data/sync/AppStateReconciler.kt` |
+| 改本地通知 | `notification/NotificationDispatcher.kt`、`notification/NotificationChannels.kt` |
 | 新增 REST 端点 | `data/remote/ApiService.kt` + DTO + Repository |
 | 改本地存储（Token/设置） | `data/local/SecureTokenStore.kt`、`SettingsDataStore.kt` |
 | 改 DI 绑定 | `di/` |
