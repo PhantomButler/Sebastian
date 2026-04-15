@@ -54,7 +54,8 @@ async def test_bash_description_logged() -> None:
 
 async def test_bash_silent_command_empty_hint_is_done() -> None:
     """mv 等静默命令无输出时 empty_hint 应为 'Done'。"""
-    import os, tempfile
+    import os
+    import tempfile
     with tempfile.NamedTemporaryFile(delete=False) as f:
         src = f.name
     dst = src + "_moved"
@@ -107,7 +108,8 @@ async def test_bash_diff_exit_1_interpretation_in_output(tmp_path) -> None:
 
 async def test_bash_grep_exit_0_no_interpretation() -> None:
     """grep 找到匹配返回 0，output 不含 returncode_interpretation 字段。"""
-    import os, tempfile
+    import os
+    import tempfile
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         f.write("hello\n")
         fname = f.name

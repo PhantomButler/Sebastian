@@ -57,7 +57,7 @@ async def _heartbeat(
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=_HEARTBEAT_INTERVAL_S)
             return  # stop_event 已 set，命令结束
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = int(time.monotonic() - start)
             try:
                 await progress_cb({"elapsed_seconds": elapsed})
@@ -107,7 +107,7 @@ async def bash(
             proc.communicate(),
             timeout=float(effective_timeout),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.wait()
         return ToolResult(ok=False, error=f"Command timed out after {effective_timeout}s")

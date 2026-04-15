@@ -45,7 +45,6 @@ def test_tool_call_context_progress_cb_defaults_to_none() -> None:
 
 
 def test_tool_call_context_progress_cb_accepts_callable() -> None:
-    import asyncio
     from sebastian.permissions.types import ToolCallContext
 
     async def fake_cb(data: dict) -> None:
