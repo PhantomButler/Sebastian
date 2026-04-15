@@ -188,9 +188,16 @@ Deep link `sebastian://session/{sessionId}`：
 
 ## 关键设计考量
 
-### 为什么选 "REST 快照 + SSE 增量"，不选 "Last-Event-ID 精准续传"
+### 为什么选 "REST 快照 + SSE 增量"，不依赖 Last-Event-ID 做条件 reconcile
 
-Ring buffer 500 条在"手机锁屏一晚上"或"进程被杀 + 长时间离线"场景下必然失效，必须有快照兜底。既然快照必须存在，就不值得再维护另一条基于 `Last-Event-ID` 的分支。每次回前台多一次 HTTP（数据量小）换来统一的心智模型和天然容错，是划算的交易。
+澄清两层概念：
+
+1. **SSE 协议层的 Last-Event-ID 断点续传**（OkHttp SSE 客户端自动带 header，服务端 500 条 ring buffer 据此补发）—— **保留不动**。这是 SSE 本身的能力，`SseClient.kt` 和 `sebastian/gateway/sse.py` 已实现，省流量、事件顺序天然正确，是白用的优化。
+2. **客户端逻辑层用 Last-Event-ID 判断"是否需要拉快照"**（典型思路："精准续传成功就不 reconcile，失败才退化"）—— **不做**。
+
+不做第 2 层的原因：Ring buffer 500 条在"手机锁屏一晚上"或"进程被杀 + 长时间离线"场景下必然失效，快照兜底必须存在。既然必须有，就不值得再维护一条基于 Last-Event-ID 的条件分支。无条件每次都 reconcile 一次，逻辑统一、天然容错。
+
+两层协同：reconcile 拉回快照作为 baseline，SSE 带 Last-Event-ID 重连后服务端续传增量事件，客户端按主键幂等 merge。快照里的旧状态被增量事件覆盖没问题（upsert 最终一致）。每次回前台多一次 HTTP（数据量很小）换来统一心智模型，是划算的交易。
 
 ### 为什么拆 `GlobalSseDispatcher`
 
