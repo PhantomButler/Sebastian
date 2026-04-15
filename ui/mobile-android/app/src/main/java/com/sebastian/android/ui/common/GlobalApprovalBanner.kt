@@ -163,7 +163,7 @@ fun GlobalApprovalBanner(
                                 GlassPillButton(
                                     text = "Deny",
                                     onClick = { onDeny(current.approvalId) },
-                                    containerColor = Color(0xFFB71C1C).copy(alpha = 0.82f),
+                                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.82f),
                                     contentColor = Color.White,
                                 )
                                 GlassPillButton(
