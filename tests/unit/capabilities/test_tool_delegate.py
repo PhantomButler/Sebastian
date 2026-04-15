@@ -30,9 +30,7 @@ async def test_delegate_to_agent_creates_session_and_dispatches():
     mock_state.event_bus = MagicMock()
 
     with (
-        patch(
-            "sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state
-        ),
+        patch("sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state),
         patch(
             "sebastian.capabilities.tools.delegate_to_agent.get_tool_context",
             return_value=_FAKE_CTX,
@@ -59,9 +57,7 @@ async def test_delegate_unknown_agent_type_returns_error() -> None:
     mock_state.agent_instances = {}  # 无任何 agent
 
     with (
-        patch(
-            "sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state
-        ),
+        patch("sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state),
         patch(
             "sebastian.capabilities.tools.delegate_to_agent.get_tool_context",
             return_value=_FAKE_CTX,
@@ -96,9 +92,7 @@ async def test_delegate_creates_background_task() -> None:
     mock_task.add_done_callback = MagicMock()
 
     with (
-        patch(
-            "sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state
-        ),
+        patch("sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state),
         patch(
             "sebastian.capabilities.tools.delegate_to_agent.get_tool_context",
             return_value=_FAKE_CTX,
@@ -128,9 +122,7 @@ async def test_delegate_sets_parent_session_id_and_depth() -> None:
     mock_state.event_bus = MagicMock()
 
     with (
-        patch(
-            "sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state
-        ),
+        patch("sebastian.capabilities.tools.delegate_to_agent._get_state", return_value=mock_state),
         patch(
             "sebastian.capabilities.tools.delegate_to_agent.get_tool_context",
             return_value=_FAKE_CTX,
