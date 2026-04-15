@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.model.ThinkingCapability
@@ -73,17 +72,17 @@ fun ThinkButton(
     val chipShape = RoundedCornerShape(percent = 50)
 
     val backgroundColor = if (isActive && capability != ThinkingCapability.ALWAYS_ON)
-        Color(0xFF007AFF).copy(alpha = 0.12f)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     else
         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
 
     val borderColor = if (isActive && capability != ThinkingCapability.ALWAYS_ON)
-        Color(0xFF007AFF).copy(alpha = 0.32f)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
     else
         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
 
     val contentColor = if (isActive && capability != ThinkingCapability.ALWAYS_ON)
-        Color(0xFF007AFF)
+        MaterialTheme.colorScheme.primary
     else
         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
 
