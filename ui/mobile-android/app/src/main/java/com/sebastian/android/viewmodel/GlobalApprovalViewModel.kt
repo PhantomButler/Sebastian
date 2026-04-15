@@ -3,22 +3,28 @@ package com.sebastian.android.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sebastian.android.data.model.StreamEvent
+import com.sebastian.android.data.remote.GlobalSseDispatcher
 import com.sebastian.android.data.repository.ChatRepository
-import com.sebastian.android.data.repository.SettingsRepository
 import com.sebastian.android.di.IoDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
 
 data class GlobalApproval(
+    val approvalId: String,
+    val sessionId: String,
+    val agentType: String,
+    val toolName: String,
+    val toolInputJson: String,
+    val reason: String,
+)
+
+data class ApprovalSnapshot(
     val approvalId: String,
     val sessionId: String,
     val agentType: String,
@@ -34,41 +40,37 @@ data class GlobalApprovalUiState(
 @HiltViewModel
 class GlobalApprovalViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
-    private val settingsRepository: SettingsRepository,
+    private val sseDispatcher: GlobalSseDispatcher,
     @param:IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GlobalApprovalUiState())
     val uiState: StateFlow<GlobalApprovalUiState> = _uiState.asStateFlow()
 
-    private var sseJob: Job? = null
-
-    fun onAppStart() {
-        if (sseJob?.isActive == true) return
-        sseJob = viewModelScope.launch(dispatcher) {
-            val baseUrl = settingsRepository.serverUrl.first()
-            if (baseUrl.isEmpty()) return@launch
-            try {
-                chatRepository.globalStream(baseUrl).collect { event ->
-                    handleEvent(event)
-                }
-            } catch (_: CancellationException) {
-                throw CancellationException()
-            } catch (_: Exception) {
-                // Global SSE failure is non-fatal; will retry on next onAppStart
-            }
+    init {
+        viewModelScope.launch(dispatcher) {
+            sseDispatcher.events.collect { handleEvent(it) }
         }
     }
 
-    fun onAppStop() {
-        sseJob?.cancel()
-        sseJob = null
+    fun replaceAll(snapshot: List<ApprovalSnapshot>) {
+        val next = snapshot.map {
+            GlobalApproval(
+                approvalId = it.approvalId,
+                sessionId = it.sessionId,
+                agentType = it.agentType,
+                toolName = it.toolName,
+                toolInputJson = it.toolInputJson,
+                reason = it.reason,
+            )
+        }
+        _uiState.update { it.copy(approvals = next) }
     }
 
     private fun handleEvent(event: StreamEvent) {
         when (event) {
-            is StreamEvent.ApprovalRequested -> {
-                val approval = GlobalApproval(
+            is StreamEvent.ApprovalRequested -> upsert(
+                GlobalApproval(
                     approvalId = event.approvalId,
                     sessionId = event.sessionId,
                     agentType = event.agentType,
@@ -76,35 +78,40 @@ class GlobalApprovalViewModel @Inject constructor(
                     toolInputJson = event.toolInputJson,
                     reason = event.reason,
                 )
-                _uiState.update { it.copy(approvals = it.approvals + approval) }
-            }
-            is StreamEvent.ApprovalGranted -> {
-                _uiState.update { state ->
-                    state.copy(approvals = state.approvals.filter { it.approvalId != event.approvalId })
-                }
-            }
-            is StreamEvent.ApprovalDenied -> {
-                _uiState.update { state ->
-                    state.copy(approvals = state.approvals.filter { it.approvalId != event.approvalId })
-                }
-            }
+            )
+            is StreamEvent.ApprovalGranted -> removeById(event.approvalId)
+            is StreamEvent.ApprovalDenied -> removeById(event.approvalId)
             else -> Unit
         }
     }
 
-    fun grantApproval(approvalId: String) {
+    private fun upsert(approval: GlobalApproval) {
+        _uiState.update { state ->
+            val idx = state.approvals.indexOfFirst { it.approvalId == approval.approvalId }
+            val next = if (idx >= 0) {
+                state.approvals.toMutableList().apply { this[idx] = approval }
+            } else {
+                state.approvals + approval
+            }
+            state.copy(approvals = next)
+        }
+    }
+
+    private fun removeById(approvalId: String) {
         _uiState.update { state ->
             state.copy(approvals = state.approvals.filter { it.approvalId != approvalId })
         }
+    }
+
+    fun grantApproval(approvalId: String) {
+        removeById(approvalId)
         viewModelScope.launch(dispatcher) {
             chatRepository.grantApproval(approvalId)
         }
     }
 
     fun denyApproval(approvalId: String) {
-        _uiState.update { state ->
-            state.copy(approvals = state.approvals.filter { it.approvalId != approvalId })
-        }
+        removeById(approvalId)
         viewModelScope.launch(dispatcher) {
             chatRepository.denyApproval(approvalId)
         }

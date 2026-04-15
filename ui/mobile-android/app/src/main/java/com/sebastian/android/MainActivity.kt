@@ -28,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.compose.NavHost
@@ -88,12 +87,8 @@ fun SebastianNavHost() {
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> globalApprovalViewModel.onAppStart()
-                Lifecycle.Event.ON_STOP -> globalApprovalViewModel.onAppStop()
-                else -> {}
-            }
+        val observer = LifecycleEventObserver { _, _ ->
+            // Approval dispatcher 与 reconciler 接线见 Task 7
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
