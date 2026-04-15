@@ -30,7 +30,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import com.sebastian.android.ui.common.SebastianSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -53,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.sebastian.android.data.model.ThinkingCapability
+import com.sebastian.android.ui.common.SebastianSwitch
 import com.sebastian.android.viewmodel.ProviderFormViewModel
 
 private val PROVIDER_TYPES = listOf("anthropic", "openai")
