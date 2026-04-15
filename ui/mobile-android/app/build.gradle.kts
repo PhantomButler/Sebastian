@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.mikepenz.markdown.android)
     implementation(libs.mikepenz.markdown.m3)
     implementation(libs.mikepenz.markdown.code)
+    implementation(libs.snipme.highlights)
     implementation(libs.serialization.json)
     implementation(libs.datastore.preferences)
     implementation(libs.security.crypto)

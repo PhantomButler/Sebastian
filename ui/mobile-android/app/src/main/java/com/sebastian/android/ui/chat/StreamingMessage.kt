@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -123,30 +124,32 @@ private fun AssistantMessageBlocks(
             .padding(horizontal = 16.dp),
     ) {
         blocks.forEach { block ->
-            val alpha = alphaMap[block.blockId]?.value ?: 1f
-            when (block) {
-                is ContentBlock.ThinkingBlock -> ThinkingCard(
-                    block = block,
-                    onToggle = { onToggleThinking(msgId, block.blockId) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .alpha(alpha),
-                )
-                is ContentBlock.ToolBlock -> ToolCallCard(
-                    block = block,
-                    onToggle = { onToggleTool(msgId, block.blockId) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .alpha(alpha),
-                )
-                is ContentBlock.TextBlock -> MarkdownView(
-                    text = block.text,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .alpha(alpha),
-                )
+            key(block.blockId) {
+                val alpha = alphaMap[block.blockId]?.value ?: 1f
+                when (block) {
+                    is ContentBlock.ThinkingBlock -> ThinkingCard(
+                        block = block,
+                        onToggle = { onToggleThinking(msgId, block.blockId) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(alpha),
+                    )
+                    is ContentBlock.ToolBlock -> ToolCallCard(
+                        block = block,
+                        onToggle = { onToggleTool(msgId, block.blockId) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(alpha),
+                    )
+                    is ContentBlock.TextBlock -> MarkdownView(
+                        text = block.text,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(alpha),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

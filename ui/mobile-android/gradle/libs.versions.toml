@@ -14,6 +14,7 @@ retrofit = "2.11.0"
 moshi = "1.15.2"
 coil = "2.7.0"
 mikepenz-markdown = "0.40.2"
+snipme-highlights = "1.1.0"
 datastore = "1.1.1"
 security-crypto = "1.1.0-alpha02"
 coroutines = "1.8.0"
@@ -53,6 +54,7 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 mikepenz-markdown-android = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-android", version.ref = "mikepenz-markdown" }
 mikepenz-markdown-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "mikepenz-markdown" }
 mikepenz-markdown-code = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-code", version.ref = "mikepenz-markdown" }
+snipme-highlights = { group = "dev.snipme", name = "highlights", version.ref = "snipme-highlights" }
 # Backdrop (liquid glass effect)
 backdrop = { group = "io.github.kyant0", name = "backdrop", version.ref = "backdrop" }
 # Storage
