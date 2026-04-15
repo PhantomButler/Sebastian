@@ -167,8 +167,7 @@ def test_allowed_tools_empty_list_injects_protocol_only(tmp_path: Path) -> None:
         tmp_path,
         "minimal",
         "MinimalAgent",
-        '[agent]\nclass_name = "MinimalAgent"\ndescription = "minimal"\n'
-        "allowed_tools = []\n",
+        '[agent]\nclass_name = "MinimalAgent"\ndescription = "minimal"\nallowed_tools = []\n',
     )
     configs = {c.agent_type: c for c in load_agents(extra_dirs=[tmp_path])}
     final = configs["minimal"].allowed_tools
@@ -184,8 +183,7 @@ def test_allowed_tools_list_appends_protocol(tmp_path: Path) -> None:
         tmp_path,
         "reader",
         "ReaderAgent",
-        '[agent]\nclass_name = "ReaderAgent"\ndescription = "reader"\n'
-        'allowed_tools = ["Read"]\n',
+        '[agent]\nclass_name = "ReaderAgent"\ndescription = "reader"\nallowed_tools = ["Read"]\n',
     )
     configs = {c.agent_type: c for c in load_agents(extra_dirs=[tmp_path])}
     final = configs["reader"].allowed_tools

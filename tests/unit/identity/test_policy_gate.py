@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from sebastian.core.types import ToolResult
+from sebastian.permissions.gate import PolicyGate
 from sebastian.permissions.types import PermissionTier, ReviewDecision, ToolCallContext
 
 
@@ -526,15 +527,12 @@ async def test_low_tier_file_path_inside_workspace_no_approval(tmp_path) -> None
 
 def _make_gate_with_specs(
     native_specs: list[dict],
-) -> "PolicyGate":
+) -> PolicyGate:
     """构造一个 PolicyGate，注入 registry 返回指定 native_specs。"""
-    from sebastian.permissions.gate import PolicyGate
-
     registry = MagicMock()
     registry.get_callable_specs = MagicMock(
         side_effect=lambda allowed_tools, allowed_skills: [
-            spec for spec in native_specs
-            if allowed_tools is None or spec["name"] in allowed_tools
+            spec for spec in native_specs if allowed_tools is None or spec["name"] in allowed_tools
         ]
     )
     reviewer = MagicMock()
@@ -568,7 +566,10 @@ def test_get_callable_specs_injects_reason_for_model_decides() -> None:
         {
             "name": "Bash",
             "description": "bash",
-            "input_schema": {"properties": {"command": {"type": "string"}}, "required": ["command"]},
+            "input_schema": {
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"],
+            },
         },
     ]
     gate = _make_gate_with_specs(specs)

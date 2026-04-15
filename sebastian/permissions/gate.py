@@ -150,10 +150,7 @@ class PolicyGate:
         if context.allowed_tools is not None and tool_name not in context.allowed_tools:
             return ToolResult(
                 ok=False,
-                error=(
-                    f"Tool {tool_name!r} not in allowed_tools for agent "
-                    f"{context.agent_type!r}"
-                ),
+                error=(f"Tool {tool_name!r} not in allowed_tools for agent {context.agent_type!r}"),
             )
 
         native = get_tool(tool_name)

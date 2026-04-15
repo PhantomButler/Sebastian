@@ -133,12 +133,8 @@ class BaseAgent(ABC):
             provider,
             gate,
             resolved_model,
-            allowed_tools=(
-                set(self.allowed_tools) if self.allowed_tools is not None else None
-            ),
-            allowed_skills=(
-                set(self.allowed_skills) if self.allowed_skills is not None else None
-            ),
+            allowed_tools=(set(self.allowed_tools) if self.allowed_tools is not None else None),
+            allowed_skills=(set(self.allowed_skills) if self.allowed_skills is not None else None),
         )
         self.system_prompt = self.build_system_prompt(gate)
 

@@ -435,9 +435,7 @@ async def test_agent_loop_passes_allowed_tools_to_provider() -> None:
     )
     await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
 
-    registry.get_callable_specs.assert_called_once_with(
-        allowed_tools={"Read"}, allowed_skills=None
-    )
+    registry.get_callable_specs.assert_called_once_with(allowed_tools={"Read"}, allowed_skills=None)
     assert captured_tools == [[{"name": "Read", "description": "read", "input_schema": {}}]]
 
 
