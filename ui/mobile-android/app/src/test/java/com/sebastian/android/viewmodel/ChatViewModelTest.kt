@@ -466,4 +466,23 @@ class ChatViewModelTest {
 
         runBlocking { verify(chatRepository, never()).getMessages(any()) }
     }
+
+    @Test
+    fun `onAppStart in IDLE_READY skips reconcile`() = vmTest {
+        activateSession()  // getMessages #1
+        // 构造 IDLE_READY：发送失败后 ViewModel 会把 composerState 拨到 IDLE_READY + 保留 error
+        runBlocking {
+            whenever(chatRepository.sendTurn(any(), any(), any()))
+                .thenReturn(Result.failure(RuntimeException("boom")))
+        }
+        viewModel.sendMessage("半截话")
+        dispatcher.scheduler.advanceTimeBy(200)
+        assertEquals(ComposerState.IDLE_READY, viewModel.uiState.value.composerState)
+
+        viewModel.onAppStart()
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // 仅 activateSession 那次
+        runBlocking { verify(chatRepository, times(1)).getMessages("s1") }
+    }
 }

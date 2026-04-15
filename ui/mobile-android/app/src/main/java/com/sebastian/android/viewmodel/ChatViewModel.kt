@@ -447,7 +447,9 @@ class ChatViewModel @Inject constructor(
      * 覆盖"切后台回来半截 assistant 气泡 / 输入框状态错乱"场景。
      *
      * Streaming/Sending/Cancelling 期间跳过，避免把正在流的 turn 切断；离线时跳过，
-     * 留给 [observeNetwork] 在网络恢复后接管重连。
+     * 留给 [observeNetwork] 在网络恢复后接管重连。IDLE_READY 期间跳过，避免把用户
+     * 在 Composer 里未发送的半截输入对应的发送按钮状态拨回 IDLE_EMPTY（Composer 文本
+     * 存在 ChatScreen 的 local remember state，ViewModel 不感知）造成视觉错位。
      */
     fun onAppStart() {
         val state = _uiState.value
@@ -455,7 +457,8 @@ class ChatViewModel @Inject constructor(
         if (state.isOffline) return
         if (state.composerState == ComposerState.STREAMING ||
             state.composerState == ComposerState.SENDING ||
-            state.composerState == ComposerState.CANCELLING
+            state.composerState == ComposerState.CANCELLING ||
+            state.composerState == ComposerState.IDLE_READY
         ) return
         switchSession(sessionId)
     }

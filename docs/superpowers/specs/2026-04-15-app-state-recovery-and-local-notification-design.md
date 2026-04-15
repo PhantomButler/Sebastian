@@ -268,3 +268,23 @@ App 内有完整的应用内 UI（GlobalApprovalBanner、ChatScreen 流式渲染
 - `session_state` 字段 + 完整状态机留给
   [multi-device-session-state-sync spec](2026-04-14-multi-device-session-state-sync-design.md)
   的正题
+
+**关于 spec L83-89 的双触发 + debounce**：
+
+原 spec 要求 chat reconcile 同时挂 `ProcessLifecycleOwner.ON_START` + SSE
+`onOpen`，带 150ms debounce。本方案 **只挂 ON_START**（复用 `ChatScreen` 已有
+的 `LifecycleEventObserver`），不挂 SSE `onOpen`。理由：
+
+- SSE 重连路径已由 `ChatViewModel.observeNetwork` +
+  `startSseCollection(replayFromStart = needsReplay)` 兜底：网络恢复触发
+  重连，`Last-Event-ID` 断点续传，`needsReplay` 判断是否需要回放——这本身
+  就是 SSE 层的"reconcile"，不需要再叠一次 `switchSession`
+- approval reconcile 仍按原设计走 `AppStateReconciler` 的双触发 + debounce，
+  因为 approval 快照没有 `Last-Event-ID` 回放机制，必须显式拉全量
+- debounce 本是为双触发去抖而设，单触发场景不需要
+
+**守卫条件增补**：`IDLE_READY`（用户正在编辑未发送 / 发送失败后残留草稿）
+也跳过 reconcile。原因：Composer 的文本存在 `ChatScreen` 的 local
+`remember { mutableStateOf }`，ViewModel 不感知；若此时 reconcile 把
+`composerState` 拨回 `IDLE_EMPTY`，会导致"输入框有字、发送按钮灰"的视觉
+错位。等用户把草稿发出去或清空（回到 IDLE_EMPTY）再 reconcile。
