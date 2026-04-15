@@ -32,6 +32,8 @@ interface NotificationSink {
     fun cancel(id: Int)
 }
 
+private const val BODY_MAX_CHARS = 120
+
 @Singleton
 class NotificationDispatcher(
     private val sseDispatcher: GlobalSseDispatcher,
@@ -75,7 +77,7 @@ class NotificationDispatcher(
                     spec = NotificationSpec(
                         channelId = NotificationChannels.APPROVAL,
                         title = "需要审批：${event.toolName}",
-                        body = event.reason.take(120),
+                        body = event.reason.take(BODY_MAX_CHARS),
                         sessionId = event.sessionId,
                     ),
                 )
@@ -89,7 +91,7 @@ class NotificationDispatcher(
                     spec = NotificationSpec(
                         channelId = NotificationChannels.TASK_PROGRESS,
                         title = "${event.agentType} 已完成",
-                        body = event.goal.take(120),
+                        body = event.goal.take(BODY_MAX_CHARS),
                         sessionId = event.sessionId,
                     ),
                 )
@@ -101,7 +103,7 @@ class NotificationDispatcher(
                     spec = NotificationSpec(
                         channelId = NotificationChannels.TASK_PROGRESS,
                         title = "${event.agentType} 执行失败",
-                        body = (event.error.ifBlank { event.goal }).take(120),
+                        body = (event.error.ifBlank { event.goal }).take(BODY_MAX_CHARS),
                         sessionId = event.sessionId,
                     ),
                 )

@@ -111,6 +111,41 @@ class NotificationDispatcherTest {
     }
 
     @Test
+    fun `session completed uses agentType-prefixed title`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val upstream = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
+        val sse = buildSse(upstream, dispatcher)
+        val sink = mock<NotificationSink>()
+        val scope = TestScope(dispatcher)
+
+        val sut = NotificationDispatcher(
+            sseDispatcher = sse,
+            sink = sink,
+            foregroundChecker = { false },
+            dispatcher = dispatcher,
+        )
+        sse.start(scope)
+        sut.start(scope)
+        testScheduler.advanceUntilIdle()
+
+        upstream.emit(
+            StreamEvent.SessionCompleted(
+                sessionId = "s1",
+                agentType = "sebastian",
+                goal = "clean up logs",
+            )
+        )
+        testScheduler.advanceUntilIdle()
+
+        verify(sink).notify(
+            eq(("completed:s1").hashCode()),
+            matchNotification(NotificationChannels.TASK_PROGRESS, "sebastian 已完成"),
+        )
+        sut.stop()
+        sse.stop()
+    }
+
+    @Test
     fun `approval granted cancels prior notification`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val upstream = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
