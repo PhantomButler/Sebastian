@@ -1,5 +1,6 @@
 package com.sebastian.android.data.repository
 
+import com.sebastian.android.data.model.ApprovalSnapshot
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.StreamEvent
 import com.sebastian.android.data.model.ThinkingEffort
@@ -57,13 +58,15 @@ class ChatRepositoryImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun getPendingApprovals(): Result<List<com.sebastian.android.viewmodel.ApprovalSnapshot>> = runCatching {
+    override suspend fun getPendingApprovals(): Result<List<ApprovalSnapshot>> = runCatching {
         apiService.getPendingApprovals().approvals.map { dto ->
-            com.sebastian.android.viewmodel.ApprovalSnapshot(
+            ApprovalSnapshot(
                 approvalId = dto.id,
                 sessionId = dto.sessionId,
                 agentType = dto.agentType ?: "sebastian",
                 toolName = dto.toolName,
+                // 注意：Moshi 把 JSON 数字全解码为 Double，JSONObject 再 toString 时整数会保留小数点；
+                // 这里只作为 UI 展示用的原始 JSON，不做类型敏感操作。
                 toolInputJson = org.json.JSONObject(dto.toolInput ?: emptyMap<String, Any>()).toString(),
                 reason = dto.reason.orEmpty(),
             )

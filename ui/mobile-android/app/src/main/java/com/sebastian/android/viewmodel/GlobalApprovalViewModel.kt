@@ -2,6 +2,7 @@ package com.sebastian.android.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sebastian.android.data.model.ApprovalSnapshot
 import com.sebastian.android.data.model.StreamEvent
 import com.sebastian.android.data.remote.GlobalSseDispatcher
 import com.sebastian.android.data.repository.ChatRepository
@@ -16,15 +17,6 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class GlobalApproval(
-    val approvalId: String,
-    val sessionId: String,
-    val agentType: String,
-    val toolName: String,
-    val toolInputJson: String,
-    val reason: String,
-)
-
-data class ApprovalSnapshot(
     val approvalId: String,
     val sessionId: String,
     val agentType: String,

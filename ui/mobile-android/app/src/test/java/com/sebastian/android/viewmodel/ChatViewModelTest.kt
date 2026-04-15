@@ -2,6 +2,7 @@ package com.sebastian.android.viewmodel
 
 import app.cash.turbine.test
 import com.sebastian.android.data.local.NetworkMonitor
+import com.sebastian.android.data.model.ApprovalSnapshot
 import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole

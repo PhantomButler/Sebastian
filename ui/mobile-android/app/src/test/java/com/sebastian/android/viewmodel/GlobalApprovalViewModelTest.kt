@@ -1,5 +1,6 @@
 package com.sebastian.android.viewmodel
 
+import com.sebastian.android.data.model.ApprovalSnapshot
 import com.sebastian.android.data.model.StreamEvent
 import com.sebastian.android.data.remote.GlobalSseDispatcher
 import com.sebastian.android.data.repository.ChatRepository
