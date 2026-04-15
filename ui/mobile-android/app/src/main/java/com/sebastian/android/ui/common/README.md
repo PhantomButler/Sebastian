@@ -11,7 +11,8 @@ common/
 ├── AnimationTokens.kt      # 全局动画时长常量
 ├── ErrorBanner.kt          # 错误横幅（可选操作按钮）
 ├── GlobalApprovalBanner.kt # 全局审批横幅（悬浮，覆盖所有页面）
-├── MarkdownView.kt         # AndroidView 封装 Markwon 渲染
+├── MarkdownDefaults.kt     # Markdown 颜色/排版/组件配置（含代码块语法高亮）
+├── MarkdownView.kt         # 纯 Compose Markdown 渲染组件
 ├── SebastianIcons.kt       # 自定义图标集（ImageVector 懒加载）
 └── glass/                  → [glass/README.md](glass/README.md)  # 液态玻璃组件库
 ```
@@ -22,9 +23,13 @@ common/
 
 全局审批横幅，悬浮在所有页面之上（`zIndex(1f)`），显示第一条待审批请求，含拒绝/允许按钮和"查看详情"跳转。由 `GlobalApprovalViewModel` 驱动，审批事件入队，处理后自动弹出下一条。
 
+### `MarkdownDefaults`
+
+集中管理 Markdown 渲染的颜色、排版和组件配置，包括代码块语法高亮主题，供 `MarkdownView` 引用。
+
 ### `MarkdownView`
 
-`AndroidView` 包裹 `Markwon`，接受预渲染的 `CharSequence`（`renderedMarkdown`）。Markwon 实例由外部传入以便复用，避免每次 recomposition 重建。
+纯 Compose 实现，接受 `text: String`，使用 `rememberMarkdownState(retainState = true) + Markdown()` 渲染（multiplatform-markdown-renderer v0.40.2）。样式通过 `MarkdownDefaults` 注入，无 `AndroidView` 依赖。
 
 ### `ErrorBanner`
 
@@ -48,7 +53,8 @@ common/
 |---------|--------|
 | 改全局审批横幅逻辑 | `GlobalApprovalBanner.kt` + `viewmodel/GlobalApprovalViewModel.kt` |
 | 改错误横幅样式/状态 | `ErrorBanner.kt` |
-| 改 Markdown 渲染 | `MarkdownView.kt` |
+| 改 Markdown 渲染样式/配置 | `MarkdownDefaults.kt` |
+| 改 Markdown 渲染逻辑 | `MarkdownView.kt` |
 | 新增/修改自定义图标 | `SebastianIcons.kt` |
 | 改动画时长全局常量 | `AnimationTokens.kt` |
 | 改液态玻璃组件 API | `glass/` → [glass/README.md](glass/README.md) |
