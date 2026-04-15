@@ -14,9 +14,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.NotificationManagerCompat
 import androidx.navigation.NavController
 import com.sebastian.android.ui.navigation.Route
 
@@ -64,8 +70,31 @@ fun SettingsScreen(navController: NavController) {
                 onClick = { navController.navigate(Route.SettingsDebugLogging) { launchSingleTop = true } },
             )
             HorizontalDivider()
+            NotificationPermissionRow()
         }
     }
+}
+
+@Composable
+private fun NotificationPermissionRow() {
+    val context = LocalContext.current
+    val enabled by remember(context) {
+        mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
+    }
+    if (enabled) return
+
+    ListItem(
+        headlineContent = { Text("通知权限未开启") },
+        supportingContent = { Text("开启后 Sebastian 离线时可通知审批与任务完成") },
+        trailingContent = {
+            TextButton(onClick = {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                context.startActivity(intent)
+            }) { Text("去设置") }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
