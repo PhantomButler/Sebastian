@@ -57,6 +57,24 @@ class ChatRepositoryImpl @Inject constructor(
         Unit
     }
 
+    override suspend fun getPendingApprovals(): Result<List<com.sebastian.android.viewmodel.ApprovalSnapshot>> = runCatching {
+        apiService.getPendingApprovals().approvals.map { dto ->
+            com.sebastian.android.viewmodel.ApprovalSnapshot(
+                approvalId = dto.id,
+                sessionId = dto.sessionId,
+                agentType = dto.agentType ?: "sebastian",
+                toolName = dto.toolName,
+                toolInputJson = org.json.JSONObject(dto.toolInput ?: emptyMap<String, Any>()).toString(),
+                reason = dto.reason.orEmpty(),
+            )
+        }
+    }
+
+    override suspend fun getSessionRecent(sessionId: String, limit: Int): Result<List<Message>> = runCatching {
+        apiService.getSessionRecent(sessionId, limit).messages
+            .mapIndexed { index, dto -> dto.toDomain(sessionId, index) }
+    }
+
     private fun ThinkingEffort.toApiString(): String? = when (this) {
         ThinkingEffort.OFF -> null
         ThinkingEffort.ON -> "on"

@@ -50,3 +50,25 @@ data class SessionDetailResponse(
     @param:Json(name ="session") val session: SessionDto,
     @param:Json(name ="messages") val messages: List<MessageDto>,
 )
+
+@JsonClass(generateAdapter = true)
+data class SessionRecentResponse(
+    @param:Json(name ="session_id") val sessionId: String,
+    @param:Json(name ="status") val status: String,
+    @param:Json(name ="messages") val messages: List<MessageDto>,
+)
+
+@JsonClass(generateAdapter = true)
+data class PendingApprovalsResponse(
+    @param:Json(name ="approvals") val approvals: List<PendingApprovalDto>,
+)
+
+@JsonClass(generateAdapter = true)
+data class PendingApprovalDto(
+    @param:Json(name ="id") val id: String,
+    @param:Json(name ="session_id") val sessionId: String,
+    @param:Json(name ="tool_name") val toolName: String,
+    @param:Json(name ="tool_input") val toolInput: Map<String, Any>?,
+    @param:Json(name ="reason") val reason: String?,
+    @param:Json(name ="agent_type") val agentType: String? = null,
+)
