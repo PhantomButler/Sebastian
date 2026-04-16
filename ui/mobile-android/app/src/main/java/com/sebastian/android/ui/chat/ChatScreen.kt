@@ -42,7 +42,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,6 +55,7 @@ import com.sebastian.android.data.model.Session
 import com.sebastian.android.ui.common.ErrorBanner
 import com.sebastian.android.data.model.ThinkingCapability
 import com.sebastian.android.ui.common.SebastianIcons
+import com.sebastian.android.ui.common.ToastCenter
 import com.sebastian.android.ui.common.glass.GlassSurface
 import com.sebastian.android.ui.common.glass.pressScale
 import com.sebastian.android.ui.common.glass.rememberGlassState
@@ -151,8 +151,6 @@ fun ChatScreen(
         mainPane = {
             val glassState = rememberGlassState(MaterialTheme.colorScheme.background)
             val context = LocalContext.current
-            // 单例 Toast：连点时先 cancel 上一个，避免排队连续弹
-            var newSessionToast by remember { mutableStateOf<Toast?>(null) }
             var showEffortPicker by remember { mutableStateOf(false) }
             Box(
                 modifier = Modifier
@@ -290,12 +288,7 @@ fun ChatScreen(
                                         indication = null,
                                     ) {
                                         if (chatState.messages.isEmpty()) {
-                                            newSessionToast?.cancel()
-                                            newSessionToast = Toast.makeText(
-                                                context,
-                                                "Already in a new chat",
-                                                Toast.LENGTH_SHORT,
-                                            ).also { it.show() }
+                                            ToastCenter.show(context, "Already in a new chat")
                                         } else {
                                             chatViewModel.newSession()
                                         }
