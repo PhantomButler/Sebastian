@@ -59,10 +59,13 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
     val events: SharedFlow<EditorEvent> = _events.asSharedFlow()
 
     private var putJob: Job? = null
+    private var loadJob: Job? = null
     private var snapshot: EditorUiState? = null
 
     fun load() {
-        viewModelScope.launch {
+        // 幂等：旋转/重组 重复触发时，正在进行的 load 不再重复拉；避免覆盖用户刚改的选择
+        if (loadJob?.isActive == true) return
+        loadJob = viewModelScope.launch {
             val bindingR = agentRepository.getBinding(agentType)
             val providersR = settingsRepository.getProviders()
             val err = bindingR.exceptionOrNull() ?: providersR.exceptionOrNull()

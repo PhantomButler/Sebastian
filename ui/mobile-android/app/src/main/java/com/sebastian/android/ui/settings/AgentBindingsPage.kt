@@ -26,11 +26,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.sebastian.android.data.model.AgentInfo
 import com.sebastian.android.data.model.ThinkingEffort
+import com.sebastian.android.ui.common.ToastCenter
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.viewmodel.AgentBindingsViewModel
 
@@ -41,7 +43,16 @@ fun AgentBindingsPage(
     viewModel: AgentBindingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(state.errorMessage) {
+        val msg = state.errorMessage ?: return@LaunchedEffect
+        ToastCenter.show(
+            context,
+            msg.ifBlank { "Failed to load agent bindings." },
+            key = "agent-bindings-load-error",
+        )
+    }
 
     Scaffold(
         topBar = {

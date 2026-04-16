@@ -22,6 +22,7 @@ import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.wheneverBlocking
 
@@ -132,6 +133,26 @@ class AgentBindingEditorViewModelTest {
         dispatcher.scheduler.advanceTimeBy(400)
         advanceUntilIdle()
         verify(agentRepo, never()).setBinding(any(), anyOrNull(), any())
+    }
+
+    @Test
+    fun `concurrent load calls dedupe into a single getBinding`() = runTest(dispatcher) {
+        val p = provider("p1", ThinkingCapability.EFFORT, isDefault = true)
+        wheneverBlocking { agentRepo.getBinding("foo") }.thenReturn(
+            Result.success(AgentBindingDto("foo", "p1", null)),
+        )
+        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
+            Result.success(listOf(p)),
+        )
+
+        val vm = AgentBindingEditorViewModel("foo", agentRepo, settingsRepo)
+        // 模拟页面首次进入 + 旋转/重组再次触发
+        vm.load()
+        vm.load()
+        advanceUntilIdle()
+
+        verify(agentRepo, times(1)).getBinding("foo")
+        verify(settingsRepo, times(1)).getProviders()
     }
 
     @Test
