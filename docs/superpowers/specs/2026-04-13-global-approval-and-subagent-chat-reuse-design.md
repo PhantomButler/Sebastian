@@ -1,3 +1,8 @@
+---
+integrated_to: mobile/global-approval.md
+integrated_at: 2026-04-16
+---
+
 # 全局审批系统 + SubAgent 对话页复用主对话三面板
 
 > Date: 2026-04-13

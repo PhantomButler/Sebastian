@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_updated: 2026-04-15
+version: "1.2"
+last_updated: 2026-04-16
 status: implemented
 ---
 
@@ -88,6 +88,7 @@ class ThinkingBlockStop:
     block_id: str
     thinking: str              # 完整 thinking 文本
     signature: str | None      # Anthropic 签名（多轮回填必需）
+    duration_ms: int | None = None  # thinking 耗时（ms），由 base_agent 计算
 
 @dataclass
 class TextBlockStart:
@@ -233,6 +234,27 @@ _EVENT_MAP: ClassVar[dict[type, EventType]] = {
 
 CancelledError 时：partial 写入 history，publish `turn.interrupted`，然后重新 raise。
 
+### 3.4 Thinking Duration 追踪
+
+`base_agent.py` 在 `_stream_inner` 内用 `time.monotonic()` 追踪每个 thinking block 的耗时：
+
+```python
+# 局部 dict，block_id → 开始时间
+_thinking_start: dict[str, float] = {}
+
+# 收到 ThinkingBlockStart 时记录
+if isinstance(event, ThinkingBlockStart):
+    _thinking_start[event.block_id] = time.monotonic()
+
+# 收到 ThinkingBlockStop 时计算并注入
+if isinstance(event, ThinkingBlockStop):
+    start = _thinking_start.pop(event.block_id, None)
+    if start is not None:
+        event.duration_ms = int((time.monotonic() - start) * 1000)
+```
+
+`duration_ms` 同步写入 `assistant_blocks`（供多轮 thinking 回填使用），并通过 SSE 事件推送至前端。
+
 ---
 
 ## 4. Task 状态机
@@ -285,7 +307,7 @@ CREATED → PLANNING → RUNNING → COMPLETED
 | `turn.received` | 用户消息进入 | `session_id` |
 | `thinking_block.start` | thinking block 开始 | `session_id`, `block_id` |
 | `turn.thinking_delta` | 每个 thinking token | `session_id`, `block_id`, `delta` |
-| `thinking_block.stop` | thinking block 结束 | `session_id`, `block_id` |
+| `thinking_block.stop` | thinking block 结束 | `session_id`, `block_id`, `duration_ms` |
 | `text_block.start` | text block 开始 | `session_id`, `block_id` |
 | `turn.delta` | 每个文字 token | `session_id`, `block_id`, `delta` |
 | `text_block.stop` | text block 结束 | `session_id`, `block_id` |

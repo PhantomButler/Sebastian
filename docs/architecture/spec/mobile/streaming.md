@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-04-11
+version: "1.1"
+last_updated: 2026-04-16
 status: in-progress
 ---
 
@@ -83,6 +83,7 @@ sealed class ContentBlock {
         val blockId: String,
         val text: String,
         val done: Boolean,
+        val durationMs: Long? = null,   // thinking 耗时（ms），来自后端 thinking_block.stop 事件
     ) : ContentBlock()
 
     data class ToolBlock(
@@ -239,7 +240,50 @@ Compose `LazyColumn` 的 `rememberLazyListState()` 提供精确的 `firstVisible
 
 ---
 
-## 6. 动画状态语言
+## 6. ThinkingCard 极简风格
+
+对标 DeepSeek App 的极简思考卡片：无 Card 容器、行式布局、显示耗时。完全融入消息流，无背景色，无圆角容器。
+
+### 6.1 布局结构
+
+```
+┌── Row（fillMaxWidth，clickable，padding 4dp v / 0dp h）──────────────┐
+│  [●圆点 8dp，呼吸动画，仅 thinking 中可见]                              │
+│  [文字："Thinking" | "Thought for Xs"]   weight=1                    │
+│  [Icon：chevron_right（thinking）| arrow_down/up（done）]             │
+└──────────────────────────────────────────────────────────────────────┘
+AnimatedVisibility（expanded）
+  左侧装饰线（dot + verticalLine，primary 色）
+  Text（block.text，bodySmall，onSurfaceVariant）
+```
+
+### 6.2 状态表现
+
+| 状态 | 圆点 | 文字 | Icon |
+|------|------|------|------|
+| thinking（`!done`） | 可见，呼吸动画 | `Thinking` | `chevron_right` |
+| done（`done=true`） | 不可见 | `Thought for Xs` / `Thought for Xm Ys` | `keyboard_arrow_down/up` |
+
+两态均可点击展开/折叠。圆点使用 `AnimationTokens` 中 `THINKING_PULSE` 的 alpha 呼吸动画。
+
+### 6.3 耗时格式
+
+```kotlin
+fun formatThinkingDuration(ms: Long): String {
+    val s = ms / 1000
+    return if (s < 60) "${s}s" else "${s / 60}m ${s % 60}s"
+}
+```
+
+`durationMs == null`（旧数据 / 后端未传）时，done 状态降级显示 `Thought`（不带耗时）。
+
+### 6.4 数据链路
+
+后端 `thinking_block.stop` SSE 事件携带 `duration_ms` → `SseFrameDto` 解析 → `StreamEvent.ThinkingBlockStop.durationMs` → `ChatViewModel` 写入 `ContentBlock.ThinkingBlock.durationMs` → `ThinkingCard` 读取并格式化显示。
+
+---
+
+## 7. 动画状态语言
 
 Sebastian 的工作状态通过 Header 区域（或消息区域入口）的视觉动画传达，目标是让用户直觉感知 Agent 状态，类似「贾维斯在呼吸」的自然感。
 

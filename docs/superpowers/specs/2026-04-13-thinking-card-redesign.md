@@ -1,3 +1,8 @@
+---
+integrated_to: core/runtime.md + mobile/streaming.md
+integrated_at: 2026-04-16
+---
+
 # ThinkingCard 极简风格重设计
 
 **日期：** 2026-04-13
