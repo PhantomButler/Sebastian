@@ -14,25 +14,24 @@ if TYPE_CHECKING:
 
 def _coerce_thinking(
     effort: str | None,
-    adaptive: bool,
     capability: str | None,
-) -> tuple[str | None, bool]:
-    """按 provider capability 钳制 effort/adaptive 到合法组合。"""
+) -> str | None:
+    """按 provider capability 钳制 effort 到合法值。"""
     if capability in ("none", "always_on"):
-        return (None, False)
+        return None
     if capability == "toggle":
         if effort in (None, "off"):
-            return ("off", False)
+            return "off"
         # 任何非空非 off 的值（包括 on/low/medium/high/max）→ on
-        return ("on", False)
+        return "on"
     if capability == "effort":
         if effort in ("max", "on"):
-            return ("high", False)
-        return (effort, False)
+            return "high"
+        return effort
     if capability == "adaptive":
-        return (effort, adaptive)
+        return effort
     # capability 未知/None → pass-through
-    return (effort, adaptive)
+    return effort
 
 
 @dataclass
@@ -40,7 +39,6 @@ class ResolvedProvider:
     provider: LLMProvider
     model: str
     thinking_effort: str | None
-    thinking_adaptive: bool
     capability: str | None
 
 
@@ -103,14 +101,12 @@ class LLMProviderRegistry:
             raise RuntimeError("No default LLM provider configured. Add one via the Settings page.")
 
         effort_raw = binding.thinking_effort if binding else None
-        adaptive_raw = binding.thinking_adaptive if binding else False
-        effort, adaptive = _coerce_thinking(effort_raw, adaptive_raw, record.thinking_capability)
+        effort = _coerce_thinking(effort_raw, record.thinking_capability)
 
         return ResolvedProvider(
             provider=self._instantiate(record),
             model=record.model,
             thinking_effort=effort,
-            thinking_adaptive=adaptive,
             capability=record.thinking_capability,
         )
 
@@ -166,7 +162,6 @@ class LLMProviderRegistry:
         agent_type: str,
         provider_id: str | None,
         thinking_effort: str | None = None,
-        thinking_adaptive: bool = False,
     ) -> AgentLLMBindingRecord:
         async with self._db_factory() as session:
             result = await session.execute(
@@ -178,13 +173,11 @@ class LLMProviderRegistry:
                     agent_type=agent_type,
                     provider_id=provider_id,
                     thinking_effort=thinking_effort,
-                    thinking_adaptive=thinking_adaptive,
                 )
                 session.add(record)
             else:
                 existing.provider_id = provider_id
                 existing.thinking_effort = thinking_effort
-                existing.thinking_adaptive = thinking_adaptive
                 record = existing
             await session.commit()
             await session.refresh(record)

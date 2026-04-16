@@ -15,30 +15,30 @@ from sebastian.llm.registry import (
 # ---------------------------------------------------------------------------
 
 
-def test_coerce_capability_none_clears_all():
-    assert _coerce_thinking("high", True, "none") == (None, False)
+def test_coerce_capability_none_clears_effort():
+    assert _coerce_thinking("high", "none") is None
 
 
-def test_coerce_capability_always_on_clears_all():
-    assert _coerce_thinking("high", True, "always_on") == (None, False)
+def test_coerce_capability_always_on_clears_effort():
+    assert _coerce_thinking("high", "always_on") is None
 
 
-def test_coerce_effort_drops_max_and_adaptive():
-    assert _coerce_thinking("max", True, "effort") == ("high", False)
+def test_coerce_effort_drops_max():
+    assert _coerce_thinking("max", "effort") == "high"
 
 
-def test_coerce_toggle_drops_effort_values():
-    assert _coerce_thinking("high", False, "toggle") == ("on", False)
-    assert _coerce_thinking("off", False, "toggle") == ("off", False)
+def test_coerce_toggle_normalizes_values():
+    assert _coerce_thinking("high", "toggle") == "on"
+    assert _coerce_thinking("off", "toggle") == "off"
 
 
-def test_coerce_adaptive_keeps_all():
-    assert _coerce_thinking("max", True, "adaptive") == ("max", True)
+def test_coerce_adaptive_passes_through():
+    assert _coerce_thinking("max", "adaptive") == "max"
 
 
 def test_coerce_none_capability_returns_unmodified():
     # capability is None → pass through
-    assert _coerce_thinking("high", False, None) == ("high", False)
+    assert _coerce_thinking("high", None) == "high"
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ async def registry(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_set_binding_stores_thinking(registry) -> None:
-    """set_binding 带 effort/adaptive，get_provider 应返回对应钳制结果。"""
+    """set_binding 带 effort，get_provider 应返回对应钳制结果。"""
     from sebastian.llm.crypto import encrypt
     from sebastian.store.models import LLMProviderRecord
 
@@ -83,13 +83,12 @@ async def test_set_binding_stores_thinking(registry) -> None:
     records = await registry.list_all()
     pid = records[0].id
 
-    await registry.set_binding("forge", pid, thinking_effort="high", thinking_adaptive=True)
+    await registry.set_binding("forge", pid, thinking_effort="high")
     resolved = await registry.get_provider("forge")
 
     assert isinstance(resolved, ResolvedProvider)
     assert resolved.model == "claude-opus-4-6"
     assert resolved.thinking_effort == "high"
-    assert resolved.thinking_adaptive is True
     assert resolved.capability == "adaptive"
 
 
@@ -112,13 +111,12 @@ async def test_get_provider_falls_back_to_default_when_no_binding(registry) -> N
     assert isinstance(resolved, ResolvedProvider)
     assert resolved.model == "claude-haiku-4-5"
     assert resolved.thinking_effort is None
-    assert resolved.thinking_adaptive is False
 
 
 @pytest.mark.asyncio
 async def test_get_provider_coerces_max_down_in_effort_capability(registry) -> None:
-    """存入 capability=effort 的 provider，binding 设 effort=max adaptive=True，
-    get_provider 应钳制返回 (high, False)。"""
+    """存入 capability=effort 的 provider，binding 设 effort=max，
+    get_provider 应钳制返回 "high"。"""
     from sebastian.llm.crypto import encrypt
     from sebastian.store.models import LLMProviderRecord
 
@@ -134,9 +132,8 @@ async def test_get_provider_coerces_max_down_in_effort_capability(registry) -> N
     records = await registry.list_all()
     pid = records[0].id
 
-    await registry.set_binding("forge", pid, thinking_effort="max", thinking_adaptive=True)
+    await registry.set_binding("forge", pid, thinking_effort="max")
     resolved = await registry.get_provider("forge")
 
     assert resolved.thinking_effort == "high"
-    assert resolved.thinking_adaptive is False
     assert resolved.capability == "effort"

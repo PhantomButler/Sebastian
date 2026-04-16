@@ -1,12 +1,11 @@
 """base_agent 从 ResolvedProvider 派生 thinking_effort 的注入测试。
 
 验证 base_agent 内部从 llm_registry.get_provider() 返回的 ResolvedProvider
-直接读取 thinking_effort / thinking_adaptive，而不是依赖方法入参透传。
+直接读取 thinking_effort，而不是依赖方法入参透传。
 
-三个场景：
-- effort 模式（adaptive=False, effort="high"）→ chat_stream 收到 thinking_effort="high"
-- adaptive 模式（adaptive=True, effort="high"）→ chat_stream 收到 thinking_effort="adaptive"
-- off 模式（adaptive=False, effort=None）→ chat_stream 收到 thinking_effort=None
+两个场景：
+- effort 模式（effort="high"）→ chat_stream 收到 thinking_effort="high"
+- off 模式（effort=None）→ chat_stream 收到 thinking_effort=None
 """
 
 from __future__ import annotations
@@ -55,7 +54,7 @@ async def _make_agent(tmp_path, resolved_provider: ResolvedProvider) -> tuple[_T
 
 def _make_resolved(
     thinking_effort: str | None,
-    thinking_adaptive: bool,
+    capability: str = "effort",
 ) -> ResolvedProvider:
     provider = MagicMock()
     provider.message_format = "anthropic"
@@ -63,17 +62,16 @@ def _make_resolved(
         provider=provider,
         model="claude-opus-4-6",
         thinking_effort=thinking_effort,
-        thinking_adaptive=thinking_adaptive,
-        capability="adaptive" if thinking_adaptive else "effort",
+        capability=capability,
     )
 
 
 @pytest.mark.asyncio
 async def test_base_agent_derives_effort_from_resolved_provider(tmp_path) -> None:
-    """effort 模式：ResolvedProvider.thinking_effort="high", adaptive=False
+    """effort 模式：ResolvedProvider.thinking_effort="high"
     → loop.stream 收到 thinking_effort="high"。
     """
-    resolved = _make_resolved(thinking_effort="high", thinking_adaptive=False)
+    resolved = _make_resolved(thinking_effort="high")
     agent, captured = await _make_agent(tmp_path, resolved)
 
     result = await agent.run_streaming("hello", "inject-session")
@@ -83,25 +81,11 @@ async def test_base_agent_derives_effort_from_resolved_provider(tmp_path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_base_agent_derives_adaptive_sentinel_from_resolved_provider(tmp_path) -> None:
-    """adaptive 模式：ResolvedProvider.thinking_adaptive=True, effort="high"
-    → loop.stream 收到 thinking_effort="adaptive"（sentinel 字符串）。
-    """
-    resolved = _make_resolved(thinking_effort="high", thinking_adaptive=True)
-    agent, captured = await _make_agent(tmp_path, resolved)
-
-    result = await agent.run_streaming("hello", "inject-session")
-
-    assert result == "ok"
-    assert captured.get("thinking_effort") == "adaptive"
-
-
-@pytest.mark.asyncio
 async def test_base_agent_derives_none_when_thinking_off(tmp_path) -> None:
-    """off 模式：ResolvedProvider.thinking_effort=None, adaptive=False
+    """off 模式：ResolvedProvider.thinking_effort=None
     → loop.stream 收到 thinking_effort=None。
     """
-    resolved = _make_resolved(thinking_effort=None, thinking_adaptive=False)
+    resolved = _make_resolved(thinking_effort=None)
     agent, captured = await _make_agent(tmp_path, resolved)
 
     result = await agent.run_streaming("hello", "inject-session")

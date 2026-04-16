@@ -132,10 +132,8 @@ async def test_put_binding_sets_provider_id() -> None:
     data = resp.json()
     assert data["agent_type"] == "forge"
     assert data["provider_id"] == "prov-1"
-    # provider changed (none → prov-1), so effort/adaptive forced to None/False
-    state.llm_registry.set_binding.assert_awaited_once_with(
-        "forge", "prov-1", thinking_effort=None, thinking_adaptive=False
-    )
+    # provider changed (none → prov-1), so effort forced to None
+    state.llm_registry.set_binding.assert_awaited_once_with("forge", "prov-1", thinking_effort=None)
 
 
 @pytest.mark.asyncio

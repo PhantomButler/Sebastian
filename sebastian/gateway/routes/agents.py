@@ -18,7 +18,6 @@ JSONDict = dict[str, Any]
 class BindingUpdate(BaseModel):
     provider_id: str | None = None
     thinking_effort: str | None = None
-    thinking_adaptive: bool = False
 
 
 def _binding_to_dict(binding: Any) -> JSONDict:
@@ -26,7 +25,6 @@ def _binding_to_dict(binding: Any) -> JSONDict:
         "agent_type": binding.agent_type,
         "provider_id": binding.provider_id,
         "thinking_effort": binding.thinking_effort,
-        "thinking_adaptive": binding.thinking_adaptive,
     }
 
 
@@ -90,7 +88,6 @@ async def get_agent_binding(
             "agent_type": agent_type,
             "provider_id": None,
             "thinking_effort": None,
-            "thinking_adaptive": False,
         }
     return _binding_to_dict(binding)
 
@@ -119,21 +116,17 @@ async def set_agent_binding(
 
     if provider_changed:
         effort: str | None = None
-        adaptive: bool = False
     else:
         effort = body.thinking_effort
-        adaptive = body.thinking_adaptive
 
     # NONE / ALWAYS_ON capability 强制清空
     if record is not None and record.thinking_capability in ("none", "always_on"):
         effort = None
-        adaptive = False
 
     binding = await state.llm_registry.set_binding(
         agent_type,
         body.provider_id,
         thinking_effort=effort,
-        thinking_adaptive=adaptive,
     )
     return _binding_to_dict(binding)
 

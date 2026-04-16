@@ -118,16 +118,16 @@ def test_get_binding_for_sebastian_returns_record(client) -> None:
     assert data["provider_id"] is None
 
 
-def test_put_binding_with_thinking_fields(client) -> None:
-    """PUT 接受 thinking_effort / thinking_adaptive，adaptive capability 下直接存储。"""
+def test_put_binding_with_thinking_effort(client) -> None:
+    """PUT 接受 thinking_effort，adaptive capability 下直接存储。"""
     http_client, token = client
 
     pid = _create_provider(http_client, token, name="Adaptive", thinking_capability="adaptive")
 
-    # 首次 PUT：provider 从无到有，强制 reset — effort/adaptive 应被清空
+    # 首次 PUT：provider 从无到有，强制 reset — effort 应被清空
     resp = http_client.put(
         "/api/v1/agents/sebastian/llm-binding",
-        json={"provider_id": pid, "thinking_effort": "high", "thinking_adaptive": True},
+        json={"provider_id": pid, "thinking_effort": "high"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
@@ -135,22 +135,20 @@ def test_put_binding_with_thinking_fields(client) -> None:
     assert data["provider_id"] == pid
     # provider 切换（从无到有）→ 强制清空
     assert data["thinking_effort"] is None
-    assert data["thinking_adaptive"] is False
 
-    # 第二次 PUT：同一 provider，不切换 → effort/adaptive 直接保存
+    # 第二次 PUT：同一 provider，不切换 → effort 直接保存
     resp2 = http_client.put(
         "/api/v1/agents/sebastian/llm-binding",
-        json={"provider_id": pid, "thinking_effort": "high", "thinking_adaptive": True},
+        json={"provider_id": pid, "thinking_effort": "high"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp2.status_code == 200
     data2 = resp2.json()
     assert data2["thinking_effort"] == "high"
-    assert data2["thinking_adaptive"] is True
 
 
 def test_put_binding_switching_provider_forces_reset(client) -> None:
-    """切换 provider 时强制清空 effort/adaptive，忽略请求体里的值。"""
+    """切换 provider 时强制清空 effort，忽略请求体里的值。"""
     http_client, token = client
 
     pid_a = _create_provider(http_client, token, name="ProviderA", thinking_capability="adaptive")
@@ -164,25 +162,24 @@ def test_put_binding_switching_provider_forces_reset(client) -> None:
     )
     http_client.put(
         "/api/v1/agents/sebastian/llm-binding",
-        json={"provider_id": pid_a, "thinking_effort": "high", "thinking_adaptive": True},
+        json={"provider_id": pid_a, "thinking_effort": "high"},
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    # 切换到 B，即使请求体带了 effort/adaptive，应被强制清空
+    # 切换到 B，即使请求体带了 effort，应被强制清空
     resp = http_client.put(
         "/api/v1/agents/sebastian/llm-binding",
-        json={"provider_id": pid_b, "thinking_effort": "high", "thinking_adaptive": True},
+        json={"provider_id": pid_b, "thinking_effort": "high"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["provider_id"] == pid_b
     assert data["thinking_effort"] is None
-    assert data["thinking_adaptive"] is False
 
 
 def test_put_binding_to_none_capability_provider_clears_thinking(client) -> None:
-    """binding 到 thinking_capability='none' 的 provider，强制清空 effort/adaptive。"""
+    """binding 到 thinking_capability='none' 的 provider，强制清空 effort。"""
     http_client, token = client
 
     pid = _create_provider(http_client, token, name="NoThinking", thinking_capability="none")
@@ -194,16 +191,15 @@ def test_put_binding_to_none_capability_provider_clears_thinking(client) -> None
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    # 同一 provider 再次 PUT 带上 effort/adaptive — capability=none 应强制清空
+    # 同一 provider 再次 PUT 带上 effort — capability=none 应强制清空
     resp = http_client.put(
         "/api/v1/agents/sebastian/llm-binding",
-        json={"provider_id": pid, "thinking_effort": "high", "thinking_adaptive": True},
+        json={"provider_id": pid, "thinking_effort": "high"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["thinking_effort"] is None
-    assert data["thinking_adaptive"] is False
 
 
 def test_send_turn_with_extra_thinking_effort_field_is_accepted(client) -> None:

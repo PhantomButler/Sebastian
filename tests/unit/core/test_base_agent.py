@@ -182,7 +182,6 @@ async def test_base_agent_run_streaming_derives_thinking_effort_from_registry(
         provider=mock_provider,
         model="claude-opus-4-6",
         thinking_effort="medium",
-        thinking_adaptive=False,
         capability="effort",
     )
     registry = AsyncMock()

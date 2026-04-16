@@ -73,7 +73,6 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
     patches: list[tuple[str, str, str]] = [
         ("llm_providers", "thinking_capability", "VARCHAR(20)"),
         ("agent_llm_bindings", "thinking_effort", "VARCHAR(16)"),
-        ("agent_llm_bindings", "thinking_adaptive", "BOOLEAN NOT NULL DEFAULT 0"),
     ]
     for table, column, ddl in patches:
         result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
@@ -81,3 +80,15 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
         if column not in existing:
             await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
             logger.info("Applied migration: %s.%s", table, column)
+
+    await _drop_obsolete_columns(conn)
+
+
+async def _drop_obsolete_columns(conn: Any) -> None:
+    """删除已废弃的列。idempotent：列不存在时静默跳过。"""
+    result = await conn.exec_driver_sql(
+        "SELECT name FROM pragma_table_info('agent_llm_bindings') WHERE name = 'thinking_adaptive'"
+    )
+    if result.first():
+        await conn.exec_driver_sql("ALTER TABLE agent_llm_bindings DROP COLUMN thinking_adaptive")
+        logger.info("Dropped obsolete column: agent_llm_bindings.thinking_adaptive")

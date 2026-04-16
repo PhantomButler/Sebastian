@@ -280,16 +280,14 @@ class BaseAgent(ABC):
             provider, model = resolved.provider, resolved.model
             self._loop._provider = provider
             self._loop._model = model
-            thinking_effort_for_llm = (
-                "adaptive" if resolved.thinking_adaptive else resolved.thinking_effort
-            )
+            thinking_effort_for_llm = resolved.thinking_effort
             logger.info(
                 "LLM resolved: agent=%s session=%s provider=%s model=%s thinking_effort=%s",
                 self.name,
                 session_id,
                 type(provider).__name__,
                 model,
-                thinking_effort_for_llm,
+                resolved.thinking_effort,
             )
 
         agent_context = agent_name or self.name

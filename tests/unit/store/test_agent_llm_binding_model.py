@@ -92,4 +92,3 @@ async def test_new_binding_defaults_to_no_thinking(db_session) -> None:
     await db_session.refresh(rec)
 
     assert rec.thinking_effort is None
-    assert rec.thinking_adaptive is False
