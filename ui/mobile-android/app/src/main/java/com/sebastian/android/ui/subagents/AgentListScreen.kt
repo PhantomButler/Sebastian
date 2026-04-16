@@ -29,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.sebastian.android.data.model.displayName
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.viewmodel.SubAgentViewModel
 

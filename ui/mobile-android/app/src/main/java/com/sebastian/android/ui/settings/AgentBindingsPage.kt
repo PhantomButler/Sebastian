@@ -35,7 +35,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.sebastian.android.data.model.AgentInfo
 import com.sebastian.android.data.model.Provider
-import com.sebastian.android.data.model.displayName
 import com.sebastian.android.ui.common.ToastCenter
 import com.sebastian.android.viewmodel.AgentBindingsEvent
 import com.sebastian.android.viewmodel.AgentBindingsViewModel

@@ -32,14 +32,13 @@ class ChatRepositoryImpl @Inject constructor(
             SendTurnRequest(
                 content = content,
                 sessionId = sessionId,
-                thinkingEffort = effort.toApiString(),
             )
         )
         response.sessionId
     }
 
     override suspend fun sendSessionTurn(sessionId: String, content: String, effort: ThinkingEffort): Result<Unit> = runCatching {
-        apiService.sendSessionTurn(sessionId, SendTurnRequest(content = content, thinkingEffort = effort.toApiString()))
+        apiService.sendSessionTurn(sessionId, SendTurnRequest(content = content))
         Unit
     }
 

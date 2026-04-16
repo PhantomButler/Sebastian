@@ -42,6 +42,7 @@ class AgentBindingsViewModelTest {
 
     private fun sampleAgent(boundId: String? = null) = AgentInfo(
         agentType = "forge",
+        displayName = "Forge",
         description = "Code",
         boundProviderId = boundId,
     )
