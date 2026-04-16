@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
@@ -122,7 +123,7 @@ private fun InfiniteTransition.normalizedTime(periodMs: Int, label: String): Sta
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(periodMs, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
+            repeatMode = RepeatMode.Restart, // must be Restart: 0 → 1 normalized time wraps each cycle
         ),
         label = label,
     )
@@ -222,18 +223,25 @@ fun HudAnimation(
     val t = rememberInfiniteTransition(label = "hud")
     val outerRot by t.animateFloat(
         initialValue = 0f, targetValue = -360f,
-        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(
+            tween(1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart, // must be Restart: 0 → -360 wraps seamlessly
+        ),
         label = "outerRot",
     )
     val innerRot by t.animateFloat(
         initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(
+            tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart, // must be Restart: 0 → 360 wraps seamlessly
+        ),
         label = "innerRot",
     )
     val pingPhase by t.animateFloat(
         initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(
             tween(1400, easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)),
+            repeatMode = RepeatMode.Restart, // must be Restart: ping snaps back to radius 1dp each cycle
         ),
         label = "ping",
     )
@@ -245,6 +253,10 @@ fun HudAnimation(
         ),
         label = "core",
     )
+
+    // Hoist PathEffect allocations out of the draw callback to avoid per-frame GC pressure
+    val outerEffect = remember { PathEffect.dashPathEffect(floatArrayOf(22f, 28f)) }
+    val innerEffect = remember { PathEffect.dashPathEffect(floatArrayOf(8f, 18f)) }
 
     Canvas(
         modifier
@@ -266,14 +278,14 @@ fun HudAnimation(
         // 外圈断弧：r=8dp，stroke 1.5dp，dash 22:28
         drawDashedArcHalo(
             center, radius = 8.dp.toPx(), strokeWidth = 1.5.dp.toPx(),
-            dashOn = 22f, dashOff = 28f, rotationDeg = outerRot,
+            pathEffect = outerEffect, rotationDeg = outerRot,
             accent = accent, glowAlphaScale = glowAlphaScale,
         )
 
         // 内圈断弧：r=4.5dp，stroke 1.2dp，dash 8:18
         drawDashedArcHalo(
             center, radius = 4.5.dp.toPx(), strokeWidth = 1.2.dp.toPx(),
-            dashOn = 8f, dashOff = 18f, rotationDeg = innerRot,
+            pathEffect = innerEffect, rotationDeg = innerRot,
             accent = accent, glowAlphaScale = glowAlphaScale,
         )
 
@@ -292,8 +304,7 @@ private fun DrawScope.drawDashedArcHalo(
     center: Offset,
     radius: Float,
     strokeWidth: Float,
-    dashOn: Float,
-    dashOff: Float,
+    pathEffect: PathEffect,
     rotationDeg: Float,
     accent: Color,
     glowAlphaScale: Float,
@@ -306,7 +317,7 @@ private fun DrawScope.drawDashedArcHalo(
             center = center,
             style = Stroke(
                 width = strokeWidth * 2f,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashOn, dashOff)),
+                pathEffect = pathEffect,
                 cap = StrokeCap.Round,
             ),
         )
@@ -317,7 +328,7 @@ private fun DrawScope.drawDashedArcHalo(
             center = center,
             style = Stroke(
                 width = strokeWidth,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashOn, dashOff)),
+                pathEffect = pathEffect,
                 cap = StrokeCap.Round,
             ),
         )
