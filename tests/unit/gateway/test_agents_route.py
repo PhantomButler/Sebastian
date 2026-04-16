@@ -17,8 +17,8 @@ def _build_app_with_mocks(agents: dict, bindings: list) -> FastAPI:
     state.llm_registry.list_bindings = AsyncMock(return_value=bindings)
 
     app = FastAPI()
-    from sebastian.gateway.routes import agents as agents_mod
     from sebastian.gateway.auth import require_auth
+    from sebastian.gateway.routes import agents as agents_mod
 
     async def _fake_auth() -> dict[str, str]:
         return {"user_id": "test"}
@@ -130,8 +130,12 @@ async def test_put_binding_with_null_clears_binding() -> None:
 
     agents = {
         "forge": AgentConfig(
-            agent_type="forge", name="ForgeAgent", description="",
-            max_children=5, stalled_threshold_minutes=5, agent_class=MagicMock(),
+            agent_type="forge",
+            name="ForgeAgent",
+            description="",
+            max_children=5,
+            stalled_threshold_minutes=5,
+            agent_class=MagicMock(),
         )
     }
     app = _build_app_with_mocks(agents, [])
@@ -168,8 +172,12 @@ async def test_put_binding_400_for_unknown_provider() -> None:
 
     agents = {
         "forge": AgentConfig(
-            agent_type="forge", name="ForgeAgent", description="",
-            max_children=5, stalled_threshold_minutes=5, agent_class=MagicMock(),
+            agent_type="forge",
+            name="ForgeAgent",
+            description="",
+            max_children=5,
+            stalled_threshold_minutes=5,
+            agent_class=MagicMock(),
         )
     }
     app = _build_app_with_mocks(agents, [])
@@ -191,8 +199,12 @@ async def test_delete_binding_returns_204() -> None:
 
     agents = {
         "forge": AgentConfig(
-            agent_type="forge", name="ForgeAgent", description="",
-            max_children=5, stalled_threshold_minutes=5, agent_class=MagicMock(),
+            agent_type="forge",
+            name="ForgeAgent",
+            description="",
+            max_children=5,
+            stalled_threshold_minutes=5,
+            agent_class=MagicMock(),
         )
     }
     app = _build_app_with_mocks(agents, [])

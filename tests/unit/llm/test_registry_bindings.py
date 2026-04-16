@@ -52,8 +52,12 @@ async def test_set_and_get_binding(registry_with_db) -> None:
 async def test_set_binding_upsert_overwrites(registry_with_db) -> None:
     from sebastian.store.models import LLMProviderRecord
 
-    r1 = LLMProviderRecord(name="A", provider_type="anthropic", api_key_enc=encrypt("k1"), model="m1", is_default=False)
-    r2 = LLMProviderRecord(name="B", provider_type="openai", api_key_enc=encrypt("k2"), model="m2", is_default=False)
+    r1 = LLMProviderRecord(
+        name="A", provider_type="anthropic", api_key_enc=encrypt("k1"), model="m1", is_default=False
+    )
+    r2 = LLMProviderRecord(
+        name="B", provider_type="openai", api_key_enc=encrypt("k2"), model="m2", is_default=False
+    )
     await registry_with_db.create(r1)
     await registry_with_db.create(r2)
     records = await registry_with_db.list_all()

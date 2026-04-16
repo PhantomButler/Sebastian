@@ -106,20 +106,14 @@ class LLMProviderRegistry:
             result = await session.execute(select(AgentLLMBindingRecord))
             return list(result.scalars().all())
 
-    async def set_binding(
-        self, agent_type: str, provider_id: str | None
-    ) -> AgentLLMBindingRecord:
+    async def set_binding(self, agent_type: str, provider_id: str | None) -> AgentLLMBindingRecord:
         async with self._db_factory() as session:
             result = await session.execute(
-                select(AgentLLMBindingRecord).where(
-                    AgentLLMBindingRecord.agent_type == agent_type
-                )
+                select(AgentLLMBindingRecord).where(AgentLLMBindingRecord.agent_type == agent_type)
             )
             existing = result.scalar_one_or_none()
             if existing is None:
-                record = AgentLLMBindingRecord(
-                    agent_type=agent_type, provider_id=provider_id
-                )
+                record = AgentLLMBindingRecord(agent_type=agent_type, provider_id=provider_id)
                 session.add(record)
             else:
                 existing.provider_id = provider_id
@@ -131,9 +125,7 @@ class LLMProviderRegistry:
     async def clear_binding(self, agent_type: str) -> None:
         async with self._db_factory() as session:
             result = await session.execute(
-                select(AgentLLMBindingRecord).where(
-                    AgentLLMBindingRecord.agent_type == agent_type
-                )
+                select(AgentLLMBindingRecord).where(AgentLLMBindingRecord.agent_type == agent_type)
             )
             existing = result.scalar_one_or_none()
             if existing is not None:
@@ -143,9 +135,7 @@ class LLMProviderRegistry:
     async def _get_binding(self, agent_type: str) -> AgentLLMBindingRecord | None:
         async with self._db_factory() as session:
             result = await session.execute(
-                select(AgentLLMBindingRecord).where(
-                    AgentLLMBindingRecord.agent_type == agent_type
-                )
+                select(AgentLLMBindingRecord).where(AgentLLMBindingRecord.agent_type == agent_type)
             )
             return result.scalar_one_or_none()
 
