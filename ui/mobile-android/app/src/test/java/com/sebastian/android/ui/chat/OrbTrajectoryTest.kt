@@ -50,6 +50,16 @@ class OrbTrajectoryTest {
     }
 
     @Test
+    fun `at t=0_125 easing deviates from linear lerp`() {
+        // raw = (0.125 - 0) / (0.5 - 0) = 0.25
+        // easeInOutQuad(0.25) = 2 * 0.25 * 0.25 = 0.125   ← not 0.25 (linear would give 0.25)
+        val v = interpolateTrajectory(0.125f, trajectory)
+        assertEquals(1.0f, v.offset.x.value, 0.001f)   // lerp(0, 8, 0.125) = 1.0
+        assertEquals(-0.5f, v.offset.y.value, 0.001f)  // lerp(0, -4, 0.125) = -0.5
+        assertEquals(0.65f, v.alpha, 0.001f)            // lerp(0.6, 1.0, 0.125) = 0.65
+    }
+
+    @Test
     fun `time out of range clamps to boundaries`() {
         assertEquals(0.6f, interpolateTrajectory(-0.5f, trajectory).alpha, 0.001f)
         assertEquals(0.6f, interpolateTrajectory(1.5f, trajectory).alpha, 0.001f)
