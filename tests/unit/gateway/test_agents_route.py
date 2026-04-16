@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 
-def _build_app_with_mocks(agents: dict, bindings: list) -> FastAPI:
+def _build_app_with_mocks(agents: dict, bindings: list, all_records: list | None = None) -> FastAPI:
     import sebastian.gateway.state as state
 
     state.agent_registry = agents
@@ -15,6 +15,7 @@ def _build_app_with_mocks(agents: dict, bindings: list) -> FastAPI:
     state.index_store.list_by_agent_type = AsyncMock(return_value=[])
     state.llm_registry = MagicMock()
     state.llm_registry.list_bindings = AsyncMock(return_value=bindings)
+    state.llm_registry.list_all = AsyncMock(return_value=all_records or [])
 
     app = FastAPI()
     from sebastian.gateway.auth import require_auth
@@ -52,8 +53,10 @@ async def test_list_agents_includes_bound_provider_id_when_bound() -> None:
         resp = await client.get("/api/v1/agents")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["agents"][0]["agent_type"] == "forge"
-    assert data["agents"][0]["bound_provider_id"] == "prov-123"
+    # sebastian is always first
+    assert data["agents"][0]["agent_type"] == "sebastian"
+    forge = next(a for a in data["agents"] if a["agent_type"] == "forge")
+    assert forge["binding"]["provider_id"] == "prov-123"
 
 
 @pytest.mark.asyncio
@@ -75,7 +78,8 @@ async def test_list_agents_returns_null_bound_provider_when_unbound() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/api/v1/agents")
     data = resp.json()
-    assert data["agents"][0]["bound_provider_id"] is None
+    aide = next(a for a in data["agents"] if a["agent_type"] == "aide")
+    assert aide["binding"] is None
 
 
 @pytest.mark.asyncio
@@ -93,20 +97,17 @@ async def test_put_binding_sets_provider_id() -> None:
             agent_class=MagicMock(),
         )
     }
-    app = _build_app_with_mocks(agents, [])
+    provider_record = LLMProviderRecord(
+        id="prov-1",
+        name="x",
+        provider_type="anthropic",
+        api_key_enc="k",
+        model="m",
+        is_default=False,
+    )
+    app = _build_app_with_mocks(agents, [], all_records=[provider_record])
     import sebastian.gateway.state as state
 
-    # Allow provider validation
-    state.llm_registry._get_record = AsyncMock(
-        return_value=LLMProviderRecord(
-            id="prov-1",
-            name="x",
-            provider_type="anthropic",
-            api_key_enc="k",
-            model="m",
-            is_default=False,
-        )
-    )
     state.llm_registry.set_binding = AsyncMock(
         return_value=AgentLLMBindingRecord(agent_type="forge", provider_id="prov-1")
     )
@@ -119,8 +120,12 @@ async def test_put_binding_sets_provider_id() -> None:
         )
     assert resp.status_code == 200
     data = resp.json()
-    assert data == {"agent_type": "forge", "provider_id": "prov-1"}
-    state.llm_registry.set_binding.assert_awaited_once_with("forge", "prov-1")
+    assert data["agent_type"] == "forge"
+    assert data["provider_id"] == "prov-1"
+    # provider changed (none → prov-1), so effort/adaptive forced to None/False
+    state.llm_registry.set_binding.assert_awaited_once_with(
+        "forge", "prov-1", thinking_effort=None, thinking_adaptive=False
+    )
 
 
 @pytest.mark.asyncio
@@ -180,10 +185,8 @@ async def test_put_binding_400_for_unknown_provider() -> None:
             agent_class=MagicMock(),
         )
     }
-    app = _build_app_with_mocks(agents, [])
-    import sebastian.gateway.state as state
-
-    state.llm_registry._get_record = AsyncMock(return_value=None)
+    # list_all returns empty → provider id "bogus" not found → 400
+    app = _build_app_with_mocks(agents, [], all_records=[])
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.put(
