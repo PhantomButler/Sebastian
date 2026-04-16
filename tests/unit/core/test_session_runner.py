@@ -25,7 +25,7 @@ async def test_run_agent_session_success():
         event_bus=event_bus,
     )
 
-    agent.run_streaming.assert_awaited_once_with("write tests", "s1", thinking_effort=None)
+    agent.run_streaming.assert_awaited_once_with("write tests", "s1")
     session_store.update_session.assert_awaited_once()
     updated = session_store.update_session.call_args[0][0]
     assert updated.status == SessionStatus.COMPLETED

@@ -31,7 +31,6 @@ async def run_agent_session(
     session_store: SessionStore,
     index_store: IndexStore,
     event_bus: EventBus | None = None,
-    thinking_effort: str | None = None,
 ) -> None:
     """Run an agent on a session asynchronously. Sets status on completion/failure.
 
@@ -41,7 +40,7 @@ async def run_agent_session(
     """
     stopped_by_tool = False
     try:
-        await agent.run_streaming(goal, session.id, thinking_effort=thinking_effort)
+        await agent.run_streaming(goal, session.id)
         # ask_parent 工具会把 session.status 设为 WAITING；此时不覆盖为 COMPLETED
         if session.status != SessionStatus.WAITING:
             session.status = SessionStatus.COMPLETED

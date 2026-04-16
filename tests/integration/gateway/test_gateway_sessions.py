@@ -171,7 +171,7 @@ def test_send_turn_to_sebastian_session_runs_background_stream(client):
     assert "response" not in payload
     assert len(scheduled_coroutines) == 1
     mock_run_streaming.assert_called_once_with(
-        "Continue the conversation", session.id, thinking_effort=None
+        "Continue the conversation", session.id
     )
     assert mock_run_streaming.await_count == 0
 
@@ -412,10 +412,9 @@ def test_sub_agent_turns_accepts_thinking_effort(client) -> None:
 
         assert resp.status_code == 200, resp.text
         assert len(scheduled_coroutines) == 1
-        # Check that run_streaming was called with thinking_effort
-        mock_agent.run_streaming.assert_called_once_with(
-            "follow up", session.id, thinking_effort="medium"
-        )
+        # A4: thinking_effort is no longer passed to run_streaming from the HTTP layer;
+        # the agent reads it internally from llm_registry.get_provider().
+        mock_agent.run_streaming.assert_called_once_with("follow up", session.id)
     finally:
         # Restore original
         state.agent_instances.clear()

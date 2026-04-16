@@ -131,9 +131,7 @@ def test_send_turn_returns_immediate_session_metadata(client):
     assert "response" not in data
     assert len(scheduled_coroutines) == 1
     mock_create_task.assert_called_once()
-    mock_run_streaming.assert_called_once_with(
-        "Hello Sebastian", fake_session.id, thinking_effort=None
-    )
+    mock_run_streaming.assert_called_once_with("Hello Sebastian", fake_session.id)
     assert mock_run_streaming.await_count == 0
 
 
@@ -178,7 +176,11 @@ def test_agents_endpoint_returns_list_format(client):
         assert "max_children" in agent
 
 
-def test_post_turns_accepts_thinking_effort_and_passes_to_agent(client):
+def test_post_turns_accepts_thinking_effort_field_in_dto(client):
+    """POST /turns 接受 thinking_effort 字段（向后兼容 HTTP DTO），但不再透传给 run_streaming。
+    A4: thinking_effort 由 agent 内部从 llm_registry.get_provider() 读取。
+    A5 将删除 HTTP DTO 字段。
+    """
     http_client, mock_run_streaming, fake_session = client
     token = _login(http_client)
     scheduled_coroutines = []
@@ -199,5 +201,6 @@ def test_post_turns_accepts_thinking_effort_and_passes_to_agent(client):
         )
 
     assert response.status_code == 200, response.text
-    mock_run_streaming.assert_called_once_with("hello", fake_session.id, thinking_effort="high")
+    # thinking_effort is NOT forwarded — agent reads from registry
+    mock_run_streaming.assert_called_once_with("hello", fake_session.id)
     assert len(scheduled_coroutines) == 1

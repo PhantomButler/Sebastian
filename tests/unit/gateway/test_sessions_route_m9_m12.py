@@ -80,8 +80,8 @@ async def test_schedule_session_turn_sub_agent_no_agent_name() -> None:
         else:
             gw_pkg.__dict__.pop("state", None)
 
-    # Verify run_streaming was called exactly once, without agent_name kwarg
-    mock_agent.run_streaming.assert_awaited_once_with("hello", "sess-test", thinking_effort=None)
+    # Verify run_streaming was called exactly once, without agent_name or thinking_effort kwarg
+    mock_agent.run_streaming.assert_awaited_once_with("hello", "sess-test")
 
 
 @pytest.mark.asyncio

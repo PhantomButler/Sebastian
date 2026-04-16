@@ -256,14 +256,12 @@ class BaseAgent(ABC):
         session_id: str,
         task_id: str | None = None,
         agent_name: str | None = None,
-        thinking_effort: str | None = None,
     ) -> str:
         return await self.run_streaming(
             user_message,
             session_id,
             task_id=task_id,
             agent_name=agent_name,
-            thinking_effort=thinking_effort,
         )
 
     async def run_streaming(
@@ -272,22 +270,26 @@ class BaseAgent(ABC):
         session_id: str,
         task_id: str | None = None,
         agent_name: str | None = None,
-        thinking_effort: str | None = None,
     ) -> str:
         self._completed_cancel_intents.pop(session_id, None)
         self._current_task_goals[session_id] = user_message
 
+        thinking_effort_for_llm: str | None = None
         if not self._provider_injected and self._llm_registry is not None:
             resolved = await self._llm_registry.get_provider(self.name)
             provider, model = resolved.provider, resolved.model
             self._loop._provider = provider
             self._loop._model = model
+            thinking_effort_for_llm = (
+                "adaptive" if resolved.thinking_adaptive else resolved.thinking_effort
+            )
             logger.info(
-                "LLM resolved: agent=%s session=%s provider=%s model=%s",
+                "LLM resolved: agent=%s session=%s provider=%s model=%s thinking_effort=%s",
                 self.name,
                 session_id,
                 type(provider).__name__,
                 model,
+                thinking_effort_for_llm,
             )
 
         agent_context = agent_name or self.name
@@ -338,7 +340,7 @@ class BaseAgent(ABC):
                 session_id=session_id,
                 task_id=task_id,
                 agent_context=agent_context,
-                thinking_effort=thinking_effort,
+                thinking_effort=thinking_effort_for_llm,
             )
         )
         self._active_streams[session_id] = current_stream
