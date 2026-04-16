@@ -201,6 +201,7 @@ App 有两条 SSE 连接：
 | 改 Todo 面板 | `ui/chat/TodoPanel.kt` |
 | 改全局审批横幅 | `ui/common/GlobalApprovalBanner.kt`、`viewmodel/GlobalApprovalViewModel.kt` |
 | 改错误 Banner | `ui/common/ErrorBanner.kt` |
+| 弹一次性 Toast 提示 | `ui/common/ToastCenter.kt` |
 | 新增路由 | `ui/navigation/Route.kt` + `MainActivity.kt` |
 | 改设置页 | `ui/settings/` |
 | 改 Sub-Agent 列表 | `ui/subagents/AgentListScreen.kt` |

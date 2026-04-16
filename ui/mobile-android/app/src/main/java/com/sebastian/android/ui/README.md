@@ -46,6 +46,7 @@ ui/
 | 改全局审批横幅 | `common/GlobalApprovalBanner.kt` |
 | 改错误横幅 | `common/ErrorBanner.kt` |
 | 改 Markdown 渲染视图 | `common/MarkdownView.kt` |
+| 弹一次性 Toast 提示 | `common/ToastCenter.kt` |
 | 改液态玻璃组件 | `common/glass/` → [glass/README.md](common/glass/README.md) |
 | 新增路由 | `navigation/Route.kt` + `MainActivity.kt` → [navigation/README.md](navigation/README.md) |
 | 改设置页 | `settings/` → [settings/README.md](settings/README.md) |

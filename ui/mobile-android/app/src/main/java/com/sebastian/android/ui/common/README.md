@@ -14,6 +14,7 @@ common/
 ├── MarkdownDefaults.kt     # Markdown 颜色/排版/组件配置（含代码块语法高亮）
 ├── MarkdownView.kt         # 纯 Compose Markdown 渲染组件
 ├── SebastianIcons.kt       # 自定义图标集（ImageVector 懒加载）
+├── ToastCenter.kt          # 公共 Toast 入口（节流 + 同时刻最多一条）
 └── glass/                  → [glass/README.md](glass/README.md)  # 液态玻璃组件库
 ```
 
@@ -43,6 +44,30 @@ common/
 
 从 React Native 版本（`ui/mobile/`）迁移的自定义图标集，每个图标为懒加载 `ImageVector`，与 Material Icons 用法一致。
 
+### `ToastCenter`
+
+统一的一次性 Toast 入口。内置两层防抖：
+
+1. **节流**：同 `key`（默认为 `message` 本身）在 `throttleMs`（默认 1500ms）内重复调用被丢弃
+2. **同时刻最多一条**：进程范围内只持有一个 Toast 引用，新调用先 cancel 再显示
+
+```kotlin
+import com.sebastian.android.ui.common.ToastCenter
+
+// 最简：同文案 1.5s 内只弹一次
+ToastCenter.show(context, "已在目标会话")
+
+// 同文案不同语义，用 key 区分
+ToastCenter.show(context, "已在目标会话", key = "already-in-session")
+
+// 自定义节流窗口
+ToastCenter.show(context, message = "...", throttleMs = 3000L)
+```
+
+非 Composable 处（ViewModel / 回调）也可直接调用，内部只持 `applicationContext`，不泄漏 Activity。
+
+**禁止直接 `Toast.makeText(...).show()`**——所有一次性提示走 ToastCenter，以保证节流和单例显示。
+
 ### `glass/`
 
 基于 `io.github.kyant0:backdrop` 封装的液态玻璃组件库（`GlassKit` / `GlassSurface` / `GlassButton`）。详见 [glass/README.md](glass/README.md)。
@@ -57,6 +82,7 @@ common/
 | 改 Markdown 渲染逻辑 | `MarkdownView.kt` |
 | 新增/修改自定义图标 | `SebastianIcons.kt` |
 | 改动画时长全局常量 | `AnimationTokens.kt` |
+| 弹一次性 Toast 提示（防重复 + 同时刻最多一条） | `ToastCenter.kt` |
 | 改液态玻璃组件 API | `glass/` → [glass/README.md](glass/README.md) |
 
 ---
