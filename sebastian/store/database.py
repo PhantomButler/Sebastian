@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from sqlalchemy import event
+from sqlalchemy.engine import Engine as SyncEngine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -22,12 +24,26 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
+def _install_sqlite_fk_pragma(engine: AsyncEngine) -> None:
+    """Enable SQLite ON DELETE cascade/set-null semantics on every connection."""
+    sync_engine: SyncEngine = engine.sync_engine
+
+    @event.listens_for(sync_engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection: Any, _connection_record: Any) -> None:
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
+
+
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         from sebastian.config import settings
 
         _engine = create_async_engine(settings.database_url, echo=False, future=True)
+        _install_sqlite_fk_pragma(_engine)
     return _engine
 
 
