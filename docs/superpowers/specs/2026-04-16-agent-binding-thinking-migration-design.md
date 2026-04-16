@@ -347,15 +347,15 @@ fun EffortSlider(
 
 实现用 `Slider(steps = size - 2)` + 下方等宽标签行。`enabled=false` 时透明度 0.38 + `Modifier.pointerInput { }` 吞点击。
 
-**特例**：`TOGGLE` 不用 slider，用 `Switch` + leading label `Thinking`（Off/On）。视觉上和档位条区分。
+**特例**：`TOGGLE` 不用 slider，用 `SebastianSwitch`（`ui/common/SebastianSwitch.kt`，苹果风绿色公共组件）+ leading label `Thinking`（Off/On）。视觉上和档位条区分。
 
 ### 5.5 `AdaptiveSwitch`
 
-Material3 `ListItem` + trailing `Switch`：
+Material3 `ListItem` + trailing `SebastianSwitch`（复用 `ui/common/SebastianSwitch.kt`，苹果风绿色）：
 
 - `headlineContent`: `Adaptive Thinking`
 - `supportingContent`: `Let the model decide thinking depth`
-- `trailingContent`: `Switch(checked, onCheckedChange)`
+- `trailingContent`: `SebastianSwitch(checked, onCheckedChange)`
 
 ### 5.6 `ALWAYS_ON` / `NONE` 能力
 
