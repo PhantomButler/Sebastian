@@ -7,7 +7,6 @@ import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.StreamEvent
-import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.repository.ChatRepository
 import com.sebastian.android.data.repository.SessionRepository
 import com.sebastian.android.data.repository.SettingsRepository
@@ -63,7 +62,7 @@ class ChatViewModelTest {
         whenever(chatRepository.sessionStream(any(), any(), any())).thenReturn(sseFlow)
         whenever(chatRepository.globalStream(any(), any())).thenReturn(flowOf())
         runBlocking {
-            whenever(chatRepository.sendTurn(any(), any(), any())).thenReturn(Result.success("s1"))
+            whenever(chatRepository.sendTurn(any(), any())).thenReturn(Result.success("s1"))
             whenever(chatRepository.grantApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.denyApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.cancelTurn(any())).thenReturn(Result.success(Unit))
@@ -256,9 +255,9 @@ class ChatViewModelTest {
             override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?) = sseFlow
             override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<StreamEvent>()
             override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
-            override suspend fun sendTurn(sessionId: String?, content: String, effort: com.sebastian.android.data.model.ThinkingEffort) =
+            override suspend fun sendTurn(sessionId: String?, content: String) =
                 Result.failure<String>(RuntimeException("网络错误"))
-            override suspend fun sendSessionTurn(sessionId: String, content: String, effort: com.sebastian.android.data.model.ThinkingEffort) =
+            override suspend fun sendSessionTurn(sessionId: String, content: String) =
                 Result.success(Unit)
             override suspend fun cancelTurn(sessionId: String) = Result.success(Unit)
             override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
@@ -472,7 +471,7 @@ class ChatViewModelTest {
         activateSession()  // getMessages #1
         // 构造 IDLE_READY：发送失败后 ViewModel 会把 composerState 拨到 IDLE_READY + 保留 error
         runBlocking {
-            whenever(chatRepository.sendTurn(any(), any(), any()))
+            whenever(chatRepository.sendTurn(any(), any()))
                 .thenReturn(Result.failure(RuntimeException("boom")))
         }
         viewModel.sendMessage("半截话")

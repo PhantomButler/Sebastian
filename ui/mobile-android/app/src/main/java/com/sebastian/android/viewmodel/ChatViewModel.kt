@@ -7,7 +7,6 @@ import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.StreamEvent
-import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.model.ToolStatus
 import com.sebastian.android.data.repository.ChatRepository
 import com.sebastian.android.data.repository.SessionRepository
@@ -38,7 +37,6 @@ data class ChatUiState(
     val composerState: ComposerState = ComposerState.IDLE_EMPTY,
     val scrollFollowState: ScrollFollowState = ScrollFollowState.FOLLOWING,
     val agentAnimState: AgentAnimState = AgentAnimState.IDLE,
-    val activeThinkingEffort: ThinkingEffort = ThinkingEffort.OFF,
     val activeSessionId: String? = null,       // null = 新对话
     val isOffline: Boolean = false,
     val error: String? = null,
@@ -295,7 +293,7 @@ class ChatViewModel @Inject constructor(
             )
         }
         viewModelScope.launch(dispatcher) {
-            chatRepository.sendTurn(currentSessionId, text, _uiState.value.activeThinkingEffort)
+            chatRepository.sendTurn(currentSessionId, text)
                 .onSuccess { returnedSessionId ->
                     // REST returned — clear SENDING immediately; SSE events drive the rest of the turn.
                     _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
@@ -350,7 +348,7 @@ class ChatViewModel @Inject constructor(
                     }
             } else {
                 // Existing session: send turn
-                chatRepository.sendSessionTurn(currentSessionId, text, _uiState.value.activeThinkingEffort)
+                chatRepository.sendSessionTurn(currentSessionId, text)
                     .onSuccess {
                         _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
                         if (sseJob?.isActive != true) {
@@ -371,7 +369,7 @@ class ChatViewModel @Inject constructor(
             state.copy(messages = state.messages + userMsg, composerState = ComposerState.SENDING, scrollFollowState = ScrollFollowState.FOLLOWING)
         }
         viewModelScope.launch(dispatcher) {
-            chatRepository.sendSessionTurn(sessionId, text, _uiState.value.activeThinkingEffort)
+            chatRepository.sendSessionTurn(sessionId, text)
                 .onSuccess { _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) } }
                 .onFailure { e -> _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) } }
         }
@@ -466,10 +464,6 @@ class ChatViewModel @Inject constructor(
     fun onAppStop() {
         sseJob?.cancel()
         sseJob = null
-    }
-
-    fun setEffort(effort: ThinkingEffort) {
-        _uiState.update { it.copy(activeThinkingEffort = effort) }
     }
 
     fun onUserScrolled() {

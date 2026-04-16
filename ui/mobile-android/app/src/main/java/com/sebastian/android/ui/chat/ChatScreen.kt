@@ -2,11 +2,6 @@
 package com.sebastian.android.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,18 +48,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.sebastian.android.data.model.Session
 import com.sebastian.android.ui.common.ErrorBanner
-import com.sebastian.android.data.model.ThinkingCapability
 import com.sebastian.android.ui.common.SebastianIcons
 import com.sebastian.android.ui.common.ToastCenter
 import com.sebastian.android.ui.common.glass.GlassSurface
 import com.sebastian.android.ui.common.glass.pressScale
 import com.sebastian.android.ui.common.glass.rememberGlassState
 import com.sebastian.android.ui.composer.Composer
-import com.sebastian.android.ui.composer.EffortPickerCard
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.viewmodel.ChatViewModel
 import com.sebastian.android.viewmodel.SessionViewModel
-import com.sebastian.android.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,11 +68,9 @@ fun ChatScreen(
     onActiveSessionChanged: ((String?) -> Unit)? = null,
     chatViewModel: ChatViewModel = hiltViewModel(),
     sessionViewModel: SessionViewModel = hiltViewModel(),
-    settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val chatState by chatViewModel.uiState.collectAsState()
     val sessionState by sessionViewModel.uiState.collectAsState()
-    val settingsState by settingsViewModel.uiState.collectAsState()
 
     // 从审批横幅跳转过来时，切换到指定 session
     LaunchedEffect(sessionId) {
@@ -151,7 +141,6 @@ fun ChatScreen(
         mainPane = {
             val glassState = rememberGlassState(MaterialTheme.colorScheme.background)
             val context = LocalContext.current
-            var showEffortPicker by remember { mutableStateOf(false) }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -318,58 +307,9 @@ fun ChatScreen(
                     }
                 }
 
-                // EffortPickerCard overlay：与 MessageList 同树，GlassSurface 可正确采样
-                val pickerCapability = settingsState.currentProvider?.thinkingCapability
-                val showPickerCard = showEffortPicker &&
-                    (pickerCapability == ThinkingCapability.EFFORT || pickerCapability == ThinkingCapability.ADAPTIVE)
-
-                // 透明 scrim：仅 fade，点击关闭
-                AnimatedVisibility(
-                    visible = showPickerCard,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { showEffortPicker = false },
-                    )
-                }
-
-                // 卡片：弹入 scale+fade，收起 scale+fade
-                AnimatedVisibility(
-                    visible = showPickerCard,
-                    enter = fadeIn() + scaleIn(
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-                        initialScale = 0.92f,
-                    ),
-                    exit = fadeOut() + scaleOut(targetScale = 0.95f),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(start = 24.dp, end = 24.dp, bottom = 140.dp),
-                ) {
-                    EffortPickerCard(
-                        current = chatState.activeThinkingEffort,
-                        capability = pickerCapability ?: ThinkingCapability.EFFORT,
-                        glassState = glassState,
-                        onSelect = { effort ->
-                            chatViewModel.setEffort(effort)
-                            showEffortPicker = false
-                        },
-                    )
-                }
-
                 Composer(
                     state = chatState.composerState,
                     glassState = glassState,
-                    activeProvider = settingsState.currentProvider,
-                    effort = chatState.activeThinkingEffort,
-                    onEffortChange = chatViewModel::setEffort,
-                    onShowEffortPicker = { showEffortPicker = true },
                     onSend = { text ->
                         if (agentId != null) {
                             chatViewModel.sendAgentMessage(agentId, text)
