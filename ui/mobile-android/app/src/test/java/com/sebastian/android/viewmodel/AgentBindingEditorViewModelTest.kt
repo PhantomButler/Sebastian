@@ -17,7 +17,11 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.wheneverBlocking
 
@@ -124,6 +128,50 @@ class AgentBindingEditorViewModelTest {
         advanceUntilIdle()
 
         assertEquals(ThinkingCapability.ADAPTIVE, vm.uiState.value.effectiveCapability)
+        // 合法的初始状态不应触发 PUT
+        dispatcher.scheduler.advanceTimeBy(400)
+        advanceUntilIdle()
+        verify(agentRepo, never()).setBinding(any(), anyOrNull(), any())
+    }
+
+    @Test
+    fun `NONE capability with OFF effort does not trigger PUT on load`() = runTest(dispatcher) {
+        val noThink = provider("pn", ThinkingCapability.NONE)
+        wheneverBlocking { agentRepo.getBinding("foo") }.thenReturn(
+            Result.success(AgentBindingDto("foo", "pn", null)),
+        )
+        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
+            Result.success(listOf(noThink)),
+        )
+
+        val vm = AgentBindingEditorViewModel("foo", agentRepo, settingsRepo)
+        vm.load()
+        advanceUntilIdle()
+        dispatcher.scheduler.advanceTimeBy(400)
+        advanceUntilIdle()
+
+        assertEquals(ThinkingEffort.OFF, vm.uiState.value.thinkingEffort)
+        verify(agentRepo, never()).setBinding(eq("foo"), anyOrNull(), any())
+    }
+
+    @Test
+    fun `ALWAYS_ON capability with OFF effort does not trigger PUT on load`() = runTest(dispatcher) {
+        val alwaysOn = provider("pa", ThinkingCapability.ALWAYS_ON)
+        wheneverBlocking { agentRepo.getBinding("foo") }.thenReturn(
+            Result.success(AgentBindingDto("foo", "pa", null)),
+        )
+        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
+            Result.success(listOf(alwaysOn)),
+        )
+
+        val vm = AgentBindingEditorViewModel("foo", agentRepo, settingsRepo)
+        vm.load()
+        advanceUntilIdle()
+        dispatcher.scheduler.advanceTimeBy(400)
+        advanceUntilIdle()
+
+        assertEquals(ThinkingEffort.OFF, vm.uiState.value.thinkingEffort)
+        verify(agentRepo, never()).setBinding(eq("foo"), anyOrNull(), any())
     }
 
     @Test

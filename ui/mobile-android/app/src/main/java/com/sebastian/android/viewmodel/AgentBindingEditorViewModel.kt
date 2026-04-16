@@ -136,6 +136,8 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
         capability: ThinkingCapability?,
     ): Pair<ThinkingEffort, Boolean> {
         val steps = capability?.let { effortStepsFor(it) } ?: return Pair(effort, false)
+        // NONE / ALWAYS_ON 无档位可选，保持传入值不触发 PUT
+        if (steps.isEmpty()) return Pair(effort, false)
         if (effort !in steps) {
             // 钳到最高合法档位
             val fallback = steps.lastOrNull { it != ThinkingEffort.OFF } ?: ThinkingEffort.OFF
