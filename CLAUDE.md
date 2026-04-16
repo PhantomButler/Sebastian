@@ -306,7 +306,7 @@ SEBASTIAN_GATEWAY_PORT=8823
 
 ### 分支模型
 - `main`：受保护分支，只接受 PR squash merge，是发版基线
-- `dev`：常驻开发分支，所有日常工作直接在 dev 上 commit + push
+- `dev`：常驻开发分支，所有日常工作直接在 dev 上 commit + push，未经用户允许不得随意执行git rebase 命令，除非用户明确指示，否则需要执行rebase 命令时需要停下里询问用户并提供原因
 - 不要随意拉新分支；确实需要独立分支（例如长期实验）时提前与用户对齐
 
 ### 提交前准备（同步 main 到 dev）
