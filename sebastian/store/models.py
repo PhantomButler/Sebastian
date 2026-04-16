@@ -96,6 +96,10 @@ class AgentLLMBindingRecord(Base):
         ForeignKey("llm_providers.id", ondelete="SET NULL"),
         nullable=True,
     )
+    thinking_effort: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    thinking_adaptive: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0",
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(UTC),

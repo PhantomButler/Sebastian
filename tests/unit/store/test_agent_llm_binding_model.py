@@ -80,3 +80,16 @@ async def test_agent_binding_provider_on_delete_set_null() -> None:
         assert loaded[0].agent_type == "forge"
         assert loaded[0].provider_id is None
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_new_binding_defaults_to_no_thinking(db_session) -> None:
+    from sebastian.store.models import AgentLLMBindingRecord
+
+    rec = AgentLLMBindingRecord(agent_type="foo", provider_id=None)
+    db_session.add(rec)
+    await db_session.commit()
+    await db_session.refresh(rec)
+
+    assert rec.thinking_effort is None
+    assert rec.thinking_adaptive is False
