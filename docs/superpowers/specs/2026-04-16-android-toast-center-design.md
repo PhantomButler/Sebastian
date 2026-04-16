@@ -54,14 +54,15 @@ object ToastCenter {
 
 ```kotlin
 object ToastCenter {
+    private val lock = Any()
     private val lastShownAt = HashMap<String, Long>()  // key -> clock() 时间戳
     private var currentToast: Toast? = null
 
     // ---- internal 测试桩点：生产路径使用默认值，测试路径替换 ----
-    internal var clock: () -> Long = { SystemClock.uptimeMillis() }
-    internal var mainExecutor: (Runnable) -> Unit =
+    @Volatile internal var clock: () -> Long = { SystemClock.uptimeMillis() }
+    @Volatile internal var mainExecutor: (Runnable) -> Unit =
         { Handler(Looper.getMainLooper()).post(it) }
-    internal var toastFactory: (Context, CharSequence, Int) -> Toast =
+    @Volatile internal var toastFactory: (Context, CharSequence, Int) -> Toast =
         { ctx, msg, dur -> Toast.makeText(ctx, msg, dur) }
 
     fun show(
@@ -72,7 +73,7 @@ object ToastCenter {
         duration: Int = Toast.LENGTH_SHORT,
     ) {
         val now = clock()
-        synchronized(this) {
+        synchronized(lock) {
             val last = lastShownAt[key]
             if (last != null && now - last < throttleMs) return
             lastShownAt[key] = now
@@ -88,9 +89,10 @@ object ToastCenter {
 
 要点：
 
-- `synchronized(this)` 保护节流表并发访问（`show` 可能被后台线程调用）。
-- 三个 internal 可变字段 `clock` / `mainExecutor` / `toastFactory` 是**唯一的测试桩点**：生产路径即默认值，测试 setup 替换、teardown 还原。
+- 私有 `lock = Any()` 保护节流表并发访问（`show` 可能被后台线程调用）；不用 `synchronized(this)` 以免 `object` 单例 monitor 被外部代码抢占。
+- 三个 `@Volatile internal var` 字段 `clock` / `mainExecutor` / `toastFactory` 是**唯一的测试桩点**：生产路径即默认值，测试 setup 替换、teardown 还原；`@Volatile` 保证跨线程可见性。
 - 节流表**不主动清理**：key 数量由业务文案决定，量级很小，生命周期随进程即可。
+- 节流比较使用 `val last = lastShownAt[key]; if (last != null && now - last < throttleMs) return`——不能用 `?: 0L` 兜底，否则 `clock()` 返回值小于 `throttleMs` 时首次调用会被错误节流。
 
 ## 6. 调用点迁移
 
@@ -153,10 +155,11 @@ ToastCenter.show(context, message = "...", throttleMs = 3000L)
 
 测试用例：
 
-- `show_sameKeyWithinThrottle_isDropped`：fakeNow = 0 调一次，fakeNow = 500 再调同 key，`toastFactory` 只被调 1 次
-- `show_sameKeyAfterThrottle_isShown`：fakeNow = 0 / 1600 两次同 key，两次均通过
-- `show_differentKeys_bothPass`：同一 fakeNow 两次不同 key，`toastFactory` 被调 2 次
-- `show_cancelsPrevious`：两次 `show`（不同 key 避开节流），前一次返回的 mock Toast `cancel()` 被调一次
+- `first call at clock zero is not throttled`：fakeNow = 0 调一次，`toastFactory` 被调 1 次（锁死 `?: 0L` 兜底边界 bug 的回归）
+- `same key within throttle window is dropped`：fakeNow = 0 调一次，fakeNow = 500 再调同 key，`toastFactory` 只被调 1 次
+- `same key after throttle window is shown`：fakeNow = 0 / 1600 两次同 key，两次均通过
+- `different keys pass independently`：同一 fakeNow 两次不同 key，`toastFactory` 被调 2 次
+- `second show cancels previous toast`：两次 `show`（不同 key 避开节流），前一次返回的 mock Toast `cancel()` 被调一次
 
 通过 `Context` 参数传入 `mock<Context>()`，`applicationContext` stub 返回自身即可，不触碰任何 Android 实际实现。
 

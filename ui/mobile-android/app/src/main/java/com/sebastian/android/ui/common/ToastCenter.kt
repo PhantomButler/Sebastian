@@ -8,13 +8,14 @@ import android.widget.Toast
 import androidx.annotation.VisibleForTesting
 
 object ToastCenter {
+    private val lock = Any()
     private val lastShownAt = HashMap<String, Long>()
     private var currentToast: Toast? = null
 
-    @VisibleForTesting internal var clock: () -> Long = { SystemClock.uptimeMillis() }
-    @VisibleForTesting internal var mainExecutor: (Runnable) -> Unit =
+    @Volatile @VisibleForTesting internal var clock: () -> Long = { SystemClock.uptimeMillis() }
+    @Volatile @VisibleForTesting internal var mainExecutor: (Runnable) -> Unit =
         { Handler(Looper.getMainLooper()).post(it) }
-    @VisibleForTesting internal var toastFactory: (Context, CharSequence, Int) -> Toast =
+    @Volatile @VisibleForTesting internal var toastFactory: (Context, CharSequence, Int) -> Toast =
         { ctx, msg, dur -> Toast.makeText(ctx, msg, dur) }
 
     fun show(
@@ -25,7 +26,7 @@ object ToastCenter {
         duration: Int = Toast.LENGTH_SHORT,
     ) {
         val now = clock()
-        synchronized(this) {
+        synchronized(lock) {
             val last = lastShownAt[key]
             if (last != null && now - last < throttleMs) return
             lastShownAt[key] = now
@@ -39,7 +40,7 @@ object ToastCenter {
 
     @VisibleForTesting
     internal fun resetForTest() {
-        synchronized(this) {
+        synchronized(lock) {
             lastShownAt.clear()
             currentToast = null
         }

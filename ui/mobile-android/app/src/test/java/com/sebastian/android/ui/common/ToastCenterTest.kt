@@ -42,6 +42,15 @@ class ToastCenterTest {
     }
 
     @Test
+    fun `first call at clock zero is not throttled`() {
+        // 回归：防止 lastShownAt[key] 初值陷阱把 fakeNow = 0 的首次调用误节流
+        fakeNow = 0L
+        ToastCenter.show(context, "hi")
+
+        assertEquals(1, createdToasts.size)
+    }
+
+    @Test
     fun `same key within throttle window is dropped`() {
         ToastCenter.show(context, "hi")
         fakeNow = 500L
