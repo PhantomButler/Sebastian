@@ -8,13 +8,14 @@ MVVM ViewModel 层，使用 Hilt 注入依赖，通过 `StateFlow<UiState>` 向 
 
 ```text
 viewmodel/
-├── AgentBindingsViewModel.kt  # Agent LLM 绑定管理（列表加载、绑定/解绑）
-├── ChatViewModel.kt           # 主对话状态机（SSE 订阅、消息渲染）
-├── GlobalApprovalViewModel.kt # 全局审批队列（跨 session 的审批事件处理）
-├── ProviderFormViewModel.kt   # Provider 新增/编辑表单状态
-├── SessionViewModel.kt        # Session 列表与新建
-├── SettingsViewModel.kt       # 设置页状态（serverUrl、当前 provider）
-└── SubAgentViewModel.kt       # Sub-Agent 列表与 Agent Session 管理
+├── AgentBindingsViewModel.kt       # Agent LLM 绑定主列表（仅加载）
+├── AgentBindingEditorViewModel.kt  # 单个 Agent 绑定编辑（Provider + Thinking，防抖保存）
+├── ChatViewModel.kt                # 主对话状态机（SSE 订阅、消息渲染）
+├── GlobalApprovalViewModel.kt      # 全局审批队列（跨 session 的审批事件处理）
+├── ProviderFormViewModel.kt        # Provider 新增/编辑表单状态
+├── SessionViewModel.kt             # Session 列表与新建
+├── SettingsViewModel.kt            # 设置页状态（serverUrl、当前 provider）
+└── SubAgentViewModel.kt            # Sub-Agent 列表与 Agent Session 管理
 ```
 
 ## 模块说明
@@ -31,12 +32,21 @@ viewmodel/
 
 ### `AgentBindingsViewModel`
 
-Agent LLM 绑定管理，负责：
+Agent LLM 绑定主列表页的 ViewModel，仅负责数据加载：
 
 - `load()`：并发加载 agent 列表和 provider 列表，合并到 `AgentBindingsUiState`
-- `bind(agentType, providerId)`：绑定指定 agent 到 provider，乐观更新本地列表
-- `useDefault(agentType)`：清除绑定（使用系统默认 provider）
-- 操作结果通过 `events: SharedFlow<AgentBindingsEvent>`（`BindingUpdated` / `Error`）通知 UI
+
+实际的绑定修改由次级编辑页 `AgentBindingEditorViewModel` 承担，主列表仅展示与导航。
+
+### `AgentBindingEditorViewModel`
+
+单个 Agent 的绑定编辑页 ViewModel（`@AssistedInject`，`Factory.create(agentType)`），负责：
+
+- `load()`：拉取当前 binding 与 provider 列表；若服务端已保存档位超过当前 Provider capability 合法范围，自动钳到最高合法档并触发一次保存
+- `selectProvider(providerId: String?)`：切换 Provider；切换时 `thinkingEffort` 复位为 `OFF`，若切换前存在配置则通过 snackbar 提示
+- `setEffort(e: ThinkingEffort)`：修改思考档位
+- 防抖自动保存：任何修改都会触发 300ms debounce 的 `schedulePut()`，调用 `AgentRepository.setBinding()`；失败时回滚到上一快照并 emit snackbar
+- 暴露 `events: SharedFlow<EditorEvent>`，`EditorEvent.Snackbar(text)` 用于一次性提示
 
 ### `ChatViewModel`
 
@@ -100,8 +110,8 @@ ViewModel (sendMessage / switchSession / ...)
 | 改主对话消息处理逻辑 | `ChatViewModel.handleEvent()` |
 | 改 SSE 重连/断线逻辑 | `ChatViewModel.startSseCollection()` / `observeNetwork()` |
 | 改全局审批处理 | `GlobalApprovalViewModel.grantApproval()` / `denyApproval()` |
-| 改 Agent LLM 绑定逻辑 | `AgentBindingsViewModel.bind()` / `useDefault()` |
-| 改思考档位状态 | `ChatViewModel.setEffort()` |
+| 改 Agent LLM 绑定主列表加载 | `AgentBindingsViewModel.load()` |
+| 改单个 Agent 绑定编辑（Provider + Thinking） | `AgentBindingEditorViewModel.selectProvider()` / `setEffort()` |
 | 改滚动跟随逻辑 | `ChatViewModel.onUserScrolled()` / `onScrolledNearBottom()` 等 |
 | 改 session 列表加载 | `SessionViewModel` |
 | 改设置页状态（serverUrl / provider） | `SettingsViewModel` |

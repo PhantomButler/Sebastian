@@ -24,7 +24,7 @@ ui/
 |------|------|
 | [chat/](chat/README.md) | 主对话入口，`NavigableListDetailPaneScaffold` 三栏自适应布局 |
 | [common/](common/README.md) | 跨页面复用组件（Glass 组件库、ErrorBanner、审批横幅、Markdown、图标） |
-| [composer/](composer/README.md) | 消息输入区（Composer + SendButton + ThinkButton） |
+| [composer/](composer/README.md) | 消息输入区（Composer + SendButton，插槽架构） |
 | [navigation/](navigation/README.md) | Type-safe 路由定义（`Route` sealed class） |
 | [settings/](settings/README.md) | 设置页组（连接/账户、Provider、外观、高级） |
 | [subagents/](subagents/README.md) | Sub-Agent 浏览与进入 AgentChat |
@@ -42,7 +42,8 @@ ui/
 | 改 Todo 面板 | `chat/TodoPanel.kt` |
 | 改输入框样式/行为 | `composer/Composer.kt` → [composer/README.md](composer/README.md) |
 | 改发送/停止按钮状态 | `composer/SendButton.kt` |
-| 改思考档位按钮/选择器 | `composer/ThinkButton.kt` |
+| 改 Agent LLM 绑定主列表 | `settings/AgentBindingsPage.kt` |
+| 改 Agent LLM 绑定次级页（Provider + Thinking） | `settings/AgentBindingEditorPage.kt` + `settings/components/EffortSlider.kt` + `settings/components/ProviderPickerDialog.kt` |
 | 改全局审批横幅 | `common/GlobalApprovalBanner.kt` |
 | 改错误横幅 | `common/ErrorBanner.kt` |
 | 改 Markdown 渲染视图 | `common/MarkdownView.kt` |
