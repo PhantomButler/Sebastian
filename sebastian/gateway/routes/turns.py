@@ -79,9 +79,7 @@ async def send_turn(
 
     await _ensure_llm_ready("sebastian")
     session = await state.sebastian.get_or_create_session(body.session_id, body.content)
-    task = asyncio.create_task(
-        state.sebastian.run_streaming(body.content, session.id)
-    )
+    task = asyncio.create_task(state.sebastian.run_streaming(body.content, session.id))
     task.add_done_callback(_log_background_turn_failure)
     return {
         "session_id": session.id,

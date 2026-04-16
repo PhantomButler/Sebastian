@@ -74,7 +74,11 @@ def _create_provider(http_client, token, *, name: str, thinking_capability: str 
             "api_key": "sk-ant-fake",
             "model": "claude-opus-4-6",
             "base_url": "https://api.anthropic.com",
-            **({"thinking_capability": thinking_capability} if thinking_capability is not None else {}),
+            **(
+                {"thinking_capability": thinking_capability}
+                if thinking_capability is not None
+                else {}
+            ),
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -211,12 +215,15 @@ def test_send_turn_with_extra_thinking_effort_field_is_accepted(client) -> None:
 
     http_client, token = client
 
-    with patch(
-        "sebastian.gateway.state.sebastian.get_or_create_session",
-        new_callable=AsyncMock,
-    ) as mock_session, patch(
-        "sebastian.gateway.state.sebastian.run_streaming",
-        new_callable=AsyncMock,
+    with (
+        patch(
+            "sebastian.gateway.state.sebastian.get_or_create_session",
+            new_callable=AsyncMock,
+        ) as mock_session,
+        patch(
+            "sebastian.gateway.state.sebastian.run_streaming",
+            new_callable=AsyncMock,
+        ),
     ):
         from sebastian.core.types import Session
 

@@ -231,16 +231,12 @@ async def _schedule_session_turn(
     import sebastian.gateway.state as state
 
     if session.agent_type == "sebastian":
-        task = asyncio.create_task(
-            state.sebastian.run_streaming(content, session.id)
-        )
+        task = asyncio.create_task(state.sebastian.run_streaming(content, session.id))
     else:
         agent = state.agent_instances.get(session.agent_type)
         if agent is None:
             raise ValueError(f"No agent instance for type: {session.agent_type}")
-        task = asyncio.create_task(
-            agent.run_streaming(content, session.id)
-        )
+        task = asyncio.create_task(agent.run_streaming(content, session.id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     task.add_done_callback(_log_background_turn_failure)

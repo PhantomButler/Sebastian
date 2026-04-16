@@ -24,9 +24,7 @@ def _build_app_with_mocks(agents: dict, bindings: list, all_records: list | None
         )
     )
     state.llm_registry.get_record = AsyncMock(
-        side_effect=lambda provider_id: next(
-            (r for r in _records if r.id == provider_id), None
-        )
+        side_effect=lambda provider_id: next((r for r in _records if r.id == provider_id), None)
     )
 
     app = FastAPI()

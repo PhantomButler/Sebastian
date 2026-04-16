@@ -4,8 +4,11 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.llm.registry import LLMProviderRegistry, ResolvedProvider, _coerce_thinking
-
+from sebastian.llm.registry import (
+    LLMProviderRegistry,
+    ResolvedProvider,
+    _coerce_thinking,
+)
 
 # ---------------------------------------------------------------------------
 # Pure-logic tests (no DB)

@@ -122,9 +122,8 @@ async def test_get_provider_uses_binding(registry_with_db) -> None:
 
     await registry_with_db.set_binding("forge", bound_id)
     resolved = await registry_with_db.get_provider("forge")
-    provider, model = resolved.provider, resolved.model
-    assert isinstance(provider, AnthropicProvider)
-    assert model == "claude-haiku-4-5"
+    assert isinstance(resolved.provider, AnthropicProvider)
+    assert resolved.model == "claude-haiku-4-5"
 
 
 @pytest.mark.asyncio
@@ -141,7 +140,7 @@ async def test_get_provider_falls_back_when_no_binding(registry_with_db) -> None
     await registry_with_db.create(default)
 
     resolved = await registry_with_db.get_provider("forge")
-    provider, model = resolved.provider, resolved.model
+    _, model = resolved.provider, resolved.model
     assert model == "claude-opus-4-6"
 
 
@@ -162,7 +161,7 @@ async def test_get_provider_falls_back_when_binding_provider_id_is_null(
     await registry_with_db.set_binding("forge", None)
 
     resolved = await registry_with_db.get_provider("forge")
-    provider, model = resolved.provider, resolved.model
+    _, model = resolved.provider, resolved.model
     assert model == "claude-opus-4-6"
 
 
@@ -201,5 +200,5 @@ async def test_get_provider_falls_back_when_bound_provider_deleted(
     assert bindings[0].provider_id is None  # ON DELETE SET NULL
 
     resolved = await registry_with_db.get_provider("forge")
-    provider, model = resolved.provider, resolved.model
+    _, model = resolved.provider, resolved.model
     assert model == "claude-opus-4-6"

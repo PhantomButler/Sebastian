@@ -170,9 +170,7 @@ def test_send_turn_to_sebastian_session_runs_background_stream(client):
     assert "ts" in payload
     assert "response" not in payload
     assert len(scheduled_coroutines) == 1
-    mock_run_streaming.assert_called_once_with(
-        "Continue the conversation", session.id
-    )
+    mock_run_streaming.assert_called_once_with("Continue the conversation", session.id)
     assert mock_run_streaming.await_count == 0
 
 
