@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-04-10
+version: "1.1"
+last_updated: 2026-04-16
 status: implemented
 ---
 
@@ -67,15 +67,30 @@ def decrypt(enc: str) -> str: ...
 
 GET 接口不返回 `api_key_enc` 明文，固定返回 `"***"`。
 
-### 2.3 per-agent 模型选择
+### 2.3 per-agent provider 绑定
 
-在 `manifest.toml` 中声明（可选，不填则使用全局默认）：
+Sub-agent 与具体 provider record 的绑定存在 `agent_llm_bindings` 表（见 §2.4），由 Settings UI 维护。无绑定则使用全局 `is_default=True` 的 provider。
 
-```toml
-[llm]
-provider_type = "anthropic"
-model = "claude-haiku-4-5"
+> 旧版 `manifest.toml [llm]` 段已废弃并从代码中移除；manifest 里的 `[llm]` 段会被忽略。
+
+### 2.4 AgentLLMBindingRecord
+
+文件：`sebastian/store/models.py`
+
+```python
+class AgentLLMBindingRecord(Base):
+    __tablename__ = "agent_llm_bindings"
+
+    agent_type: Mapped[str]                 # PK，如 "forge" / "aide"
+    provider_id: Mapped[str | None]         # FK → llm_providers.id, ON DELETE SET NULL
+    updated_at: Mapped[datetime]
 ```
+
+语义：
+- `agent_type` 作主键 → 一个 agent 只有一条绑定（per-turn live 生效）
+- `provider_id = NULL` 等价于无绑定 → fallback 全局默认
+- 删除 provider 时外键自动置空对应 binding 的 `provider_id`（需要 SQLite `PRAGMA foreign_keys=ON`，已在 `sebastian/store/database.py` 的 `get_engine()` 启用）
+- Sebastian orchestrator 不写入此表
 
 ---
 
@@ -243,15 +258,13 @@ Anthropic Extended Thinking 在多轮带 tool result 回传时，前一轮的 th
 class LLMProviderRegistry:
     async def get_provider(
         self,
-        provider_type: str | None = None,
-        model: str | None = None,
+        agent_type: str | None = None,
     ) -> LLMProvider:
         """
         优先级：
-        1. provider_type + model 精确匹配
-        2. provider_type 匹配，取 is_default=True
-        3. 全局 is_default=True
-        4. 抛出 ConfigError
+        1. agent_type 对应的 binding 存在且 provider_id 非空 → 用对应 record
+        2. 否则 fallback 全局 is_default=True
+        3. 无默认 → 抛 RuntimeError
         """
 ```
 
@@ -331,6 +344,7 @@ Clamp 时触发 toast 提示。
 
 ## 10. Gateway 路由
 
+### Provider CRUD（路径保持不变）
 ```
 GET    /api/v1/llm/providers              # 列表（api_key 返回 "***"）
 POST   /api/v1/llm/providers              # 新增
@@ -340,6 +354,19 @@ POST   /api/v1/llm/providers/{id}/set-default  # 设为全局默认
 ```
 
 POST/PUT 请求体包含 `thinking_capability` 字段（可选），Settings 页新增对应下拉选择器。
+
+### Agent 列表（扩展字段）
+```
+GET    /api/v1/agents
+       响应每条 agent 增加 `bound_provider_id: str | null`
+```
+
+### Agent 绑定管理（新增）
+```
+PUT    /api/v1/agents/{agent_type}/llm-binding
+       body: { "provider_id": str | null }
+DELETE /api/v1/agents/{agent_type}/llm-binding
+```
 
 ---
 
