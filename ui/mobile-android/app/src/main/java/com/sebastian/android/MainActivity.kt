@@ -15,7 +15,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
@@ -44,6 +43,7 @@ import com.sebastian.android.data.sync.AppStateReconciler
 import kotlinx.coroutines.launch
 import com.sebastian.android.ui.chat.ChatScreen
 import com.sebastian.android.ui.common.GlobalApprovalBanner
+import com.sebastian.android.ui.common.ToastCenter
 import com.sebastian.android.ui.common.glass.rememberGlassState
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.ui.settings.AppearancePage
@@ -133,8 +133,6 @@ fun SebastianNavHost(
     val context = LocalContext.current
     // 记录当前真实显示的 session（ChatScreen 通过回调实时上报，含面板手动切换）
     var currentViewingSessionId by remember { mutableStateOf<String?>(null) }
-    // 单例 Toast：连点时先 cancel 上一个，避免排队连续弹
-    var alreadyInSessionToast by remember { mutableStateOf<Toast?>(null) }
 
     // Attach reconciler 到 globalApprovalViewModel（chat 消息 reconcile 留作后续 task）
     DisposableEffect(Unit) {
@@ -256,12 +254,7 @@ fun SebastianNavHost(
                 // 用 ChatScreen 实时上报的 activeSessionId 做精确判断，
                 // 覆盖用户通过面板手动切换 session 后 route 参数已过时的情况
                 if (approval.sessionId == currentViewingSessionId) {
-                    alreadyInSessionToast?.cancel()
-                    alreadyInSessionToast = Toast.makeText(
-                        context,
-                        "已在目标会话",
-                        Toast.LENGTH_SHORT,
-                    ).also { it.show() }
+                    ToastCenter.show(context, "已在目标会话")
                     return@GlobalApprovalBanner
                 }
 
