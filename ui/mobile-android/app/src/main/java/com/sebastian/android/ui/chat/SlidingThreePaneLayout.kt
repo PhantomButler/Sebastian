@@ -2,8 +2,7 @@ package com.sebastian.android.ui.chat
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -37,6 +36,29 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 enum class SidePane { NONE, LEFT, RIGHT }
+
+/**
+ * iOS UIKit 风格 rubberband 衰减：越界距离越大阻力越大，最终趋近于 [dimension]。
+ *
+ * 公式 f(x, D) = (0.55 * x * D) / (0.55 * x + D)
+ * - f(0) = 0
+ * - f(x) < x 恒成立（衰减性）
+ * - lim x→∞ f(x) = D（渐近线）
+ *
+ * @param distance 越界距离（>= 0）
+ * @param dimension 容量参数（决定渐近线 = dimension）
+ */
+internal fun rubberband(distance: Float, dimension: Float): Float {
+    if (dimension <= 0f) return 0f
+    val k = 0.55f
+    return (k * distance * dimension) / (k * distance + dimension)
+}
+
+/**
+ * 三面板共用的 spring 动画：dampingRatio 0.75 + stiffness 380，
+ * 收尾带 1 次轻微过冲（Material LowBouncy 风格）。
+ */
+private val PaneSpringSpec = spring<Float>(dampingRatio = 0.75f, stiffness = 380f)
 
 /**
  * 三面板滑动布局：侧边栏占 [paneFraction] 屏幕宽度，主内容同步推出。
@@ -77,7 +99,7 @@ fun SlidingThreePaneLayout(
                 SidePane.RIGHT -> -paneWidthPx
             }
             if (offset.value != target) {
-                offset.animateTo(target, tween(300, easing = FastOutSlowInEasing))
+                offset.animateTo(target, PaneSpringSpec)
             }
         }
 
@@ -109,12 +131,19 @@ fun SlidingThreePaneLayout(
                         // 确认是横向拖拽，停止正在进行的动画
                         scope.launch { offset.stop() }
 
+                        val maxOver = paneWidthPx * 0.25f
                         horizontalDrag(drag.id) { change ->
                             velocityTracker.addPosition(change.uptimeMillis, change.position)
                             val dragAmount = change.positionChange().x
                             change.consume()
-                            val newOffset = (offset.value + dragAmount)
-                                .coerceIn(-paneWidthPx, paneWidthPx)
+                            val newRaw = offset.value + dragAmount
+                            val newOffset = when {
+                                newRaw > paneWidthPx ->
+                                    paneWidthPx + rubberband(newRaw - paneWidthPx, maxOver)
+                                newRaw < -paneWidthPx ->
+                                    -paneWidthPx - rubberband(-newRaw - paneWidthPx, maxOver)
+                                else -> newRaw
+                            }
                             scope.launch { offset.snapTo(newOffset) }
                         }
 
@@ -137,17 +166,19 @@ fun SlidingThreePaneLayout(
                             else -> 0f
                         }
 
+                        // 先通知外部 state（让 BackHandler 等立刻同步），再启动 spring
+                        onPaneChange(
+                            when (target) {
+                                paneWidthPx -> SidePane.LEFT
+                                -paneWidthPx -> SidePane.RIGHT
+                                else -> SidePane.NONE
+                            }
+                        )
                         scope.launch {
                             offset.animateTo(
-                                target,
-                                tween(200, easing = FastOutSlowInEasing),
-                            )
-                            onPaneChange(
-                                when (target) {
-                                    paneWidthPx -> SidePane.LEFT
-                                    -paneWidthPx -> SidePane.RIGHT
-                                    else -> SidePane.NONE
-                                }
+                                targetValue = target,
+                                animationSpec = PaneSpringSpec,
+                                initialVelocity = velocity,
                             )
                         }
                     }
