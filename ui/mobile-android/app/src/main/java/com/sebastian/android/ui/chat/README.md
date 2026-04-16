@@ -8,6 +8,8 @@
 
 ```text
 chat/
+├── AgentPill.kt              # 顶部 agent 名称胶囊（灵动岛展开/收起 + THINKING/ACTIVE 动画）
+├── AgentPillAnimations.kt    # 4 光团 OrbsAnimation + Jarvis HUD 动画 Canvas 实现
 ├── ChatScreen.kt             # 主对话 Screen（三栏脚手架 + GlassSurface Composer）
 ├── CollapsibleContent.kt     # 工具调用展开区的二次折叠容器（≤5行直展，>5行折叠+最多30行）
 ├── MessageList.kt            # 消息列表（LazyColumn + 滚动跟随逻辑）
