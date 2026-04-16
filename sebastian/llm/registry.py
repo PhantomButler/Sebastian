@@ -49,18 +49,16 @@ class LLMProviderRegistry:
     async def get_provider(self, agent_type: str | None = None) -> tuple[LLMProvider, str]:
         """Return (provider, model) for the given agent_type.
 
-        Checks agents/{agent_type}/manifest.toml [llm] section first.
-        Falls back to get_default_with_model() if no manifest config or no matching DB record.
+        Resolution order:
+        1. If agent_type has a binding row with a non-null provider_id → use that record.
+        2. Otherwise fallback to global default provider.
         """
         if agent_type is not None:
-            manifest_llm = _read_manifest_llm(agent_type)
-            if manifest_llm:
-                provider_type = manifest_llm.get("provider_type")
-                model = manifest_llm.get("model")
-                if provider_type and model:
-                    record = await self._get_by_type(provider_type)
-                    if record is not None:
-                        return self._instantiate(record), model
+            binding = await self._get_binding(agent_type)
+            if binding is not None and binding.provider_id is not None:
+                record = await self._get_record(binding.provider_id)
+                if record is not None:
+                    return self._instantiate(record), record.model
         return await self.get_default_with_model()
 
     async def _get_by_type(self, provider_type: str) -> LLMProviderRecord | None:

@@ -90,3 +90,108 @@ async def test_clear_binding_noop_when_missing(registry_with_db) -> None:
     # Should not raise
     await registry_with_db.clear_binding("nonexistent")
     assert await registry_with_db.list_bindings() == []
+
+
+@pytest.mark.asyncio
+async def test_get_provider_uses_binding(registry_with_db) -> None:
+    from sebastian.llm.anthropic import AnthropicProvider
+    from sebastian.store.models import LLMProviderRecord
+
+    default = LLMProviderRecord(
+        name="default",
+        provider_type="anthropic",
+        api_key_enc=encrypt("sk-default"),
+        model="claude-opus-4-6",
+        is_default=True,
+    )
+    bound = LLMProviderRecord(
+        name="bound",
+        provider_type="anthropic",
+        api_key_enc=encrypt("sk-bound"),
+        model="claude-haiku-4-5",
+        is_default=False,
+    )
+    await registry_with_db.create(default)
+    await registry_with_db.create(bound)
+    records = await registry_with_db.list_all()
+    bound_id = next(r.id for r in records if r.name == "bound")
+
+    await registry_with_db.set_binding("forge", bound_id)
+    provider, model = await registry_with_db.get_provider("forge")
+    assert isinstance(provider, AnthropicProvider)
+    assert model == "claude-haiku-4-5"
+
+
+@pytest.mark.asyncio
+async def test_get_provider_falls_back_when_no_binding(registry_with_db) -> None:
+    from sebastian.store.models import LLMProviderRecord
+
+    default = LLMProviderRecord(
+        name="default",
+        provider_type="anthropic",
+        api_key_enc=encrypt("sk-default"),
+        model="claude-opus-4-6",
+        is_default=True,
+    )
+    await registry_with_db.create(default)
+
+    provider, model = await registry_with_db.get_provider("forge")
+    assert model == "claude-opus-4-6"
+
+
+@pytest.mark.asyncio
+async def test_get_provider_falls_back_when_binding_provider_id_is_null(
+    registry_with_db,
+) -> None:
+    from sebastian.store.models import LLMProviderRecord
+
+    default = LLMProviderRecord(
+        name="default",
+        provider_type="anthropic",
+        api_key_enc=encrypt("sk-default"),
+        model="claude-opus-4-6",
+        is_default=True,
+    )
+    await registry_with_db.create(default)
+    await registry_with_db.set_binding("forge", None)
+
+    provider, model = await registry_with_db.get_provider("forge")
+    assert model == "claude-opus-4-6"
+
+
+@pytest.mark.asyncio
+async def test_get_provider_falls_back_when_bound_provider_deleted(
+    registry_with_db,
+) -> None:
+    """Deleting the bound provider triggers ON DELETE SET NULL, then get_provider
+    should fallback to default."""
+    from sebastian.store.models import LLMProviderRecord
+
+    default = LLMProviderRecord(
+        name="default",
+        provider_type="anthropic",
+        api_key_enc=encrypt("sk-default"),
+        model="claude-opus-4-6",
+        is_default=True,
+    )
+    bound = LLMProviderRecord(
+        name="bound",
+        provider_type="anthropic",
+        api_key_enc=encrypt("sk-bound"),
+        model="claude-haiku-4-5",
+        is_default=False,
+    )
+    await registry_with_db.create(default)
+    await registry_with_db.create(bound)
+    records = await registry_with_db.list_all()
+    bound_id = next(r.id for r in records if r.name == "bound")
+    await registry_with_db.set_binding("forge", bound_id)
+
+    await registry_with_db.delete(bound_id)
+
+    bindings = await registry_with_db.list_bindings()
+    assert len(bindings) == 1
+    assert bindings[0].provider_id is None  # ON DELETE SET NULL
+
+    provider, model = await registry_with_db.get_provider("forge")
+    assert model == "claude-opus-4-6"
