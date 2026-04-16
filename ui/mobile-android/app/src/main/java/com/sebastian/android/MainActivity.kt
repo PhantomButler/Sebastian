@@ -46,6 +46,7 @@ import com.sebastian.android.ui.common.GlobalApprovalBanner
 import com.sebastian.android.ui.common.ToastCenter
 import com.sebastian.android.ui.common.glass.rememberGlassState
 import com.sebastian.android.ui.navigation.Route
+import com.sebastian.android.ui.settings.AgentBindingEditorPage
 import com.sebastian.android.ui.settings.AgentBindingsPage
 import com.sebastian.android.ui.settings.AppearancePage
 import com.sebastian.android.ui.settings.DebugLoggingPage
@@ -245,6 +246,13 @@ fun SebastianNavHost(
             }
             composable<Route.SettingsAgentBindings> {
                 AgentBindingsPage(navController = navController)
+            }
+            composable<Route.SettingsAgentBindingEditor> { backStackEntry ->
+                val route = backStackEntry.toRoute<Route.SettingsAgentBindingEditor>()
+                AgentBindingEditorPage(
+                    agentType = route.agentType,
+                    navController = navController,
+                )
             }
         }
 

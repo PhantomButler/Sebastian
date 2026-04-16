@@ -32,6 +32,9 @@ sealed class Route {
     data object SettingsAgentBindings : Route()
 
     @Serializable
+    data class SettingsAgentBindingEditor(val agentType: String) : Route()
+
+    @Serializable
     data object SettingsAppearance : Route()
 
     @Serializable
