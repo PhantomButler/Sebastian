@@ -1020,8 +1020,8 @@ git commit -m "feat(android/data): 扩 AgentBinding DTO 含 thinking_effort；�
 定位到 `ApiService.kt` 中 `setAgentBinding` 方法，确认其已经接受 `SetBindingRequest`（上一步已扩 DTO 包含新字段，此接口无需改签名）。新增一个 `getAgentBinding`：
 
 ```kotlin
-@GET("/api/v1/agents/{agent_type}/llm-binding")
-suspend fun getAgentBinding(@Path("agent_type") agentType: String): AgentBindingDto
+@GET("api/v1/agents/{agentType}/llm-binding")
+suspend fun getAgentBinding(@Path("agentType") agentType: String): AgentBindingDto
 ```
 
 - [ ] **Step 2: 扩 `AgentRepository` 接口**
@@ -1501,7 +1501,10 @@ class AgentBindingEditorViewModelTest {
 
     @Test
     fun `setEffort debounces consecutive changes into single put`() = runTest(dispatcher) {
-        val p = Provider("p1", "C", "anthropic", "c", false, ThinkingCapability.EFFORT)
+        val p = Provider(
+            id = "p1", name = "C", type = "anthropic", baseUrl = null,
+            model = "c", isDefault = false, thinkingCapability = ThinkingCapability.EFFORT,
+        )
         whenever(agentRepo.getBinding("sebastian")).thenReturn(Result.success(
             AgentBindingDto("sebastian", "p1", null),
         ))
@@ -1523,7 +1526,10 @@ class AgentBindingEditorViewModelTest {
 
     @Test
     fun `effective capability falls back to default provider when binding has no provider`() = runTest(dispatcher) {
-        val def = Provider("pd", "Default", "anthropic", "c", isDefault = true, thinkingCapability = ThinkingCapability.ADAPTIVE)
+        val def = Provider(
+            id = "pd", name = "Default", type = "anthropic", baseUrl = null,
+            model = "c", isDefault = true, thinkingCapability = ThinkingCapability.ADAPTIVE,
+        )
         whenever(agentRepo.getBinding("foo")).thenReturn(Result.success(
             AgentBindingDto("foo", null, null),
         ))
@@ -1538,10 +1544,13 @@ class AgentBindingEditorViewModelTest {
 
     @Test
     fun `out-of-range effort is coerced to highest valid step on init`() = runTest(dispatcher) {
-        val effortOnly = Provider("p", "GPT", "openai", "g", false, ThinkingCapability.EFFORT)
+        val effortOnly = Provider(
+            id = "p", name = "GPT", type = "openai", baseUrl = null,
+            model = "g", isDefault = false, thinkingCapability = ThinkingCapability.EFFORT,
+        )
         // DB 里留下 max（上一任 provider 是 adaptive）
         whenever(agentRepo.getBinding("foo")).thenReturn(Result.success(
-            AgentBindingDto("foo", "p", "max", true),
+            AgentBindingDto("foo", "p", "max"),
         ))
         whenever(settingsRepo.getProviders()).thenReturn(Result.success(listOf(effortOnly)))
 
@@ -1585,7 +1594,6 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
