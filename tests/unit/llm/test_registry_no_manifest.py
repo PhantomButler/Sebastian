@@ -52,6 +52,7 @@ async def test_manifest_llm_section_is_ignored(tmp_path, monkeypatch) -> None:
     )
     await registry.create(default)
 
-    provider, model = await registry.get_provider("forge")
+    resolved = await registry.get_provider("forge")
+    provider, model = resolved.provider, resolved.model
     assert model == "claude-opus-4-6"
     await engine.dispose()

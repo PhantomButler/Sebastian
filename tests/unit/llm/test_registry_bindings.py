@@ -121,7 +121,8 @@ async def test_get_provider_uses_binding(registry_with_db) -> None:
     bound_id = next(r.id for r in records if r.name == "bound")
 
     await registry_with_db.set_binding("forge", bound_id)
-    provider, model = await registry_with_db.get_provider("forge")
+    resolved = await registry_with_db.get_provider("forge")
+    provider, model = resolved.provider, resolved.model
     assert isinstance(provider, AnthropicProvider)
     assert model == "claude-haiku-4-5"
 
@@ -139,7 +140,8 @@ async def test_get_provider_falls_back_when_no_binding(registry_with_db) -> None
     )
     await registry_with_db.create(default)
 
-    provider, model = await registry_with_db.get_provider("forge")
+    resolved = await registry_with_db.get_provider("forge")
+    provider, model = resolved.provider, resolved.model
     assert model == "claude-opus-4-6"
 
 
@@ -159,7 +161,8 @@ async def test_get_provider_falls_back_when_binding_provider_id_is_null(
     await registry_with_db.create(default)
     await registry_with_db.set_binding("forge", None)
 
-    provider, model = await registry_with_db.get_provider("forge")
+    resolved = await registry_with_db.get_provider("forge")
+    provider, model = resolved.provider, resolved.model
     assert model == "claude-opus-4-6"
 
 
@@ -197,5 +200,6 @@ async def test_get_provider_falls_back_when_bound_provider_deleted(
     assert len(bindings) == 1
     assert bindings[0].provider_id is None  # ON DELETE SET NULL
 
-    provider, model = await registry_with_db.get_provider("forge")
+    resolved = await registry_with_db.get_provider("forge")
+    provider, model = resolved.provider, resolved.model
     assert model == "claude-opus-4-6"

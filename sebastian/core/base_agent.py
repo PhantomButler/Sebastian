@@ -278,7 +278,8 @@ class BaseAgent(ABC):
         self._current_task_goals[session_id] = user_message
 
         if not self._provider_injected and self._llm_registry is not None:
-            provider, model = await self._llm_registry.get_provider(self.name)
+            resolved = await self._llm_registry.get_provider(self.name)
+            provider, model = resolved.provider, resolved.model
             self._loop._provider = provider
             self._loop._model = model
             logger.info(
