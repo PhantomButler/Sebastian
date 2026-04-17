@@ -13,6 +13,7 @@ import com.sebastian.android.ui.settings.components.effortStepsFor
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -43,6 +44,7 @@ sealed interface EditorEvent {
     data class Snackbar(val text: String) : EditorEvent
 }
 
+@HiltViewModel(assistedFactory = AgentBindingEditorViewModel.Factory::class)
 class AgentBindingEditorViewModel @AssistedInject constructor(
     @Assisted private val agentType: String,
     private val agentRepository: AgentRepository,
