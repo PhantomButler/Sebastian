@@ -42,6 +42,7 @@ async def test_cancel_session_registers_pending_with_stop_intent(agent) -> None:
 @pytest.mark.asyncio
 async def test_run_streaming_consumes_pending_cancel_on_registration(tmp_path: Path) -> None:
     """REST 200 后用户立即点停止 → pending cancel 写入 → run_streaming 登记后立即消费."""
+
     class DummyAgent(BaseAgent):
         name = "sebastian"
 
