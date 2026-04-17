@@ -655,7 +655,7 @@ class BaseAgent(ABC):
         previous = self._pending_cancel_timers.pop(session_id, None)
         if previous is not None:
             previous.cancel()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         handle = loop.call_later(60.0, self._expire_pending_cancel, session_id)
         self._pending_cancel_timers[session_id] = handle
 

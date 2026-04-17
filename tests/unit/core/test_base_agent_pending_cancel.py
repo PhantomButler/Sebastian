@@ -61,7 +61,7 @@ async def test_run_streaming_consumes_pending_cancel_on_registration(tmp_path: P
     assert "s1" in agent._pending_cancel_intents
 
     # run_streaming should consume the pending cancel and raise CancelledError.
-    with pytest.raises((asyncio.CancelledError, Exception)):
+    with pytest.raises(asyncio.CancelledError):
         await agent.run_streaming("hello", "s1")
 
     # Pending intent must be consumed.
