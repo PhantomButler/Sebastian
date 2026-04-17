@@ -38,14 +38,16 @@ import kotlinx.coroutines.delay
 /**
  * UI 层胶囊动画档位，合并自 [AgentAnimState]：
  * - IDLE → COLLAPSED（只显示 Text）
+ * - PENDING → BREATHING（彩虹渐变旋转光环）
  * - THINKING → THINKING（4 光团）
  * - STREAMING / WORKING → ACTIVE（Jarvis HUD）
  */
-enum class AgentPillMode { COLLAPSED, THINKING, ACTIVE }
+enum class AgentPillMode { COLLAPSED, BREATHING, THINKING, ACTIVE }
 
 fun AgentAnimState.toPillMode(): AgentPillMode = when (this) {
     AgentAnimState.IDLE -> AgentPillMode.COLLAPSED
-    AgentAnimState.PENDING, AgentAnimState.THINKING -> AgentPillMode.THINKING
+    AgentAnimState.PENDING -> AgentPillMode.BREATHING
+    AgentAnimState.THINKING -> AgentPillMode.THINKING
     AgentAnimState.STREAMING, AgentAnimState.WORKING -> AgentPillMode.ACTIVE
 }
 
@@ -87,6 +89,7 @@ fun AgentPill(
 
     val stateLabel = when (stableMode) {
         AgentPillMode.COLLAPSED -> null
+        AgentPillMode.BREATHING -> "等待响应"
         AgentPillMode.THINKING -> "正在思考"
         AgentPillMode.ACTIVE -> "正在响应"
     }
@@ -128,6 +131,9 @@ fun AgentPill(
                         label = "agentPillTail",
                     ) { mode ->
                         when (mode) {
+                            AgentPillMode.BREATHING -> BreathingHalo(
+                                glowAlphaScale = glowScale,
+                            )
                             AgentPillMode.THINKING -> OrbsAnimation(
                                 accent = accent,
                                 glowAlphaScale = glowScale,
