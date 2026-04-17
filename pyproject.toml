@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "sebastian"
 version = "0.2.6"
 description = "Personal AI butler system — your own Jarvis"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
