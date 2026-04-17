@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -41,12 +42,6 @@ async def test_cancel_session_registers_pending_with_stop_intent(agent) -> None:
 @pytest.mark.asyncio
 async def test_run_streaming_consumes_pending_cancel_on_registration(tmp_path: Path) -> None:
     """REST 200 后用户立即点停止 → pending cancel 写入 → run_streaming 登记后立即消费."""
-    import asyncio
-    from unittest.mock import AsyncMock, MagicMock, patch
-    from sebastian.core.base_agent import BaseAgent
-    from sebastian.core.types import Session
-    from sebastian.store.session_store import SessionStore
-
     class DummyAgent(BaseAgent):
         name = "sebastian"
 
