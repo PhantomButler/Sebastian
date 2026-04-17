@@ -46,6 +46,7 @@ routes/
 | `POST /sessions/{id}/tasks/{tid}/pause` — 暂停 Task | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}/tasks/{tid}` — 取消 Task（DELETE）| [sessions.py](sessions.py) |
 | `POST /sessions/{id}/tasks/{tid}/cancel` — 取消 Task（POST）| [sessions.py](sessions.py) |
+| `POST /sessions/{id}/cancel` — 取消 session 当前 turn（含未登记流的预取消兜底）| [sessions.py](sessions.py) |
 | `GET /stream` — 订阅全局 SSE 事件流 | [stream.py](stream.py) |
 | `GET /sessions/{id}/stream` — 订阅单会话 SSE 事件流 | [stream.py](stream.py) |
 | `POST /auth/login` — 密码登录，获取 JWT | [turns.py](turns.py) |

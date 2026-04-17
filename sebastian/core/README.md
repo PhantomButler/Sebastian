@@ -32,6 +32,16 @@ CREATED → PLANNING → RUNNING → COMPLETED
                               ↘ CANCELLED
 ```
 
+## Cancel 三段式生命周期
+
+| 字典 | 语义 | 消费方 |
+|------|------|--------|
+| `_pending_cancel_intents[sid]` | 流尚未登记时记录的预取消 intent（REST 已返回、`_active_streams` 未写入） | `run_streaming` 登记 `_active_streams` 后立即消费 |
+| `_cancel_requested[sid]` | 流运行中被取消的 intent | `run_streaming` finally 块 |
+| `_completed_cancel_intents[sid]` | 流已终止的取消 intent，供外部（如 resume 工具）消费 | `consume_cancel_intent()` |
+
+`_pending_cancel_intents` 条目带 60s TTL（`_schedule_pending_cancel_cleanup` / `_expire_pending_cancel`），防止 turn 从未真正启动时泄漏。
+
 ## 修改导航
 
 | 如果要修改… | 看这里 |
