@@ -149,10 +149,18 @@ async def test_run_streaming_publishes_turn_events(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_base_agent_run_streaming_passes_thinking_effort_to_loop(tmp_path: Path) -> None:
+async def test_base_agent_run_streaming_derives_thinking_effort_from_registry(
+    tmp_path: Path,
+) -> None:
+    """run_streaming 从 llm_registry.get_provider() 返回的 ResolvedProvider 读取 thinking_effort，
+    而不再接受入参透传。
+    """
+    from unittest.mock import AsyncMock
+
     from sebastian.core.base_agent import BaseAgent
     from sebastian.core.stream_events import TurnDone
     from sebastian.core.types import Session
+    from sebastian.llm.registry import ResolvedProvider
     from sebastian.store.session_store import SessionStore
 
     class TestAgent(BaseAgent):
@@ -168,7 +176,19 @@ async def test_base_agent_run_streaming_passes_thinking_effort_to_loop(tmp_path:
         )
     )
 
-    agent = TestAgent(MagicMock(), store)
+    mock_provider = MagicMock()
+    mock_provider.message_format = "anthropic"
+    resolved = ResolvedProvider(
+        provider=mock_provider,
+        model="claude-opus-4-6",
+        thinking_effort="medium",
+        capability="effort",
+    )
+    registry = AsyncMock()
+    registry.get_provider = AsyncMock(return_value=resolved)
+
+    agent = TestAgent(MagicMock(), store, llm_registry=registry)
+    agent._provider_injected = False
 
     captured: dict = {}
 
@@ -178,7 +198,7 @@ async def test_base_agent_run_streaming_passes_thinking_effort_to_loop(tmp_path:
 
     agent._loop.stream = fake_stream  # type: ignore[attr-defined]
 
-    result = await agent.run_streaming("hello", "thinking-session", thinking_effort="medium")
+    result = await agent.run_streaming("hello", "thinking-session")
 
     assert result == "done"
     assert captured.get("thinking_effort") == "medium"
@@ -313,8 +333,8 @@ def test_guidelines_section_appears_before_tools_section() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_session_returns_false_when_no_active_stream(tmp_path: Path) -> None:
-    """Cancelling an idle session returns False — no stream to cancel."""
+async def test_cancel_session_registers_pending_when_no_active_stream(tmp_path: Path) -> None:
+    """Cancelling an idle session registers a pending cancel and returns True."""
     from sebastian.core.base_agent import BaseAgent
     from sebastian.core.types import Session
     from sebastian.store.session_store import SessionStore
@@ -328,7 +348,8 @@ async def test_cancel_session_returns_false_when_no_active_stream(tmp_path: Path
 
     result = await agent.cancel_session("idle-session")
 
-    assert result is False
+    assert result is True
+    assert agent._pending_cancel_intents["idle-session"] == "cancel"
 
 
 @pytest.mark.asyncio
@@ -495,7 +516,7 @@ async def test_cancel_session_emits_turn_cancelled_and_turn_response(tmp_path: P
 
 @pytest.mark.asyncio
 async def test_cancel_session_idempotent(tmp_path: Path) -> None:
-    """Second cancel call on same session returns False and does not raise."""
+    """Second cancel after stream is gone registers a pending cancel (True) and does not raise."""
     from sebastian.core.base_agent import BaseAgent
     from sebastian.core.stream_events import TextBlockStart
     from sebastian.core.types import Session
@@ -524,7 +545,7 @@ async def test_cancel_session_idempotent(tmp_path: Path) -> None:
     second = await agent.cancel_session("idem-session")
 
     assert first is True
-    assert second is False  # stream already gone
+    assert second is True  # stream gone → pre-cancel registered
 
     with pytest.raises((asyncio.CancelledError, Exception)):
         await run_task

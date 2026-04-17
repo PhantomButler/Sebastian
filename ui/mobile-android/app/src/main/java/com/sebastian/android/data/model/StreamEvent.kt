@@ -5,6 +5,7 @@ sealed class StreamEvent {
     data class TurnReceived(val sessionId: String) : StreamEvent()
     data class TurnResponse(val sessionId: String, val content: String) : StreamEvent()
     data class TurnInterrupted(val sessionId: String, val partialContent: String) : StreamEvent()
+    data class TurnCancelled(val sessionId: String, val partialContent: String) : StreamEvent()
 
     // Thinking block
     data class ThinkingBlockStart(val sessionId: String, val blockId: String) : StreamEvent()

@@ -17,6 +17,8 @@ subagents/
 
 由 `SubAgentViewModel` 驱动，从后端拉取可用 Sub-Agent 列表并展示。点击某个 Agent 直接导航至 `Route.AgentChat(agentId, agentName)`，复用主对话 `ChatScreen` 的三面板布局（SubAgent 模式）。
 
+> `/agents` 后端返回包含主管家 Sebastian（`is_orchestrator = true`），本页在 VM 层通过 `filterNot { isOrchestrator }` 过滤掉，只展示真正的 sub-agent。
+
 ## 修改导航
 
 | 修改场景 | 优先看 |

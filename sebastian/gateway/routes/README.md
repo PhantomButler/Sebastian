@@ -11,7 +11,7 @@
 ```
 routes/
 ├── __init__.py        # 空文件，包标识
-├── agents.py          # Agent 状态查询与健康检查（GET /agents, GET /health）
+├── agents.py          # Agent 状态查询与 LLM 绑定管理（GET /agents, PUT/DELETE /agents/{type}/llm-binding, GET /health）
 ├── approvals.py       # 高危操作审批流（列出/批准/拒绝 pending approval）
 ├── debug.py           # 运行时调试接口（查询/动态修改日志级别）
 ├── llm_providers.py   # LLM Provider 配置管理（CRUD）
@@ -24,7 +24,9 @@ routes/
 
 | 如果要修改… | 看这里 |
 |------------|--------|
-| `GET /agents` — 查询所有 Agent 运行状态 | [agents.py](agents.py) |
+| `GET /agents` — 查询所有 Agent 运行状态（含 `bound_provider_id` 字段） | [agents.py](agents.py) |
+| `PUT /agents/{agent_type}/llm-binding` — 为 Agent 绑定指定 LLM Provider（`provider_id: null` 清除绑定） | [agents.py](agents.py) |
+| `DELETE /agents/{agent_type}/llm-binding` — 清除 Agent 的 LLM Provider 绑定 | [agents.py](agents.py) |
 | `GET /health` — 健康检查 | [agents.py](agents.py) |
 | `GET /approvals` — 列出待审批操作 | [approvals.py](approvals.py) |
 | `POST /approvals/{id}/grant` — 批准操作 | [approvals.py](approvals.py) |
@@ -38,16 +40,17 @@ routes/
 | `GET /sessions` — 列出会话（支持过滤/分页） | [sessions.py](sessions.py) |
 | `GET /sessions/{id}` — 查询单个会话及其消息 | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}` — 删除会话 | [sessions.py](sessions.py) |
-| `POST /sessions/{id}/turns` — 向已有会话发送消息（支持 `thinking_effort`） | [sessions.py](sessions.py) |
-| `POST /agents/{agent_type}/sessions` — 创建 sub-agent 会话（首条消息即透传 `thinking_effort`，无需先建会话再发 turn） | [sessions.py](sessions.py) |
+| `POST /sessions/{id}/turns` — 向已有会话发送消息 | [sessions.py](sessions.py) |
+| `POST /agents/{agent_type}/sessions` — 创建 sub-agent 会话（首条消息即透传，无需先建会话再发 turn） | [sessions.py](sessions.py) |
 | `GET /sessions/{id}/tasks` — 列出会话下的 Task | [sessions.py](sessions.py) |
 | `POST /sessions/{id}/tasks/{tid}/pause` — 暂停 Task | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}/tasks/{tid}` — 取消 Task（DELETE）| [sessions.py](sessions.py) |
 | `POST /sessions/{id}/tasks/{tid}/cancel` — 取消 Task（POST）| [sessions.py](sessions.py) |
+| `POST /sessions/{id}/cancel` — 取消 session 当前 turn（含未登记流的预取消兜底）| [sessions.py](sessions.py) |
 | `GET /stream` — 订阅全局 SSE 事件流 | [stream.py](stream.py) |
 | `GET /sessions/{id}/stream` — 订阅单会话 SSE 事件流 | [stream.py](stream.py) |
 | `POST /auth/login` — 密码登录，获取 JWT | [turns.py](turns.py) |
-| `POST /turns` — 发送消息，触发主对话轮次（支持 `thinking_effort`） | [turns.py](turns.py) |
+| `POST /turns` — 发送消息，触发主对话轮次（effort 由 binding 决定） | [turns.py](turns.py) |
 
 ---
 

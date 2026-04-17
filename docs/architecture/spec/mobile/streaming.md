@@ -1,7 +1,7 @@
 ---
-version: "1.0"
-last_updated: 2026-04-11
-status: in-progress
+version: "1.2"
+last_updated: 2026-04-17
+status: implemented
 ---
 
 # 流式渲染与连接层
@@ -83,6 +83,7 @@ sealed class ContentBlock {
         val blockId: String,
         val text: String,
         val done: Boolean,
+        val durationMs: Long? = null,   // thinking 耗时（ms），来自后端 thinking_block.stop 事件
     ) : ContentBlock()
 
     data class ToolBlock(
@@ -119,35 +120,86 @@ sealed class ToolResult {
 
 ## 3. 流式 Markdown 渲染
 
-### 3.1 核心策略：块级增量渲染
+基于 **multiplatform-markdown-renderer v0.40.2**（mikepenz/multiplatform-markdown-renderer），纯 Compose 原生实现。
+
+### 3.1 核心策略：统一渲染路径
 
 ```
-已完成的 TextBlock（done=true）→ 后台协程 Markwon 解析 → AnnotatedString → Compose Text
-进行中的 TextBlock（done=false）→ 纯文本直接渲染 → Compose Text
+所有 TextBlock（done 与否）→ MarkdownView(String) → 库内 remember(content) 缓存解析
 ```
 
-视觉效果：已完成段落立即呈现 Markdown 样式（标题、加粗、列表），光标所在的当前段落为纯文本，块完成时无缝切换，无整体跳变闪烁。
+所有状态（流式中、完成态、历史加载）走同一路径 `MarkdownView(text = block.text)`，库内部用 `rememberMarkdownState(retainState = true)` 缓存解析结果。无预解析层，无 `CharSequence` 中间态，历史加载和流式渲染无差别处理。
 
-### 3.2 数据流
+> **技术选型决策**：替换原先的 Markwon（`io.noties.markwon`）+ `AndroidView(TextView)` 方案。Markwon 基于 TextView，在 Compose 中需 AndroidView 包装，导致流式→完成态布局跳变、大列表滚动性能不佳、历史会话因 `renderedMarkdown=null` 降级为纯文本。新库是纯 Composable，消除上述所有问题。
+
+### 3.2 依赖配置（`app/build.gradle.kts`）
 
 ```kotlin
-// IO Dispatcher — 不占 Main Thread
-private fun parseMarkdown(text: String): AnnotatedString =
-    withContext(Dispatchers.IO) {
-        markwon.toMarkdown(text).toAnnotatedString()
-    }
+// libs.versions.toml: mikepenz-markdown = "0.40.2"
+implementation(libs.mikepenz.markdown.android)   // com.mikepenz:multiplatform-markdown-renderer-android
+implementation(libs.mikepenz.markdown.m3)         // Material 3 主题零配置继承
+implementation(libs.mikepenz.markdown.code)       // 代码高亮（基于 Highlights 库）
 ```
 
+已移除所有 `io.noties.markwon:*` 依赖。
+
+### 3.3 组件结构
+
+**`MarkdownView.kt`**
+
 ```kotlin
-// ViewModel 中，每个 TextBlock 完成时触发一次解析
-case StreamEvent.TextBlockStop -> {
-    val block = findBlock(blockId)
-    val rendered = parseMarkdown(block.text)  // IO 线程
-    updateBlock(blockId, block.copy(rendered = rendered, done = true))
+@Composable
+fun MarkdownView(text: String, modifier: Modifier = Modifier) {
+    val markdownState = rememberMarkdownState(text, retainState = true)
+    Markdown(
+        markdownState = markdownState,
+        modifier = modifier,
+        colors = MarkdownDefaults.colors(),
+        typography = MarkdownDefaults.typography(),
+        components = MarkdownDefaults.components(),
+    )
 }
 ```
 
-### 3.3 Delta 节流（50ms flush）
+**`MarkdownDefaults.kt`** — 集中管理所有 markdown 样式配置
+
+```kotlin
+object MarkdownDefaults {
+    @Composable fun colors(): MarkdownColors         // 跟随 MaterialTheme
+    @Composable fun typography(): MarkdownTypography // 跟随 MaterialTheme.typography
+    @Composable fun components(): MarkdownComponents // 注册代码块高亮
+}
+```
+
+> **实现差异**：原设计为独立 `CodeBlockView.kt` 文件，实际实现将代码块渲染逻辑合并进 `MarkdownDefaults.kt`，通过 `MarkdownHighlightedCodeBlock` / `MarkdownHighlightedCodeFence` 组件注入 `MarkdownComponents`，使用 `SyntaxThemes.atom(darkMode = isDark)` 语法高亮配色。
+
+**视觉规格**：
+
+| 元素 | 规格 |
+|------|------|
+| 正文 | `bodyLarge`（16sp），行高 1.5x |
+| H1/H2/H3 | `headlineMedium` / `titleLarge` / `titleMedium` |
+| 列表 | 正文字号，左缩进 16dp |
+| 引用块 `>` | 左侧 3dp 主题色竖线，文字 alpha 0.7 |
+| 代码块 | 固定深色背景（`#1E1E1E`），等宽字体 13sp，水平可滚动，复制按钮 |
+| 行内代码 | 等宽字体，`onSurface` 叠 8% alpha 背景，圆角 4dp |
+| 链接 | `primary` 色，可跳转 |
+
+### 3.4 数据模型
+
+`TextBlock` 无 `renderedMarkdown` 字段，Markdown 解析在 Composable 渲染时由库内部处理：
+
+```kotlin
+data class TextBlock(
+    override val blockId: String,
+    val text: String,
+    val done: Boolean = false,  // 流式淡入动画的 isDone 判断
+) : ContentBlock()
+```
+
+`ChatViewModel` 的 `TextBlockStop` handler 简化为只做 flush + `done=true`，无异步 parse 协程。
+
+### 3.5 Delta 节流（50ms flush）
 
 SSE delta 以原始速度到达，直接更新 UI 会产生不必要的重组压力。在 IO 协程中缓冲 50ms 统一 flush：
 
@@ -239,7 +291,50 @@ Compose `LazyColumn` 的 `rememberLazyListState()` 提供精确的 `firstVisible
 
 ---
 
-## 6. 动画状态语言
+## 6. ThinkingCard 极简风格
+
+对标 DeepSeek App 的极简思考卡片：无 Card 容器、行式布局、显示耗时。完全融入消息流，无背景色，无圆角容器。
+
+### 6.1 布局结构
+
+```
+┌── Row（fillMaxWidth，clickable，padding 4dp v / 0dp h）──────────────┐
+│  [●圆点 8dp，呼吸动画，仅 thinking 中可见]                              │
+│  [文字："Thinking" | "Thought for Xs"]   weight=1                    │
+│  [Icon：chevron_right（thinking）| arrow_down/up（done）]             │
+└──────────────────────────────────────────────────────────────────────┘
+AnimatedVisibility（expanded）
+  左侧装饰线（dot + verticalLine，primary 色）
+  Text（block.text，bodySmall，onSurfaceVariant）
+```
+
+### 6.2 状态表现
+
+| 状态 | 圆点 | 文字 | Icon |
+|------|------|------|------|
+| thinking（`!done`） | 可见，呼吸动画 | `Thinking` | `chevron_right` |
+| done（`done=true`） | 不可见 | `Thought for Xs` / `Thought for Xm Ys` | `keyboard_arrow_down/up` |
+
+两态均可点击展开/折叠。圆点使用 `AnimationTokens` 中 `THINKING_PULSE` 的 alpha 呼吸动画。
+
+### 6.3 耗时格式
+
+```kotlin
+fun formatThinkingDuration(ms: Long): String {
+    val s = ms / 1000
+    return if (s < 60) "${s}s" else "${s / 60}m ${s % 60}s"
+}
+```
+
+`durationMs == null`（旧数据 / 后端未传）时，done 状态降级显示 `Thought`（不带耗时）。
+
+### 6.4 数据链路
+
+后端 `thinking_block.stop` SSE 事件携带 `duration_ms` → `SseFrameDto` 解析 → `StreamEvent.ThinkingBlockStop.durationMs` → `ChatViewModel` 写入 `ContentBlock.ThinkingBlock.durationMs` → `ThinkingCard` 读取并格式化显示。
+
+---
+
+## 7. 动画状态语言
 
 Sebastian 的工作状态通过 Header 区域（或消息区域入口）的视觉动画传达，目标是让用户直觉感知 Agent 状态，类似「贾维斯在呼吸」的自然感。
 

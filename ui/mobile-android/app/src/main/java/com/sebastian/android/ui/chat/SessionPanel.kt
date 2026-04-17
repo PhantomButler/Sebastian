@@ -1,6 +1,5 @@
 package com.sebastian.android.ui.chat
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.sebastian.android.ui.common.SebastianIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -112,32 +112,29 @@ fun SessionPanel(
 
             // Feature section — 精简模式下隐藏
             if (agentName == null) {
-                Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    Text(
-                        text = "功能",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-                    )
-                    FeatureItem(
-                        label = "Sub-Agents",
-                        onClick = onNavigateToSubAgents,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    FeatureItem(
-                        label = "设置",
-                        onClick = onNavigateToSettings,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    FeatureItem(
-                        label = "系统总览",
-                        enabled = false,
-                        badgeText = "即将推出",
-                        onClick = {},
-                    )
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 2.dp,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        FeatureItem(
+                            label = "Sub-Agents",
+                            leadingIcon = SebastianIcons.SubAgents,
+                            onClick = onNavigateToSubAgents,
+                        )
+                        FeatureDivider()
+                        FeatureItem(
+                            label = "设置",
+                            leadingIcon = SebastianIcons.Settings,
+                            isLast = true,
+                            onClick = onNavigateToSettings,
+                        )
+                    }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(top = 12.dp))
+                Spacer(Modifier.height(14.dp))
             }
 
             // History section
@@ -237,56 +234,43 @@ private fun FeatureItem(
     label: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    badgeText: String? = null,
+    leadingIcon: ImageVector? = null,
+    isLast: Boolean = false,
 ) {
-    val borderColor = if (enabled) {
-        MaterialTheme.colorScheme.outlineVariant
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-    }
-
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(
-            width = 1.dp,
-            color = borderColor,
-        ),
-        color = MaterialTheme.colorScheme.surface,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.weight(1f),
+        if (leadingIcon != null) {
+            Icon(
+                imageVector = leadingIcon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp),
             )
-            if (badgeText != null) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                ) {
-                    Text(
-                        text = badgeText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
-            }
+            Spacer(Modifier.width(10.dp))
         }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
     }
+}
+
+@Composable
+private fun FeatureDivider() {
+    Surface(
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 44.dp)
+            .height(0.5.dp),
+    ) {}
 }
 
 @Composable
@@ -329,7 +313,7 @@ private fun SessionItem(
                 Icon(
                     imageVector = SebastianIcons.Delete,
                     contentDescription = "删除会话",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(18.dp),
                 )
             }

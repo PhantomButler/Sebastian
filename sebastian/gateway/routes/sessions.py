@@ -72,7 +72,6 @@ async def create_agent_session(
     content = body.get("content", "")
     if not content:
         raise HTTPException(400, "content is required")
-    thinking_effort = body.get("thinking_effort")
 
     session = Session(
         agent_type=agent_type,
@@ -95,7 +94,6 @@ async def create_agent_session(
             session_store=state.session_store,
             index_store=state.index_store,
             event_bus=state.event_bus,
-            thinking_effort=thinking_effort,
         )
     )
     _background_tasks.add(_task)
@@ -123,7 +121,6 @@ async def get_session(
 
 class SendTurnBody(BaseModel):
     content: str
-    thinking_effort: str | None = None
 
 
 def _log_background_turn_failure(task: asyncio.Task[object]) -> None:
@@ -229,22 +226,17 @@ async def _resolve_session_task(
 async def _schedule_session_turn(
     session: Session,
     content: str,
-    thinking_effort: str | None = None,
 ) -> None:
     """Route a turn to the correct agent instance."""
     import sebastian.gateway.state as state
 
     if session.agent_type == "sebastian":
-        task = asyncio.create_task(
-            state.sebastian.run_streaming(content, session.id, thinking_effort=thinking_effort)
-        )
+        task = asyncio.create_task(state.sebastian.run_streaming(content, session.id))
     else:
         agent = state.agent_instances.get(session.agent_type)
         if agent is None:
             raise ValueError(f"No agent instance for type: {session.agent_type}")
-        task = asyncio.create_task(
-            agent.run_streaming(content, session.id, thinking_effort=thinking_effort)
-        )
+        task = asyncio.create_task(agent.run_streaming(content, session.id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     task.add_done_callback(_log_background_turn_failure)
@@ -278,7 +270,7 @@ async def send_turn_to_session(
     session = await _resolve_session(state, session_id)
     await _ensure_llm_ready(session.agent_type)
     now = await _touch_session(state, session)
-    await _schedule_session_turn(session, body.content, thinking_effort=body.thinking_effort)
+    await _schedule_session_turn(session, body.content)
 
     return {
         "session_id": session_id,

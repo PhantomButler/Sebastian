@@ -23,6 +23,7 @@ object SseFrameParser {
         "turn.received" -> StreamEvent.TurnReceived(data.getString("session_id"))
         "turn.response" -> StreamEvent.TurnResponse(data.getString("session_id"), data.optString("content", ""))
         "turn.interrupted" -> StreamEvent.TurnInterrupted(data.getString("session_id"), data.optString("partial_content", ""))
+        "turn.cancelled" -> StreamEvent.TurnCancelled(data.getString("session_id"), data.optString("partial_content", ""))
         "thinking_block.start" -> StreamEvent.ThinkingBlockStart(data.getString("session_id"), data.getString("block_id"))
         "turn.thinking_delta" -> StreamEvent.ThinkingDelta(data.getString("session_id"), data.getString("block_id"), data.getString("delta"))
         "thinking_block.stop" -> StreamEvent.ThinkingBlockStop(

@@ -2,22 +2,37 @@
 
 > 上级：[ui/README.md](../README.md)
 
-消息输入区，由 `ChatUiState.composerState`（`ComposerState` 枚举）驱动，封装输入框、发送/停止按钮与思考档位选择器。
+消息输入区，由 `ChatUiState.composerState`（`ComposerState` 枚举）驱动，封装输入框与发送/停止按钮。思考档位已迁移至每个 Sub-Agent 的绑定次级页（见 `ui/settings/AgentBindingEditorPage.kt`），Composer 不再承载 thinking UI。
 
 ## 目录结构
 
 ```text
 composer/
-├── Composer.kt     # 输入框容器（组合 ThinkButton + SendButton，GlassSurface 悬浮）
-├── SendButton.kt   # 发送/停止按钮（状态机驱动）
-└── ThinkButton.kt  # 思考档位按钮（AUTO / LOW / HIGH，弹出 EffortPicker）
+├── Composer.kt         # 输入框容器（插槽架构，GlassSurface 悬浮）
+└── SendButton.kt       # 发送/停止按钮（状态机驱动）
 ```
 
 ## 模块说明
 
 ### `Composer`
 
-接收 `ComposerState` / `activeProvider` / `effort`，通过 `GlassSurface` 实现液态玻璃悬浮效果，内部组合 `ThinkButton` 和 `SendButton`。
+插槽架构，自身无状态：`ComposerState` 由 `ChatViewModel` 持有并通过 prop 传入。签名：
+
+```kotlin
+@Composable
+fun Composer(
+    state: ComposerState,
+    glassState: GlassState,
+    onSend: (String) -> Unit,
+    onStop: () -> Unit,
+    voiceSlot: @Composable (() -> Unit)? = null,
+    attachmentSlot: @Composable (() -> Unit)? = null,
+    attachmentPreviewSlot: @Composable (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+)
+```
+
+通过 `GlassSurface` 实现液态玻璃悬浮效果；输入文本为内部 `rememberSaveable` 状态，按 `text.isNotBlank()` 推导实际按钮状态。`voiceSlot` / `attachmentSlot` / `attachmentPreviewSlot` 为 Phase 2 预留插槽，默认 `null`；接入语音或附件时不修改本文件。
 
 ### `SendButton`
 
@@ -30,18 +45,14 @@ composer/
 | `STREAMING` | AI 正在响应 | 停止按钮 |
 | `CANCELLING` | 已发送停止请求 | 加载中 |
 
-### `ThinkButton`
-
-按当前 Provider `thinking_capability` 决定是否渲染。点击弹出 `EffortPicker`，可选档位：`AUTO` / `LOW` / `HIGH`。
-
 ## 修改导航
 
 | 修改场景 | 优先看 |
 |---------|--------|
 | 改输入框整体布局/悬浮样式 | `Composer.kt` |
 | 改发送/停止按钮状态逻辑 | `SendButton.kt` |
-| 改思考档位按钮/选择器 | `ThinkButton.kt` |
 | 改 `ComposerState` 枚举定义 | `viewmodel/ChatViewModel.kt` |
+| 改每个 Agent 的思考档位（Provider + Effort） | `ui/settings/AgentBindingEditorPage.kt` → [settings/README.md](../settings/README.md) |
 
 ---
 

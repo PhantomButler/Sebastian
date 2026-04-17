@@ -35,7 +35,9 @@ class SubAgentViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             agentRepository.getAgents()
                 .onSuccess { agents ->
-                    _uiState.update { it.copy(isLoading = false, agents = agents) }
+                    // /agents 返回含 orchestrator，subagents 列表只展示真正的 sub-agent
+                    val subAgents = agents.filterNot { it.isOrchestrator }
+                    _uiState.update { it.copy(isLoading = false, agents = subAgents) }
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }

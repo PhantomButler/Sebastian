@@ -170,9 +170,7 @@ def test_send_turn_to_sebastian_session_runs_background_stream(client):
     assert "ts" in payload
     assert "response" not in payload
     assert len(scheduled_coroutines) == 1
-    mock_run_streaming.assert_called_once_with(
-        "Continue the conversation", session.id, thinking_effort=None
-    )
+    mock_run_streaming.assert_called_once_with("Continue the conversation", session.id)
     assert mock_run_streaming.await_count == 0
 
 
@@ -353,8 +351,8 @@ def test_post_cancel_unknown_session_returns_404(client) -> None:
     assert resp.status_code == 404
 
 
-def test_post_cancel_idle_session_returns_404(client) -> None:
-    """Session with no active stream returns 404 (no stream to cancel)."""
+def test_post_cancel_idle_session_returns_200(client) -> None:
+    """Session with no active stream returns 200 — a pending cancel is registered."""
     import sebastian.gateway.state as state
     from sebastian.core.types import Session
 
@@ -369,7 +367,7 @@ def test_post_cancel_idle_session_returns_404(client) -> None:
         "/api/v1/sessions/idle-cancel/cancel",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 404
+    assert resp.status_code == 200
 
 
 def test_sub_agent_turns_accepts_thinking_effort(client) -> None:
@@ -412,11 +410,60 @@ def test_sub_agent_turns_accepts_thinking_effort(client) -> None:
 
         assert resp.status_code == 200, resp.text
         assert len(scheduled_coroutines) == 1
-        # Check that run_streaming was called with thinking_effort
-        mock_agent.run_streaming.assert_called_once_with(
-            "follow up", session.id, thinking_effort="medium"
-        )
+        # A4: thinking_effort is no longer passed to run_streaming from the HTTP layer;
+        # the agent reads it internally from llm_registry.get_provider().
+        mock_agent.run_streaming.assert_called_once_with("follow up", session.id)
     finally:
         # Restore original
         state.agent_instances.clear()
         state.agent_instances.update(original_instances)
+
+
+def test_cancel_right_after_turn_returns_200(client) -> None:
+    """POST /cancel right after POST /turns must not 404 even before _active_streams is registered.
+
+    Simulates the race: the background task created by POST /turns is intercepted and
+    closed before run_streaming ever executes (so _active_streams is never populated).
+    The immediately following POST /cancel must still return 200 by writing a pending
+    cancel intent, and _pending_cancel_intents must be populated for that session.
+    """
+    import sebastian.gateway.state as state
+    from sebastian.core.types import Session
+
+    http_client, mock_run_streaming, _ = client
+    token = _login(http_client)
+
+    session = Session(
+        agent_type="sebastian",
+        agent_id="sebastian_01",
+        title="Race test session",
+    )
+    _store_session(session)
+
+    scheduled_coroutines: list[object] = []
+
+    # Intercept asyncio.create_task so run_streaming never actually runs
+    # and _active_streams is never populated — this simulates the race window.
+    with patch(
+        "sebastian.gateway.routes.sessions.asyncio.create_task",
+        side_effect=_capture_background_task(scheduled_coroutines),
+    ):
+        turn_resp = http_client.post(
+            f"/api/v1/sessions/{session.id}/turns",
+            json={"content": "Hello"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert turn_resp.status_code == 200, turn_resp.text
+    assert len(scheduled_coroutines) == 1  # background task was created and closed
+
+    # _active_streams is NOT populated (run_streaming never ran).
+    # Immediately cancel — must return 200, not 404.
+    cancel_resp = http_client.post(
+        f"/api/v1/sessions/{session.id}/cancel",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert cancel_resp.status_code == 200, cancel_resp.text
+
+    # The pending cancel intent must have been recorded in the agent.
+    assert session.id in state.sebastian._pending_cancel_intents

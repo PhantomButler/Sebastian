@@ -17,6 +17,9 @@ capabilities/
 │   ├── __init__.py
 │   ├── _loader.py       # 启动时自动扫描 tools/ 目录，触发 @tool 自注册
 │   ├── _file_state.py   # 文件读取状态追踪（Write/Edit 的前置保护）
+│   ├── _path_utils.py   # 统一文件路径解析（相对路径 → workspace_dir）
+│   ├── _session_lock.py # Session 级 asyncio.Lock，防止并发 turn 冲突
+│   ├── _session_permission.py  # stop/resume 权限校验（depth 边界）
 │   ├── ask_parent/      # 子代理主动暂停并向上级请求指示（状态置 WAITING）
 │   ├── bash/            # Shell 命令执行工具
 │   ├── check_sub_agents/  # 查询当前 Sub-Agent 会话状态
@@ -29,6 +32,7 @@ capabilities/
 │   ├── resume_agent/    # 恢复 waiting/idle 子代理执行
 │   ├── stop_agent/      # 暂停运行中的子代理到 idle（可恢复）
 │   ├── spawn_sub_agent/ # Sebastian 创建新的 Sub-Agent session
+│   ├── todo_write/      # Session 级 todo 列表覆盖式写入工具
 │   └── write/           # 文件写入工具（含 mtime 保护）
 ├── mcps/                # MCP server 配置目录，每个子目录一个 config.toml，启动时自动连接
 │   ├── __init__.py
@@ -96,8 +100,8 @@ async def my_tool(param: str) -> ToolResult:
 ## 子模块
 
 - [tools/](tools/README.md) — Native 工具插件目录，`@tool` 装饰器驱动自注册
-- `mcps/` — MCP Server 配置目录，`config.toml` 驱动自动连接
-- `skills/` — Skill 复合能力目录（Phase 2+，当前占位）
+- [mcps/](mcps/README.md) — MCP Server 配置目录，`config.toml` 驱动自动连接
+- [skills/](skills/README.md) — Skill 复合能力目录，`SKILL.md` 驱动自动加载
 
 ---
 

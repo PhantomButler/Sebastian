@@ -13,6 +13,7 @@ llm/
 ├── __init__.py          # 模块入口（空导出，按需 import 子模块）
 ├── provider.py          # LLMProvider 抽象基类；定义 stream() 接口和 message_format 属性
 ├── anthropic.py         # Anthropic SDK 适配，处理 thinking block、tool_use streaming
+├── crypto.py            # Fernet 加密/解密封装，基于 secret.key，用于 API Key 落库前的保护
 ├── openai_compat.py     # OpenAI /v1/chat/completions 适配，兼容 DeepSeek-R1 等第三方模型
 └── registry.py          # DB 驱动的 Provider 注册表，支持运行时切换；无配置时抛出 RuntimeError
 ```
@@ -77,6 +78,7 @@ UI 层需在 clamp 规则中保证传入 Provider 的 effort 始终合法（见 
 | 如果要修改… | 看这里 |
 |------------|--------|
 | 新增 Provider（如 Google Gemini） | 继承 [provider.py](provider.py) 的 `LLMProvider`，声明 `message_format`，在 [registry.py](registry.py) 的 `_instantiate()` 注册 `provider_type` |
+| API Key 加密/解密（落库前保护） | [crypto.py](crypto.py) 的 `encrypt()` / `decrypt()` |
 | Anthropic streaming 行为 / thinking block | [anthropic.py](anthropic.py) |
 | OpenAI 兼容模型适配 / thinking_format | [openai_compat.py](openai_compat.py) |
 | 调整 thinking_capability 翻译规则 / budget 默认值 | [anthropic.py](anthropic.py) 的 `_build_thinking_kwargs` 与 `FIXED_EFFORT_TO_BUDGET` / [openai_compat.py](openai_compat.py) |

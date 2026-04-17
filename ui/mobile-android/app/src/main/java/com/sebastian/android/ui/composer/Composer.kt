@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.TextField
@@ -20,8 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.sebastian.android.data.model.Provider
-import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.ui.common.glass.GlassState
 import com.sebastian.android.ui.common.glass.GlassSurface
 import com.sebastian.android.viewmodel.ComposerState
@@ -37,10 +36,6 @@ import com.sebastian.android.viewmodel.ComposerState
 fun Composer(
     state: ComposerState,
     glassState: GlassState,
-    activeProvider: Provider?,
-    effort: ThinkingEffort,
-    onEffortChange: (ThinkingEffort) -> Unit,
-    onShowEffortPicker: () -> Unit,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
     // Phase 2 插槽预留
@@ -52,7 +47,7 @@ fun Composer(
     var text by rememberSaveable { mutableStateOf("") }
 
     val effectiveState = when {
-        state == ComposerState.STREAMING || state == ComposerState.SENDING || state == ComposerState.CANCELLING -> state
+        state == ComposerState.STREAMING || state == ComposerState.PENDING || state == ComposerState.CANCELLING -> state
         text.isNotBlank() -> ComposerState.IDLE_READY
         else -> ComposerState.IDLE_EMPTY
     }
@@ -85,19 +80,15 @@ fun Composer(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            // 工具栏
+            // 工具栏（ThinkButton 已下线，用等高 Spacer 占位保持整体高度不变）
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ThinkButton(
-                    activeProvider = activeProvider,
-                    currentEffort = effort,
-                    onEffortChange = onEffortChange,
-                    onShowPicker = onShowEffortPicker,
-                )
+                // 原 ThinkButton 位置空出，用与 ThinkButton 等高的 Spacer 占位（48dp 高度）
+                Spacer(Modifier.size(width = 0.dp, height = 48.dp))
                 voiceSlot?.let {
                     Spacer(Modifier.width(4.dp))
                     it()

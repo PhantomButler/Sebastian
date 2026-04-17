@@ -26,7 +26,7 @@ import com.sebastian.android.viewmodel.ComposerState
  * |-------------|--------------------------|-------|
  * | IDLE_EMPTY  | Neutral 玻璃圆（禁用）      | 否    |
  * | IDLE_READY  | Primary 玻璃圆 + 发送图标   | 是    |
- * | SENDING     | Neutral 玻璃圆 + 进度环     | 否    |
+ * | PENDING     | Primary 玻璃圆 + 停止图标   | 是    |
  * | STREAMING   | Primary 玻璃圆 + 停止图标   | 是    |
  * | CANCELLING  | Neutral 玻璃圆 + 进度环     | 否    |
  *
@@ -40,15 +40,20 @@ fun SendButton(
     onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val isEnabled = state == ComposerState.IDLE_READY || state == ComposerState.STREAMING
-    val tint = if (state == ComposerState.IDLE_READY || state == ComposerState.STREAMING)
+    val isEnabled = state == ComposerState.IDLE_READY ||
+        state == ComposerState.STREAMING ||
+        state == ComposerState.PENDING
+    val tint = if (state == ComposerState.IDLE_READY ||
+        state == ComposerState.STREAMING ||
+        state == ComposerState.PENDING
+    )
         GlassButtonTint.Primary
     else
         GlassButtonTint.Neutral
 
     val onClick: () -> Unit = when (state) {
         ComposerState.IDLE_READY -> onSend
-        ComposerState.STREAMING -> onStop
+        ComposerState.STREAMING, ComposerState.PENDING -> onStop
         else -> ({})
     }
 
@@ -76,12 +81,12 @@ fun SendButton(
                     else
                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                 )
-                ComposerState.STREAMING -> Icon(
+                ComposerState.PENDING, ComposerState.STREAMING -> Icon(
                     imageVector = SebastianIcons.StopAction,
                     contentDescription = "停止",
                     tint = MaterialTheme.colorScheme.onPrimary,
                 )
-                ComposerState.SENDING, ComposerState.CANCELLING -> CircularProgressIndicator(
+                ComposerState.CANCELLING -> CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),

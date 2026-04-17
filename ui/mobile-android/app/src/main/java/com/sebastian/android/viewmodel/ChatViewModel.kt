@@ -7,7 +7,6 @@ import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.StreamEvent
-import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.model.ToolStatus
 import com.sebastian.android.data.repository.ChatRepository
 import com.sebastian.android.data.repository.SessionRepository
@@ -16,8 +15,11 @@ import com.sebastian.android.di.IoDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -29,16 +31,15 @@ import kotlin.coroutines.cancellation.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
-enum class ComposerState { IDLE_EMPTY, IDLE_READY, SENDING, STREAMING, CANCELLING }
+enum class ComposerState { IDLE_EMPTY, IDLE_READY, PENDING, STREAMING, CANCELLING }
 enum class ScrollFollowState { FOLLOWING, DETACHED, NEAR_BOTTOM }
-enum class AgentAnimState { IDLE, THINKING, STREAMING, WORKING }
+enum class AgentAnimState { IDLE, PENDING, THINKING, STREAMING, WORKING }
 
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val composerState: ComposerState = ComposerState.IDLE_EMPTY,
     val scrollFollowState: ScrollFollowState = ScrollFollowState.FOLLOWING,
     val agentAnimState: AgentAnimState = AgentAnimState.IDLE,
-    val activeThinkingEffort: ThinkingEffort = ThinkingEffort.OFF,
     val activeSessionId: String? = null,       // null = 新对话
     val isOffline: Boolean = false,
     val error: String? = null,
@@ -59,11 +60,26 @@ class ChatViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    private val _toastEvents = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val toastEvents: SharedFlow<String> = _toastEvents.asSharedFlow()
+
     private val pendingDeltas = ConcurrentHashMap<String, StringBuilder>()
 
     private var sseJob: Job? = null
+    private var sendTurnJob: Job? = null
     private var currentAssistantMessageId: String? = null
     private var pendingTurnSessionId: String? = null
+
+    private var pendingTimeoutJob: Job? = null
+    private var pendingTimeoutElapsedMs: Long = 0L
+    private var pendingTimeoutStartAtMs: Long = 0L
+
+    // Overrideable in tests to use virtual time.
+    internal var clock: () -> Long = { System.currentTimeMillis() }
+
+    companion object {
+        private const val PENDING_TIMEOUT_MS = 15_000L
+    }
 
     init {
         observeNetwork()
@@ -143,7 +159,7 @@ class ChatViewModel @Inject constructor(
                             connectionFailed = true,
                             // If we lost the connection mid-turn, reset the composer so the
                             // button doesn't stay spinning with no way to dismiss.
-                            composerState = if (state.composerState == ComposerState.SENDING ||
+                            composerState = if (state.composerState == ComposerState.PENDING ||
                                 state.composerState == ComposerState.STREAMING
                             ) ComposerState.IDLE_EMPTY else state.composerState,
                         )
@@ -154,6 +170,7 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun handleEvent(event: StreamEvent) {
+        cancelPendingTimeout()
         when (event) {
             is StreamEvent.TurnReceived -> {
                 pendingTurnSessionId = event.sessionId
@@ -272,6 +289,18 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            is StreamEvent.TurnCancelled -> {
+                flushPendingDeltasForCurrentMessage()
+                currentAssistantMessageId = null
+                pendingTurnSessionId = null
+                _uiState.update {
+                    it.copy(
+                        composerState = ComposerState.IDLE_EMPTY,
+                        agentAnimState = AgentAnimState.IDLE,
+                    )
+                }
+            }
+
             else -> Unit
         }
     }
@@ -290,15 +319,17 @@ class ChatViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 messages = state.messages + userMsg,
-                composerState = ComposerState.SENDING,
+                composerState = ComposerState.PENDING,
+                agentAnimState = AgentAnimState.PENDING,
                 scrollFollowState = ScrollFollowState.FOLLOWING,
             )
         }
-        viewModelScope.launch(dispatcher) {
-            chatRepository.sendTurn(currentSessionId, text, _uiState.value.activeThinkingEffort)
+        startPendingTimeout()
+        sendTurnJob = viewModelScope.launch(dispatcher) {
+            chatRepository.sendTurn(currentSessionId, text)
                 .onSuccess { returnedSessionId ->
-                    // REST returned — clear SENDING immediately; SSE events drive the rest of the turn.
-                    _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
+                    sendTurnJob = null
+                    // REST returned — leave PENDING; SSE block events will drive the transition.
                     if (currentSessionId == null || currentSessionId != returnedSessionId) {
                         // New session created by backend — switch to it
                         _uiState.update { it.copy(activeSessionId = returnedSessionId) }
@@ -315,6 +346,7 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 .onFailure { e ->
+                    sendTurnJob = null
                     _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
                 }
         }
@@ -332,32 +364,37 @@ class ChatViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 messages = state.messages + userMsg,
-                composerState = ComposerState.SENDING,
+                composerState = ComposerState.PENDING,
+                agentAnimState = AgentAnimState.PENDING,
                 scrollFollowState = ScrollFollowState.FOLLOWING,
             )
         }
-        viewModelScope.launch(dispatcher) {
+        startPendingTimeout()
+        sendTurnJob = viewModelScope.launch(dispatcher) {
             if (currentSessionId == null) {
                 // New agent session: create + start SSE
                 sessionRepository.createAgentSession(agentId, text)
                     .onSuccess { session ->
+                        sendTurnJob = null
                         _uiState.update { it.copy(activeSessionId = session.id, composerState = ComposerState.IDLE_EMPTY) }
                         startSseCollection(replayFromStart = true)
                         sessionRepository.loadAgentSessions(agentId)
                     }
                     .onFailure { e ->
+                        sendTurnJob = null
                         _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
                     }
             } else {
-                // Existing session: send turn
-                chatRepository.sendSessionTurn(currentSessionId, text, _uiState.value.activeThinkingEffort)
+                // Existing session: send turn — leave PENDING; SSE block events drive the transition.
+                chatRepository.sendSessionTurn(currentSessionId, text)
                     .onSuccess {
-                        _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
+                        sendTurnJob = null
                         if (sseJob?.isActive != true) {
                             startSseCollection(replayFromStart = true)
                         }
                     }
                     .onFailure { e ->
+                        sendTurnJob = null
                         _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
                     }
             }
@@ -368,17 +405,36 @@ class ChatViewModel @Inject constructor(
         if (text.isBlank()) return
         val userMsg = Message(id = UUID.randomUUID().toString(), sessionId = sessionId, role = MessageRole.USER, text = text)
         _uiState.update { state ->
-            state.copy(messages = state.messages + userMsg, composerState = ComposerState.SENDING, scrollFollowState = ScrollFollowState.FOLLOWING)
+            state.copy(
+                messages = state.messages + userMsg,
+                composerState = ComposerState.PENDING,
+                agentAnimState = AgentAnimState.PENDING,
+                scrollFollowState = ScrollFollowState.FOLLOWING,
+            )
         }
         viewModelScope.launch(dispatcher) {
-            chatRepository.sendSessionTurn(sessionId, text, _uiState.value.activeThinkingEffort)
-                .onSuccess { _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) } }
+            // Leave PENDING on success; SSE block events drive the transition.
+            chatRepository.sendSessionTurn(sessionId, text)
                 .onFailure { e -> _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) } }
         }
     }
 
     fun cancelTurn() {
-        val sessionId = _uiState.value.activeSessionId ?: return
+        cancelPendingTimeout()
+        val sessionId = _uiState.value.activeSessionId
+        if (sessionId == null) {
+            // Still in PENDING before REST returned — cancel the local job,
+            // keep user bubble for editing/retry.
+            sendTurnJob?.cancel()
+            sendTurnJob = null
+            _uiState.update {
+                it.copy(
+                    composerState = ComposerState.IDLE_READY,
+                    agentAnimState = AgentAnimState.IDLE,
+                )
+            }
+            return
+        }
         _uiState.update { it.copy(composerState = ComposerState.CANCELLING) }
         viewModelScope.launch(dispatcher) {
             withTimeoutOrNull(5_000L) {
@@ -452,11 +508,43 @@ class ChatViewModel @Inject constructor(
      * 存在 ChatScreen 的 local remember state，ViewModel 不感知）造成视觉错位。
      */
     fun onAppStart() {
+        resumePendingTimeoutIfNeeded()
         val state = _uiState.value
-        val sessionId = state.activeSessionId ?: return
         if (state.isOffline) return
+
+        if (state.composerState == ComposerState.PENDING) {
+            val sessionId = state.activeSessionId ?: run {
+                // No session yet (REST hasn't returned) — restart SSE if needed
+                startSseCollection(replayFromStart = false)
+                return
+            }
+            viewModelScope.launch(dispatcher) {
+                chatRepository.getMessages(sessionId)
+                    .onSuccess { msgs ->
+                        val last = msgs.lastOrNull()
+                        val turnDone = last?.role == MessageRole.ASSISTANT &&
+                            last.blocks.lastOrNull()?.isDone == true
+                        if (turnDone) {
+                            cancelPendingTimeout()
+                            _uiState.update {
+                                it.copy(
+                                    messages = msgs,
+                                    composerState = ComposerState.IDLE_EMPTY,
+                                    agentAnimState = AgentAnimState.IDLE,
+                                )
+                            }
+                        }
+                        startSseCollection(replayFromStart = false)
+                    }
+                    .onFailure {
+                        startSseCollection(replayFromStart = false)
+                    }
+            }
+            return
+        }
+
+        val sessionId = state.activeSessionId ?: return
         if (state.composerState == ComposerState.STREAMING ||
-            state.composerState == ComposerState.SENDING ||
             state.composerState == ComposerState.CANCELLING ||
             state.composerState == ComposerState.IDLE_READY
         ) return
@@ -464,12 +552,9 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onAppStop() {
+        pausePendingTimeout()
         sseJob?.cancel()
         sseJob = null
-    }
-
-    fun setEffort(effort: ThinkingEffort) {
-        _uiState.update { it.copy(activeThinkingEffort = effort) }
     }
 
     fun onUserScrolled() {
@@ -497,6 +582,43 @@ class ChatViewModel @Inject constructor(
     }
 
     fun clearError() = _uiState.update { it.copy(error = null) }
+
+    // ── Pending timeout helpers ──────────────────────────────────────────────
+
+    private fun startPendingTimeout() {
+        pendingTimeoutElapsedMs = 0L
+        launchPendingTimeoutSegment(PENDING_TIMEOUT_MS)
+    }
+
+    private fun launchPendingTimeoutSegment(remaining: Long) {
+        pendingTimeoutJob?.cancel()
+        pendingTimeoutStartAtMs = clock()
+        pendingTimeoutJob = viewModelScope.launch(dispatcher) {
+            delay(remaining)
+            _toastEvents.emit("响应较慢，可点停止后重试")
+        }
+    }
+
+    private fun pausePendingTimeout() {
+        if (pendingTimeoutJob?.isActive == true) {
+            pendingTimeoutElapsedMs += clock() - pendingTimeoutStartAtMs
+            pendingTimeoutJob?.cancel()
+            pendingTimeoutJob = null
+        }
+    }
+
+    private fun resumePendingTimeoutIfNeeded() {
+        if (_uiState.value.composerState != ComposerState.PENDING) return
+        val remaining = (PENDING_TIMEOUT_MS - pendingTimeoutElapsedMs).coerceAtLeast(0L)
+        if (remaining == 0L) return
+        launchPendingTimeoutSegment(remaining)
+    }
+
+    private fun cancelPendingTimeout() {
+        pendingTimeoutJob?.cancel()
+        pendingTimeoutJob = null
+        pendingTimeoutElapsedMs = 0L
+    }
 
     // ── Private helpers ──────────────────────────────────────────────────────
 

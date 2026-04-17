@@ -10,24 +10,44 @@
 
 ```
 tools/
-├── __init__.py          # 模块入口（空）
-├── _loader.py           # 启动时扫描子目录包，触发 @tool 自注册
-├── _file_state.py       # 文件读取状态追踪（保障 Write/Edit 前置 Read 约束）
-├── _path_utils.py       # 统一文件路径解析（相对路径 → workspace_dir，所有工具必须使用）
-├── bash/                # Shell 命令执行工具（permission_tier: MODEL_DECIDES）
-│   └── __init__.py      # @tool: bash_execute
-├── edit/                # 文件精准字符串替换工具（permission_tier: MODEL_DECIDES）
-│   └── __init__.py      # @tool: file_edit
-├── glob/                # 文件模式匹配工具（permission_tier: LOW）
-│   └── __init__.py      # @tool: file_glob
-├── grep/                # 文件内容正则搜索工具，优先 ripgrep（permission_tier: LOW）
-│   └── __init__.py      # @tool: file_grep
-├── read/                # 文件读取工具（permission_tier: LOW）
-│   └── __init__.py      # @tool: file_read
-├── todo_write/          # Session 级 todo 列表覆盖式写入工具（permission_tier: LOW）
-│   └── __init__.py      # @tool: todo_write
-└── write/               # 文件写入工具，含 mtime 保护（permission_tier: MODEL_DECIDES）
-    └── __init__.py      # @tool: file_write
+├── __init__.py              # 模块入口（空）
+├── _loader.py               # 启动时扫描子目录包，触发 @tool 自注册
+├── _file_state.py           # 文件读取状态追踪（保障 Write/Edit 前置 Read 约束）
+├── _path_utils.py           # 统一文件路径解析（相对路径 → workspace_dir，所有工具必须使用）
+├── _session_lock.py         # Session 级 asyncio.Lock，防止并发 turn 冲突
+├── _session_permission.py   # stop/resume 操作的 depth 边界权限校验（被 stop_agent/resume_agent 调用）
+│
+│   # ── 能力工具（manifest allowed_tools 白名单管控）────────────────
+├── bash/                    # Shell 命令执行工具（permission_tier: MODEL_DECIDES）
+│   └── __init__.py          # @tool: bash_execute
+├── edit/                    # 文件精准字符串替换工具（permission_tier: MODEL_DECIDES）
+│   └── __init__.py          # @tool: file_edit
+├── glob/                    # 文件模式匹配工具（permission_tier: LOW）
+│   └── __init__.py          # @tool: file_glob
+├── grep/                    # 文件内容正则搜索工具，优先 ripgrep（permission_tier: LOW）
+│   └── __init__.py          # @tool: file_grep
+├── read/                    # 文件读取工具（permission_tier: LOW）
+│   └── __init__.py          # @tool: file_read
+├── todo_write/              # Session 级 todo 列表覆盖式写入工具（permission_tier: LOW）
+│   └── __init__.py          # @tool: todo_write
+├── write/                   # 文件写入工具，含 mtime 保护（permission_tier: MODEL_DECIDES）
+│   └── __init__.py          # @tool: file_write
+│
+│   # ── 协议工具（按 Agent 层级角色自动注入，无需在 manifest 声明）──
+├── ask_parent/              # 子代理主动暂停并向上级请求指示（状态置 WAITING）
+│   └── __init__.py          # @tool: ask_parent
+├── check_sub_agents/        # 查询当前 Agent 创建的所有子代理会话状态
+│   └── __init__.py          # @tool: check_sub_agents
+├── delegate_to_agent/       # Sebastian 委派任务给 Sub-Agent（工具调用形式）
+│   └── __init__.py          # @tool: delegate_to_agent
+├── inspect_session/         # 查看指定 session 的最近消息与状态
+│   └── __init__.py          # @tool: inspect_session
+├── resume_agent/            # 恢复 waiting/idle 子代理执行
+│   └── __init__.py          # @tool: resume_agent
+├── spawn_sub_agent/         # 组长创建 depth=3 子代理 session
+│   └── __init__.py          # @tool: spawn_sub_agent
+└── stop_agent/              # 暂停运行中的子代理到 idle（可恢复）
+    └── __init__.py          # @tool: stop_agent
 ```
 
 ## 修改导航
@@ -38,6 +58,8 @@ tools/
 | 修改工具自动扫描逻辑 | [_loader.py](_loader.py) |
 | 修改文件读取状态保护 | [_file_state.py](_file_state.py) |
 | 修改路径解析基准（workspace_dir） | [_path_utils.py](_path_utils.py) |
+| 修改 session 并发锁 | [_session_lock.py](_session_lock.py) |
+| 修改 stop/resume 权限边界规则 | [_session_permission.py](_session_permission.py) |
 | Shell 命令执行工具 | [bash/\_\_init\_\_.py](bash/__init__.py) |
 | 文件精准替换工具 | [edit/\_\_init\_\_.py](edit/__init__.py) |
 | 文件模式匹配工具 | [glob/\_\_init\_\_.py](glob/__init__.py) |
@@ -45,6 +67,13 @@ tools/
 | 文件读取工具 | [read/\_\_init\_\_.py](read/__init__.py) |
 | Todo 列表写入工具 | [todo_write/\_\_init\_\_.py](todo_write/__init__.py) |
 | 文件写入工具 | [write/\_\_init\_\_.py](write/__init__.py) |
+| 子代理主动请示上级 | [ask_parent/\_\_init\_\_.py](ask_parent/__init__.py) |
+| 查询子代理状态 | [check_sub_agents/\_\_init\_\_.py](check_sub_agents/__init__.py) |
+| Sebastian 委派任务 | [delegate_to_agent/\_\_init\_\_.py](delegate_to_agent/__init__.py) |
+| 查看 session 进展 | [inspect_session/\_\_init\_\_.py](inspect_session/__init__.py) |
+| 恢复子代理执行 | [resume_agent/\_\_init\_\_.py](resume_agent/__init__.py) |
+| 创建 depth=3 子代理 | [spawn_sub_agent/\_\_init\_\_.py](spawn_sub_agent/__init__.py) |
+| 暂停子代理 | [stop_agent/\_\_init\_\_.py](stop_agent/__init__.py) |
 
 ## ToolResult 规范
 

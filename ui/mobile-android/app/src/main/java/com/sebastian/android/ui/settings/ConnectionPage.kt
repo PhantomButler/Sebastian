@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -105,7 +106,8 @@ fun ConnectionPage(
             SectionLabel("服务器")
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                color = Color.White,
+                shadowElevation = 8.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     OutlinedTextField(
@@ -142,12 +144,6 @@ fun ConnectionPage(
                             Text("保存")
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "模拟器：http://10.0.2.2:8823\n真机使用局域网 IP",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
 
@@ -157,7 +153,8 @@ fun ConnectionPage(
             SectionLabel("账户")
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                color = Color.White,
+                shadowElevation = 8.dp,
             ) {
                 if (uiState.isLoggedIn) {
                     LoggedInContent(onLogout = viewModel::logout)
@@ -208,8 +205,8 @@ private fun LoggedInContent(onLogout: () -> Unit) {
         Button(
             onClick = onLogout,
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.error,
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
             ),
             modifier = Modifier
                 .fillMaxWidth()

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sebastian.store.database import Base  # noqa: F401
@@ -84,4 +84,21 @@ class LLMProviderRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
+
+
+class AgentLLMBindingRecord(Base):
+    __tablename__ = "agent_llm_bindings"
+
+    agent_type: Mapped[str] = mapped_column(String(100), primary_key=True)
+    provider_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("llm_providers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    thinking_effort: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )

@@ -3,7 +3,6 @@ package com.sebastian.android.data.repository
 import com.sebastian.android.data.model.ApprovalSnapshot
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.StreamEvent
-import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.remote.ApiService
 import com.sebastian.android.data.remote.SseClient
 import com.sebastian.android.data.remote.dto.SendTurnRequest
@@ -27,19 +26,18 @@ class ChatRepositoryImpl @Inject constructor(
         apiService.getSession(sessionId).messages.mapIndexed { index, dto -> dto.toDomain(sessionId, index) }
     }
 
-    override suspend fun sendTurn(sessionId: String?, content: String, effort: ThinkingEffort): Result<String> = runCatching {
+    override suspend fun sendTurn(sessionId: String?, content: String): Result<String> = runCatching {
         val response = apiService.sendTurn(
             SendTurnRequest(
                 content = content,
                 sessionId = sessionId,
-                thinkingEffort = effort.toApiString(),
             )
         )
         response.sessionId
     }
 
-    override suspend fun sendSessionTurn(sessionId: String, content: String, effort: ThinkingEffort): Result<Unit> = runCatching {
-        apiService.sendSessionTurn(sessionId, SendTurnRequest(content = content, thinkingEffort = effort.toApiString()))
+    override suspend fun sendSessionTurn(sessionId: String, content: String): Result<Unit> = runCatching {
+        apiService.sendSessionTurn(sessionId, SendTurnRequest(content = content))
         Unit
     }
 
@@ -71,14 +69,5 @@ class ChatRepositoryImpl @Inject constructor(
                 reason = dto.reason.orEmpty(),
             )
         }
-    }
-
-    private fun ThinkingEffort.toApiString(): String? = when (this) {
-        ThinkingEffort.OFF -> null
-        ThinkingEffort.ON -> "on"
-        ThinkingEffort.LOW -> "low"
-        ThinkingEffort.MEDIUM -> "medium"
-        ThinkingEffort.HIGH -> "high"
-        ThinkingEffort.MAX -> "max"
     }
 }

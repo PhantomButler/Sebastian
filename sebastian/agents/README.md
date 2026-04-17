@@ -12,6 +12,9 @@
 agents/
 ├── __init__.py          # 模块入口（空）
 ├── _loader.py           # 启动时扫描 manifest.toml，自动注册所有 Agent
+├── aide/                # 通用执行随从 Sub-Agent（命令执行、文件操作、系统任务）
+│   ├── __init__.py      # AideAgent 类定义（继承 BaseAgent）
+│   └── manifest.toml    # Agent 声明（max_children=3，allowed_tools 同 forge）
 └── forge/               # 代码编写与执行 Sub-Agent
     ├── __init__.py      # ForgeAgent 类定义（继承 BaseAgent）
     ├── manifest.toml    # Agent 元数据（描述、class_name、worker 数、工具权限等）
@@ -31,6 +34,7 @@ agents/
 | 修改最大并发子任务数 | `<agent_name>/manifest.toml` 的 `max_children` |
 | 新增 Agent 私有工具 | `<agent_name>/tools/` 下新建 `__init__.py` + `@tool` 装饰器 |
 | 修改 Agent 自动发现逻辑 | [_loader.py](_loader.py) |
+| 通用执行 Agent | [aide/](aide/__init__.py) |
 | 代码编写 Agent | [forge/](forge/__init__.py) |
 
 ## 如何新增 Sub-Agent

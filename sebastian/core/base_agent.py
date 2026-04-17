@@ -122,6 +122,11 @@ class BaseAgent(ABC):
         self._cancel_requested: dict[str, CancelIntent] = {}
         # session_id → completed cancel intent, available for outer consumers after teardown.
         self._completed_cancel_intents: dict[str, CancelIntent] = {}
+        # session_id → pre-cancel intent registered before the stream task is live.
+        # Consumed by run_streaming immediately after registering _active_streams.
+        self._pending_cancel_intents: dict[str, CancelIntent] = {}
+        # session_id → asyncio.TimerHandle for pending-cancel TTL cleanup
+        self._pending_cancel_timers: dict[str, asyncio.TimerHandle] = {}
         self._partial_buffer: dict[str, str] = {}
 
         # instance-level overrides class-level defaults
@@ -256,14 +261,12 @@ class BaseAgent(ABC):
         session_id: str,
         task_id: str | None = None,
         agent_name: str | None = None,
-        thinking_effort: str | None = None,
     ) -> str:
         return await self.run_streaming(
             user_message,
             session_id,
             task_id=task_id,
             agent_name=agent_name,
-            thinking_effort=thinking_effort,
         )
 
     async def run_streaming(
@@ -272,15 +275,25 @@ class BaseAgent(ABC):
         session_id: str,
         task_id: str | None = None,
         agent_name: str | None = None,
-        thinking_effort: str | None = None,
     ) -> str:
         self._completed_cancel_intents.pop(session_id, None)
         self._current_task_goals[session_id] = user_message
 
+        thinking_effort_for_llm: str | None = None
         if not self._provider_injected and self._llm_registry is not None:
-            provider, model = await self._llm_registry.get_provider(self.name)
+            resolved = await self._llm_registry.get_provider(self.name)
+            provider, model = resolved.provider, resolved.model
             self._loop._provider = provider
             self._loop._model = model
+            thinking_effort_for_llm = resolved.thinking_effort
+            logger.info(
+                "LLM resolved: agent=%s session=%s provider=%s model=%s thinking_effort=%s",
+                self.name,
+                session_id,
+                type(provider).__name__,
+                model,
+                resolved.thinking_effort,
+            )
 
         agent_context = agent_name or self.name
         existing_stream = self._active_streams.get(session_id)
@@ -330,10 +343,18 @@ class BaseAgent(ABC):
                 session_id=session_id,
                 task_id=task_id,
                 agent_context=agent_context,
-                thinking_effort=thinking_effort,
+                thinking_effort=thinking_effort_for_llm,
             )
         )
         self._active_streams[session_id] = current_stream
+        # Consume pre-cancel: user clicked stop before we finished setup.
+        pending_intent = self._pending_cancel_intents.pop(session_id, None)
+        pending_timer = self._pending_cancel_timers.pop(session_id, None)
+        if pending_timer is not None:
+            pending_timer.cancel()
+        if pending_intent is not None:
+            self._cancel_requested[session_id] = pending_intent
+            current_stream.cancel()
         try:
             return await current_stream
         finally:
@@ -598,17 +619,20 @@ class BaseAgent(ABC):
     async def cancel_session(self, session_id: str, intent: CancelIntent = "cancel") -> bool:
         """Cancel the active streaming turn for session_id.
 
-        Args:
-            session_id: Target session to stop.
-            intent: "cancel" for terminal cancellation, or "stop" to preserve
-                resumable context for the caller to handle after the stream exits.
+        If no stream is registered yet (race between REST return and
+        run_streaming registering _active_streams), record the intent in
+        _pending_cancel_intents so run_streaming consumes it on registration.
 
-        Returns True if a stream was cancelled, False if no active stream exists.
+        Returns True if a stream was cancelled OR a pending cancel was registered;
+        False only if the intent is invalid (raised) — never silently False.
         """
         validated_intent = self._validate_cancel_intent(intent)
         stream = self._active_streams.get(session_id)
         if stream is None or stream.done():
-            return False
+            # Pre-cancel: run_streaming will consume this on _active_streams registration.
+            self._pending_cancel_intents[session_id] = validated_intent
+            self._schedule_pending_cancel_cleanup(session_id)
+            return True
         previous = self._cancel_requested.get(session_id)
         if previous is not None and previous != validated_intent:
             logger.warning(
@@ -624,6 +648,20 @@ class BaseAgent(ABC):
         except (asyncio.CancelledError, Exception):
             pass
         return True
+
+    def _schedule_pending_cancel_cleanup(self, session_id: str) -> None:
+        """Expire _pending_cancel_intents[session_id] after 60s to avoid leaks
+        when run_streaming never starts (e.g. turn aborted during setup)."""
+        previous = self._pending_cancel_timers.pop(session_id, None)
+        if previous is not None:
+            previous.cancel()
+        loop = asyncio.get_running_loop()
+        handle = loop.call_later(60.0, self._expire_pending_cancel, session_id)
+        self._pending_cancel_timers[session_id] = handle
+
+    def _expire_pending_cancel(self, session_id: str) -> None:
+        self._pending_cancel_intents.pop(session_id, None)
+        self._pending_cancel_timers.pop(session_id, None)
 
     def consume_cancel_intent(self, session_id: str) -> CancelIntent | None:
         """Return and clear the completed cancel intent for a session, if any."""

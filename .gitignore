@@ -19,6 +19,7 @@ build/
 *.sqlite
 .env.local
 .env.*.local
+/icons/
 
 # IDE
 .idea/

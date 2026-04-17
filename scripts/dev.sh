@@ -16,6 +16,7 @@ color_dim()  { printf "\033[90m%s\033[0m\n" "$*"; }
 export SEBASTIAN_DATA_DIR="${SEBASTIAN_DATA_DIR:-$HOME/.sebastian-dev}"
 export SEBASTIAN_GATEWAY_PORT="${SEBASTIAN_GATEWAY_PORT:-8824}"
 export SEBASTIAN_GATEWAY_HOST="${SEBASTIAN_GATEWAY_HOST:-127.0.0.1}"
+export PYTHONUNBUFFERED=1  # 日志实时落盘，dev 调试用
 
 # 加载 .env 中不冲突的变量（如 ANTHROPIC_API_KEY）
 if [[ -f "${PROJECT_ROOT}/.env" ]]; then

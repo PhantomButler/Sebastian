@@ -7,13 +7,13 @@ import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.StreamEvent
-import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.repository.ChatRepository
 import com.sebastian.android.data.repository.SessionRepository
 import com.sebastian.android.data.repository.SettingsRepository
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -32,6 +32,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
@@ -60,16 +62,17 @@ class ChatViewModelTest {
         networkMonitor = mock()
         whenever(networkMonitor.isOnline).thenReturn(onlineFlow)
         whenever(settingsRepository.serverUrl).thenReturn(serverUrlFlow)
-        whenever(chatRepository.sessionStream(any(), any(), any())).thenReturn(sseFlow)
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenReturn(sseFlow)
         whenever(chatRepository.globalStream(any(), any())).thenReturn(flowOf())
         runBlocking {
-            whenever(chatRepository.sendTurn(any(), any(), any())).thenReturn(Result.success("s1"))
+            whenever(chatRepository.sendTurn(any(), any())).thenReturn(Result.success("s1"))
             whenever(chatRepository.grantApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.denyApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.cancelTurn(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.getMessages(any())).thenReturn(Result.success(emptyList()))
         }
         viewModel = ChatViewModel(chatRepository, sessionRepository, settingsRepository, networkMonitor, dispatcher)
+        viewModel.clock = { dispatcher.scheduler.currentTime }
         dispatcher.scheduler.advanceTimeBy(200)
     }
 
@@ -230,15 +233,16 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `sendMessage adds user message and sets composerState SENDING`() = vmTest {
+    fun `sendMessage adds user message and sets composerState PENDING`() = vmTest {
         viewModel.uiState.test {
             awaitItem() // initial
 
             viewModel.sendMessage("你好")
-            dispatcher.scheduler.advanceTimeBy(200)
+            dispatcher.scheduler.advanceTimeBy(50)
 
             val state = awaitItem()
-            assertEquals(ComposerState.SENDING, state.composerState)
+            assertEquals(ComposerState.PENDING, state.composerState)
+            assertEquals(AgentAnimState.PENDING, state.agentAnimState)
             assertEquals(ScrollFollowState.FOLLOWING, state.scrollFollowState)
             val userMsg = state.messages.lastOrNull { it.role == MessageRole.USER }
             assertTrue(userMsg != null)
@@ -256,9 +260,9 @@ class ChatViewModelTest {
             override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?) = sseFlow
             override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<StreamEvent>()
             override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
-            override suspend fun sendTurn(sessionId: String?, content: String, effort: com.sebastian.android.data.model.ThinkingEffort) =
+            override suspend fun sendTurn(sessionId: String?, content: String) =
                 Result.failure<String>(RuntimeException("网络错误"))
-            override suspend fun sendSessionTurn(sessionId: String, content: String, effort: com.sebastian.android.data.model.ThinkingEffort) =
+            override suspend fun sendSessionTurn(sessionId: String, content: String) =
                 Result.success(Unit)
             override suspend fun cancelTurn(sessionId: String) = Result.success(Unit)
             override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
@@ -266,6 +270,7 @@ class ChatViewModelTest {
             override suspend fun getPendingApprovals() = Result.success(emptyList<ApprovalSnapshot>())
         }
         viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, dispatcher)
+        viewModel.clock = { dispatcher.scheduler.currentTime }
         dispatcher.scheduler.advanceTimeBy(200)
 
         vmTest {
@@ -472,7 +477,7 @@ class ChatViewModelTest {
         activateSession()  // getMessages #1
         // 构造 IDLE_READY：发送失败后 ViewModel 会把 composerState 拨到 IDLE_READY + 保留 error
         runBlocking {
-            whenever(chatRepository.sendTurn(any(), any(), any()))
+            whenever(chatRepository.sendTurn(any(), any()))
                 .thenReturn(Result.failure(RuntimeException("boom")))
         }
         viewModel.sendMessage("半截话")
@@ -484,5 +489,339 @@ class ChatViewModelTest {
 
         // 仅 activateSession 那次
         runBlocking { verify(chatRepository, times(1)).getMessages("s1") }
+    }
+
+    @Test
+    fun `TurnCancelled event resets composerState to IDLE_EMPTY and agentAnimState to IDLE`() = vmTest {
+        activateSession()
+        viewModel.uiState.test {
+            awaitItem() // post-session state
+
+            sseFlow.emit(StreamEvent.TurnReceived("s1"))
+            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
+            sseFlow.emit(StreamEvent.TextDelta("s1", "b0_0", "hello"))
+            dispatcher.scheduler.advanceTimeBy(200)
+            // Consume intermediate states until we see STREAMING
+            var seenStreaming = false
+            while (!seenStreaming) {
+                val state = awaitItem()
+                if (state.composerState == ComposerState.STREAMING) seenStreaming = true
+            }
+
+            sseFlow.emit(StreamEvent.TurnCancelled("s1", "hello"))
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            var found = false
+            while (!found) {
+                val state = awaitItem()
+                if (state.composerState == ComposerState.IDLE_EMPTY && state.agentAnimState == AgentAnimState.IDLE) {
+                    found = true
+                }
+            }
+            assertTrue(found)
+
+            // Verify currentAssistantMessageId is cleared: a TextDelta emitted after
+            // TurnCancelled should be dropped (no active message to append to).
+            // Capture the message list snapshot right after cancel settled.
+            val snapshotAfterCancel = viewModel.uiState.value.messages
+            val assistantTextAfterCancel = snapshotAfterCancel
+                .lastOrNull { it.role == MessageRole.ASSISTANT }
+                ?.blocks
+                ?.filterIsInstance<ContentBlock.TextBlock>()
+                ?.joinToString("") { it.text }
+                ?: ""
+
+            sseFlow.emit(StreamEvent.TextDelta("s1", "b0", " extra"))
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            // No new state item should carry " extra" — any emitted item must not
+            // contain text beyond what was present right after TurnCancelled.
+            val snapshotAfterOrphanDelta = viewModel.uiState.value.messages
+            val assistantTextAfterDelta = snapshotAfterOrphanDelta
+                .lastOrNull { it.role == MessageRole.ASSISTANT }
+                ?.blocks
+                ?.filterIsInstance<ContentBlock.TextBlock>()
+                ?.joinToString("") { it.text }
+                ?: ""
+            assertFalse(
+                "Orphan TextDelta after TurnCancelled must be dropped",
+                assistantTextAfterDelta.contains(" extra")
+            )
+            assertEquals(
+                "Assistant message text must not grow after TurnCancelled",
+                assistantTextAfterCancel,
+                assistantTextAfterDelta
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `sendMessage enters PENDING and stays PENDING through sendTurn REST success`() = vmTest {
+        activateSession()
+        viewModel.uiState.test {
+            awaitItem() // post-session state
+
+            viewModel.sendMessage("hi")
+            dispatcher.scheduler.advanceTimeBy(50)
+
+            val immediate = awaitItem()
+            assertEquals(ComposerState.PENDING, immediate.composerState)
+            assertEquals(AgentAnimState.PENDING, immediate.agentAnimState)
+
+            dispatcher.scheduler.advanceTimeBy(500) // let sendTurn REST finish
+            // State should STILL be PENDING after REST returns — not reset to IDLE
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `first TextBlockStart transitions PENDING to STREAMING`() = vmTest {
+        activateSession()
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(500) // let REST finish
+
+        viewModel.uiState.test {
+            awaitItem() // current PENDING state
+
+            sseFlow.emit(StreamEvent.TurnReceived("s1"))
+            dispatcher.scheduler.advanceTimeBy(50)
+            expectNoEvents() // TurnReceived should NOT change state
+
+            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0"))
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            val state = awaitItem()
+            assertEquals(ComposerState.STREAMING, state.composerState)
+            assertEquals(AgentAnimState.STREAMING, state.agentAnimState)
+        }
+    }
+
+    @Test
+    fun `cancelTurn with null activeSessionId cancels sendTurnJob and resets to IDLE_READY`() = vmTest {
+        // No active session initially — simulates first ever message
+        // Mock sendTurn to hang so we can cancel while PENDING
+        whenever(chatRepository.sendTurn(anyOrNull(), any())).doSuspendableAnswer {
+            kotlinx.coroutines.delay(30_000)
+            Result.success("s1")
+        }
+
+        viewModel.uiState.test {
+            awaitItem() // initial state
+
+            viewModel.sendMessage("hi")
+            dispatcher.scheduler.advanceTimeBy(50)
+
+            val pending = awaitItem()
+            assertEquals(ComposerState.PENDING, pending.composerState)
+            assertNull(pending.activeSessionId)
+
+            viewModel.cancelTurn()
+            dispatcher.scheduler.advanceTimeBy(50)
+
+            val afterCancel = awaitItem()
+            assertEquals(ComposerState.IDLE_READY, afterCancel.composerState)
+            assertEquals(AgentAnimState.IDLE, afterCancel.agentAnimState)
+            // User bubble is preserved
+            assertTrue(afterCancel.messages.any { it.role == MessageRole.USER })
+        }
+    }
+
+    // ── PENDING 15s 前台累计超时 ──────────────────────────────────────────────
+
+    @Test
+    fun `pending timeout emits toast after 15s foreground`() = vmTest {
+        activateSession()
+        val toasts = mutableListOf<String>()
+        val collectJob = launch {
+            viewModel.toastEvents.collect { toasts.add(it) }
+        }
+
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(50) // PENDING set
+
+        // 14s — no toast yet
+        dispatcher.scheduler.advanceTimeBy(14_000)
+        assertTrue("No toast before 15s", toasts.isEmpty())
+
+        // 1.1s more — total 15.1s > 15s
+        dispatcher.scheduler.advanceTimeBy(1_100)
+        assertEquals("Toast must fire after 15s", 1, toasts.size)
+        assertTrue(toasts[0].contains("响应较慢"))
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `pending timeout is cancelled when SSE event arrives`() = vmTest {
+        activateSession()
+        val toasts = mutableListOf<String>()
+        val collectJob = launch {
+            viewModel.toastEvents.collect { toasts.add(it) }
+        }
+
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(500) // REST finishes
+
+        // SSE event arrives — must cancel the timeout
+        sseFlow.emit(StreamEvent.TurnReceived("s1"))
+        dispatcher.scheduler.advanceTimeBy(20_000) // well past 15s
+
+        assertTrue("No toast when SSE event cancels timeout", toasts.isEmpty())
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `pending timeout pauses on app stop and resumes on app start`() = vmTest {
+        activateSession()
+        val toasts = mutableListOf<String>()
+        val collectJob = launch {
+            viewModel.toastEvents.collect { toasts.add(it) }
+        }
+
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        // 10s foreground, then background
+        dispatcher.scheduler.advanceTimeBy(10_000)
+        viewModel.onAppStop()
+        assertTrue("No toast at 10s", toasts.isEmpty())
+
+        // 30s in background — must NOT fire (timer paused)
+        dispatcher.scheduler.advanceTimeBy(30_000)
+        assertTrue("No toast while backgrounded", toasts.isEmpty())
+
+        // Return to foreground — timer resumes with 5s remaining
+        viewModel.onAppStart()
+        dispatcher.scheduler.advanceTimeBy(4_900)
+        assertTrue("No toast before remaining 5s", toasts.isEmpty())
+
+        dispatcher.scheduler.advanceTimeBy(200) // crosses 15s
+        assertEquals("Toast fires after total 15s foreground", 1, toasts.size)
+
+        collectJob.cancel()
+    }
+
+    // ── onAppStart PENDING 分支 ────────────────────────────────────────────────
+
+    @Test
+    fun `onAppStart in PENDING with completed assistant message resets to IDLE_EMPTY`() = vmTest {
+        activateSession()
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(500)
+        // Now in PENDING
+
+        // Mock getMessages to return a completed assistant turn
+        whenever(chatRepository.getMessages("s1")).thenReturn(
+            Result.success(listOf(
+                Message(
+                    id = "m1",
+                    sessionId = "s1",
+                    role = MessageRole.USER,
+                    text = "hi",
+                ),
+                Message(
+                    id = "m2",
+                    sessionId = "s1",
+                    role = MessageRole.ASSISTANT,
+                    blocks = listOf(ContentBlock.TextBlock(blockId = "b0", text = "done", done = true)),
+                ),
+            ))
+        )
+
+        viewModel.onAppStop()
+        viewModel.onAppStart()
+        dispatcher.scheduler.advanceTimeBy(300)
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertEquals(ComposerState.IDLE_EMPTY, state.composerState)
+            assertEquals(AgentAnimState.IDLE, state.agentAnimState)
+        }
+    }
+
+    @Test
+    fun `onAppStart in PENDING with only user message stays PENDING`() = vmTest {
+        activateSession()
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(500)
+
+        whenever(chatRepository.getMessages("s1")).thenReturn(
+            Result.success(listOf(
+                Message(
+                    id = "m1",
+                    sessionId = "s1",
+                    role = MessageRole.USER,
+                    text = "hi",
+                ),
+            ))
+        )
+
+        viewModel.onAppStop()
+        viewModel.onAppStart()
+        dispatcher.scheduler.advanceTimeBy(300)
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertEquals(ComposerState.PENDING, state.composerState)
+        }
+    }
+
+    @Test
+    fun `connectionFailed while PENDING resets composerState to IDLE_EMPTY`() = vmTest {
+        // Cancel old ViewModel so we can install a throwing SSE flow
+        viewModel.viewModelScope.cancel()
+
+        // A shared flow whose collect throws immediately, simulating a connection failure
+        val throwingFlow = kotlinx.coroutines.flow.flow<StreamEvent> {
+            throw RuntimeException("SSE connection lost")
+        }
+
+        val failingRepo = object : ChatRepository {
+            override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?) =
+                throwingFlow
+            override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<StreamEvent>()
+            override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
+            override suspend fun sendTurn(sessionId: String?, content: String) =
+                Result.success("s1")
+            override suspend fun sendSessionTurn(sessionId: String, content: String) =
+                Result.success(Unit)
+            override suspend fun cancelTurn(sessionId: String) = Result.success(Unit)
+            override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
+            override suspend fun denyApproval(approvalId: String) = Result.success(Unit)
+            override suspend fun getPendingApprovals() = Result.success(emptyList<ApprovalSnapshot>())
+        }
+
+        viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, dispatcher)
+        viewModel.clock = { dispatcher.scheduler.currentTime }
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Activate a session so SSE collection starts (and immediately fails)
+        viewModel.switchSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Manually force PENDING state to simulate sendMessage having been called
+        // before the SSE failure is processed. We reuse sendMessage with a mock that hangs
+        // so the REST hasn't returned yet when the SSE fails — but the simpler approach
+        // is to directly update state and verify the connectionFailed handler resets it.
+        //
+        // Instead, test the realistic path: send a message (REST will succeed instantly),
+        // then the SSE collector (which always throws) triggers connectionFailed.
+        // After sendTurn returns, composerState stays PENDING until SSE events arrive —
+        // the failing SSE sets connectionFailed=true and resets PENDING → IDLE_EMPTY.
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(500)
+
+        assertEquals(
+            "connectionFailed while PENDING must reset composerState to IDLE_EMPTY",
+            ComposerState.IDLE_EMPTY,
+            viewModel.uiState.value.composerState,
+        )
+        assertTrue(
+            "connectionFailed flag must be set",
+            viewModel.uiState.value.connectionFailed,
+        )
     }
 }

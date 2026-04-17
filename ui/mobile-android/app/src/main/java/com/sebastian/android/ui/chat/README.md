@@ -8,10 +8,14 @@
 
 ```text
 chat/
+├── AgentPill.kt              # 顶部 agent 名称胶囊（灵动岛展开/收起 + THINKING/ACTIVE 动画）
+├── AgentPillAnimations.kt    # 4 光团 OrbsAnimation + Jarvis HUD 动画 Canvas 实现
 ├── ChatScreen.kt             # 主对话 Screen（三栏脚手架 + GlassSurface Composer）
-├── SlidingThreePaneLayout.kt # 手势驱动三面板滑动容器
+├── CollapsibleContent.kt     # 工具调用展开区的二次折叠容器（≤5行直展，>5行折叠+最多30行）
 ├── MessageList.kt            # 消息列表（LazyColumn + 滚动跟随逻辑）
+├── SessionGrouping.kt        # Session 按时间分桶逻辑（今天/昨天/7天内/30天内/年月）
 ├── SessionPanel.kt           # 左栏：Session 列表面板（List Pane）
+├── SlidingThreePaneLayout.kt # 手势驱动三面板滑动容器
 ├── StreamingMessage.kt       # 流式消息气泡（逐块渲染）
 ├── ThinkingCard.kt           # 思考块卡片（可展开/折叠）
 ├── TodoPanel.kt              # 右栏：Todo 面板（Extra Pane）
@@ -81,6 +85,22 @@ tool 名 → 卡片 header 显示的集中映射。默认规则：`title = toolN
 
 从 tool inputs JSON 抽 header 右侧一行 summary 和展开态参数列表。`KEY_PRIORITY` 指定每个 tool 的字段优先级；未命中时走 `GENERIC_KEYS` 兜底；JSON 解析失败时回退成原文截断到 80 字。
 
+### `CollapsibleContent`
+
+工具调用展开区内的二次折叠容器，行为对齐 RN 侧 `CollapsibleContent.tsx`：
+
+- `lines ≤ 5`：直接展示全部内容
+- `lines > 5`：折叠态只显示第一行 + 右箭头；展开态最多显示 30 行，超出追加 `… (共 N 行)`，点击任意处收起
+- 使用 `rememberSaveable` 管理展开状态，流式增量更新不会坍塌已展开的状态
+
+### `SessionGrouping`
+
+Session 按时间分桶的纯函数逻辑，不含 UI。提供：
+
+- `groupSessions(sessions, now, zone)` — 将 Session 列表分为「今天/昨天/7天内/30天内」近期桶 + 年月历史桶，返回 `GroupedSessions`
+- `defaultExpanded(grouped, now)` — 初始展开状态：近期桶默认展开，历史月份桶默认折叠，当年年份桶展开
+- `SessionBucket` sealed class：`Recent` / `Month` / `Year`
+
 ### `SessionPanel`
 
 左栏 Session 列表面板，提供历史 Session 切换、删除会话（`onDeleteSession` 回调，实际删除由上层 `ChatScreen` 弹确认框后调用 `SessionViewModel.deleteSession`）、跳转 Settings / SubAgents 入口。`agentName` 非空时进入精简模式（隐藏功能区）。
@@ -95,14 +115,17 @@ tool 名 → 卡片 header 显示的集中映射。默认规则：`title = toolN
 
 | 修改场景 | 优先看 |
 |---------|--------|
+| 改顶部 agent 胶囊 / 活动指示器动画 | `AgentPill.kt` + `AgentPillAnimations.kt` |
 | 改三栏布局（脚手架结构） | `ChatScreen.kt` |
 | 改手机单栏手势滑动逻辑 | `SlidingThreePaneLayout.kt` |
 | 改消息列表滚动行为 | `MessageList.kt` |
 | 改消息渲染分发逻辑 | `StreamingMessage.kt` |
 | 改思考块展开/折叠 | `ThinkingCard.kt` |
 | 改工具调用块样式/状态 | `ToolCallCard.kt` |
+| 改工具调用展开区内二次折叠行为 | `CollapsibleContent.kt` |
 | 新增/修改 tool 名在卡片 header 的显示规则 | `ToolDisplayName.kt` |
 | 改 tool inputs 摘要字段优先级 | `ToolCallInputExtractor.kt` |
+| 改 Session 时间分桶/排序逻辑 | `SessionGrouping.kt` |
 | 改 Session 列表面板 | `SessionPanel.kt` |
 | 改 Todo 面板 | `TodoPanel.kt` |
 

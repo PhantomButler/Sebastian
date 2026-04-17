@@ -15,14 +15,15 @@ navigation/
 
 | Route | Screen |
 |-------|--------|
-| `Chat` | `ChatScreen`（主对话，agentId=null） |
+| `Chat(sessionId?)` | `ChatScreen`（主对话，agentId=null） |
 | `SubAgents` | `AgentListScreen` |
-| `AgentChat(agentId, agentName)` | `ChatScreen`（SubAgent 三面板模式） |
+| `AgentChat(agentId, agentName, sessionId?)` | `ChatScreen`（SubAgent 三面板模式） |
 | `Settings` | `SettingsScreen` |
 | `SettingsConnection` | `ConnectionPage` |
 | `SettingsProviders` | `ProviderListPage` |
 | `SettingsProvidersNew` | `ProviderFormPage(null)` |
 | `SettingsProvidersEdit(providerId)` | `ProviderFormPage(id)` |
+| `SettingsAgentBindings` | `AgentBindingsPage` |
 | `SettingsAppearance` | `AppearancePage` |
 | `SettingsDebugLogging` | `DebugLoggingPage` |
 

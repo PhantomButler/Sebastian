@@ -1,23 +1,30 @@
 package com.sebastian.android.ui.settings
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +75,11 @@ fun ProviderListPage(
         }
     }
 
+    val sortedProviders = remember(uiState.providers) {
+        val (default, others) = uiState.providers.partition { it.isDefault }
+        default + others
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -80,6 +92,20 @@ fun ProviderListPage(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            if (uiState.providers.isNotEmpty()) {
+                FloatingActionButton(
+                    onClick = {
+                        navController.navigate(Route.SettingsProvidersNew) { launchSingleTop = true }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = CircleShape,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "添加 Provider")
+                }
+            }
+        },
     ) { innerPadding ->
         when {
             uiState.isLoading && uiState.providers.isEmpty() -> {
@@ -158,7 +184,7 @@ fun ProviderListPage(
                     }
 
                     items(
-                        items = uiState.providers,
+                        items = sortedProviders,
                         key = { it.id },
                     ) { provider ->
                         SwipeToDeleteProviderCard(
@@ -172,35 +198,12 @@ fun ProviderListPage(
                         )
                     }
 
-                    // "+ 添加 Provider" 按钮
-                    item {
-                        Surface(
-                            onClick = {
-                                navController.navigate(Route.SettingsProvidersNew) { launchSingleTop = true }
-                            },
-                            shape = RoundedCornerShape(14.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    "+ 添加 Provider",
-                                    fontSize = 17.sp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-
-                    item { Spacer(Modifier.height(16.dp)) }
+                    item { Spacer(Modifier.height(88.dp)) }
                 }
             }
         }
     }
 
-    // 删除确认弹窗
     deleteTarget?.let { provider ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
@@ -234,16 +237,16 @@ private fun SwipeToDeleteProviderCard(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
                 onDelete()
-                false // 不真正 dismiss，让弹窗确认后再删
+                false
             } else {
-                false // 禁止右滑
+                false
             }
         },
     )
 
     SwipeToDismissBox(
         state = dismissState,
-        enableDismissFromStartToEnd = false, // 禁止右滑
+        enableDismissFromStartToEnd = false,
         backgroundContent = {
             Box(
                 modifier = Modifier
@@ -270,35 +273,80 @@ private fun ProviderCard(
     provider: Provider,
     onClick: () -> Unit,
 ) {
+    val bgColor by animateColorAsState(
+        targetValue = if (provider.isDefault) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        animationSpec = tween(durationMillis = 200),
+        label = "provider_card_bg",
+    )
+
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = bgColor,
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = buildString {
-                    append(provider.name)
-                    if (provider.isDefault) append(" ★")
-                },
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                text = buildString {
-                    append(provider.type)
-                    if (!provider.model.isNullOrBlank()) {
-                        append(" · ")
-                        append(provider.model)
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = provider.name,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (provider.isDefault) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    if (provider.isDefault) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .height(20.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "默认",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    lineHeight = 20.sp,
+                                )
+                            }
+                        }
                     }
-                },
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
+                }
+                Text(
+                    text = buildString {
+                        append(provider.type)
+                        if (!provider.model.isNullOrBlank()) {
+                            append(" · ")
+                            append(provider.model)
+                        }
+                    },
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            Icon(
+                SebastianIcons.RightArrow,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
             )
         }
     }

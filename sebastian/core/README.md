@@ -19,6 +19,7 @@ core/
 ├── protocols.py         # 结构子类型 Protocol 定义：ApprovalManagerProtocol、ToolSpecProvider
 ├── stream_events.py     # LLM 流式输出的内部事件 dataclass（TextDelta、ToolCallReady、TurnDone 等）
 ├── tool.py              # @tool 装饰器系统：自动提取函数签名生成 ToolSpec，注册到全局 _tools 字典
+├── tool_context.py      # ContextVar 封装：暴露当前执行工具的 ToolCallContext，供 PolicyGate 读取
 └── types.py             # 核心数据类型：Task、Session、TaskStatus 状态机枚举、ToolResult、Checkpoint 等
 ```
 
@@ -30,6 +31,16 @@ CREATED → PLANNING → RUNNING → COMPLETED
               ↘ FAILED
                               ↘ CANCELLED
 ```
+
+## Cancel 三段式生命周期
+
+| 字典 | 语义 | 消费方 |
+|------|------|--------|
+| `_pending_cancel_intents[sid]` | 流尚未登记时记录的预取消 intent（REST 已返回、`_active_streams` 未写入） | `run_streaming` 登记 `_active_streams` 后立即消费 |
+| `_cancel_requested[sid]` | 流运行中被取消的 intent | `run_streaming` finally 块 |
+| `_completed_cancel_intents[sid]` | 流已终止的取消 intent，供外部（如 resume 工具）消费 | `consume_cancel_intent()` |
+
+`_pending_cancel_intents` 条目带 60s TTL（`_schedule_pending_cancel_cleanup` / `_expire_pending_cancel`），防止 turn 从未真正启动时泄漏。
 
 ## 修改导航
 
@@ -44,6 +55,7 @@ CREATED → PLANNING → RUNNING → COMPLETED
 | 僵死 session 检测与恢复 | [stalled_watchdog.py](stalled_watchdog.py) |
 | 新增核心数据类型 | [types.py](types.py) |
 | 注册新工具（@tool 装饰器） | [tool.py](tool.py)，工具实现放 `capabilities/tools/` |
+| 读取当前工具执行上下文（ToolCallContext） | [tool_context.py](tool_context.py) 的 `get_tool_context()` |
 | Approval / ToolSpec 跨模块接口 | [protocols.py](protocols.py) |
 | LLM 流式事件结构 | [stream_events.py](stream_events.py) |
 
