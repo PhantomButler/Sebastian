@@ -42,6 +42,52 @@ IDLE / PENDING / THINKING / STREAMING / WORKING
 
 - 新增 `PENDING`，与 `ComposerState.PENDING` 同步起止
 
+## 3.5 后端竞态兜底（`_pending_cancel_intents`）
+
+### 问题
+
+`POST /api/v1/sessions/{id}/turns`（与 `/turns`）是 fire-and-forget：REST 立即返回 200，`run_streaming` 在后台先做多段 `await`（LLM provider 解析、session 查找、发 `TURN_RECEIVED`、episodic 加载 / 写入）后，才在 [base_agent.py:344](sebastian/core/base_agent.py:344) 把 `_stream_inner` task 登记进 `_active_streams[session_id]`。
+
+PENDING 期间 SendButton 即刻可点停止，用户若在 REST 200 到 `_active_streams` 登记之间点停止 → `cancel_session()` 读到 `None` → gateway 返回 404，**后端 turn 仍在跑**，首字仍会吐出，前端陷入"刚取消又冒出来"的破碎状态。冷启动 / SQLite 慢 IO / 远程 provider 解析时，该窗口可达数百毫秒。
+
+### 方案
+
+在 `BaseAgent` 新增 `_pending_cancel_intents: dict[str, CancelIntent]`（与现有 `_cancel_requested` 并列但语义不同 —— 前者用于"流尚未登记时的预取消"，后者用于"流在跑时的取消请求"）。
+
+**`cancel_session(session_id, intent)` 调整**（[base_agent.py:606](sebastian/core/base_agent.py:606)）：
+
+```
+stream = self._active_streams.get(session_id)
+if stream is None or stream.done():
+    self._pending_cancel_intents[session_id] = validated_intent  # 登记预取消
+    # TTL 清理：asyncio.get_event_loop().call_later(60, _cleanup, session_id)
+    return True   # gateway 回 200 ok，前端正常收尾等 turn.cancelled
+# …既有逻辑不变
+```
+
+**`run_streaming` 登记处调整**（[base_agent.py:335-344](sebastian/core/base_agent.py:335)）：
+
+```
+current_stream = asyncio.create_task(self._stream_inner(...))
+self._active_streams[session_id] = current_stream
+# 兜底：登记前或登记瞬间若已有预取消，立即中止
+pending = self._pending_cancel_intents.pop(session_id, None)
+if pending is not None:
+    self._cancel_requested[session_id] = pending
+    current_stream.cancel()
+try:
+    return await current_stream
+# …既有 finally 不变（统一走 cancel 收尾发 turn.cancelled）
+```
+
+TTL 清理：`_pending_cancel_intents` 条目若 60s 内未被 `run_streaming` 消费（例如 turn 从未真正启动），定时器自清，避免内存泄漏。
+
+### 属性
+
+- Gateway `/cancel` 端点、`CancelIntent` 枚举、`turn.cancelled` / `turn.response` 事件协议均不变 —— 只补实现竞态
+- 前端无需 retry，PENDING 期间 `/cancel` 永远得到 200 + 最终的 `turn.cancelled` 事件
+- `_pending_cancel_intents` 与现有 `_cancel_requested` / `_completed_cancel_intents` 组成三段式生命周期：预取消 → 进行中取消 → 已完成取消
+
 ## 4. 行为改造点
 
 | 触发点 | 现状 | 改后 |
@@ -51,6 +97,14 @@ IDLE / PENDING / THINKING / STREAMING / WORKING
 | 首个 block 事件（Thinking/Text/Tool BlockStart） | 转 `STREAMING`，切对应 agentAnimState | 同现 —— 自然离开 PENDING |
 | `sendTurn.onFailure` | `composerState=IDLE_READY`，记录 error | 同现 |
 | 流中 `connectionFailed` 重置 | 若 `SENDING`/`STREAMING` 回 `IDLE_EMPTY` | 把 `SENDING` 换成 `PENDING` 的判断；**PENDING 状态下连接失败也回 `IDLE_EMPTY`**（防止 PENDING 卡死） |
+
+### 4.1 PENDING 退出时机
+
+退出 PENDING = **首个 BlockStart 事件**（`ThinkingBlockStart` / `TextBlockStart` / `ToolBlockStart`），不是更早的 `TurnReceived`。
+
+- `TurnReceived` 只做 silent ack（保持既有行为：设 `pendingTurnSessionId` / `currentAssistantMessageId`，不切 composerState / agentAnimState）
+- 保留 BREATHING 动画覆盖「TurnReceived → 首 Block」这段"已确认收到、正在准备生成"的空档，比过早切 THINKING（此时 LLM 尚未真正推理）更贴近语义
+- pill 动画递进：`COLLAPSED → BREATHING → THINKING/ACTIVE` 一次性完成，无中间跳变
 
 ## 5. SendButton 视觉
 
@@ -95,6 +149,16 @@ PENDING 与 STREAMING 在按钮层视觉一致（停止图标 + Primary），语
   - **已显示的用户气泡保留**，不撤回
   - 为后续编辑消息功能预留：下一轮从（未来可编辑的）用户消息继续
 
+### 7.1 离线 / 后台恢复对 PENDING 的处理
+
+- `onAppStop`（`ProcessLifecycleOwner.ON_STOP`）：cancel `sseJob`，**不改 composerState / agentAnimState**（PENDING 语义需要跨越后台期）
+- `onAppStart`（`ProcessLifecycleOwner.ON_START`）若当前 `composerState == PENDING`：
+  - **不走 `switchSession`**（会全量清空消息 + 重置状态，破坏用户视觉上下文）
+  - 调一次 `chatRepository.getMessages(activeSessionId)`：
+    - 若最新一条 role == assistant 且 `done == true` → 后台期 turn 已完成 → 强制 `composerState = IDLE_EMPTY`，`agentAnimState = IDLE`，重建 SSE 连接（`Last-Event-ID` 回放剩余事件）
+    - 否则（最新仍是 user 或 assistant 未完成）→ 保持 PENDING，重建 SSE 连接由 `Last-Event-ID` 回放补齐事件，首个 BlockStart 会自然退出 PENDING
+  - `activeSessionId == null`（PENDING 期间 REST 尚未返回就切后台）：极小概率场景，onAppStart 无 session 可查，保持 PENDING 等 `sendTurn` 协程自然恢复（`viewModelScope` 的协程在后台挂起时 IO 仍可能完成）或用户手动停止
+
 ## 8. PENDING 超时兜底
 
 REST `sendTurn.onSuccess` 之后启动一个 15s 计时：
@@ -104,6 +168,12 @@ REST `sendTurn.onSuccess` 之后启动一个 15s 计时：
 - **不自动中断**，只给出可读的信号；用户可选择继续等或点停止
 
 计时状态保存在 ChatViewModel 内部，session 切换 / cancel / TurnResponse / TurnInterrupted / TurnCancelled 时清除。
+
+**前台累计计时**：计时器以"前台累计时长"为准，不计后台时间：
+
+- `onAppStop`：若计时器在跑 → 记录已走时长并 cancel 计时 `Job`
+- `onAppStart`：若 `composerState == PENDING` 且已走时长 < 15s → 以剩余时长（15s - 已走）重启计时
+- 避免用户切后台后回来就立刻看到"响应较慢"提示
 
 ## 9. 涉及改动文件
 
@@ -116,26 +186,40 @@ REST `sendTurn.onSuccess` 之后启动一个 15s 计时：
 | `ui/theme/Color.kt` | 新增彩虹辅色（紫 / 青） |
 | `data/model/StreamEvent.kt` | 新增 `TurnCancelled` 事件密封子类（`data class TurnCancelled(val sessionId: String) : StreamEvent()`） |
 | `data/remote/dto/SseFrameDto.kt` | SSE parser 新增 `"turn.cancelled"` → `StreamEvent.TurnCancelled` 分支 |
-| `viewmodel/README.md` | 更新状态机表格 |
+| `viewmodel/README.md` | 更新状态机表格；补充 `onAppStart` PENDING 分支说明 |
+| `../../sebastian/core/base_agent.py` | 新增 `_pending_cancel_intents: dict[str, CancelIntent]` 与 TTL 清理；`cancel_session` 在流未登记时写入预取消；`run_streaming` 登记 `_active_streams` 后消费预取消立即 cancel |
+| `../../sebastian/core/README.md` | 记录 `_pending_cancel_intents` 语义与三段式取消生命周期 |
 | `../../sebastian/gateway/routes/README.md` | 补充 `POST /sessions/{id}/cancel` 端点文档（当前缺失） |
 
 ## 10. 测试策略
 
-- **单元测试**（`viewmodel/ChatViewModelTest`）：
+- **后端单元测试**（`tests/unit/core/test_base_agent_cancel.py`）：
+  - 流尚未登记时调 `cancel_session` → 写入 `_pending_cancel_intents`，返回 True
+  - `run_streaming` 登记 `_active_streams` 后若 `_pending_cancel_intents` 有记录 → 立即 cancel → 发 `turn.cancelled`
+  - `_pending_cancel_intents` 60s TTL 到期自清
+  - 现有 cancel 路径（流在跑时 cancel）语义不变
+- **后端集成测试**（`tests/integration/gateway/test_gateway_sessions.py`）：
+  - `POST /turns` 返回 200 后立刻 `POST /sessions/{id}/cancel` → 不 404，session stream 收到 `turn.cancelled` 事件
+  - 对上述两种路径断言最终 `_active_streams` / `_pending_cancel_intents` 均被清空
+- **前端单元测试**（`viewmodel/ChatViewModelTest`）：
   - sendMessage → composerState = PENDING、agentAnimState = PENDING
   - sendTurn.onSuccess 后 composerState 仍为 PENDING
-  - 首个 ThinkingBlockStart / TextBlockStart / ToolBlockStart 事件到达后转 STREAMING
-  - PENDING 下 cancelTurn 走 `/cancel` 分支；无 sessionId 时本地取消且保留 Composer 文本
+  - 首个 ThinkingBlockStart / TextBlockStart / ToolBlockStart 事件到达后转 STREAMING；`TurnReceived` 不触发切换
+  - PENDING 下 cancelTurn 走 `/cancel` 分支；无 sessionId 时 `sendTurnJob?.cancel()` 且保留 Composer 文本 + 用户气泡
+  - `turn.cancelled` 事件走 `TurnCancelled` 分支，等价于 `TurnInterrupted` 收尾
   - 15s 超时触发提示 flow；收到任意事件可取消计时
+  - `onAppStart` 在 PENDING 下调 `getMessages` 并按最后一条消息角色决定保持 / 退回 IDLE_EMPTY
+  - 计时器前台累计：onAppStop 暂停、onAppStart 按剩余时长重启
 - **UI 预览**（Compose Preview）：AgentPill 四档（COLLAPSED / BREATHING / THINKING / ACTIVE）静态截图，BreathingHalo 单独预览
-- **联调验证**：本地 gateway + 模拟器，手动触发三种路径（慢 LLM / 正常 / cancel）观察 pill + 按钮过渡
+- **联调验证**：本地 gateway + 模拟器，手动触发四种路径（慢 LLM / 正常 / PENDING 期间 cancel / PENDING 期间切后台再回来）观察 pill + 按钮过渡
 
 ## 11. 非目标（YAGNI）
 
 - 不做「发送失败自动重试」
-- 不改后端 cancel 语义（intent、事件类型、路由均保持不变；前端补 `turn.cancelled` 消费不算改后端）
+- 不改后端 cancel **协议语义**（intent 默认值 / 事件类型 / 路由均保持不变）；后端仅补 `_pending_cancel_intents` 竞态兜底实现（见 §3.5），前端补 `turn.cancelled` 事件消费
 - 不给用户消息气泡加状态指示器（未来编辑消息功能会独立处理）
 - 不修改全局 SSE / approval 链路
+- 不做「PENDING 期间连接失败保留 PENDING + 手动重连」优化：当前 PENDING → IDLE_EMPTY 的安全回退 + SSE 重连事件回放已能自愈，保留 PENDING 需要配套重连 UI，放 follow-up
 
 ## 12. 审核发现记录（2026-04-17）
 
@@ -166,3 +250,18 @@ REST `sendTurn.onSuccess` 之后启动一个 15s 计时：
 **问题**：`sebastian/gateway/routes/README.md` 的修改导航表遗漏了 `POST /sessions/{id}/cancel` 端点（实现在 `sessions.py:389-403`），只列出了 task-level 的 cancel 端点。
 
 **修正**：补充该端点文档。
+
+### 12.5 后端 `_active_streams` 登记竞态（已纳入 §3.5、§9、§10）
+
+**问题**：`POST /turns` 是 fire-and-forget，REST 200 立刻返回，但 `run_streaming` 要跨多段 await 后才把 `_stream_inner` task 登记进 `_active_streams`（[base_agent.py:302-344](sebastian/core/base_agent.py:302)）。PENDING 期间 SendButton 即可点停止，若用户在 REST 200 到 `_active_streams` 登记之间点停止 → `cancel_session()` 读到 None → gateway 404，后端 turn 仍在跑，首字仍会吐出。
+
+**影响**：前端陷入"刚取消又冒出来"的破碎状态；冷启动 / SQLite 慢 IO / 远程 provider 解析时窗口达数百毫秒，非罕见。
+
+**方案对比**：
+
+| 方向 | 正确性 | 失败路径 | 采用 |
+|------|-------|---------|------|
+| 前端 retry + 本地降级 | 概率性（retry 预算覆盖不了冷启动窗口） | retry 耗尽后本地取消，后端 turn 脱缰继续跑 | ✗ |
+| 后端 `_pending_cancel_intents` | 确定性，无 race | gateway 永远 200 + 最终 `turn.cancelled` | ✓ |
+
+**修正**：后端加 `_pending_cancel_intents: dict[str, CancelIntent]` 预取消表（带 60s TTL），`cancel_session` 在流未登记时写入、`run_streaming` 登记后立即消费。Intent / 事件类型 / 路由协议不变。详见 §3.5。
