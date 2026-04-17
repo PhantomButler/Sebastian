@@ -333,8 +333,8 @@ def test_guidelines_section_appears_before_tools_section() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_session_returns_false_when_no_active_stream(tmp_path: Path) -> None:
-    """Cancelling an idle session returns False — no stream to cancel."""
+async def test_cancel_session_registers_pending_when_no_active_stream(tmp_path: Path) -> None:
+    """Cancelling an idle session registers a pending cancel and returns True."""
     from sebastian.core.base_agent import BaseAgent
     from sebastian.core.types import Session
     from sebastian.store.session_store import SessionStore
@@ -348,7 +348,8 @@ async def test_cancel_session_returns_false_when_no_active_stream(tmp_path: Path
 
     result = await agent.cancel_session("idle-session")
 
-    assert result is False
+    assert result is True
+    assert agent._pending_cancel_intents["idle-session"] == "cancel"
 
 
 @pytest.mark.asyncio
@@ -515,7 +516,7 @@ async def test_cancel_session_emits_turn_cancelled_and_turn_response(tmp_path: P
 
 @pytest.mark.asyncio
 async def test_cancel_session_idempotent(tmp_path: Path) -> None:
-    """Second cancel call on same session returns False and does not raise."""
+    """Second cancel after stream is gone registers a pending cancel (True) and does not raise."""
     from sebastian.core.base_agent import BaseAgent
     from sebastian.core.stream_events import TextBlockStart
     from sebastian.core.types import Session
@@ -544,7 +545,7 @@ async def test_cancel_session_idempotent(tmp_path: Path) -> None:
     second = await agent.cancel_session("idem-session")
 
     assert first is True
-    assert second is False  # stream already gone
+    assert second is True  # stream gone → pre-cancel registered
 
     with pytest.raises((asyncio.CancelledError, Exception)):
         await run_task

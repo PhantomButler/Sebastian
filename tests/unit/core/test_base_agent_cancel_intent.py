@@ -118,10 +118,13 @@ async def test_stop_intent_preserves_partial_without_cancelled_semantics(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_cancel_session_returns_false_without_recording_consumable_intent(agent) -> None:
+async def test_cancel_session_registers_pending_without_recording_consumable_intent(agent) -> None:
+    # No active stream → returns True and writes a pending cancel.
+    # consume_cancel_intent only surfaces _completed_ intents, not pending ones.
     result = await agent.cancel_session("nope")
 
-    assert result is False
+    assert result is True
+    assert agent._pending_cancel_intents["nope"] == "cancel"
     assert agent.consume_cancel_intent("nope") is None
 
 

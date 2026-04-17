@@ -122,6 +122,11 @@ class BaseAgent(ABC):
         self._cancel_requested: dict[str, CancelIntent] = {}
         # session_id → completed cancel intent, available for outer consumers after teardown.
         self._completed_cancel_intents: dict[str, CancelIntent] = {}
+        # session_id → pre-cancel intent registered before the stream task is live.
+        # Consumed by run_streaming immediately after registering _active_streams.
+        self._pending_cancel_intents: dict[str, CancelIntent] = {}
+        # session_id → asyncio.TimerHandle for pending-cancel TTL cleanup
+        self._pending_cancel_timers: dict[str, asyncio.TimerHandle] = {}
         self._partial_buffer: dict[str, str] = {}
 
         # instance-level overrides class-level defaults
@@ -606,17 +611,20 @@ class BaseAgent(ABC):
     async def cancel_session(self, session_id: str, intent: CancelIntent = "cancel") -> bool:
         """Cancel the active streaming turn for session_id.
 
-        Args:
-            session_id: Target session to stop.
-            intent: "cancel" for terminal cancellation, or "stop" to preserve
-                resumable context for the caller to handle after the stream exits.
+        If no stream is registered yet (race between REST return and
+        run_streaming registering _active_streams), record the intent in
+        _pending_cancel_intents so run_streaming consumes it on registration.
 
-        Returns True if a stream was cancelled, False if no active stream exists.
+        Returns True if a stream was cancelled OR a pending cancel was registered;
+        False only if the intent is invalid (raised) — never silently False.
         """
         validated_intent = self._validate_cancel_intent(intent)
         stream = self._active_streams.get(session_id)
         if stream is None or stream.done():
-            return False
+            # Pre-cancel: run_streaming will consume this on _active_streams registration.
+            self._pending_cancel_intents[session_id] = validated_intent
+            self._schedule_pending_cancel_cleanup(session_id)
+            return True
         previous = self._cancel_requested.get(session_id)
         if previous is not None and previous != validated_intent:
             logger.warning(
@@ -632,6 +640,20 @@ class BaseAgent(ABC):
         except (asyncio.CancelledError, Exception):
             pass
         return True
+
+    def _schedule_pending_cancel_cleanup(self, session_id: str) -> None:
+        """Expire _pending_cancel_intents[session_id] after 60s to avoid leaks
+        when run_streaming never starts (e.g. turn aborted during setup)."""
+        previous = self._pending_cancel_timers.pop(session_id, None)
+        if previous is not None:
+            previous.cancel()
+        loop = asyncio.get_event_loop()
+        handle = loop.call_later(60.0, self._expire_pending_cancel, session_id)
+        self._pending_cancel_timers[session_id] = handle
+
+    def _expire_pending_cancel(self, session_id: str) -> None:
+        self._pending_cancel_intents.pop(session_id, None)
+        self._pending_cancel_timers.pop(session_id, None)
 
     def consume_cancel_intent(self, session_id: str) -> CancelIntent | None:
         """Return and clear the completed cancel intent for a session, if any."""

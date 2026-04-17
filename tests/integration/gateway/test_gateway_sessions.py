@@ -351,8 +351,8 @@ def test_post_cancel_unknown_session_returns_404(client) -> None:
     assert resp.status_code == 404
 
 
-def test_post_cancel_idle_session_returns_404(client) -> None:
-    """Session with no active stream returns 404 (no stream to cancel)."""
+def test_post_cancel_idle_session_returns_200(client) -> None:
+    """Session with no active stream returns 200 — a pending cancel is registered."""
     import sebastian.gateway.state as state
     from sebastian.core.types import Session
 
@@ -367,7 +367,7 @@ def test_post_cancel_idle_session_returns_404(client) -> None:
         "/api/v1/sessions/idle-cancel/cancel",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 404
+    assert resp.status_code == 200
 
 
 def test_sub_agent_turns_accepts_thinking_effort(client) -> None:
