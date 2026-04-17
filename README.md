@@ -1,97 +1,172 @@
+<div align="center">
+
+<!-- TODO: Replace with project logo when ready -->
+<!-- <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+  <img alt="Sebastian" src="docs/assets/logo-light.svg" width="200">
+</picture> -->
+
 # Sebastian
 
-一个目标驱动的个人全能 AI 管家系统，灵感来自黑执事的塞巴斯蒂安与 Overlord 的 Sebas Tian，对标钢铁侠贾维斯愿景。
+**Your self-hosted AI butler — inspired by the indefatigable Sebastian Michaelis.**
 
-自托管部署，Android App 为主要交互入口，支持个人主用 + 受控多用户（家人/访客）。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/Jaxton07/Sebastian/actions/workflows/ci.yml/badge.svg)](https://github.com/Jaxton07/Sebastian/actions/workflows/ci.yml)
 
-## 技术栈
+[简体中文](README.zh-CN.md)
 
-| 层次 | 技术 |
-|------|------|
-| 后端 | Python 3.12+，FastAPI，SQLAlchemy（async），SQLite |
-| AI | Anthropic Claude API，多 LLM 提供商适配 |
-| 移动端 | React Native（Expo），Android 优先 |
-| 通信 | REST + SSE 事件流，A2A 内部协议 |
-| 部署 | Docker Compose，自托管 |
+</div>
 
-## 快速开始
+---
 
-### 一键安装（推荐，macOS / Linux）
+Sebastian is a goal-driven personal AI butler system. Tell it what you want — it figures out the *how*, decomposes goals, delegates to specialized sub-agents, and keeps working even after you close the app. Self-hosted, private by default, with an Android app as the primary interface.
+
+> [!NOTE]
+> Sebastian is designed for **personal and family use** — it's not an enterprise product. Self-hosted on your own machine, your data never leaves your control.
+
+<!-- TODO: Add app screenshots when available -->
+<!--
+## Screenshots
+
+<div align="center">
+  <img src="docs/assets/screenshot-chat.png" width="240" alt="Chat Screen">
+  <img src="docs/assets/screenshot-agents.png" width="240" alt="Sub-Agents Screen">
+  <img src="docs/assets/screenshot-settings.png" width="240" alt="Settings Screen">
+</div>
+-->
+
+## ✨ Key Features
+
+- 🏠 **Self-hosted & private** — Runs on your machine. No cloud dependency, no data leaks.
+- 🤖 **Three-tier agent architecture** — Sebastian (head butler) delegates to team leads, who dispatch workers. Your goals get executed, not just answered.
+- 📱 **Native Android app** — Real-time streaming responses, thinking blocks, tool call cards. Built with Kotlin + Jetpack Compose.
+- 🔧 **Zero-config extensibility** — Add tools, MCP servers, skills, and sub-agents by creating files. No core code changes needed.
+- 🧠 **Three-layer memory** — Working memory for current tasks, episodic memory for conversation history, semantic memory with vector search (RAG).
+- 🔒 **Permission & approval system** — Sensitive operations require your approval. Three-tier risk classification (Low / Model-Decides / High-Risk).
+- 🚀 **Dynamic Tool Factory** — When an agent needs a tool that doesn't exist, it can write one, test it in a sandbox, and register it — all autonomously.
+
+## Feature Matrix
+
+| Feature | Android App | Web UI | CLI |
+|---------|:-----------:|:------:|:---:|
+| Real-time chat with streaming | ✅ | 🔄 | ✅ |
+| Sub-agent management | ✅ | 🔄 | — |
+| Approval notifications | ✅ | 🔄 | — |
+| LLM provider configuration | ✅ | — | — |
+| Session & task history | ✅ | 🔄 | — |
+| Thinking block display | ✅ | — | — |
+| Tool call visualization | ✅ | — | — |
+| One-click install / update | — | — | ✅ |
+| Headless initialization | — | — | ✅ |
+
+✅ Available · 🔄 Planned · — Not applicable
+
+## ⚡ Quick Start
+
+### Install Server (macOS / Linux)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash
 ```
 
-脚本会：
+This installs the Sebastian backend service on your machine — downloads the latest release, verifies SHA256 checksums, installs dependencies, and launches the setup wizard. Open the URL it prints, set your name and password, and you're done.
 
-1. 检查 Python 3.12+ 等依赖
-2. 从最新 GitHub Release 下载源码包与 `SHA256SUMS`
-3. 校验文件指纹
-4. 解压到 `~/.sebastian/app/`
-5. 创建 venv、安装依赖、启动首次初始化向导
+### Install Android App
 
-启动后浏览器会被唤起到 `http://127.0.0.1:8823/setup?token=...`，填入主人名字与登录密码即可。
+Download `sebastian-app-v*.apk` from [Releases](https://github.com/Jaxton07/Sebastian/releases) and install it on your phone.
 
-### 升级到新版本
+On first launch, go to **Settings → Connection** and enter your server URL: `http://<your-local-ip>:8823`
 
-```bash
-sebastian update            # 拉取最新 release，校验、原地替换、自动回滚
-sebastian update --check    # 只检查不升级
-```
+### Connect Your AI Provider
 
-升级流程会保留 `.venv` / `.env` / `~/.sebastian/` 数据目录不动，最近 3 个旧版本会留作备份。
+After setup, open the Android app and go to **Settings → Providers**. Add your LLM provider (Anthropic, OpenAI, etc.) — API keys are stored encrypted on your machine, never sent to any cloud service.
 
-### 手动安装（偏执模式）
+## 🧭 Common Commands
 
 ```bash
-# 1. 下载最新 release
-curl -LO https://github.com/Jaxton07/Sebastian/releases/latest/download/SHA256SUMS
-TAR=$(grep '\.tar\.gz$' SHA256SUMS | awk '{print $2}')
-curl -LO "https://github.com/Jaxton07/Sebastian/releases/latest/download/${TAR}"
-
-# 2. 校验 SHA256
-shasum -a 256 -c SHA256SUMS --ignore-missing
-
-# 3. 解压并运行
-tar xzf "${TAR}"
-cd "${TAR%.tar.gz}"
-./scripts/install.sh
+sebastian serve              # Start the server (first launch opens setup wizard)
+sebastian serve --host 0.0.0.0 --port 8823   # Custom bind address
+sebastian init --headless    # Initialize without browser (for headless servers)
+sebastian update             # Update to latest release (auto-rollback on failure)
+sebastian update --check     # Check for updates without installing
 ```
 
-### 从源码开发
+## 🏗️ Architecture
 
-```bash
-git clone git@github.com:Jaxton07/Sebastian.git
-cd Sebastian
-pip install -e ".[dev,memory]"
-sebastian serve
+```
+┌─────────────┐     REST + SSE     ┌──────────────────┐
+│  Android App │◄──────────────────►│     Gateway       │
+│  (Kotlin)    │                    │  (FastAPI + SSE)  │
+└─────────────┘                    └────────┬──────────┘
+                                            │
+                                   ┌────────▼────────┐
+                                   │    Sebastian     │  ← Head Butler (depth 1)
+                                   │  (Orchestrator)  │
+                                   └────────┬─────────┘
+                                            │ delegate_to_agent
+                              ┌──────────────┼──────────────┐
+                              ▼              ▼              ▼
+                        ┌──────────┐  ┌──────────┐  ┌──────────┐
+                        │  Forge   │  │  Stock   │  │  Life    │  ← Team Leads (depth 2)
+                        │  Agent   │  │  Agent   │  │  Agent   │
+                        └────┬─────┘  └──────────┘  └──────────┘
+                             │ spawn_sub_agent
+                        ┌────▼─────┐
+                        │ Workers  │                          ← Workers (depth 3)
+                        └──────────┘
+
+          ┌─────────────────────────────────────────────┐
+          │            Shared Capabilities               │
+          │  Tools · MCPs · Skills · Memory · Sandbox    │
+          └─────────────────────────────────────────────┘
 ```
 
-### Android App
+Every agent inherits from `BaseAgent` — same tool system, same streaming loop, same memory access. Sebastian adds goal decomposition and delegation; team leads add domain-specific tools and worker dispatch.
 
-从 [Releases 页面](https://github.com/Jaxton07/Sebastian/releases) 下载 `sebastian-app-v*.apk`，通过 `adb install` 或直接传到手机安装。
+For the full architecture spec, see [docs/architecture/spec/](docs/architecture/spec/).
 
-首次打开 App → Settings → 填写 Server URL：
+### The Manor System
 
-- 模拟器（宿主机）：`http://10.0.2.2:8823`
-- 同局域网真机：`http://<电脑局域网 IP>:8823`
+Inspired by a traditional butler hierarchy: you are the lord of the manor, Sebastian is the head butler, the second tier is department leads (coding, finance, lifestyle), and the third tier is workers dispatched by leads.
 
-> ⚠️ Release APK 仅允许 HTTPS，局域网直连明文需用 debug build。公网部署推荐 Tailscale，详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
-
-### iOS
-
-本版本不分发 iOS 构建。开发者可通过 Xcode 自行 build：
-
-```bash
-cd ui/mobile
-npm install --legacy-peer-deps
-npx expo run:ios        # 需要 macOS + Xcode
+```
+You (Lord of the Manor)
+│
+├── Sebastian (Head Butler)
+│     └── Understands your intent, decomposes goals, delegates to leads
+│
+├── Forge (Coding Lead)
+│     ├── Handles simple tasks directly, dispatches workers for complex ones
+│     └── Up to 5 workers concurrently
+│
+├── Stock Agent Lead (Planned)
+│     └── ...
+└── ...
 ```
 
-移动端开发详情见 [ui/mobile/README.md](ui/mobile/README.md)。
+Day-to-day: you only talk to Sebastian — it coordinates leads automatically. As you get started, you can also open direct conversations with any lead or intervene in any active session.
 
-## 文档
+## 🗺️ Roadmap
 
-- [CLAUDE.md](CLAUDE.md) — 开发规范、环境配置、工作流指引
-- [INDEX.md](INDEX.md) — 代码库模块索引（供 Claude Code 导航用）
-- [docs/](docs/) — 架构设计文档与 Spec
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **Phase 1** | Core engine, three-tier agents, Android app, gateway, SSE | ✅ Done |
+| **Phase 2** | Memory system, Forge agent, push notifications, skills | 🔄 In progress |
+| **Phase 3** | Voice pipeline, iOS app, trigger engine | 📋 Planned |
+| **Phase 4** | Advanced triggers, more sub-agents, Web UI | 📋 Planned |
+| **Phase 5** | Biometric auth, multi-factor permissions, audit logging | 📋 Planned |
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Architecture Spec](docs/architecture/spec/INDEX.md) | Full system design — data models, protocols, agent hierarchy |
+| [Backend Guide](sebastian/README.md) | Python backend module map and development entry points |
+| [Android App Guide](ui/mobile-android/README.md) | Kotlin app architecture, navigation, SSE connection details |
+| [Changelog](CHANGELOG.md) | Version history and breaking changes |
+| [Contributing Guide](CONTRIBUTING.md) | Development setup, code style, PR workflow |
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
