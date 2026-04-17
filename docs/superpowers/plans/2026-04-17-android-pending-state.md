@@ -1522,9 +1522,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 ## 联调验收记录（实施后回填）
 
-_由实施者填写：_
+_验收日期：2026-04-17_
 
-- 路径 1 — 正常响应：
-- 路径 2 — PENDING 期间点停止：
-- 路径 3 — 切后台再回来：
-- 路径 4 — 15s 超时提示：
+- 路径 1 — 正常响应：✅ PASS — 顶部胶囊立刻出彩虹呼吸动画 + "等待响应"，SendButton 变停止图标可点；首字到达后正常过渡到 THINKING/ACTIVE
+- 路径 2 — PENDING 期间点停止：✅ PASS — 胶囊回 COLLAPSED，SendButton 回 IDLE_EMPTY，用户气泡保留；Gateway /cancel 返回 200
+- 路径 3 — 切后台再回来：✅ PASS — 后台期 turn 完成则回前台显示完整回复；未完成则胶囊保持 BREATHING，SSE 回放补齐
+- 路径 4 — 15s 超时提示：⏳ 待定 — 触发慢网络/慢 LLM 场景较难复现，暂未验证
