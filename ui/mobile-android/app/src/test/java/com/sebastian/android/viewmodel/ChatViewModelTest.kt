@@ -513,6 +513,40 @@ class ChatViewModelTest {
                 }
             }
             assertTrue(found)
+
+            // Verify currentAssistantMessageId is cleared: a TextDelta emitted after
+            // TurnCancelled should be dropped (no active message to append to).
+            // Capture the message list snapshot right after cancel settled.
+            val snapshotAfterCancel = viewModel.uiState.value.messages
+            val assistantTextAfterCancel = snapshotAfterCancel
+                .lastOrNull { it.role == MessageRole.ASSISTANT }
+                ?.blocks
+                ?.filterIsInstance<ContentBlock.TextBlock>()
+                ?.joinToString("") { it.text }
+                ?: ""
+
+            sseFlow.emit(StreamEvent.TextDelta("s1", "b0", " extra"))
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            // No new state item should carry " extra" — any emitted item must not
+            // contain text beyond what was present right after TurnCancelled.
+            val snapshotAfterOrphanDelta = viewModel.uiState.value.messages
+            val assistantTextAfterDelta = snapshotAfterOrphanDelta
+                .lastOrNull { it.role == MessageRole.ASSISTANT }
+                ?.blocks
+                ?.filterIsInstance<ContentBlock.TextBlock>()
+                ?.joinToString("") { it.text }
+                ?: ""
+            assertFalse(
+                "Orphan TextDelta after TurnCancelled must be dropped",
+                assistantTextAfterDelta.contains(" extra")
+            )
+            assertEquals(
+                "Assistant message text must not grow after TurnCancelled",
+                assistantTextAfterCancel,
+                assistantTextAfterDelta
+            )
+
             cancelAndIgnoreRemainingEvents()
         }
     }
