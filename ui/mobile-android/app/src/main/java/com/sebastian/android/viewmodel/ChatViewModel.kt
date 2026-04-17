@@ -270,6 +270,18 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            is StreamEvent.TurnCancelled -> {
+                flushPendingDeltasForCurrentMessage()
+                currentAssistantMessageId = null
+                pendingTurnSessionId = null
+                _uiState.update {
+                    it.copy(
+                        composerState = ComposerState.IDLE_EMPTY,
+                        agentAnimState = AgentAnimState.IDLE,
+                    )
+                }
+            }
+
             else -> Unit
         }
     }

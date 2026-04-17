@@ -484,4 +484,36 @@ class ChatViewModelTest {
         // 仅 activateSession 那次
         runBlocking { verify(chatRepository, times(1)).getMessages("s1") }
     }
+
+    @Test
+    fun `TurnCancelled event resets composerState to IDLE_EMPTY and agentAnimState to IDLE`() = vmTest {
+        activateSession()
+        viewModel.uiState.test {
+            awaitItem() // post-session state
+
+            sseFlow.emit(StreamEvent.TurnReceived("s1"))
+            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
+            sseFlow.emit(StreamEvent.TextDelta("s1", "b0_0", "hello"))
+            dispatcher.scheduler.advanceTimeBy(200)
+            // Consume intermediate states until we see STREAMING
+            var seenStreaming = false
+            while (!seenStreaming) {
+                val state = awaitItem()
+                if (state.composerState == ComposerState.STREAMING) seenStreaming = true
+            }
+
+            sseFlow.emit(StreamEvent.TurnCancelled("s1", "hello"))
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            var found = false
+            while (!found) {
+                val state = awaitItem()
+                if (state.composerState == ComposerState.IDLE_EMPTY && state.agentAnimState == AgentAnimState.IDLE) {
+                    found = true
+                }
+            }
+            assertTrue(found)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }
