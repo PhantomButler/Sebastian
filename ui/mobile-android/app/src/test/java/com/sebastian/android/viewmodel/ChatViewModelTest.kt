@@ -703,4 +703,60 @@ class ChatViewModelTest {
 
         collectJob.cancel()
     }
+
+    @Test
+    fun `connectionFailed while PENDING resets composerState to IDLE_EMPTY`() = vmTest {
+        // Cancel old ViewModel so we can install a throwing SSE flow
+        viewModel.viewModelScope.cancel()
+
+        // A shared flow whose collect throws immediately, simulating a connection failure
+        val throwingFlow = kotlinx.coroutines.flow.flow<StreamEvent> {
+            throw RuntimeException("SSE connection lost")
+        }
+
+        val failingRepo = object : ChatRepository {
+            override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?) =
+                throwingFlow
+            override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<StreamEvent>()
+            override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
+            override suspend fun sendTurn(sessionId: String?, content: String) =
+                Result.success("s1")
+            override suspend fun sendSessionTurn(sessionId: String, content: String) =
+                Result.success(Unit)
+            override suspend fun cancelTurn(sessionId: String) = Result.success(Unit)
+            override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
+            override suspend fun denyApproval(approvalId: String) = Result.success(Unit)
+            override suspend fun getPendingApprovals() = Result.success(emptyList<ApprovalSnapshot>())
+        }
+
+        viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, dispatcher)
+        viewModel.clock = { dispatcher.scheduler.currentTime }
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Activate a session so SSE collection starts (and immediately fails)
+        viewModel.switchSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Manually force PENDING state to simulate sendMessage having been called
+        // before the SSE failure is processed. We reuse sendMessage with a mock that hangs
+        // so the REST hasn't returned yet when the SSE fails — but the simpler approach
+        // is to directly update state and verify the connectionFailed handler resets it.
+        //
+        // Instead, test the realistic path: send a message (REST will succeed instantly),
+        // then the SSE collector (which always throws) triggers connectionFailed.
+        // After sendTurn returns, composerState stays PENDING until SSE events arrive —
+        // the failing SSE sets connectionFailed=true and resets PENDING → IDLE_EMPTY.
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(500)
+
+        assertEquals(
+            "connectionFailed while PENDING must reset composerState to IDLE_EMPTY",
+            ComposerState.IDLE_EMPTY,
+            viewModel.uiState.value.composerState,
+        )
+        assertTrue(
+            "connectionFailed flag must be set",
+            viewModel.uiState.value.connectionFailed,
+        )
+    }
 }

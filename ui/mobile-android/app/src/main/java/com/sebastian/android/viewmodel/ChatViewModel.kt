@@ -369,27 +369,32 @@ class ChatViewModel @Inject constructor(
                 scrollFollowState = ScrollFollowState.FOLLOWING,
             )
         }
-        viewModelScope.launch(dispatcher) {
+        startPendingTimeout()
+        sendTurnJob = viewModelScope.launch(dispatcher) {
             if (currentSessionId == null) {
                 // New agent session: create + start SSE
                 sessionRepository.createAgentSession(agentId, text)
                     .onSuccess { session ->
+                        sendTurnJob = null
                         _uiState.update { it.copy(activeSessionId = session.id, composerState = ComposerState.IDLE_EMPTY) }
                         startSseCollection(replayFromStart = true)
                         sessionRepository.loadAgentSessions(agentId)
                     }
                     .onFailure { e ->
+                        sendTurnJob = null
                         _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
                     }
             } else {
                 // Existing session: send turn — leave PENDING; SSE block events drive the transition.
                 chatRepository.sendSessionTurn(currentSessionId, text)
                     .onSuccess {
+                        sendTurnJob = null
                         if (sseJob?.isActive != true) {
                             startSseCollection(replayFromStart = true)
                         }
                     }
                     .onFailure { e ->
+                        sendTurnJob = null
                         _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
                     }
             }
