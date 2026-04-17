@@ -1,6 +1,7 @@
 package com.sebastian.android.ui.chat
 
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.InfiniteTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -9,6 +10,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -29,6 +31,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import com.sebastian.android.ui.theme.AgentAccentDark
+import com.sebastian.android.ui.theme.AgentAccentLight
+import com.sebastian.android.ui.theme.AgentRainbowCyanDark
+import com.sebastian.android.ui.theme.AgentRainbowCyanLight
+import com.sebastian.android.ui.theme.AgentRainbowPurpleDark
+import com.sebastian.android.ui.theme.AgentRainbowPurpleLight
 
 /**
  * 光团运行轨迹的一个关键帧。t 范围 0f..1f，归一化时间。
@@ -332,5 +340,60 @@ private fun DrawScope.drawDashedArcHalo(
                 cap = StrokeCap.Round,
             ),
         )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BreathingHalo · PENDING · 彩虹渐变旋转光环 + 呼吸 alpha
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * PENDING state halo: rotating rainbow gradient ring + alpha breathing.
+ * - Three-color sweep (blue → purple → cyan → blue), rotates 360° in 2.4s
+ * - Alpha breathes 0.35 ↔ 0.75 in 1.6s
+ * - Same size as AgentPill pill area — no radius increase
+ */
+@Composable
+fun BreathingHalo(
+    modifier: Modifier = Modifier,
+    glowAlphaScale: Float = 1f,
+) {
+    val isDark = isSystemInDarkTheme()
+    val primary = if (isDark) AgentAccentDark else AgentAccentLight
+    val purple = if (isDark) AgentRainbowPurpleDark else AgentRainbowPurpleLight
+    val cyan = if (isDark) AgentRainbowCyanDark else AgentRainbowCyanLight
+
+    val infinite = rememberInfiniteTransition(label = "breathing_halo")
+    val rotation by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "rotation",
+    )
+    val alpha by infinite.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "alpha",
+    )
+
+    Canvas(modifier = modifier.size(24.dp)) {
+        val brush = Brush.sweepGradient(
+            listOf(primary, purple, cyan, primary),
+        )
+        rotate(rotation) {
+            drawCircle(
+                brush = brush,
+                radius = size.minDimension / 2f,
+                alpha = alpha * glowAlphaScale,
+                style = Stroke(width = 4.dp.toPx()),
+            )
+        }
     }
 }
