@@ -50,7 +50,7 @@ IDLE / PENDING / THINKING / STREAMING / WORKING
 | `sendTurn.onSuccess` | 立即 `composerState=IDLE_EMPTY`（导致按钮置灰） | **不再改 composerState / agentAnimState**，只做 sessionId 切换与 SSE 建连 |
 | 首个 block 事件（Thinking/Text/Tool BlockStart） | 转 `STREAMING`，切对应 agentAnimState | 同现 —— 自然离开 PENDING |
 | `sendTurn.onFailure` | `composerState=IDLE_READY`，记录 error | 同现 |
-| 流中 `connectionFailed` 重置 | 若 `SENDING`/`STREAMING` 回 `IDLE_EMPTY` | 把 `SENDING` 换成 `PENDING` 的判断 |
+| 流中 `connectionFailed` 重置 | 若 `SENDING`/`STREAMING` 回 `IDLE_EMPTY` | 把 `SENDING` 换成 `PENDING` 的判断；**PENDING 状态下连接失败也回 `IDLE_EMPTY`**（防止 PENDING 卡死） |
 
 ## 5. SendButton 视觉
 
@@ -84,10 +84,13 @@ PENDING 与 STREAMING 在按钮层视觉一致（停止图标 + Primary），语
 
 - 若 `activeSessionId != null`：
   - `composerState=CANCELLING`（与现有 STREAMING 停止一致），调用 `chatRepository.cancelTurn(sessionId)`
-  - 后续走既有 `TurnInterrupted` 事件分支收尾，恢复到 `IDLE_EMPTY`
+  - 后端 `cancel_session()` 默认 intent=`"cancel"`，发出 `turn.cancelled` + `turn.response` 两个 SSE 事件
+  - 前端需**新增 `TurnCancelled` 事件处理**（见 §9 改动文件），在 handleEvent 中走与 `TurnInterrupted` 相同的收尾逻辑：flush deltas → `IDLE_EMPTY`
+  - 若 `TurnCancelled` 解析缺失，`turn.cancelled` 会被当作 `Unknown` 丢弃，UI 靠后续 `TurnResponse` 事件兜底恢复——功能不坏但语义丢失
   - **已显示的用户气泡保留**，不撤回
 - 若 `activeSessionId == null`（首次对话、REST 尚未返回）：
   - 直接取消本地 `sendTurn` 协程，不经过 CANCELLING（没有远端请求可等）
+  - **前置条件**：`sendMessage()` 需将 `sendTurn` 的 `Job` 保存为 ViewModel 成员变量（如 `sendTurnJob`），以便在此处调用 `sendTurnJob?.cancel()`
   - `composerState=IDLE_READY`，保留 Composer 文本（允许用户重发或编辑）
   - **已显示的用户气泡保留**，不撤回
   - 为后续编辑消息功能预留：下一轮从（未来可编辑的）用户消息继续
@@ -100,18 +103,21 @@ REST `sendTurn.onSuccess` 之后启动一个 15s 计时：
 - 15s 内无任何事件 → 通过现有 `ToastCenter` 或 `ErrorBanner` 提示「响应较慢，可点停止后重试」
 - **不自动中断**，只给出可读的信号；用户可选择继续等或点停止
 
-计时状态保存在 ChatViewModel 内部，session 切换 / cancel / TurnResponse / TurnInterrupted 时清除。
+计时状态保存在 ChatViewModel 内部，session 切换 / cancel / TurnResponse / TurnInterrupted / TurnCancelled 时清除。
 
 ## 9. 涉及改动文件
 
 | 文件 | 改动 |
 |------|------|
-| `viewmodel/ChatViewModel.kt` | 状态机改写（SENDING → PENDING），onSuccess 不再重置 composerState，新增 PENDING 超时计时 |
+| `viewmodel/ChatViewModel.kt` | 状态机改写（SENDING → PENDING），onSuccess 不再重置 composerState，新增 PENDING 超时计时，保存 `sendTurnJob` 供本地取消，新增 `TurnCancelled` 处理分支 |
 | `ui/composer/SendButton.kt` | PENDING 映射到停止图标 + 可点 |
 | `ui/chat/AgentPill.kt` | 新增 BREATHING mode |
 | `ui/chat/AgentPillAnimations.kt` | 新增 `BreathingHalo` composable（彩虹 gradient + alpha 呼吸） |
 | `ui/theme/Color.kt` | 新增彩虹辅色（紫 / 青） |
+| `data/model/StreamEvent.kt` | 新增 `TurnCancelled` 事件密封子类（`data class TurnCancelled(val sessionId: String) : StreamEvent()`） |
+| `data/remote/dto/SseFrameDto.kt` | SSE parser 新增 `"turn.cancelled"` → `StreamEvent.TurnCancelled` 分支 |
 | `viewmodel/README.md` | 更新状态机表格 |
+| `../../sebastian/gateway/routes/README.md` | 补充 `POST /sessions/{id}/cancel` 端点文档（当前缺失） |
 
 ## 10. 测试策略
 
@@ -127,6 +133,36 @@ REST `sendTurn.onSuccess` 之后启动一个 15s 计时：
 ## 11. 非目标（YAGNI）
 
 - 不做「发送失败自动重试」
-- 不改后端 cancel 语义
+- 不改后端 cancel 语义（intent、事件类型、路由均保持不变；前端补 `turn.cancelled` 消费不算改后端）
 - 不给用户消息气泡加状态指示器（未来编辑消息功能会独立处理）
 - 不修改全局 SSE / approval 链路
+
+## 12. 审核发现记录（2026-04-17）
+
+代码审核中发现的问题，已纳入本 spec 对应修正：
+
+### 12.1 `turn.cancelled` SSE 事件不匹配（已纳入 §7、§9）
+
+**问题**：后端 `cancel_session()` 默认 intent=`"cancel"`，发出 `turn.cancelled` 事件。Android 端 `SseFrameParser` 只解析了 `turn.interrupted`（对应 intent=`"stop"`，由 `stop_agent` 工具发出），**不认识 `turn.cancelled`**。`StreamEvent` 也缺少 `TurnCancelled` 子类。
+
+**影响**：用户点停止后，`turn.cancelled` 被当作 `Unknown` 丢弃，UI 靠后续 `turn.response` 事件兜底恢复。功能不坏，但 cancel 语义丢失。
+
+**修正**：前端新增 `StreamEvent.TurnCancelled` + parser 分支 + handleEvent 处理。详见 §7、§9。
+
+### 12.2 `activeSessionId == null` 本地取消需保存 Job 引用（已纳入 §7）
+
+**问题**：当前 `cancelTurn()` 遇 `activeSessionId == null` 直接 `return`（不操作）。Spec 要求"直接取消本地 `sendTurn` 协程"，但 `sendMessage()` 未保存 `sendTurn` 的 `Job` 引用，无法从外部取消。
+
+**修正**：`sendMessage()` 中将 `chatRepository.sendTurn(...)` 的协程 Job 保存为 `sendTurnJob: Job?` 成员变量。PENDING 下无 sessionId 时调用 `sendTurnJob?.cancel()`。
+
+### 12.3 `connectionFailed` 需覆盖 PENDING 回退（已纳入 §4）
+
+**问题**：当网络中断导致 SSE 连接失败时，现有逻辑将 `SENDING`/`STREAMING` 回退到 `IDLE_EMPTY`。新增 `PENDING` 后，如果 PENDING 状态下连接失败也需要同样回退，否则 PENDING 会卡死（按钮一直显示停止但实际无法操作）。
+
+**修正**：`connectionFailed` 处理中把 `SENDING` 的判断改为 `PENDING`，确保覆盖。
+
+### 12.4 后端 routes README 文档缺失（已纳入 §9）
+
+**问题**：`sebastian/gateway/routes/README.md` 的修改导航表遗漏了 `POST /sessions/{id}/cancel` 端点（实现在 `sessions.py:389-403`），只列出了 task-level 的 cancel 端点。
+
+**修正**：补充该端点文档。
