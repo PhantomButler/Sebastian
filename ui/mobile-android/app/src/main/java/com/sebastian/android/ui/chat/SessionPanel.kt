@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.sebastian.android.ui.common.SebastianIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -121,11 +122,13 @@ fun SessionPanel(
                     )
                     FeatureItem(
                         label = "Sub-Agents",
+                        leadingIcon = SebastianIcons.SubAgents,
                         onClick = onNavigateToSubAgents,
                     )
                     Spacer(Modifier.height(6.dp))
                     FeatureItem(
                         label = "设置",
+                        leadingIcon = SebastianIcons.Settings,
                         onClick = onNavigateToSettings,
                     )
                     Spacer(Modifier.height(6.dp))
@@ -238,6 +241,7 @@ private fun FeatureItem(
     onClick: () -> Unit,
     enabled: Boolean = true,
     badgeText: String? = null,
+    leadingIcon: ImageVector? = null,
 ) {
     val borderColor = if (enabled) {
         MaterialTheme.colorScheme.outlineVariant
@@ -262,6 +266,19 @@ private fun FeatureItem(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (leadingIcon != null) {
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = null,
+                    tint = if (enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),

@@ -721,4 +721,121 @@ object SebastianIcons {
             }
         }.build()
     }
+
+    val Settings: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "Settings",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 1024f,
+            viewportHeight = 1024f,
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                // Outer gear
+                moveTo(890.539f, 559.570f)
+                curveToRelative(2.115f, -16.294f, 3.483f, -32.587f, 3.483f, -49.999f)
+                curveToRelative(0f, -17.288f, -1.617f, -33.582f, -3.483f, -49.999f)
+                lineToRelative(107.462f, -84.078f)
+                curveToRelative(9.701f, -7.588f, 12.314f, -21.394f, 6.095f, -32.588f)
+                lineToRelative(-101.864f, -176.241f)
+                curveToRelative(-6.095f, -11.192f, -19.901f, -15.298f, -31.094f, -11.192f)
+                lineToRelative(-126.865f, 50.994f)
+                curveToRelative(-26.492f, -20.397f, -55.099f, -37.188f, -86.068f, -49.999f)
+                lineTo(638.802f, 21.393f)
+                curveTo(637.186f, 9.080f, 626.613f, 0f, 613.802f, 0f)
+                horizontalLineTo(409.949f)
+                curveToRelative(-12.686f, 0f, -23.384f, 9.204f, -25.000f, 21.393f)
+                lineToRelative(-19.403f, 135.073f)
+                curveToRelative(-31.094f, 12.686f, -59.576f, 30.100f, -86.068f, 49.999f)
+                lineToRelative(-126.865f, -50.995f)
+                curveToRelative(-11.815f, -4.602f, -24.999f, 0f, -31.094f, 11.194f)
+                lineTo(19.656f, 342.906f)
+                curveToRelative(-6.715f, 11.193f, -3.482f, 24.999f, 6.095f, 32.587f)
+                lineToRelative(107.462f, 84.078f)
+                curveToRelative(-2.115f, 16.293f, -3.483f, 33.084f, -3.483f, 49.999f)
+                curveToRelative(0f, 16.915f, 1.617f, 33.581f, 3.483f, 49.999f)
+                lineTo(25.627f, 643.648f)
+                curveTo(15.924f, 651.235f, 13.313f, 665.041f, 19.532f, 676.234f)
+                lineToRelative(101.864f, 176.241f)
+                curveToRelative(6.094f, 11.194f, 19.901f, 15.299f, 31.094f, 11.194f)
+                lineToRelative(126.865f, -50.996f)
+                curveToRelative(26.492f, 20.398f, 55.098f, 37.190f, 86.068f, 50.000f)
+                lineToRelative(19.402f, 135.073f)
+                curveToRelative(1.617f, 12.189f, 12.190f, 21.393f, 25.000f, 21.393f)
+                horizontalLineToRelative(203.853f)
+                curveToRelative(12.686f, 0f, 23.383f, -9.204f, 25.000f, -21.393f)
+                lineToRelative(19.402f, -135.073f)
+                curveToRelative(31.094f, -12.686f, 59.577f, -30.100f, 86.069f, -49.999f)
+                lineToRelative(126.865f, 50.995f)
+                curveToRelative(11.815f, 4.602f, 24.999f, 0f, 31.093f, -11.194f)
+                lineTo(1003.970f, 676.234f)
+                curveToRelative(6.095f, -11.193f, 3.483f, -24.999f, -6.094f, -32.586f)
+                lineToRelative(-107.338f, -84.078f)
+                close()
+                // Inner circle (counter-clockwise → nonzero fill creates hole)
+                moveTo(511.938f, 688.050f)
+                curveToRelative(-98.382f, 0f, -178.356f, -79.974f, -178.356f, -178.356f)
+                reflectiveCurveToRelative(79.974f, -178.356f, 178.356f, -178.356f)
+                reflectiveCurveTo(690.294f, 411.313f, 690.294f, 509.695f)
+                reflectiveCurveToRelative(-79.974f, 178.355f, -178.356f, 178.355f)
+                close()
+            }
+        }.build()
+    }
+
+    val SubAgents: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "SubAgents",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 1024f,
+            viewportHeight = 1024f,
+        ).apply {
+            // Main body (center figure)
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(593.9f, 473.4f)
+                curveToRelative(110.2f, 23.8f, 238.4f, 101.3f, 238.4f, 324.8f)
+                curveToRelative(0f, 59.6f, -74.5f, 59.6f, -315.8f, 59.6f)
+                curveToRelative(-244.3f, 0f, -315.8f, 0f, -315.8f, -59.6f)
+                curveToRelative(0f, -220.5f, 128.1f, -300.9f, 238.4f, -324.8f)
+                curveToRelative(-86.4f, -47.7f, -116.2f, -157.9f, -74.5f, -247.3f)
+                reflectiveCurveToRelative(146f, -122.2f, 226.4f, -74.5f)
+                reflectiveCurveToRelative(113.2f, 157.9f, 68.5f, 244.3f)
+                curveToRelative(-15f, 35.8f, -38.8f, 59.6f, -65.6f, 77.5f)
+                close()
+            }
+            // Left figure
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(344.6f, 469.8f)
+                curveToRelative(9.4f, -2.8f, 11.8f, -15f, 4f, -21f)
+                curveToRelative(-69.2f, -53f, -90.4f, -151.6f, -52.5f, -232.9f)
+                curveToRelative(5.6f, -12f, 12.3f, -23f, 20f, -32.9f)
+                curveToRelative(6.4f, -8.2f, -0.2f, -20.1f, -10.6f, -19.2f)
+                curveToRelative(-44.8f, 3.8f, -87.1f, 31.4f, -108.7f, 77.7f)
+                curveToRelative(-30.2f, 64.7f, -14.2f, 142.8f, 39.4f, 186.4f)
+                curveToRelative(7.4f, 6.1f, 5.2f, 17.9f, -4f, 20.8f)
+                curveToRelative(-82.7f, 25.8f, -168.3f, 94.5f, -168.3f, 256.8f)
+                curveToRelative(0f, 24.9f, 15.3f, 36.9f, 57.2f, 42.8f)
+                curveToRelative(6.7f, 0.9f, 12.9f, -3.9f, 13.6f, -10.7f)
+                curveToRelative(16.5f, -167.2f, 115.5f, -239.9f, 209.9f, -267.8f)
+                close()
+            }
+            // Right figure
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(679.5f, 469.8f)
+                curveToRelative(-9.4f, -2.8f, -11.8f, -15f, -4f, -21f)
+                curveToRelative(69.2f, -53f, 90.4f, -151.6f, 52.5f, -232.9f)
+                curveToRelative(-5.6f, -12f, -12.3f, -23f, -20f, -32.9f)
+                curveToRelative(-6.4f, -8.2f, 0.2f, -20.1f, 10.6f, -19.2f)
+                curveToRelative(44.8f, 3.8f, 87.1f, 31.4f, 108.7f, 77.7f)
+                curveToRelative(30.2f, 64.7f, 14.2f, 142.8f, -39.4f, 186.4f)
+                curveToRelative(-7.4f, 6.1f, -5.2f, 17.9f, 4f, 20.8f)
+                curveToRelative(82.7f, 25.8f, 168.3f, 94.5f, 168.3f, 256.8f)
+                curveToRelative(0f, 24.9f, -15.3f, 36.9f, -57.2f, 42.8f)
+                curveToRelative(-6.7f, 0.9f, -12.9f, -3.9f, -13.6f, -10.7f)
+                curveToRelative(-16.5f, -167.2f, -115.5f, -239.9f, -209.9f, -267.8f)
+                close()
+            }
+        }.build()
+    }
 }
