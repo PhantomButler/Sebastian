@@ -31,6 +31,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
@@ -590,6 +592,36 @@ class ChatViewModelTest {
             val state = awaitItem()
             assertEquals(ComposerState.STREAMING, state.composerState)
             assertEquals(AgentAnimState.STREAMING, state.agentAnimState)
+        }
+    }
+
+    @Test
+    fun `cancelTurn with null activeSessionId cancels sendTurnJob and resets to IDLE_READY`() = vmTest {
+        // No active session initially — simulates first ever message
+        // Mock sendTurn to hang so we can cancel while PENDING
+        whenever(chatRepository.sendTurn(anyOrNull(), any())).doSuspendableAnswer {
+            kotlinx.coroutines.delay(30_000)
+            Result.success("s1")
+        }
+
+        viewModel.uiState.test {
+            awaitItem() // initial state
+
+            viewModel.sendMessage("hi")
+            dispatcher.scheduler.advanceTimeBy(50)
+
+            val pending = awaitItem()
+            assertEquals(ComposerState.PENDING, pending.composerState)
+            assertNull(pending.activeSessionId)
+
+            viewModel.cancelTurn()
+            dispatcher.scheduler.advanceTimeBy(50)
+
+            val afterCancel = awaitItem()
+            assertEquals(ComposerState.IDLE_READY, afterCancel.composerState)
+            assertEquals(AgentAnimState.IDLE, afterCancel.agentAnimState)
+            // User bubble is preserved
+            assertTrue(afterCancel.messages.any { it.role == MessageRole.USER })
         }
     }
 }

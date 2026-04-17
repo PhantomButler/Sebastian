@@ -60,6 +60,7 @@ class ChatViewModel @Inject constructor(
     private val pendingDeltas = ConcurrentHashMap<String, StringBuilder>()
 
     private var sseJob: Job? = null
+    private var sendTurnJob: Job? = null
     private var currentAssistantMessageId: String? = null
     private var pendingTurnSessionId: String? = null
 
@@ -305,9 +306,10 @@ class ChatViewModel @Inject constructor(
                 scrollFollowState = ScrollFollowState.FOLLOWING,
             )
         }
-        viewModelScope.launch(dispatcher) {
+        sendTurnJob = viewModelScope.launch(dispatcher) {
             chatRepository.sendTurn(currentSessionId, text)
                 .onSuccess { returnedSessionId ->
+                    sendTurnJob = null
                     // REST returned — leave PENDING; SSE block events will drive the transition.
                     if (currentSessionId == null || currentSessionId != returnedSessionId) {
                         // New session created by backend — switch to it
@@ -325,6 +327,7 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 .onFailure { e ->
+                    sendTurnJob = null
                     _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
                 }
         }
@@ -393,7 +396,20 @@ class ChatViewModel @Inject constructor(
     }
 
     fun cancelTurn() {
-        val sessionId = _uiState.value.activeSessionId ?: return
+        val sessionId = _uiState.value.activeSessionId
+        if (sessionId == null) {
+            // Still in PENDING before REST returned — cancel the local job,
+            // keep user bubble for editing/retry.
+            sendTurnJob?.cancel()
+            sendTurnJob = null
+            _uiState.update {
+                it.copy(
+                    composerState = ComposerState.IDLE_READY,
+                    agentAnimState = AgentAnimState.IDLE,
+                )
+            }
+            return
+        }
         _uiState.update { it.copy(composerState = ComposerState.CANCELLING) }
         viewModelScope.launch(dispatcher) {
             withTimeoutOrNull(5_000L) {
