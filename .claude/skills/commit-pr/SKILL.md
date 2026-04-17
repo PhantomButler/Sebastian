@@ -195,11 +195,89 @@ Commits:
 PR: {pr_url}
 ```
 
-## PR 合并后
+### 步骤 10：监控 CI
 
-合并使用 squash merge（`gh pr merge --squash`）。
+PR 创建后立即开始监控 CI：
 
-合并后必须立即同步 dev：
+```bash
+gh run list --branch dev --limit 5   # 查看最近 run
+gh run watch <run-id>                 # 跟随进度（或轮询）
+```
+
+每隔约 30s 检查一次，直到所有 job 完成：
+
+```bash
+gh pr checks <pr-number>
+```
+
+**若 CI 全绿**：跳到步骤 12。
+
+**若 CI 失败**：进入步骤 11。
+
+### 步骤 11：处理 CI 失败
+
+先读取失败日志判断问题性质：
+
+```bash
+gh run view <run-id> --log-failed
+```
+
+#### 小问题（直接修复，无需询问）
+
+判断标准：lint/format 错误、import 排序、未使用变量、测试因代码实现与测试期望的细节不一致（非逻辑错误）。
+
+处理方式：
+1. 本地修复
+2. 提交新 commit 到 dev（同样遵循步骤 4-7 的 lint + commit 规范）
+3. push 后 CI 自动重新触发，回到步骤 10 继续监控
+
+#### 大问题（先询问用户意见）
+
+判断标准：逻辑回归、核心功能测试失败、类型错误涉及接口变更、CI 配置本身有问题、影响范围不明确。
+
+处理方式：
+1. 向用户展示失败摘要和自己的判断
+2. 提出 1-2 个修复方案，说明各自影响
+3. 等待用户选择后再动手
+
+### 步骤 12：等待 Approve 并 Squash Merge
+
+CI 全绿后，等待用户 approve（或用户明确授权后直接合并）。
+
+确认可以合并后执行：
+
+```bash
+gh pr merge <pr-number> --squash --delete-branch
+```
+
+（`--delete-branch` 删除 GitHub 上的远程 dev 分支头部引用，不影响本地）
+
+等待合并完成：
+
+```bash
+gh pr view <pr-number> --json state -q .state   # 确认 MERGED
+```
+
+### 步骤 13：合并后同步 dev
+
+Squash merge 把所有 commit 压成一个新 commit 进入 main，dev 上的原始 commit 序列已无用。**此时不能用 rebase**（会因文本结构不同产生冲突），必须直接将 dev 对齐 main：
+
+```bash
+git fetch origin main
+git reset --hard origin/main
+git push --force-with-lease
+```
+
+完成后输出：
+
+```
+✓ PR #{pr-number} 已 squash merge 到 main
+✓ dev 已对齐 main（{short-sha}）
+```
+
+## PR 合并后（手动触发时）
+
+若用户在其他地方完成了合并，只需执行同步步骤：
 
 ```bash
 git fetch origin main
