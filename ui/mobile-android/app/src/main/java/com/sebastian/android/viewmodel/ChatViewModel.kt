@@ -28,9 +28,9 @@ import kotlin.coroutines.cancellation.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
-enum class ComposerState { IDLE_EMPTY, IDLE_READY, SENDING, STREAMING, CANCELLING }
+enum class ComposerState { IDLE_EMPTY, IDLE_READY, PENDING, STREAMING, CANCELLING }
 enum class ScrollFollowState { FOLLOWING, DETACHED, NEAR_BOTTOM }
-enum class AgentAnimState { IDLE, THINKING, STREAMING, WORKING }
+enum class AgentAnimState { IDLE, PENDING, THINKING, STREAMING, WORKING }
 
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
@@ -141,7 +141,7 @@ class ChatViewModel @Inject constructor(
                             connectionFailed = true,
                             // If we lost the connection mid-turn, reset the composer so the
                             // button doesn't stay spinning with no way to dismiss.
-                            composerState = if (state.composerState == ComposerState.SENDING ||
+                            composerState = if (state.composerState == ComposerState.PENDING ||
                                 state.composerState == ComposerState.STREAMING
                             ) ComposerState.IDLE_EMPTY else state.composerState,
                         )
@@ -300,15 +300,15 @@ class ChatViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 messages = state.messages + userMsg,
-                composerState = ComposerState.SENDING,
+                composerState = ComposerState.PENDING,
+                agentAnimState = AgentAnimState.PENDING,
                 scrollFollowState = ScrollFollowState.FOLLOWING,
             )
         }
         viewModelScope.launch(dispatcher) {
             chatRepository.sendTurn(currentSessionId, text)
                 .onSuccess { returnedSessionId ->
-                    // REST returned — clear SENDING immediately; SSE events drive the rest of the turn.
-                    _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
+                    // REST returned — leave PENDING; SSE block events will drive the transition.
                     if (currentSessionId == null || currentSessionId != returnedSessionId) {
                         // New session created by backend — switch to it
                         _uiState.update { it.copy(activeSessionId = returnedSessionId) }
@@ -342,7 +342,8 @@ class ChatViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 messages = state.messages + userMsg,
-                composerState = ComposerState.SENDING,
+                composerState = ComposerState.PENDING,
+                agentAnimState = AgentAnimState.PENDING,
                 scrollFollowState = ScrollFollowState.FOLLOWING,
             )
         }
@@ -359,10 +360,9 @@ class ChatViewModel @Inject constructor(
                         _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
                     }
             } else {
-                // Existing session: send turn
+                // Existing session: send turn — leave PENDING; SSE block events drive the transition.
                 chatRepository.sendSessionTurn(currentSessionId, text)
                     .onSuccess {
-                        _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) }
                         if (sseJob?.isActive != true) {
                             startSseCollection(replayFromStart = true)
                         }
@@ -378,11 +378,16 @@ class ChatViewModel @Inject constructor(
         if (text.isBlank()) return
         val userMsg = Message(id = UUID.randomUUID().toString(), sessionId = sessionId, role = MessageRole.USER, text = text)
         _uiState.update { state ->
-            state.copy(messages = state.messages + userMsg, composerState = ComposerState.SENDING, scrollFollowState = ScrollFollowState.FOLLOWING)
+            state.copy(
+                messages = state.messages + userMsg,
+                composerState = ComposerState.PENDING,
+                agentAnimState = AgentAnimState.PENDING,
+                scrollFollowState = ScrollFollowState.FOLLOWING,
+            )
         }
         viewModelScope.launch(dispatcher) {
+            // Leave PENDING on success; SSE block events drive the transition.
             chatRepository.sendSessionTurn(sessionId, text)
-                .onSuccess { _uiState.update { it.copy(composerState = ComposerState.IDLE_EMPTY) } }
                 .onFailure { e -> _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) } }
         }
     }
@@ -466,7 +471,7 @@ class ChatViewModel @Inject constructor(
         val sessionId = state.activeSessionId ?: return
         if (state.isOffline) return
         if (state.composerState == ComposerState.STREAMING ||
-            state.composerState == ComposerState.SENDING ||
+            state.composerState == ComposerState.PENDING ||
             state.composerState == ComposerState.CANCELLING ||
             state.composerState == ComposerState.IDLE_READY
         ) return

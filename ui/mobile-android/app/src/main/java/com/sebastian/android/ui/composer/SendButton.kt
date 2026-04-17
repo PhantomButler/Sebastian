@@ -26,7 +26,7 @@ import com.sebastian.android.viewmodel.ComposerState
  * |-------------|--------------------------|-------|
  * | IDLE_EMPTY  | Neutral 玻璃圆（禁用）      | 否    |
  * | IDLE_READY  | Primary 玻璃圆 + 发送图标   | 是    |
- * | SENDING     | Neutral 玻璃圆 + 进度环     | 否    |
+ * | PENDING     | Neutral 玻璃圆 + 进度环     | 否    |
  * | STREAMING   | Primary 玻璃圆 + 停止图标   | 是    |
  * | CANCELLING  | Neutral 玻璃圆 + 进度环     | 否    |
  *
@@ -81,7 +81,7 @@ fun SendButton(
                     contentDescription = "停止",
                     tint = MaterialTheme.colorScheme.onPrimary,
                 )
-                ComposerState.SENDING, ComposerState.CANCELLING -> CircularProgressIndicator(
+                ComposerState.PENDING, ComposerState.CANCELLING -> CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),

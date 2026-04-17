@@ -45,7 +45,7 @@ enum class AgentPillMode { COLLAPSED, THINKING, ACTIVE }
 
 fun AgentAnimState.toPillMode(): AgentPillMode = when (this) {
     AgentAnimState.IDLE -> AgentPillMode.COLLAPSED
-    AgentAnimState.THINKING -> AgentPillMode.THINKING
+    AgentAnimState.PENDING, AgentAnimState.THINKING -> AgentPillMode.THINKING
     AgentAnimState.STREAMING, AgentAnimState.WORKING -> AgentPillMode.ACTIVE
 }
 

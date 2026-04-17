@@ -63,9 +63,9 @@ Agent LLM 绑定主列表页的 ViewModel，仅负责数据加载：
 
 | 枚举 | 值 |
 |------|-----|
-| `ComposerState` | IDLE_EMPTY / IDLE_READY / SENDING / STREAMING / CANCELLING |
+| `ComposerState` | IDLE_EMPTY / IDLE_READY / PENDING / STREAMING / CANCELLING |
 | `ScrollFollowState` | FOLLOWING / DETACHED / NEAR_BOTTOM |
-| `AgentAnimState` | IDLE / THINKING / STREAMING / WORKING |
+| `AgentAnimState` | IDLE / PENDING / THINKING / STREAMING / WORKING |
 
 ### `SessionViewModel`
 

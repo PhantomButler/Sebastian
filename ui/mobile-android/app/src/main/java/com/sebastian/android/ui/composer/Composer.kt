@@ -47,7 +47,7 @@ fun Composer(
     var text by rememberSaveable { mutableStateOf("") }
 
     val effectiveState = when {
-        state == ComposerState.STREAMING || state == ComposerState.SENDING || state == ComposerState.CANCELLING -> state
+        state == ComposerState.STREAMING || state == ComposerState.PENDING || state == ComposerState.CANCELLING -> state
         text.isNotBlank() -> ComposerState.IDLE_READY
         else -> ComposerState.IDLE_EMPTY
     }

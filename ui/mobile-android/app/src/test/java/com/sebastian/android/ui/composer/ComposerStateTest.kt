@@ -34,13 +34,13 @@ class ComposerStateTest {
     }
 
     @Test
-    fun `SENDING state is not affected by text content`() {
-        assertEquals(ComposerState.SENDING, resolveComposerState("", ComposerState.SENDING))
+    fun `PENDING state is not affected by text content`() {
+        assertEquals(ComposerState.PENDING, resolveComposerState("", ComposerState.PENDING))
     }
 
     // 辅助函数：模拟 Composer 内部的状态映射逻辑
     private fun resolveComposerState(text: String, current: ComposerState): ComposerState {
-        if (current == ComposerState.STREAMING || current == ComposerState.SENDING || current == ComposerState.CANCELLING) {
+        if (current == ComposerState.STREAMING || current == ComposerState.PENDING || current == ComposerState.CANCELLING) {
             return current
         }
         return if (text.isNotBlank()) ComposerState.IDLE_READY else ComposerState.IDLE_EMPTY

@@ -229,15 +229,16 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `sendMessage adds user message and sets composerState SENDING`() = vmTest {
+    fun `sendMessage adds user message and sets composerState PENDING`() = vmTest {
         viewModel.uiState.test {
             awaitItem() // initial
 
             viewModel.sendMessage("你好")
-            dispatcher.scheduler.advanceTimeBy(200)
+            dispatcher.scheduler.advanceTimeBy(50)
 
             val state = awaitItem()
-            assertEquals(ComposerState.SENDING, state.composerState)
+            assertEquals(ComposerState.PENDING, state.composerState)
+            assertEquals(AgentAnimState.PENDING, state.agentAnimState)
             assertEquals(ScrollFollowState.FOLLOWING, state.scrollFollowState)
             val userMsg = state.messages.lastOrNull { it.role == MessageRole.USER }
             assertTrue(userMsg != null)
@@ -548,6 +549,47 @@ class ChatViewModelTest {
             )
 
             cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `sendMessage enters PENDING and stays PENDING through sendTurn REST success`() = vmTest {
+        activateSession()
+        viewModel.uiState.test {
+            awaitItem() // post-session state
+
+            viewModel.sendMessage("hi")
+            dispatcher.scheduler.advanceTimeBy(50)
+
+            val immediate = awaitItem()
+            assertEquals(ComposerState.PENDING, immediate.composerState)
+            assertEquals(AgentAnimState.PENDING, immediate.agentAnimState)
+
+            dispatcher.scheduler.advanceTimeBy(500) // let sendTurn REST finish
+            // State should STILL be PENDING after REST returns — not reset to IDLE
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `first TextBlockStart transitions PENDING to STREAMING`() = vmTest {
+        activateSession()
+        viewModel.sendMessage("hi")
+        dispatcher.scheduler.advanceTimeBy(500) // let REST finish
+
+        viewModel.uiState.test {
+            awaitItem() // current PENDING state
+
+            sseFlow.emit(StreamEvent.TurnReceived("s1"))
+            dispatcher.scheduler.advanceTimeBy(50)
+            expectNoEvents() // TurnReceived should NOT change state
+
+            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0"))
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            val state = awaitItem()
+            assertEquals(ComposerState.STREAMING, state.composerState)
+            assertEquals(AgentAnimState.STREAMING, state.agentAnimState)
         }
     }
 }
