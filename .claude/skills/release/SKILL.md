@@ -177,7 +177,7 @@ sleep 3 && gh run list --workflow=release.yml --limit 1 --json databaseId,status
 gh run watch {run_id} --exit-status
 ```
 
-Android 构建约 20 分钟，后台跟踪，完成后通知用户。
+Android 构建约 5 分钟（原生 Kotlin，比旧 React Native 快），后台跟踪，完成后通知用户。
 
 ### 步骤 7：发版后同步本地 main
 
