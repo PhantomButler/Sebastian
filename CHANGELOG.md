@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-18
+
 Android 原生重写、子代理双向通信、仓库迁移至 PhantomButler 组织。
 
 ### Breaking Changes
