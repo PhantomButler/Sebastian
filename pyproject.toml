@@ -30,8 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 memory = [
-    "chromadb>=0.5",
-    "sentence-transformers>=3.0",
+    "jieba>=0.42",
 ]
 voice = [
     "faster-whisper>=1.0",

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Sebastian — 记忆系统架构 v0.1</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f1117;
+    color: #e1e4e8;
+    margin: 0;
+    padding: 24px 32px;
+    line-height: 1.6;
+  }
+  header { margin-bottom: 36px; border-bottom: 1px solid #30363d; padding-bottom: 16px; }
+  header h1 { color: #f0f6ff; font-size: 1.5rem; margin: 0 0 4px; }
+  header .meta { color: #8b949e; font-size: 0.82rem; display: flex; gap: 20px; }
+  header .meta span { display: flex; align-items: center; gap: 4px; }
+  h2 { color: #79b8ff; font-size: 1.05rem; margin: 36px 0 10px;
+       border-bottom: 1px solid #21262d; padding-bottom: 6px; }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .desc { color: #8b949e; font-size: 0.83rem; margin: 0 0 16px; }
+  .desc code { background: #21262d; padding: 1px 5px; border-radius: 3px;
+               color: #e6edf3; font-size: 0.8rem; }
+  .mermaid { background: #161b22; }
+  .tag {
+    display: inline-block; font-size: 0.72rem; padding: 1px 8px;
+    border-radius: 10px; margin-left: 8px; vertical-align: middle;
+  }
+  .tag-planned { background: #3a1a1a; color: #f85149; border: 1px solid #6e1a1a; }
+  .tag-impl    { background: #1a3a1a; color: #56d364; border: 1px solid #1a6e1a; }
+  .tag-partial { background: #2a2a1a; color: #e3b341; border: 1px solid #5a4a1a; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  th { background: #21262d; color: #79b8ff; text-align: left;
+       padding: 7px 12px; border: 1px solid #30363d; }
+  td { padding: 6px 12px; border: 1px solid #21262d; color: #c9d1d9; vertical-align: top; }
+  tr:hover td { background: #1c2128; }
+  .field-name { color: #79c0ff; font-family: monospace; }
+  .field-type { color: #a5d6ff; font-family: monospace; }
+  .note { background: #1c2a1c; border-left: 3px solid #3fb950;
+          padding: 10px 14px; border-radius: 0 6px 6px 0;
+          font-size: 0.82rem; color: #c9d1d9; margin-top: 12px; }
+  .note strong { color: #56d364; }
+  .warn { background: #2a1c1c; border-left: 3px solid #f85149;
+          padding: 10px 14px; border-radius: 0 6px 6px 0;
+          font-size: 0.82rem; color: #c9d1d9; margin-top: 12px; }
+  .toc { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+         padding: 14px 20px; margin-bottom: 28px; font-size: 0.85rem; }
+  .toc a { color: #79b8ff; text-decoration: none; display: block;
+           padding: 3px 0; }
+  .toc a:hover { color: #a5d6ff; text-decoration: underline; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sebastian — 记忆系统架构
+    <span class="tag tag-planned">v0.1 · DRAFT</span>
+  </h1>
+  <div class="meta">
+    <span>📅 2026-04-18</span>
+    <span>📁 docs/architecture/diagrams/memory-v0.1.html</span>
+    <span>🔗 关联 Spec: docs/architecture/spec/INDEX.md</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <strong style="color:#e6edf3">目录</strong><br>
+  <a href="#overview">① 三层记忆总览</a>
+  <a href="#datamodel">② 数据模型（memories 表）</a>
+  <a href="#write">③ 写入流水线（即时 + 沉淀）</a>
+  <a href="#read">④ 读取流水线（被动注入 + 主动查询）</a>
+  <a href="#integration">⑤ 与 Agent Loop 集成</a>
+  <a href="#tools">⑥ 新增工具一览</a>
+</nav>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="overview">① 三层记忆总览</h2>
+<div class="card">
+  <p class="desc">
+    三层记忆各有作用域和生命周期。<span class="tag tag-impl">已实现</span> WorkingMemory 和 EpisodicMemory 已有，
+    <span class="tag tag-planned">新增</span> SemanticMemory 是本次要建设的核心。
+  </p>
+  <div class="mermaid">
+graph LR
+    subgraph L1["WorkingMemory  已实现"]
+        W1["作用域：单次 task\n存储：进程内 dict\n生命周期：task 结束即清"]
+    end
+
+    subgraph L2["EpisodicMemory  已实现·待增强"]
+        E1["作用域：单个 session\n存储：SQLite messages 表\n生命周期：永久保留\n当前限制：每次只取最近 20 条"]
+    end
+
+    subgraph L3["SemanticMemory  新增"]
+        S1["作用域：全局 Owner 级\n存储：SQLite memories 表 + FTS5\n生命周期：永久（可过期）\n检索：FTS全文 + access_count 排序"]
+    end
+
+    subgraph AGENT["BaseAgent（每次 turn）"]
+        SP["system_prompt\n注入 top-N 语义记忆"]
+        MSG["messages\n取最近 20 条情景记忆"]
+        WM["working_memory\n临时草稿变量"]
+    end
+
+    L3 -->|"被动注入"| SP
+    L2 -->|"历史对话"| MSG
+    L1 -->|"临时状态"| WM
+
+    style L1 fill:#1a2a1a,stroke:#3a7a3a
+    style L2 fill:#1a2a2a,stroke:#3a7a7a
+    style L3 fill:#2a1a2a,stroke:#7a3a7a
+    style AGENT fill:#2a2a1a,stroke:#7a7a3a
+  </div>
+  <div class="note">
+    <strong>设计原则：</strong>不引入新基础设施依赖。个人规模（单 Owner，数百到数千条记忆）SQLite FTS5 全文检索毫秒级响应，向量 DB / PostgreSQL 均属过度设计。
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="datamodel">② 数据模型</h2>
+<div class="card">
+  <p class="desc">
+    <code>memories</code> 表存储语义记忆，<code>memories_fts</code> 虚拟表提供全文索引。
+    合并了 Kimi 方案中 entity_key/value 结构化字段和 confidence/source/expires_at 的优良设计。
+  </p>
+
+  <table>
+    <tr>
+      <th>字段</th><th>类型</th><th>说明</th>
+    </tr>
+    <tr>
+      <td class="field-name">id</td>
+      <td class="field-type">TEXT PK</td>
+      <td>UUID，唯一标识</td>
+    </tr>
+    <tr>
+      <td class="field-name">category</td>
+      <td class="field-type">TEXT</td>
+      <td><code>preference</code> / <code>fact</code> / <code>project</code> / <code>habit</code> / <code>constraint</code></td>
+    </tr>
+    <tr>
+      <td class="field-name">entity_key</td>
+      <td class="field-type">TEXT</td>
+      <td>结构化键，如 <code>communication_style</code> / <code>current_project</code>。可为空（自由文本记忆）</td>
+    </tr>
+    <tr>
+      <td class="field-name">entity_value</td>
+      <td class="field-type">TEXT</td>
+      <td>结构化值，如 <code>简洁中文</code>。与 entity_key 配对</td>
+    </tr>
+    <tr>
+      <td class="field-name">content</td>
+      <td class="field-type">TEXT NOT NULL</td>
+      <td>自然语言描述，用于 FTS5 检索和注入 system prompt</td>
+    </tr>
+    <tr>
+      <td class="field-name">source</td>
+      <td class="field-type">TEXT</td>
+      <td><code>explicit</code>（用户主动说）/ <code>inferred</code>（Agent 从对话提取）</td>
+    </tr>
+    <tr>
+      <td class="field-name">confidence</td>
+      <td class="field-type">REAL</td>
+      <td>0.0–1.0。explicit 固定 1.0，inferred 由 LLM 提取时给出</td>
+    </tr>
+    <tr>
+      <td class="field-name">expires_at</td>
+      <td class="field-type">DATETIME</td>
+      <td>可选。临时偏好用，如"本周我在出差"。NULL 表示永久有效</td>
+    </tr>
+    <tr>
+      <td class="field-name">source_session_id</td>
+      <td class="field-type">TEXT</td>
+      <td>来源 session，用于追溯</td>
+    </tr>
+    <tr>
+      <td class="field-name">created_at</td>
+      <td class="field-type">DATETIME</td>
+      <td>创建时间</td>
+    </tr>
+    <tr>
+      <td class="field-name">updated_at</td>
+      <td class="field-type">DATETIME</td>
+      <td>最后更新时间（upsert 时更新）</td>
+    </tr>
+    <tr>
+      <td class="field-name">last_accessed_at</td>
+      <td class="field-type">DATETIME</td>
+      <td>最近被检索注入的时间，用于排序权重</td>
+    </tr>
+    <tr>
+      <td class="field-name">access_count</td>
+      <td class="field-type">INTEGER</td>
+      <td>被检索注入的次数，越高优先级越高</td>
+    </tr>
+  </table>
+
+  <div style="margin-top:20px">
+    <div class="mermaid">
+flowchart LR
+    subgraph SQLITE["SQLite  sebastian.db"]
+        MEM["memories\n主表\nFTS 内容源"]
+        FTS["memories_fts\nVIRTUAL TABLE fts5\ncontent entity_key entity_value\n全文检索入口"]
+        MSG["messages\n已有\n情景记忆原始对话"]
+    end
+
+    MEM -->|"FTS5 content= 触发器同步"| FTS
+    MSG -.->|"ConsolidationWorker 读取"| MEM
+
+    style SQLITE fill:#1a1a2a,stroke:#3a3a7a
+    style FTS fill:#2a1a2a,stroke:#7a3a7a
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Upsert 冲突策略：</strong>同一 entity_key 收到新值时，若新值 confidence &gt; 旧值 confidence × 0.8，则覆盖更新；否则保留旧值。explicit 来源的写入永远覆盖 inferred。
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="write">③ 写入流水线</h2>
+<div class="card">
+  <p class="desc">
+    两条写入路径：<strong>即时写入</strong>（用户主动触发，精准高置信）和
+    <strong>Session 沉淀</strong>（后台异步，从对话中推断提取）。
+  </p>
+  <div class="mermaid">
+flowchart TD
+    subgraph PATH_A["路径 A — 即时写入（用户主动）"]
+        U1["用户说: 记一下我喜欢简洁回复"]
+        A1["Agent 识别意图\n调用 memory_save 工具"]
+        A2["memory_save\ncategory=preference\nentity_key=communication_style\ncontent=喜欢简洁回复\nsource=explicit\nconfidence=1.0"]
+        A3["直接写入 memories 表\n同步更新 FTS5 索引"]
+        U1 --> A1 --> A2 --> A3
+    end
+
+    subgraph PATH_B["路径 B — Session 沉淀（后台异步）"]
+        B1["Session 状态变为 idle 或 stalled"]
+        B2["EventBus 发布\nSESSION_IDLE 事件"]
+        B3["ConsolidationWorker\n订阅事件，异步触发"]
+        B4["读取该 session\n完整对话历史"]
+        B5["调用 LLM\n结构化提取事实\n返回 JSON 列表"]
+        B6["逐条 Upsert\nsource=inferred\nconfidence=LLM 给出"]
+        B7["写入 memories 表\n更新 FTS5 索引"]
+        B1 --> B2 --> B3 --> B4 --> B5 --> B6 --> B7
+    end
+
+    style PATH_A fill:#1a2a1a,stroke:#3a7a3a
+    style PATH_B fill:#1a1a2a,stroke:#3a3a7a
+    style A2 fill:#1a3a1a,stroke:#3a8a3a
+    style B5 fill:#2a1a2a,stroke:#7a3a7a
+  </div>
+
+  <div class="note">
+    <strong>ConsolidationWorker 触发时机：</strong>复用现有 StalledWatchdog 和 Session 状态机。
+    Session 进入 <code>idle</code>（用户主动 stop）或 <code>stalled</code>（5min 无活动）时，
+    通过 EventBus 触发，不新增定时器。沉淀完成后给 session 打 <code>consolidated=True</code> 标记，避免重复提取。
+  </div>
+
+  <div class="warn" style="margin-top:12px">
+    <strong>不做每 turn 提取：</strong>每轮对话信息噪音大，额外 LLM API 费用高。只在 session 自然结束后做一次整体提取，性价比更高。
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="read">④ 读取流水线</h2>
+<div class="card">
+  <p class="desc">
+    被动注入（每次 turn 自动）和主动查询（Agent 按需）协作，覆盖高频常识和低频深查两种场景。
+  </p>
+  <div class="mermaid">
+flowchart TD
+    subgraph PASSIVE["被动注入（每次 turn 自动触发）"]
+        P1["_stream_inner() 开始"]
+        P2["_memory_section()\n查 memories 表\nFTS 匹配当前 session goal\n+ access_count + recency 排序\n取 top-8 条"]
+        P3["注入 system prompt\n## What I know about you\n- 你喜欢简洁中文回复\n- 当前项目：Sebastian AI 管家\n..."]
+        P4["同时更新\naccess_count +1\nlast_accessed_at"]
+        P1 --> P2 --> P3
+        P2 --> P4
+    end
+
+    subgraph ACTIVE["主动查询（Agent 按需调用工具）"]
+        Q1["用户: 我之前说的那个出行计划\n是什么来着?"]
+        Q2["Agent 判断需要深查"]
+        Q3["调用 memory_search\nquery=出行计划"]
+        Q4["FTS5 全文检索\nmemories_fts MATCH query\n返回相关记忆列表"]
+        Q5["Agent 把结果\n带入回复上下文"]
+        Q1 --> Q2 --> Q3 --> Q4 --> Q5
+    end
+
+    style PASSIVE fill:#1a2a1a,stroke:#3a7a3a
+    style ACTIVE fill:#1a2a2a,stroke:#3a7a7a
+    style P3 fill:#1a3a1a,stroke:#3a8a3a
+  </div>
+
+  <div class="note">
+    <strong>被动注入的位置：</strong>与 <code>_session_todos_section()</code> 相同模式，在 <code>_stream_inner()</code>
+    开始时动态拼接进 <code>effective_system_prompt</code>，每次 turn 刷新，不用 <code>build_system_prompt()</code>（那是静态的，重启才刷新）。
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="integration">⑤ 与 Agent Loop 集成</h2>
+<div class="card">
+  <p class="desc">
+    最小侵入原则：只在现有流程的 4 个位置加 hook，不改 AgentLoop 核心逻辑。
+  </p>
+  <div class="mermaid">
+sequenceDiagram
+    participant U as 用户
+    participant BA as BaseAgent
+    participant SM as SemanticMemory
+    participant AL as AgentLoop
+    participant EB as EventBus
+    participant CW as ConsolidationWorker
+
+    U->>BA: run_streaming(message, session_id)
+
+    note over BA: Hook 1 — 读取记忆注入 prompt
+    BA->>SM: top_memories(session_goal, limit=8)
+    SM-->>BA: memories[]
+    BA->>BA: effective_system_prompt =\nsystem_prompt + memory_section + todos_section
+
+    BA->>AL: loop.stream(effective_system_prompt, messages)
+
+    loop Agent Loop 多轮工具调用
+        AL-->>BA: TextDelta / ToolCallReady
+        alt ToolCallReady == memory_save
+            note over BA: Hook 2 — 即时写入
+            BA->>SM: upsert(source=explicit, confidence=1.0)
+        else ToolCallReady == memory_search
+            note over BA: Hook 3 — 主动查询
+            BA->>SM: search(query)
+            SM-->>BA: results[]
+        end
+    end
+
+    BA->>BA: TurnDone — 持久化对话
+
+    note over EB,CW: Hook 4 — Session 沉淀（异步）
+    EB->>EB: 发布 SESSION_IDLE / SESSION_STALLED
+    EB->>CW: 触发 ConsolidationWorker
+    CW->>BA: 读取 session 完整历史
+    CW->>CW: LLM 提取结构化事实
+    CW->>SM: upsert(source=inferred, confidence=llm_score)
+  </div>
+
+  <div style="margin-top:16px">
+    <table>
+      <tr><th>Hook 位置</th><th>文件</th><th>改动说明</th></tr>
+      <tr>
+        <td>1 — 读取注入</td>
+        <td><code>core/base_agent.py</code><br><code>_stream_inner()</code></td>
+        <td>仿 <code>_session_todos_section()</code>，加 <code>_memory_section()</code> 拼入 prompt</td>
+      </tr>
+      <tr>
+        <td>2 — 即时写入</td>
+        <td><code>capabilities/tools/memory_save.py</code></td>
+        <td>新增 @tool，PolicyGate 注册，Agent 调用即写</td>
+      </tr>
+      <tr>
+        <td>3 — 主动查询</td>
+        <td><code>capabilities/tools/memory_search.py</code></td>
+        <td>新增 @tool，FTS5 查询，返回 ToolResult</td>
+      </tr>
+      <tr>
+        <td>4 — 沉淀触发</td>
+        <td><code>memory/consolidation.py</code></td>
+        <td>新增 ConsolidationWorker，订阅 SESSION_IDLE / SESSION_STALLED 事件</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="tools">⑥ 新增工具一览</h2>
+<div class="card">
+  <p class="desc">4 个新 Tool，注册到 <code>capabilities/tools/</code>，通过现有 CapabilityRegistry 自动发现。</p>
+
+  <div class="grid2">
+    <div>
+      <div class="mermaid">
+flowchart TD
+    subgraph T1["memory_save\nPermissionTier: LOW"]
+        T1A["输入\ncategory: str\ncontent: str\nentity_key: str  可选\nentity_value: str  可选\nexpires_in_days: int  可选"]
+        T1B["行为\n即时 Upsert\nsource=explicit\nconfidence=1.0"]
+        T1A --> T1B
+    end
+    subgraph T2["memory_search\nPermissionTier: LOW"]
+        T2A["输入\nquery: str\nlimit: int = 5"]
+        T2B["行为\nFTS5 全文检索\n按 access_count + recency 排序\n返回匹配记忆列表"]
+        T2A --> T2B
+    end
+      </div>
+    </div>
+    <div>
+      <div class="mermaid">
+flowchart TD
+    subgraph T3["memory_list\nPermissionTier: LOW"]
+        T3A["输入\ncategory: str  可选\nlimit: int = 20"]
+        T3B["行为\n列出所有记忆\n按 access_count 排序\n供用户检查核实"]
+        T3A --> T3B
+    end
+    subgraph T4["memory_delete\nPermissionTier: LOW"]
+        T4A["输入\nmemory_id: str"]
+        T4B["行为\n软删除 or 硬删除\n同步更新 FTS5 索引"]
+        T4A --> T4B
+    end
+      </div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:4px">
+    <strong>allowed_tools 配置：</strong>
+    <code>memory_save</code> 和 <code>memory_search</code> 给所有 Agent 使用；
+    <code>memory_list</code> 和 <code>memory_delete</code> 建议只给 Sebastian 主管家，Sub-Agent 不需要管理记忆。
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#2d3748',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#4a5568',
+      lineColor: '#68d391',
+      secondaryColor: '#1a202c',
+      tertiaryColor: '#2d3748',
+      background: '#161b22',
+      mainBkg: '#161b22',
+      nodeBorder: '#4a5568',
+      clusterBkg: '#1a202c',
+      titleColor: '#90cdf4',
+      edgeLabelBackground: '#2d3748',
+      actorBkg: '#2d3748',
+      actorBorder: '#68d391',
+      actorTextColor: '#e2e8f0',
+      actorLineColor: '#4a5568',
+      signalColor: '#68d391',
+      signalTextColor: '#e2e8f0',
+      labelBoxBkgColor: '#2d3748',
+      labelBoxBorderColor: '#4a5568',
+      labelTextColor: '#e2e8f0',
+      loopTextColor: '#e2e8f0',
+      noteBorderColor: '#f6ad55',
+      noteBkgColor: '#2d3748',
+      noteTextColor: '#e2e8f0',
+      activationBorderColor: '#68d391',
+      activationBkgColor: '#1a202c',
+    },
+    flowchart: { curve: 'basis', useMaxWidth: true },
+    sequence: { useMaxWidth: true },
+  });
+</script>
+</body>
+</html>

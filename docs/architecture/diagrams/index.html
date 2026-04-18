@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Sebastian 架构图索引</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f1117; color: #e1e4e8;
+    margin: 0; padding: 32px;
+  }
+  h1 { color: #f0f6ff; font-size: 1.4rem; margin-bottom: 4px; }
+  .sub { color: #8b949e; font-size: 0.85rem; margin-bottom: 32px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 18px 20px; text-decoration: none; color: inherit;
+    display: block; transition: border-color 0.15s;
+  }
+  .card:hover { border-color: #58a6ff; }
+  .card-title { color: #79b8ff; font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+  .card-desc { color: #8b949e; font-size: 0.82rem; line-height: 1.5; }
+  .tag {
+    display: inline-block; font-size: 0.7rem; padding: 1px 7px;
+    border-radius: 10px; margin-top: 10px;
+  }
+  .v { background: #1a2a3a; color: #58a6ff; border: 1px solid #1a4a6a; }
+  .draft { background: #2a1a1a; color: #f85149; border: 1px solid #6a1a1a; }
+  .stable { background: #1a3a1a; color: #56d364; border: 1px solid #1a6a1a; }
+</style>
+</head>
+<body>
+<h1>Sebastian 架构图索引</h1>
+<p class="sub">docs/architecture/diagrams/ · 所有架构可视化文档集中存放于此</p>
+<div class="grid">
+  <a class="card" href="system-overview-v1.0.html">
+    <div class="card-title">系统总览</div>
+    <div class="card-desc">从 Android App 到 LLM Provider 的完整组件图，包含 Agent Loop 详细流程、三层 Agent 委派链路、记忆层架构、Task/Session 状态机、LLMStreamEvent 类型体系。</div>
+    <span class="tag v">v1.0</span> <span class="tag stable">已完成</span>
+  </a>
+  <a class="card" href="memory-v0.3.html">
+    <div class="card-title">记忆系统架构</div>
+    <div class="card-desc">v0.3：被动注入改为 Profile + Context 双层（Profile 按 access_count 始终注入，Context 层 FTS5 MATCH 当前用户消息，合并去重最多 8 条）；ConsolidationWorker LLM 上下文加入近期 NULL 记忆实现语义去重；FTS5 tokenizer 方案 TBD。</div>
+    <span class="tag v">v0.3</span> <span class="tag draft">设计中</span>
+  </a>
+  <a class="card" href="memory-v0.2.html" style="opacity:0.5">
+    <div class="card-title">记忆系统架构 <span style="font-size:0.75rem;color:#8b949e">（旧版）</span></div>
+    <div class="card-desc">v0.2：entity_key 混合策略、memory_keys 动态扩展、写入流水线加权排序、功能开关、System Components LLM 绑定。已被 v0.3 取代。</div>
+    <span class="tag v">v0.2</span> <span class="tag draft">已归档</span>
+  </a>
+  <a class="card" href="memory-v0.1.html" style="opacity:0.5">
+    <div class="card-title">记忆系统架构 <span style="font-size:0.75rem;color:#8b949e">（旧版）</span></div>
+    <div class="card-desc">v0.1 草稿，已被 v0.2 取代。</div>
+    <span class="tag v">v0.1</span> <span class="tag draft">已归档</span>
+  </a>
+</div>
+</body>
+</html>
