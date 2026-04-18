@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sebastian"
-version = "0.3.0"
+version = "0.3.1"
 description = "Personal AI butler system — your own Jarvis"
 license = "MIT"
 requires-python = ">=3.12"

@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-04-18
+
 ### Fixed
 - Android release build：添加 R8 缺失类 dontwarn 规则，修复 APK shrink 阶段报错导致 release 构建失败的问题。
 
