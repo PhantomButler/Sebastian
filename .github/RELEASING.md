@@ -148,7 +148,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing
 
 # 3) 一键安装在干净环境跑通
 SEBASTIAN_INSTALL_DIR=/tmp/sebastian-install-test \
-  bash -c 'curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash'
+  bash -c 'curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash'
 
 # 4) sebastian update 升级路径跑通（在已安装的旧版本目录里）
 sebastian update --check       # 应提示可升级
@@ -181,7 +181,7 @@ git push --force-with-lease
 ## 8. 通告
 
 - 在 README 顶部 badge 自动更新
-- 如有用户群 / issue 公告，附 Release URL：`https://github.com/Jaxton07/Sebastian/releases/tag/vX.Y.Z`
+- 如有用户群 / issue 公告，附 Release URL：`https://github.com/PhantomButler/Sebastian/releases/tag/vX.Y.Z`
 - 已有用户提示一句：`sebastian update` 即可升级
 
 ---

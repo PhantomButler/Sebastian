@@ -13,7 +13,7 @@ Thanks for your interest in contributing! This guide covers setting up the devel
 ### Backend Setup
 
 ```bash
-git clone https://github.com/Jaxton07/Sebastian.git
+git clone https://github.com/PhantomButler/Sebastian.git
 cd Sebastian
 pip install -e ".[dev,memory]"
 sebastian serve

@@ -34,7 +34,7 @@ from importlib import metadata
 from pathlib import Path
 from urllib.error import URLError
 
-REPO = "Jaxton07/Sebastian"
+REPO = "PhantomButler/Sebastian"
 # Top-level entries that we own and may safely replace inside the install dir.
 # Anything not in this list (.venv, .env, data/, ~/.sebastian/secret.key, etc.)
 # is left untouched.

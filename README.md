@@ -12,7 +12,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![CI](https://github.com/Jaxton07/Sebastian/actions/workflows/ci.yml/badge.svg)](https://github.com/Jaxton07/Sebastian/actions/workflows/ci.yml)
+[![CI](https://github.com/PhantomButler/Sebastian/actions/workflows/ci.yml/badge.svg)](https://github.com/PhantomButler/Sebastian/actions/workflows/ci.yml)
 
 [简体中文](README.zh-CN.md)
 
@@ -67,14 +67,14 @@ Sebastian is a goal-driven personal AI butler system. Tell it what you want — 
 ### Install Server (macOS / Linux)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
 ```
 
 This installs the Sebastian backend service on your machine — downloads the latest release, verifies SHA256 checksums, installs dependencies, and launches the setup wizard. Open the URL it prints, set your name and password, and you're done.
 
 ### Install Android App
 
-Download `sebastian-app-v*.apk` from [Releases](https://github.com/Jaxton07/Sebastian/releases) and install it on your phone.
+Download `sebastian-app-v*.apk` from [Releases](https://github.com/PhantomButler/Sebastian/releases) and install it on your phone.
 
 On first launch, go to **Settings → Connection** and enter your server URL: `http://<your-local-ip>:8823`
 

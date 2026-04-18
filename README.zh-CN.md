@@ -12,7 +12,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![CI](https://github.com/Jaxton07/Sebastian/actions/workflows/ci.yml/badge.svg)](https://github.com/Jaxton07/Sebastian/actions/workflows/ci.yml)
+[![CI](https://github.com/PhantomButler/Sebastian/actions/workflows/ci.yml/badge.svg)](https://github.com/PhantomButler/Sebastian/actions/workflows/ci.yml)
 
 [English](README.md)
 
@@ -67,14 +67,14 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统。你只需告诉
 ### 安装服务端（macOS / Linux）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
 ```
 
 这条命令安装的是 Sebastian 后端服务——自动下载最新 Release、校验 SHA256 指纹、安装依赖、启动首次初始化向导。打开终端显示的 URL，设置主人名字和密码即可。
 
 ### 安装 Android App
 
-从 [Releases 页面](https://github.com/Jaxton07/Sebastian/releases) 下载 `sebastian-app-v*.apk`，安装到手机。
+从 [Releases 页面](https://github.com/PhantomButler/Sebastian/releases) 下载 `sebastian-app-v*.apk`，安装到手机。
 
 首次打开后，进入 **Settings → Connection** 填写服务器地址：`http://<电脑局域网 IP>:8823`
 
@@ -86,9 +86,9 @@ curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.s
 
 ```bash
 # 1. 下载最新 release 并校验
-curl -LO https://github.com/Jaxton07/Sebastian/releases/latest/download/SHA256SUMS
+curl -LO https://github.com/PhantomButler/Sebastian/releases/latest/download/SHA256SUMS
 TAR=$(grep '\.tar\.gz$' SHA256SUMS | awk '{print $2}')
-curl -LO "https://github.com/Jaxton07/Sebastian/releases/latest/download/${TAR}"
+curl -LO "https://github.com/PhantomButler/Sebastian/releases/latest/download/${TAR}"
 shasum -a 256 -c SHA256SUMS --ignore-missing
 
 # 2. 解压并运行

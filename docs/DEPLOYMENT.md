@@ -12,7 +12,7 @@
 ### 全新安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
 ```
 
 脚本会自动：下载最新 release → SHA256 校验 → 解压 → 创建 Python 虚拟环境 → 安装依赖 → 启动首次初始化向导。
@@ -232,7 +232,7 @@ https://your-machine.tail1234.ts.net
 1. **在云服务器上安装 Sebastian**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
 ```
 
 2. **安装 Caddy**

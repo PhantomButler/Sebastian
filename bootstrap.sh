@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Sebastian one-line installer.
-# Usage: curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
 set -euo pipefail
 
-REPO="Jaxton07/Sebastian"
+REPO="PhantomButler/Sebastian"
 INSTALL_DIR="${SEBASTIAN_INSTALL_DIR:-$HOME/.sebastian/app}"
 
 color_red() { printf "\033[31m%s\033[0m\n" "$*"; }

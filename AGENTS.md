@@ -354,7 +354,7 @@ SEBASTIAN_GATEWAY_PORT=8823
 4. 发版完成后，dev 上的 `CHANGELOG.md` 会与 main 冲突，按「提交前准备」rebase + force-push
 5. 用户端升级方式：
    - 已安装：`sebastian update`（保留数据/venv，失败自动回滚）
-   - 全新安装：`curl -fsSL https://raw.githubusercontent.com/Jaxton07/Sebastian/main/bootstrap.sh | bash`
+   - 全新安装：`curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash`
 
 ## 12) 安全规范
 
