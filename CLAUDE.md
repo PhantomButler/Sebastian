@@ -300,22 +300,21 @@ SEBASTIAN_GATEWAY_PORT=8823
   - 如果修改了某目录的内容，同步更新该目录的 README（以及受影响的上级 README）
   - README 索引树：根 `INDEX.md` → `sebastian/README.md` → 各子模块 README
 - 写代码过程中尽量遵循模块化可扩展原则，推荐 500 行以下，不超过 800 行
-- 不要随意拉新分支，需要拉新分支时提前说明
+- 每个任务从 `main` 开 feature branch，PR 合并后删除，不保留长期分支
 
 ## 11) 代码提交与 PR 工作流
 
-### 分支模型
-- `main`：受保护分支，只接受 PR squash merge，是发版基线
-- `dev`：常驻开发分支，所有日常工作直接在 dev 上 commit + push，未经用户允许不得随意执行git rebase 命令，除非用户明确指示，否则需要执行rebase 命令时需要停下里询问用户并提供原因
-- 不要随意拉新分支；确实需要独立分支（例如长期实验）时提前与用户对齐
+### 分支模型（GitHub Flow）
+- `main`：唯一长期分支，受保护，只接受 PR squash merge，是发版基线
+- `feat/xxx` / `fix/xxx` / `chore/xxx`：短命 feature branch，从 `main` 开，PR 合并后立即删除
+- 无常驻 `dev` 分支
 
-### 提交前准备（同步 main 到 dev）
-每次开始新工作 / 一个 PR 合并后都要做：
-1. 确认在 `dev` 分支：`git checkout dev`
-2. `git fetch origin main`
-3. 若工作区有未提交改动先 `git stash`，rebase 后再 `git stash pop`
-4. `git rebase origin/main`（squash 合并的提交会被 git 检测为 cherry-pick 自动 skip）
-5. `git push --force-with-lease` 把 dev 拉平到 main
+### 开始新工作
+每次开始新任务：
+```bash
+git checkout main && git pull
+git checkout -b feat/your-feature   # 或 fix/ chore/ docs/ 等前缀
+```
 
 ### 提交规范
 - 用 `git add <具体文件>` 逐一添加，**禁止** `git add .` 或 `git add -A`
@@ -327,32 +326,32 @@ SEBASTIAN_GATEWAY_PORT=8823
 - 保持改动原子化，一个 commit 只做一件事
 
 ### 推送与 PR
-- `dev` 已 track `origin/dev`，直接 `git push` 即可（首次推新分支才用 `-u`）
-- 用 `gh pr create --base main --head dev` 创建 PR，base 永远是 `main`
+- 首次推 feature branch：`git push -u origin HEAD`
+- 后续推送：`git push`
+- 用 `gh pr create --base main` 创建 PR，base 永远是 `main`
 - PR title 与 commit message 风格一致，控制在 70 字以内
 - PR body 必须包含两部分：
   - **Summary**：改了什么、为什么改（1-3 条要点）
   - **Test plan**：验证步骤 checklist
-- 合并使用 squash merge（`gh pr merge --squash`），合并后按上面「提交前准备」流程把 dev 拉回 main
+- 合并使用 squash merge（`gh pr merge --squash --delete-branch`），合并后 feature branch 自动删除
 
 ### 分支保护
 - `main` 只接受 PR squash merge，需 CI 四项 job（`backend-lint` / `backend-type` / `backend-test` / `mobile-lint`）全绿 + 1 个 approval
 - tag `v*.*.*` 只有 admin 和 `github-actions[bot]` 可创建
-- `release.yml` 通过 `RELEASE_TOKEN`（admin PAT）push tag 与 main commit，绕过保护规则
+- `release.yml` 通过 `RELEASE_TOKEN`（admin PAT）push tag 与 main commit，Repository admin 角色可绕过保护规则
 
 ### 发版流程
 1. 在 `main` 上手动触发 release workflow，二选一：
    - GitHub UI：Actions → Release → Run workflow → 输入版本号
    - 命令行：`gh workflow run release.yml -f version=X.Y.Z --ref main`
 2. Workflow 自动：
-   - 同步 `pyproject.toml` + `ui/mobile/app.json` 版本号
+   - 同步 `pyproject.toml` + `ui/mobile-android/app/build.gradle.kts` 版本号
    - 把 `CHANGELOG.md` 的 `## [Unreleased]` 翻成 `## [X.Y.Z] - YYYY-MM-DD`
    - commit + tag + push 到 main
    - 构建 backend tarball、签名 Android APK
    - 发布 GitHub Release（包含 `sebastian-backend-vX.Y.Z.tar.gz`、`sebastian-app-vX.Y.Z.apk`、`SHA256SUMS`）
 3. 用 `gh run watch <run-id>` 跟随进度（Android 构建约 20 分钟）
-4. 发版完成后，dev 上的 `CHANGELOG.md` 会与 main 冲突，按「提交前准备」rebase + force-push
-5. 用户端升级方式：
+4. 用户端升级方式：
    - 已安装：`sebastian update`（保留数据/venv，失败自动回滚）
    - 全新安装：`curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash`
 
