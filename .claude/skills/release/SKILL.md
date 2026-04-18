@@ -44,19 +44,26 @@ content.replace("## [Unreleased]", "## [Unreleased]\n\n## [0.3.0] - 2026-04-18",
 
 **严禁**在 Unreleased 段内自己写 `## [0.3.0]` 这样的版本标题，否则 workflow 运行后会出现重复标题。
 
-### 分类
+### 段落顺序（只保留有内容的分类）
 
-按以下顺序使用三级标题，只保留有内容的分类：
+```markdown
+## [Unreleased]
 
-- `### Added` — 新功能、新命令、新文件
-- `### Changed` — 现有功能的行为变更、接口调整
-- `### Fixed` — Bug 修复
-- `### Removed` — 删除的功能或文件
+<!-- 大版本可加一行概括性描述 -->
+
+### Breaking Changes
+- 迁移步骤或注意事项
+
+### Added
+### Changed
+### Fixed
+### Removed
+```
 
 ### 格式规则
 
-- 每条以 `- ` 开头，写**用户视角的变更**，不是搬运 commit message
-- Breaking change 在条目前加 `**[breaking]**` 标记
+- 每条以 `- ` 开头，写**用户视角的变更**，不搬 commit message
+- Breaking Changes 始终放最前，用独立段（比行内标记更显眼）
 - 条目粒度：一个用户可感知的变更一条，相关的小改动合并写
 
 ### 何时写

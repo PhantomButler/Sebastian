@@ -340,6 +340,39 @@ git checkout -b feat/your-feature   # 或 fix/ chore/ docs/ 等前缀
 - tag `v*.*.*` 只有 admin 和 `github-actions[bot]` 可创建
 - `release.yml` 通过 `RELEASE_TOKEN`（admin PAT）push tag 与 main commit，Repository admin 角色可绕过保护规则
 
+### CHANGELOG 规范
+
+每次 PR 合并后同步更新 `CHANGELOG.md` 的 `[Unreleased]` 段，不要攒到发版前补。
+
+**段落顺序**（只保留有内容的分类）：
+
+```markdown
+## [Unreleased]
+
+<!-- 大版本可加一行概括性描述 -->
+
+### Breaking Changes
+- 迁移步骤或注意事项（升级前必读）
+
+### Added
+- 新功能、新命令、新文件
+
+### Changed
+- 现有功能的行为变更、接口调整
+
+### Fixed
+- Bug 修复
+
+### Removed
+- 删除的功能或文件
+```
+
+**格式规则**：
+- 每条以 `- ` 开头，写**用户视角的变更**，不搬 commit message
+- Breaking Changes 始终放最前，独立段（比行内标记更显眼）
+- `## [Unreleased]` 下**严禁**手写版本号标题，release workflow 会自动插入
+- 版本号遵循 Semantic Versioning：有 Added/Changed → minor bump；仅 Fixed → patch bump
+
 ### 发版流程
 1. 在 `main` 上手动触发 release workflow，二选一：
    - GitHub UI：Actions → Release → Run workflow → 输入版本号
