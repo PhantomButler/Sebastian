@@ -4,9 +4,10 @@
 
 ## [Unreleased]
 
+Android 原生重写、子代理双向通信、仓库迁移至 PhantomButler 组织。
+
 ### Breaking Changes
-- 子代理 `code` 重命名为 `forge`；移除 `manifest.toml` 的 `name` 字段和 `AgentConfig.display_name`，agent 只有一个名字（`agent_type`，等于目录名）。`GET /api/v1/agents` 响应不再返回 `name` 字段，UI 展示名由前端对 `agent_type` 做 capitalize。
-- 升级前请处理历史会话数据：
+- 子代理 `code` 重命名为 `forge`；移除 `manifest.toml` 的 `name` 字段和 `AgentConfig.display_name`，agent 只有一个名字（`agent_type`，等于目录名）。`GET /api/v1/agents` 响应不再返回 `name` 字段，UI 展示名由前端对 `agent_type` 做 capitalize。升级前请迁移历史会话数据：
 
   ```bash
   # 选项 A：保留历史（生产 + 开发数据目录）
@@ -38,6 +39,23 @@
   ```
 
 - Gateway 启动时会对 `sessions/` 下的孤儿目录（注册表里没有 agent_type）打 warning 日志。
+
+### Added
+- **Android 原生客户端**：完整重写为 Kotlin + Jetpack Compose，替换旧版 React Native App；支持流式输出、子代理双向通信、Markdown 渲染、深色模式。
+- **本地通知**：任务完成时推送系统通知，支持 App 在后台时提醒。
+- **App 状态恢复**：重启 App 后自动恢复上次会话状态，无需重新选择。
+- **Aide 子代理**：新增通用助手子代理，支持日常问答与任务协作。
+- `allowed_tools` 白名单真正生效：子代理工具调用严格按 manifest 配置过滤。
+
+### Changed
+- 仓库迁移至 [PhantomButler](https://github.com/PhantomButler) 组织，开放多人协作。
+- 工作流切换至 GitHub Flow：以 feature branch 替代常驻 dev 分支，简化协作流程。
+- Android UI 全面升级：消息气泡、输入框、工具调用展示、Agent 选择器全部重设计。
+- PENDING 状态优化：消除发送后的空白窗口期，即时反馈请求已受理。
+- Bash 工具增强：支持更复杂的 shell 命令，修复 orchestrator 调度问题。
+
+### Fixed
+- 后端 cancel 竞态修复：任务取消时不再出现残留状态。
 
 ## [0.2.6] - 2026-04-10
 
