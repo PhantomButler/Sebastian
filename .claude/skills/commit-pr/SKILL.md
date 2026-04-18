@@ -1,11 +1,11 @@
 ---
 name: commit-pr
-description: 提交代码并创建 PR 的标准流程。包含 rebase 检查、lint 验证、原子提交、PR 创建，防止重复 commit 和冲突。
+description: 提交代码并创建 PR 的标准流程（GitHub Flow）。从 main 开 feature branch，lint 验证，原子提交，PR 创建，CI 监控，squash merge 后删除分支。
 ---
 
 # commit-pr - 提交代码并创建 PR
 
-标准化从提交到 PR 的完整流程，确保 dev 与 main 同步、提交干净、CI 能过。
+基于 GitHub Flow 的标准化流程：feature branch → PR → squash merge → 删除分支。
 
 ## 使用方式
 
@@ -15,69 +15,38 @@ description: 提交代码并创建 PR 的标准流程。包含 rebase 检查、l
 
 仅提交不建 PR：`/commit-pr --no-pr`
 
-## 核心不变量
-
-> **`reset --hard` 只能发生在 squash merge 之后（步骤 13）。**
->
-> 如果每次 squash merge 后都正确执行了步骤 13，那么下次进入本流程时 dev 一定对齐 main，`git log origin/main..HEAD` 有输出就一定是新工作，`rebase` 永远安全。
->
-> **步骤 1-8 中禁止执行 `reset --hard`。** 只有步骤 13（squash merge 后同步）使用它。
-
 ## 执行步骤
 
-### 步骤 1：分支与同步检查
-
-确认当前在 `dev` 分支：
+### 步骤 1：确认工作分支
 
 ```bash
 git branch --show-current
 ```
 
-若不在 `dev`，**终止**并提示切换。
+- 若在 `main`：说明还没开 feature branch，**先创建**：
 
-#### 1a. Fetch 并检查 dev 与 main 的关系
+  ```bash
+  git pull
+  git checkout -b <type>/<short-description>
+  ```
+
+  分支命名规范：`feat/xxx`、`fix/xxx`、`chore/xxx`、`docs/xxx`、`refactor/xxx`
+
+- 若已在 feature branch：继续步骤 2。
+
+- 若在其他非预期分支：**终止**并提示确认。
+
+#### 1a. 确认 feature branch 基于最新 main
 
 ```bash
 git fetch origin main
-git log origin/main..HEAD --oneline   # dev 领先 main 的 commit
+git log origin/main..HEAD --oneline
 ```
 
-根据结果走以下分支：
-
-**输出为空** → dev 与 main 对齐，直接进入步骤 2。
-
-**输出不为空** → 用 `git cherry` 验证这些 commit 是否真的是新工作：
+若有多个 commit 且部分已在 main（`git cherry origin/main HEAD` 显示 `-` 前缀），说明 base 不干净，**暂停**提示用户确认后再 rebase：
 
 ```bash
-git cherry origin/main HEAD
-```
-
-- `+` 前缀 = 不在 main 中的**新工作** → 安全 rebase：
-
-  ```bash
-  git rebase origin/main
-  ```
-
-  然后进入步骤 2。
-
-- `-` 前缀 = 与 main 中某个 commit 内容相同（可能是上次 PR squash merge 后未执行步骤 13 的残留）→ 🛑 **停下来，展示给用户**：
-
-  ```
-  ⚠️ dev 上有 N 个 commit 可能是上次 PR squash merge 后未同步的残留：
-  {git log origin/main..HEAD --oneline 的输出}
-
-  这通常意味着上次 PR 合并后没有执行步骤 13（reset dev 到 main）。
-  请确认：
-  - 如果这些是新工作 → 我会 rebase origin/main 继续
-  - 如果这些是旧残留 → 请手动执行 reset --hard origin/main 后重新运行 /commit-pr
-  ```
-
-  **必须等用户明确回复后才能继续，不可自行判断。**
-
-#### 1b. 推送（若 rebase 过）
-
-```bash
-git push --force-with-lease
+git rebase origin/main
 ```
 
 ### 步骤 2：检查工作区状态
@@ -117,11 +86,7 @@ ruff format --check sebastian/ tests/
 ruff format sebastian/ tests/
 ```
 
-前端改动（`ui/mobile/` 下有改动时）：
-
-```bash
-cd ui/mobile && npx tsc --noEmit
-```
+前端改动（`ui/mobile-android/` 下有改动时跳过，Kotlin lint 由 CI 验证）。
 
 **Lint 不过不允许提交。**
 
@@ -154,26 +119,32 @@ commit message 格式：`类型(范围): 中文摘要`
 
 ### 步骤 7：推送
 
+首次推送 feature branch：
+
+```bash
+git push -u origin HEAD
+```
+
+后续追加 commit：
+
 ```bash
 git push
 ```
 
 ### 步骤 8：创建 PR（除非 `--no-pr`）
 
-创建前再次确认 dev 领先 main 的 commit：
+创建前确认 feature branch 领先 main 的 commit 数量合理：
 
 ```bash
 git log origin/main..HEAD --oneline
 ```
 
-**关键检查：**
-- 若 commit 数量异常多（>10），**暂停**并提示用户确认，可能是 rebase 不彻底
-- 若 commit message 中出现已知的 main 上的 squash merge 标题（如 `#xx`），说明有重复，**终止**
+若 commit 数量异常多（>10），**暂停**提示用户确认。
 
 确认无误后创建 PR：
 
 ```bash
-gh pr create --base main --head dev --title "{title}" --body "$(cat <<'EOF'
+gh pr create --base main --title "{title}" --body "$(cat <<'EOF'
 ## Summary
 {1-3 条要点}
 
@@ -194,7 +165,7 @@ PR 规范：
 ### 步骤 9：输出结果
 
 ```
-✓ 已提交并推送到 dev
+✓ 已提交并推送到 <branch-name>
 
 Commits:
 {commit list}
@@ -207,8 +178,8 @@ PR: {pr_url}
 PR 创建后立即开始监控 CI：
 
 ```bash
-gh run list --branch dev --limit 5   # 查看最近 run
-gh run watch <run-id>                 # 跟随进度（或轮询）
+gh run list --branch <branch-name> --limit 5
+gh run watch <run-id>
 ```
 
 每隔约 30s 检查一次，直到所有 job 完成：
@@ -235,7 +206,7 @@ gh run view <run-id> --log-failed
 
 处理方式：
 1. 本地修复
-2. 提交新 commit 到 dev（同样遵循步骤 4-7 的 lint + commit 规范）
+2. 提交新 commit 到 feature branch（同样遵循步骤 4-7 的 lint + commit 规范）
 3. push 后 CI 自动重新触发，回到步骤 10 继续监控
 
 #### 大问题（先询问用户意见）
@@ -257,59 +228,39 @@ CI 全绿后，等待用户 approve（或用户明确授权后直接合并）。
 gh pr merge <pr-number> --squash --delete-branch
 ```
 
-（`--delete-branch` 删除 GitHub 上的远程 dev 分支头部引用，不影响本地）
-
 等待合并完成：
 
 ```bash
 gh pr view <pr-number> --json state -q .state   # 确认 MERGED
 ```
 
-### 步骤 13：合并后同步 dev（⭐ 不可跳过）
+### 步骤 13：合并后回到 main
 
-Squash merge 把所有 commit 压成一个新 commit 进入 main，dev 上的原始 commit 序列已无用。**此时不能用 rebase**（会因文本结构不同产生冲突），必须直接将 dev 对齐 main：
+Feature branch 已被删除，切回 main 拉取最新：
 
 ```bash
-git fetch origin main
-git reset --hard origin/main
-git push --force-with-lease
+git checkout main
+git pull
+git branch -d <branch-name>   # 删除本地 feature branch
 ```
 
 完成后输出：
 
 ```
 ✓ PR #{pr-number} 已 squash merge 到 main
-✓ dev 已对齐 main（{short-sha}）
+✓ 已切回 main，当前为最新（{short-sha}）
 ```
-
-> **⚠️ 这一步是维持核心不变量的关键。** 跳过此步会导致下次执行步骤 1a 时触发 🛑 停下来确认，且可能误判新工作为旧残留。每次 squash merge 后必须立即执行。
-
-## PR 合并后（手动触发时）
-
-若用户在其他地方完成了合并，只需执行同步步骤：
-
-```bash
-git fetch origin main
-git stash                      # 若有未提交改动
-git reset --hard origin/main   # 直接对齐 main（squash merge 后 rebase 可能冲突）
-git stash pop                  # 恢复改动
-git push --force-with-lease
-```
-
-**这一步防止下次 PR 出现重复 commit 和无意义的 rebase 冲突。** 若在 `/release` 之后执行，release workflow 产生的 version commit 也会在这一步同步进来。
-
-> **为什么用 `reset --hard` 而不是 `rebase`？** squash merge 把多个 commit 压成一个，文本结构与原始 commit 不同。`rebase` 逐个 replay 旧 commit 时可能触发文本冲突（即使语义相同），而 `reset --hard` 直接跳过这些已无用的旧 commit。
 
 ## 常见问题
 
-### PR 包含了已合并的 commit
+### PR 包含了不相关的 commit
 
-原因：dev 没在上次 PR 合并后同步回 main（步骤 13 被跳过）。
+原因：feature branch 开分支时 base 不是最新 main。
 
-修复：执行步骤 13 的同步流程即可。
+修复：`git rebase origin/main` 整理后 force push。
 
 ### CHANGELOG 冲突
 
-原因：release workflow 修改了 main 上的 CHANGELOG（翻转 Unreleased 段），而 dev 上也有 CHANGELOG 改动。
+原因：release workflow 修改了 main 上的 CHANGELOG，而 feature branch 上也有改动。
 
-处理：`reset --hard origin/main` 后 CHANGELOG 自动对齐 main 版本，在 Unreleased 段重新添加新内容即可。
+处理：`git rebase origin/main` 手动解决冲突，保留两者内容后 force push。
