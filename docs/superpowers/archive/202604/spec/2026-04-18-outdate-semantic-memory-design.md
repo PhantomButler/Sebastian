@@ -6,8 +6,8 @@ status: ready-for-impl
 
 # SemanticMemory 系统设计
 
-*← [Spec 根索引](../../../docs/architecture/spec/INDEX.md)*
-*架构图：[docs/architecture/diagrams/memory-v0.3.html](../../architecture/diagrams/memory-v0.3.html)*
+*← [Spec 根索引](../../../../architecture/spec/INDEX.md)*
+*架构图：[docs/architecture/diagrams/memory-v0.3.html](../../../../architecture/diagrams/memory-v0.3.html)*
 
 ---
 
@@ -351,4 +351,4 @@ store/
 
 ---
 
-*← 返回 [Spec 根索引](../../../docs/architecture/spec/INDEX.md)*
+*← 返回 [Spec 根索引](../../../../architecture/spec/INDEX.md)*
