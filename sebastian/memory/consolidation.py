@@ -73,6 +73,7 @@ class MemoryConsolidator:
     def __init__(self, llm_registry: LLMProviderRegistry, *, max_retries: int = 1) -> None:
         self._registry = llm_registry
         self._max_retries = max_retries
+        self.last_resolved: ResolvedProvider | None = None
 
     async def consolidate(self, consolidator_input: ConsolidatorInput) -> ConsolidationResult:
         """Call LLM to consolidate session memory.
@@ -80,6 +81,7 @@ class MemoryConsolidator:
         Returns empty ConsolidationResult on any failure after retries.
         """
         resolved = await self._registry.get_provider(MEMORY_CONSOLIDATOR_BINDING)
+        self.last_resolved = resolved
         system = (
             "You are a memory consolidation assistant. "
             "Analyze the session and produce a ConsolidationResult. "
@@ -254,6 +256,8 @@ class SessionConsolidationWorker:
 
             # 5. Call the consolidator
             result: ConsolidationResult = await self._consolidator.consolidate(consolidator_input)
+            resolved_provider = getattr(self._consolidator, "last_resolved", None)
+            model_name = resolved_provider.model if resolved_provider is not None else None
 
             for summary in result.summaries:
                 summary_subject_id = await resolve_subject(
@@ -295,7 +299,7 @@ class SessionConsolidationWorker:
                 await decision_logger.append(
                     summary_decision,
                     worker=self._WORKER_ID,
-                    model=None,
+                    model=model_name,
                     rule_version=self._RULE_VERSION,
                 )
 
@@ -321,7 +325,7 @@ class SessionConsolidationWorker:
                     await decision_logger.append(
                         bad_decision,
                         worker=self._WORKER_ID,
-                        model=None,
+                        model=model_name,
                         rule_version=self._RULE_VERSION,
                     )
                     continue
@@ -345,7 +349,7 @@ class SessionConsolidationWorker:
                 await decision_logger.append(
                     decision,
                     worker=self._WORKER_ID,
-                    model=None,
+                    model=model_name,
                     rule_version=self._RULE_VERSION,
                 )
 
@@ -386,7 +390,7 @@ class SessionConsolidationWorker:
                 await decision_logger.append(
                     expire_decision,
                     worker=self._WORKER_ID,
-                    model=None,
+                    model=model_name,
                     rule_version=self._RULE_VERSION,
                 )
 

@@ -210,6 +210,7 @@ class MemoryDecisionLogRecord(Base):
     new_memory_id: Mapped[str | None] = mapped_column(String, nullable=True)
     worker: Mapped[str] = mapped_column(String)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     rule_version: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 

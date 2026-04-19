@@ -117,6 +117,109 @@ async def test_decision_logger_append_add(db_session) -> None:
     assert isinstance(record.created_at, datetime)
 
 
+async def test_append_captures_session_id_from_provenance(db_session) -> None:
+    """session_id flows from decision.new_memory.provenance into the log record."""
+    from sqlalchemy import select
+
+    from sebastian.store.models import MemoryDecisionLogRecord
+
+    logger = MemoryDecisionLogger(db_session)
+
+    artifact = _make_memory_artifact(memory_id="mem-prov-1")
+    artifact = artifact.model_copy(update={"provenance": {"session_id": "sess-xyz"}})
+    decision = ResolveDecision(
+        decision=MemoryDecisionType.ADD,
+        reason="ok",
+        old_memory_ids=[],
+        new_memory=artifact,
+        candidate=_make_candidate(),
+        subject_id="owner",
+        scope=MemoryScope.USER,
+        slot_id="user.preference.response_style",
+    )
+
+    await logger.append(
+        decision,
+        worker="unit-test",
+        model="claude-opus-4-6",
+        rule_version="v1",
+    )
+    await db_session.commit()
+
+    row = (await db_session.scalars(select(MemoryDecisionLogRecord))).first()
+    assert row is not None
+    assert row.session_id == "sess-xyz"
+    assert row.model == "claude-opus-4-6"
+
+
+async def test_append_session_id_none_when_no_new_memory(db_session) -> None:
+    """DISCARD decision (new_memory=None) leaves session_id column as None."""
+    from sqlalchemy import select
+
+    from sebastian.store.models import MemoryDecisionLogRecord
+
+    logger = MemoryDecisionLogger(db_session)
+
+    decision = ResolveDecision(
+        decision=MemoryDecisionType.DISCARD,
+        reason="validate fail",
+        old_memory_ids=[],
+        new_memory=None,
+        candidate=_make_candidate(),
+        subject_id="owner",
+        scope=MemoryScope.USER,
+        slot_id="user.preference.response_style",
+    )
+
+    await logger.append(
+        decision,
+        worker="unit-test",
+        model=None,
+        rule_version="v1",
+    )
+    await db_session.commit()
+
+    row = (await db_session.scalars(select(MemoryDecisionLogRecord))).first()
+    assert row is not None
+    assert row.session_id is None
+    assert row.model is None
+
+
+async def test_append_session_id_none_when_provenance_missing_key(db_session) -> None:
+    """Provenance dict without session_id key results in None session_id."""
+    from sqlalchemy import select
+
+    from sebastian.store.models import MemoryDecisionLogRecord
+
+    logger = MemoryDecisionLogger(db_session)
+
+    artifact = _make_memory_artifact(memory_id="mem-prov-2")
+    # provenance has some other field but no session_id
+    artifact = artifact.model_copy(update={"provenance": {"agent_type": "main"}})
+    decision = ResolveDecision(
+        decision=MemoryDecisionType.ADD,
+        reason="ok",
+        old_memory_ids=[],
+        new_memory=artifact,
+        candidate=_make_candidate(),
+        subject_id="owner",
+        scope=MemoryScope.USER,
+        slot_id="user.preference.response_style",
+    )
+
+    await logger.append(
+        decision,
+        worker="unit-test",
+        model=None,
+        rule_version="v1",
+    )
+    await db_session.commit()
+
+    row = (await db_session.scalars(select(MemoryDecisionLogRecord))).first()
+    assert row is not None
+    assert row.session_id is None
+
+
 async def test_decision_logger_append_supersede(db_session) -> None:
     logger = MemoryDecisionLogger(db_session)
 

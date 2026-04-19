@@ -23,6 +23,13 @@ class MemoryDecisionLogger:
         model: str | None,
         rule_version: str,
     ) -> MemoryDecisionLogRecord:
+        session_id: str | None = None
+        if decision.new_memory is not None:
+            provenance = decision.new_memory.provenance or {}
+            session_id_val = provenance.get("session_id")
+            if isinstance(session_id_val, str):
+                session_id = session_id_val
+
         record = MemoryDecisionLogRecord(
             id=str(uuid4()),
             decision=decision.decision.value,
@@ -36,6 +43,7 @@ class MemoryDecisionLogger:
             new_memory_id=decision.new_memory.id if decision.new_memory is not None else None,
             worker=worker,
             model=model,
+            session_id=session_id,
             rule_version=rule_version,
             created_at=datetime.now(UTC),
         )
