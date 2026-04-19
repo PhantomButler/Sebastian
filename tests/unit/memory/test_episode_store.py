@@ -147,3 +147,77 @@ async def test_add_summary_stores_summary_kind(db_session) -> None:
 
     assert record.kind == MemoryKind.SUMMARY.value
     assert record.content == "本周完成 Memory Phase B 方案确认"
+
+
+async def test_search_summaries_returns_summaries_only(db_session) -> None:
+    """search_summaries must only return SUMMARY-kind records, newest first."""
+    store = EpisodeMemoryStore(db_session)
+    base = datetime.now(UTC)
+
+    # Two summaries, one regular episode
+    await store.add_summary(
+        _make_artifact(
+            id="sum-old",
+            kind=MemoryKind.SUMMARY,
+            content="旧摘要",
+            recorded_at=base - timedelta(hours=2),
+        )
+    )
+    await store.add_episode(
+        _make_artifact(
+            id="episode-noise",
+            kind=MemoryKind.EPISODE,
+            content="不应被返回的普通 episode",
+            recorded_at=base - timedelta(hours=1),
+        )
+    )
+    await store.add_summary(
+        _make_artifact(
+            id="sum-new",
+            kind=MemoryKind.SUMMARY,
+            content="新摘要",
+            recorded_at=base,
+        )
+    )
+
+    results = await store.search_summaries(subject_id="owner", limit=8)
+
+    assert [r.id for r in results] == ["sum-new", "sum-old"]
+    assert all(r.kind == MemoryKind.SUMMARY.value for r in results)
+
+
+async def test_search_summaries_respects_subject_filter(db_session) -> None:
+    store = EpisodeMemoryStore(db_session)
+    await store.add_summary(
+        _make_artifact(id="owner-sum", kind=MemoryKind.SUMMARY, content="主人摘要")
+    )
+    await store.add_summary(
+        _make_artifact(
+            id="other-sum",
+            kind=MemoryKind.SUMMARY,
+            content="别人摘要",
+            subject_id="agent:foo",
+        )
+    )
+
+    results = await store.search_summaries(subject_id="owner", limit=8)
+
+    assert [r.id for r in results] == ["owner-sum"]
+
+
+async def test_search_summaries_respects_limit(db_session) -> None:
+    store = EpisodeMemoryStore(db_session)
+    base = datetime.now(UTC)
+    for i in range(5):
+        await store.add_summary(
+            _make_artifact(
+                id=f"sum-{i}",
+                kind=MemoryKind.SUMMARY,
+                content=f"摘要{i}",
+                recorded_at=base + timedelta(seconds=i),
+            )
+        )
+
+    results = await store.search_summaries(subject_id="owner", limit=2)
+
+    assert len(results) == 2

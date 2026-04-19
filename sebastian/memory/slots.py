@@ -13,9 +13,7 @@ from sebastian.memory.types import (
 )
 
 # Kinds that MUST be bound to a registered slot.
-_SLOT_REQUIRED_KINDS: frozenset[MemoryKind] = frozenset(
-    [MemoryKind.FACT, MemoryKind.PREFERENCE]
-)
+_SLOT_REQUIRED_KINDS: frozenset[MemoryKind] = frozenset([MemoryKind.FACT, MemoryKind.PREFERENCE])
 
 _BUILTIN_SLOTS: list[SlotDefinition] = [
     SlotDefinition(
@@ -86,6 +84,10 @@ class SlotRegistry:
     def __init__(self, slots: Iterable[SlotDefinition] | None = None) -> None:
         source = _BUILTIN_SLOTS if slots is None else list(slots)
         self._slots: dict[str, SlotDefinition] = {s.slot_id: s for s in source}
+
+    def list_all(self) -> list[SlotDefinition]:
+        """Return every registered :class:`SlotDefinition` in insertion order."""
+        return list(self._slots.values())
 
     def get(self, slot_id: str) -> SlotDefinition | None:
         """Return the :class:`SlotDefinition` for *slot_id*, or ``None``."""

@@ -92,6 +92,42 @@ class TestRegistryLookup:
         assert registry.get("user.preference.response_style") is None
 
 
+class TestListAll:
+    def test_list_all_returns_all_registered_slots(self) -> None:
+        registry = SlotRegistry()
+        slots = registry.list_all()
+        assert len(slots) == 6
+        slot_ids = {s.slot_id for s in slots}
+        assert slot_ids == {
+            "user.preference.response_style",
+            "user.preference.language",
+            "user.current_project_focus",
+            "user.profile.timezone",
+            "project.current_phase",
+            "agent.current_assignment",
+        }
+
+    def test_list_all_returns_slot_definitions(self) -> None:
+        registry = SlotRegistry()
+        slots = registry.list_all()
+        assert all(isinstance(s, SlotDefinition) for s in slots)
+
+    def test_list_all_on_custom_registry(self) -> None:
+        custom = SlotDefinition(
+            slot_id="custom.one",
+            scope=MemoryScope.USER,
+            subject_kind="user",
+            cardinality=Cardinality.SINGLE,
+            resolution_policy=ResolutionPolicy.SUPERSEDE,
+            kind_constraints=[MemoryKind.FACT],
+            description="custom",
+        )
+        registry = SlotRegistry(slots=[custom])
+        slots = registry.list_all()
+        assert len(slots) == 1
+        assert slots[0].slot_id == "custom.one"
+
+
 class TestValidateCandidate:
     def test_fact_without_slot_is_invalid(self) -> None:
         registry = SlotRegistry()

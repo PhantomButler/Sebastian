@@ -64,10 +64,7 @@ class EntityRegistry:
         """Return entities whose canonical_name or aliases match text."""
         result = await self._session.scalars(select(EntityRecord))
         all_records = result.all()
-        return [
-            r for r in all_records
-            if r.canonical_name == text or text in r.aliases
-        ]
+        return [r for r in all_records if r.canonical_name == text or text in r.aliases]
 
     async def list_relations(
         self,
@@ -89,6 +86,16 @@ class EntityRegistry:
             .order_by(RelationCandidateRecord.created_at.desc())
             .limit(limit)
         )
+        result = await self._session.scalars(statement)
+        return list(result.all())
+
+    async def snapshot(self, *, limit: int = 64) -> list[EntityRecord]:
+        """Return up to *limit* most recently created entities, newest first.
+
+        Used to supply the consolidator with an entity registry overview so the
+        LLM can avoid proposing duplicate canonical names.
+        """
+        statement = select(EntityRecord).order_by(EntityRecord.created_at.desc()).limit(limit)
         result = await self._session.scalars(statement)
         return list(result.all())
 

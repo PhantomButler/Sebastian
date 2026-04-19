@@ -174,22 +174,11 @@ class SessionConsolidationWorker:
             session_id, agent_type
         )
 
-        # 3. Build consolidator input
-        consolidator_input = ConsolidatorInput(
-            session_messages=messages,
-            candidate_artifacts=[],
-            active_memories_for_subject=[],
-            recent_summaries=[],
-            slot_definitions=[],
-            entity_registry_snapshot=[],
-        )
-
-        # 4. Call the consolidator
-        result: ConsolidationResult = await self._consolidator.consolidate(consolidator_input)
-
-        # 5. Persist everything in one atomic transaction.
-        #    The marker insert will raise IntegrityError if a concurrent task
-        #    already committed for the same (session_id, agent_type) pair.
+        # 3. Open one atomic transaction that wraps context-gathering,
+        #    consolidation and persistence. The marker insert at the end
+        #    will raise IntegrityError if a concurrent task already committed
+        #    for the same (session_id, agent_type) pair, preserving
+        #    idempotency.
         async with self._db_factory() as session:
             from sebastian.memory.decision_log import MemoryDecisionLogger
             from sebastian.memory.entity_registry import EntityRegistry
@@ -204,6 +193,48 @@ class SessionConsolidationWorker:
             profile_store = ProfileMemoryStore(session)
             entity_registry = EntityRegistry(session)
             decision_logger = MemoryDecisionLogger(session)
+
+            # 4. Pull consolidator context inside the transaction so the LLM
+            #    can see existing memories and avoid proposing duplicates.
+            context_subject_id = await resolve_subject(
+                MemoryScope.USER,
+                session_id=session_id,
+                agent_type=agent_type,
+            )
+            active_rows = await profile_store.search_active(subject_id=context_subject_id, limit=32)
+            recent_summary_rows = await episode_store.search_summaries(
+                subject_id=context_subject_id, limit=8
+            )
+            entity_rows = await entity_registry.snapshot(limit=64)
+
+            consolidator_input = ConsolidatorInput(
+                session_messages=messages,
+                candidate_artifacts=[],
+                active_memories_for_subject=[
+                    {
+                        "id": r.id,
+                        "slot_id": r.slot_id,
+                        "kind": r.kind,
+                        "content": r.content,
+                        "confidence": r.confidence,
+                        "source": r.source,
+                    }
+                    for r in active_rows
+                ],
+                recent_summaries=[{"content": r.content} for r in recent_summary_rows],
+                slot_definitions=[s.model_dump() for s in DEFAULT_SLOT_REGISTRY.list_all()],
+                entity_registry_snapshot=[
+                    {
+                        "canonical_name": r.canonical_name,
+                        "aliases": r.aliases,
+                        "type": r.entity_type,
+                    }
+                    for r in entity_rows
+                ],
+            )
+
+            # 5. Call the consolidator
+            result: ConsolidationResult = await self._consolidator.consolidate(consolidator_input)
 
             for summary in result.summaries:
                 summary_subject_id = await resolve_subject(

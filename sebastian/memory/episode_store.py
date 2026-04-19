@@ -92,6 +92,26 @@ class EpisodeMemoryStore:
         )
         return records[:limit]
 
+    async def search_summaries(
+        self,
+        *,
+        subject_id: str,
+        limit: int = 8,
+    ) -> list[EpisodeMemoryRecord]:
+        """Return recent SUMMARY-kind active episodes for *subject_id*, newest first."""
+        statement = (
+            select(EpisodeMemoryRecord)
+            .where(
+                EpisodeMemoryRecord.subject_id == subject_id,
+                EpisodeMemoryRecord.kind == MemoryKind.SUMMARY.value,
+                EpisodeMemoryRecord.status == MemoryStatus.ACTIVE.value,
+            )
+            .order_by(EpisodeMemoryRecord.recorded_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.scalars(statement)
+        return list(result.all())
+
     async def touch(self, memory_ids: list[str]) -> None:
         if not memory_ids:
             return

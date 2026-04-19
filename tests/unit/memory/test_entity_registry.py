@@ -181,14 +181,79 @@ async def test_list_relations_respects_limit(db_session) -> None:
     assert len(results) == 2
 
 
+async def test_snapshot_orders_by_created_at_desc(db_session) -> None:
+    registry = EntityRegistry(db_session)
+    base = datetime.now(UTC)
+
+    # Insert three entities with different created_at; upsert_entity uses now(),
+    # so insert records directly to control ordering.
+    from sebastian.store.models import EntityRecord
+
+    old = EntityRecord(
+        id="e-old",
+        canonical_name="老",
+        entity_type="pet",
+        aliases=[],
+        entity_metadata={},
+        created_at=base - timedelta(hours=2),
+        updated_at=base - timedelta(hours=2),
+    )
+    mid = EntityRecord(
+        id="e-mid",
+        canonical_name="中",
+        entity_type="pet",
+        aliases=[],
+        entity_metadata={},
+        created_at=base - timedelta(hours=1),
+        updated_at=base - timedelta(hours=1),
+    )
+    new = EntityRecord(
+        id="e-new",
+        canonical_name="新",
+        entity_type="pet",
+        aliases=[],
+        entity_metadata={},
+        created_at=base,
+        updated_at=base,
+    )
+    db_session.add_all([old, mid, new])
+    await db_session.flush()
+
+    results = await registry.snapshot(limit=10)
+
+    assert [r.id for r in results] == ["e-new", "e-mid", "e-old"]
+
+
+async def test_snapshot_respects_limit(db_session) -> None:
+    registry = EntityRegistry(db_session)
+    base = datetime.now(UTC)
+
+    from sebastian.store.models import EntityRecord
+
+    records = [
+        EntityRecord(
+            id=f"e-{i}",
+            canonical_name=f"实体-{i}",
+            entity_type="pet",
+            aliases=[],
+            entity_metadata={},
+            created_at=base + timedelta(seconds=i),
+            updated_at=base + timedelta(seconds=i),
+        )
+        for i in range(5)
+    ]
+    db_session.add_all(records)
+    await db_session.flush()
+
+    results = await registry.snapshot(limit=2)
+
+    assert len(results) == 2
+
+
 async def test_list_relations_orders_by_created_at_desc(db_session) -> None:
     base = datetime.now(UTC)
-    oldest = _make_relation(
-        subject_id="owner", content="老", created_at=base - timedelta(hours=2)
-    )
-    middle = _make_relation(
-        subject_id="owner", content="中", created_at=base - timedelta(hours=1)
-    )
+    oldest = _make_relation(subject_id="owner", content="老", created_at=base - timedelta(hours=2))
+    middle = _make_relation(subject_id="owner", content="中", created_at=base - timedelta(hours=1))
     newest = _make_relation(subject_id="owner", content="新", created_at=base)
     db_session.add_all([oldest, middle, newest])
     await db_session.flush()
