@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.net.URI
 import javax.inject.Inject
 
 data class ProviderFormUiState(
@@ -103,6 +104,10 @@ class ProviderFormViewModel @Inject constructor(
             _formState.update { it.copy(error = "Base URL 不能为空") }
             return
         }
+        if (!isValidBaseUrl(state.baseUrl)) {
+            _formState.update { it.copy(error = "Base URL 必须是 http(s) 地址") }
+            return
+        }
         viewModelScope.launch(dispatcher) {
             _formState.update { it.copy(isLoading = true, error = null) }
             val capabilityStr = when (state.thinkingCapability) {
@@ -141,4 +146,12 @@ class ProviderFormViewModel @Inject constructor(
     }
 
     fun clearError() = _formState.update { it.copy(error = null) }
+
+    private fun isValidBaseUrl(value: String): Boolean {
+        val uri = runCatching { URI(value.trim()) }.getOrNull() ?: return false
+        val scheme = uri.scheme ?: return false
+        val hasHttpScheme = scheme.equals("http", ignoreCase = true) ||
+            scheme.equals("https", ignoreCase = true)
+        return hasHttpScheme && !uri.host.isNullOrBlank()
+    }
 }

@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Fixed
+- App 与后端会校验 LLM Provider 的 Base URL 必须是 http(s) 地址，避免把 API Key 等非 URL 内容误保存到 Base URL。
 - `sebastian update` 在源码 checkout 也被当前 Python 环境导入时，仍会优先识别 `~/.sebastian/app` 安装目录，并显示安装目录中的真实版本号。
 
 ## [0.3.1] - 2026-04-18

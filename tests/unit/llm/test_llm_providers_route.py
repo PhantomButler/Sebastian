@@ -8,8 +8,10 @@ import pytest
 from fastapi import HTTPException
 
 from sebastian.gateway.routes.llm_providers import (
+    LLMProviderCreate,
     LLMProviderUpdate,
     _record_to_dict,
+    create_llm_provider,
     update_llm_provider,
 )
 from sebastian.llm.crypto import encrypt
@@ -32,6 +34,33 @@ def _make_record(**overrides: Any) -> SimpleNamespace:
     }
     base.update(overrides)
     return SimpleNamespace(**base)
+
+
+@pytest.mark.asyncio
+async def test_create_provider_rejects_invalid_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """base_url 必须是 http(s) URL，不能误填 API Key 等普通字符串。"""
+
+    async def fake_create(record: Any) -> SimpleNamespace:
+        raise AssertionError("registry.create 不应被调用")
+
+    import sebastian.gateway.state as state
+
+    monkeypatch.setattr(state, "llm_registry", SimpleNamespace(create=fake_create), raising=False)
+
+    body = LLMProviderCreate(
+        name="anthropic",
+        provider_type="anthropic",
+        api_key="sk-ant-real-key",
+        model="claude-sonnet-4-6",
+        base_url="sk-ant-key-in-wrong-field",
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await create_llm_provider(body=body, _auth={})
+
+    assert exc_info.value.status_code == 400
+    assert "base_url" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
@@ -98,6 +127,27 @@ async def test_put_provider_rejects_base_url_with_explicit_null(
     monkeypatch.setattr(state, "llm_registry", SimpleNamespace(update=fake_update), raising=False)
 
     body = LLMProviderUpdate(base_url=None)
+    with pytest.raises(HTTPException) as exc_info:
+        await update_llm_provider("p1", body=body, _auth={})
+
+    assert exc_info.value.status_code == 400
+    assert "base_url" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_put_provider_rejects_invalid_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PUT 的 base_url 也必须是 http(s) URL。"""
+
+    async def fake_update(pid: str, **kwargs: Any) -> SimpleNamespace:
+        raise AssertionError("registry.update 不应被调用")
+
+    import sebastian.gateway.state as state
+
+    monkeypatch.setattr(state, "llm_registry", SimpleNamespace(update=fake_update), raising=False)
+
+    body = LLMProviderUpdate(base_url="sk-ant-key-in-wrong-field")
     with pytest.raises(HTTPException) as exc_info:
         await update_llm_provider("p1", body=body, _auth={})
 

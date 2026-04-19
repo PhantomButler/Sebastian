@@ -20,6 +20,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.mockito.kotlin.wheneverBlocking
 
@@ -82,6 +84,36 @@ class ProviderFormViewModelTest {
             dispatcher.scheduler.advanceTimeBy(200)
             val state = awaitItem()
             assertEquals("名称不能为空", state.error)
+        }
+    }
+
+    @Test
+    fun `save with api key in base url sets error and does not create provider`() = vmTest {
+        viewModel.uiState.test {
+            awaitItem() // initial (starts stateIn subscription)
+
+            viewModel.onNameChange("TestProvider")
+            viewModel.onApiKeyChange("sk-test")
+            viewModel.onModelChange("claude-3-5-sonnet-20241022")
+            viewModel.onBaseUrlChange("sk-ant-key-in-wrong-field")
+            viewModel.save(null)
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            var state = awaitItem()
+            while (state.error == null) {
+                state = awaitItem()
+            }
+            assertEquals("Base URL 必须是 http(s) 地址", state.error)
+            verify(repository, never()).createProvider(
+                name = "TestProvider",
+                type = "anthropic",
+                baseUrl = "sk-ant-key-in-wrong-field",
+                apiKey = "sk-test",
+                model = "claude-3-5-sonnet-20241022",
+                thinkingCapability = "none",
+                isDefault = false,
+            )
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
