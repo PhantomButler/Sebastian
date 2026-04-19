@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -41,9 +41,10 @@ class ConsolidatorInput(BaseModel):
 
 
 class MemorySummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     content: str
     subject_id: str
-    scope: str = "user"
+    scope: MemoryScope = MemoryScope.USER
     session_id: str | None = None
 
 
@@ -248,7 +249,7 @@ def _summary_to_artifact(summary: MemorySummary) -> MemoryArtifact:
     return MemoryArtifact(
         id=str(uuid4()),
         kind=MemoryKind.SUMMARY,
-        scope=MemoryScope(summary.scope),
+        scope=summary.scope,
         subject_id=summary.subject_id,
         slot_id=None,
         cardinality=None,

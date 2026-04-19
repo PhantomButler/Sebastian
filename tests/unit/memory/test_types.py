@@ -416,3 +416,56 @@ def test_memory_decision_type_values_are_uppercase():
     assert MemoryDecisionType.MERGE.value == "MERGE"
     assert MemoryDecisionType.EXPIRE.value == "EXPIRE"
     assert MemoryDecisionType.DISCARD.value == "DISCARD"
+
+
+def test_candidate_artifact_rejects_unknown_field() -> None:
+    with pytest.raises(ValidationError):
+        CandidateArtifact(
+            kind=MemoryKind.FACT,
+            content="x",
+            structured_payload={},
+            subject_hint=None,
+            scope=MemoryScope.USER,
+            slot_id=None,
+            cardinality=None,
+            resolution_policy=None,
+            confidence=0.5,
+            source=MemorySource.EXPLICIT,
+            evidence=[],
+            valid_from=None,
+            valid_until=None,
+            policy_tags=[],
+            needs_review=False,
+            bogus_field="nope",  # type: ignore[call-arg]
+        )
+
+
+def test_resolve_decision_add_requires_new_memory() -> None:
+    candidate = CandidateArtifact(
+        kind=MemoryKind.FACT,
+        content="x",
+        structured_payload={},
+        subject_hint=None,
+        scope=MemoryScope.USER,
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        confidence=0.5,
+        source=MemorySource.EXPLICIT,
+        evidence=[],
+        valid_from=None,
+        valid_until=None,
+        policy_tags=[],
+        needs_review=False,
+    )
+    with pytest.raises(ValidationError):
+        ResolveDecision(
+            decision=MemoryDecisionType.ADD,
+            reason="r",
+            old_memory_ids=[],
+            new_memory=None,
+            candidate=candidate,
+            subject_id="owner",
+            scope=MemoryScope.USER,
+            slot_id=None,
+        )

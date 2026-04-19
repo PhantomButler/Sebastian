@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -9,10 +9,12 @@ from sebastian.memory.decision_log import MemoryDecisionLogger
 from sebastian.memory.types import (
     CandidateArtifact,
     Cardinality,
+    MemoryArtifact,
     MemoryDecisionType,
     MemoryKind,
     MemoryScope,
     MemorySource,
+    MemoryStatus,
     ResolutionPolicy,
     ResolveDecision,
 )
@@ -51,6 +53,33 @@ def _make_candidate() -> CandidateArtifact:
     )
 
 
+def _make_memory_artifact(memory_id: str = "mem-new") -> MemoryArtifact:
+    return MemoryArtifact(
+        id=memory_id,
+        kind=MemoryKind.PREFERENCE,
+        scope=MemoryScope.USER,
+        subject_id="owner",
+        slot_id="user.preference.response_style",
+        cardinality=Cardinality.SINGLE,
+        resolution_policy=ResolutionPolicy.SUPERSEDE,
+        content="用户偏好简洁中文回复",
+        structured_payload={"style": "concise"},
+        source=MemorySource.EXPLICIT,
+        confidence=0.96,
+        status=MemoryStatus.ACTIVE,
+        valid_from=None,
+        valid_until=None,
+        recorded_at=datetime.now(UTC),
+        last_accessed_at=None,
+        access_count=0,
+        provenance={},
+        links=[],
+        embedding_ref=None,
+        dedupe_key=None,
+        policy_tags=[],
+    )
+
+
 async def test_decision_logger_append_add(db_session) -> None:
     logger = MemoryDecisionLogger(db_session)
 
@@ -58,7 +87,7 @@ async def test_decision_logger_append_add(db_session) -> None:
         decision=MemoryDecisionType.ADD,
         reason="No existing memory for this slot",
         old_memory_ids=[],
-        new_memory=None,
+        new_memory=_make_memory_artifact(memory_id="mem-add-1"),
         candidate=_make_candidate(),
         subject_id="owner",
         scope=MemoryScope.USER,
@@ -78,7 +107,7 @@ async def test_decision_logger_append_add(db_session) -> None:
     assert record.worker == "unit-test"
     assert record.rule_version == "v1"
     assert record.model is None
-    assert record.new_memory_id is None
+    assert record.new_memory_id == "mem-add-1"
     assert record.old_memory_ids == []
     assert record.conflicts == []
     assert isinstance(record.candidate, dict)
@@ -95,7 +124,7 @@ async def test_decision_logger_append_supersede(db_session) -> None:
         decision=MemoryDecisionType.SUPERSEDE,
         reason="New value replaces old preference",
         old_memory_ids=["mem-001", "mem-002"],
-        new_memory=None,
+        new_memory=_make_memory_artifact(memory_id="mem-new-1"),
         candidate=_make_candidate(),
         subject_id="owner",
         scope=MemoryScope.USER,
@@ -116,7 +145,7 @@ async def test_decision_logger_append_supersede(db_session) -> None:
     assert record.model == "claude-sonnet-4-6"
     assert record.rule_version == "v1"
     assert record.old_memory_ids == ["mem-001", "mem-002"]
-    assert record.new_memory_id is None
+    assert record.new_memory_id == "mem-new-1"
     assert record.conflicts == []
     assert isinstance(record.candidate, dict)
     assert record.candidate["content"] == "用户偏好简洁中文回复"

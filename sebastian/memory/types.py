@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class MemoryKind(StrEnum):
@@ -69,6 +69,8 @@ class SlotDefinition(BaseModel):
 
 
 class CandidateArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     kind: MemoryKind
     content: str
     structured_payload: dict[str, Any]
@@ -87,6 +89,8 @@ class CandidateArtifact(BaseModel):
 
 
 class MemoryArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     kind: MemoryKind
     scope: MemoryScope
@@ -120,3 +124,23 @@ class ResolveDecision(BaseModel):
     subject_id: str
     scope: MemoryScope
     slot_id: str | None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _check_decision_shape(self) -> ResolveDecision:
+        requires_new_memory = (
+            MemoryDecisionType.ADD,
+            MemoryDecisionType.SUPERSEDE,
+            MemoryDecisionType.MERGE,
+        )
+        requires_old_ids = (MemoryDecisionType.SUPERSEDE, MemoryDecisionType.MERGE)
+        if self.decision in requires_new_memory and self.new_memory is None:
+            raise ValueError(f"{self.decision} must include new_memory")
+        if self.decision == MemoryDecisionType.ADD and self.old_memory_ids:
+            raise ValueError("ADD must not have old_memory_ids")
+        if self.decision in requires_old_ids and not self.old_memory_ids:
+            raise ValueError(f"{self.decision} must include old_memory_ids")
+        if self.decision == MemoryDecisionType.DISCARD and self.new_memory is not None:
+            raise ValueError("DISCARD must not have new_memory")
+        return self

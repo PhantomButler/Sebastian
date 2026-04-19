@@ -400,3 +400,8 @@ class TestMemoryConsolidatorConsolidate:
         # If no DB write was attempted, db_write_called stays False
         assert not db_write_called
         assert isinstance(result, ConsolidationResult)
+
+
+def test_memory_summary_rejects_invalid_scope() -> None:
+    with pytest.raises(ValidationError):
+        MemorySummary(content="x", subject_id="owner", scope="User", session_id=None)  # type: ignore[arg-type]
