@@ -73,6 +73,40 @@ class TestMemoryRetrievalPlanner:
         plan = planner.plan(_ctx())
         assert isinstance(plan, RetrievalPlan)
 
+    def test_retrieval_plan_has_four_lanes(self) -> None:
+        plan = RetrievalPlan()
+        assert hasattr(plan, "context_lane")
+        assert hasattr(plan, "episode_lane")
+        assert hasattr(plan, "relation_lane")
+        assert plan.profile_limit > 0
+        assert plan.context_limit > 0
+        assert plan.episode_limit > 0
+        assert plan.relation_limit > 0
+
+    def test_planner_skips_all_lanes_for_small_talk(self) -> None:
+        planner = MemoryRetrievalPlanner()
+        plan = planner.plan(_ctx("hi"))
+        assert plan.profile_lane is False
+        assert plan.context_lane is False
+        assert plan.episode_lane is False
+        assert plan.relation_lane is False
+
+    def test_planner_activates_episode_lane_on_keyword(self) -> None:
+        planner = MemoryRetrievalPlanner()
+        plan = planner.plan(_ctx("上次我们讨论的事"))
+        assert plan.episode_lane is True
+        assert plan.profile_lane is True
+
+    def test_planner_activates_context_lane_on_keyword(self) -> None:
+        planner = MemoryRetrievalPlanner()
+        plan = planner.plan(_ctx("今天的安排"))
+        assert plan.context_lane is True
+
+    def test_planner_activates_relation_lane_on_keyword(self) -> None:
+        planner = MemoryRetrievalPlanner()
+        plan = planner.plan(_ctx("老婆喜欢什么"))
+        assert plan.relation_lane is True
+
 
 # ---------------------------------------------------------------------------
 # Assembler tests

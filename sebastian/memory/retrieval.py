@@ -8,8 +8,13 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-# Keywords that trigger episode lane
+# Keywords that trigger each retrieval lane (Phase R-D, spec §2)
+PROFILE_LANE_KEYWORDS = ["我", "我的", "我喜欢", "我是", "my", "i am", "i like", "i prefer"]
 EPISODE_LANE_KEYWORDS = ["上次", "讨论", "之前", "记得", "last time", "remember", "we discussed"]
+RELATION_LANE_KEYWORDS = ["老婆", "孩子", "同事", "项目", "team", "project", "related to"]
+CONTEXT_LANE_KEYWORDS = ["现在", "今天", "本周", "正在", "now", "today", "this week", "current"]
+SMALL_TALK_PATTERNS = ["hi", "hello", "你好", "嗨", "ok", "谢谢", "thanks"]
+
 MAX_TOTAL_ITEMS = 8
 DO_NOT_AUTO_INJECT_TAG = "do_not_auto_inject"
 
@@ -24,21 +29,31 @@ class RetrievalContext(BaseModel):
 
 class RetrievalPlan(BaseModel):
     profile_lane: bool = True
+    context_lane: bool = False
     episode_lane: bool = False
+    relation_lane: bool = False
     profile_limit: int = 5
+    context_limit: int = 3
     episode_limit: int = 3
+    relation_limit: int = 3
 
 
 class MemoryRetrievalPlanner:
     def plan(self, context: RetrievalContext) -> RetrievalPlan:
         """Determine which retrieval lanes to activate."""
-        msg = context.user_message.lower()
-        episode_lane = any(kw in msg for kw in EPISODE_LANE_KEYWORDS)
+        msg = context.user_message.lower().strip()
+        if any(msg == p or msg.startswith(p + " ") for p in SMALL_TALK_PATTERNS):
+            return RetrievalPlan(
+                profile_lane=False,
+                context_lane=False,
+                episode_lane=False,
+                relation_lane=False,
+            )
         return RetrievalPlan(
-            profile_lane=True,
-            episode_lane=episode_lane,
-            profile_limit=5,
-            episode_limit=3,
+            profile_lane=True,  # always on for non-small-talk (Phase R-D rule)
+            context_lane=any(k in msg for k in CONTEXT_LANE_KEYWORDS),
+            episode_lane=any(k in msg for k in EPISODE_LANE_KEYWORDS),
+            relation_lane=any(k in msg for k in RELATION_LANE_KEYWORDS),
         )
 
 
