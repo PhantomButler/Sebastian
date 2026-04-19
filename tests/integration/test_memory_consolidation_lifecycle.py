@@ -53,7 +53,7 @@ async def test_session_completed_with_memory_enabled_calls_worker() -> None:
     # Give the task a moment to execute
     await asyncio.sleep(0)
     # Drain any pending tasks
-    await asyncio.gather(*list(scheduler._pending_tasks), return_exceptions=True)
+    await scheduler.drain()
 
     worker.consolidate_session.assert_called_once_with("sess-001", "researcher")
 
@@ -173,6 +173,33 @@ async def test_multiple_events_schedule_multiple_tasks() -> None:
         await event_bus.publish(event)
 
     await asyncio.sleep(0)
-    await asyncio.gather(*list(scheduler._pending_tasks), return_exceptions=True)
+    await scheduler.drain()
 
     assert worker.consolidate_session.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_drain_waits_for_pending_tasks() -> None:
+    """drain() waits for all pending consolidation tasks to finish.
+
+    Must not require the test to access _pending_tasks directly.
+    """
+    event_bus = EventBus()
+    worker = _make_mock_worker()
+
+    scheduler = MemoryConsolidationScheduler(
+        event_bus=event_bus,
+        worker=worker,
+        memory_settings_fn=lambda: True,
+    )
+
+    event = _make_session_completed_event(session_id="sess-drain", agent_type="researcher")
+    await event_bus.publish(event)
+
+    # Let the task be created (but may not have run yet)
+    await asyncio.sleep(0)
+
+    # drain() must complete without accessing _pending_tasks from the test
+    await scheduler.drain()
+
+    worker.consolidate_session.assert_called_once_with("sess-drain", "researcher")

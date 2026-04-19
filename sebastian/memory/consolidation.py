@@ -450,6 +450,12 @@ class MemoryConsolidationScheduler:
         if exc is not None:
             logger.error("Consolidation task failed: %s", exc, exc_info=exc)
 
+    async def drain(self) -> None:
+        """Wait for all pending consolidation tasks to finish (for tests and graceful shutdown)."""
+        pending = list(self._pending_tasks)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
     async def aclose(self) -> None:
         """Cancel all pending consolidation tasks on shutdown."""
         for task in list(self._pending_tasks):
