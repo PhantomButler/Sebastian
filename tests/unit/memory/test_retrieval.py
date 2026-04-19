@@ -562,6 +562,12 @@ class TestMemorySectionAssembler:
                 id="drop-expired",
                 valid_until=datetime.now(UTC) - timedelta(days=1),
             ),
+            FakeProfileRecord(
+                kind="pref",
+                content="not-yet",
+                id="drop-valid-from",
+                valid_from=datetime.now(UTC) + timedelta(days=1),
+            ),
         ]
 
         result = MemorySectionAssembler().assemble(
@@ -580,6 +586,7 @@ class TestMemorySectionAssembler:
         assert "agent_policy=1" in caplog.text
         assert "confidence=1" in caplog.text
         assert "valid_until=1" in caplog.text
+        assert "valid_from=1" in caplog.text
         assert "MEMORY_TRACE retrieval.assemble" in caplog.text
         assert "keep-1" in caplog.text
 

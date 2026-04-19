@@ -113,6 +113,7 @@ class MemorySectionAssembler:
             "agent_policy": 0,
             "confidence": 0,
             "valid_until": 0,
+            "valid_from": 0,
         }
 
         def _keep(record: Any) -> bool:
@@ -164,6 +165,7 @@ class MemorySectionAssembler:
                 if valid_from.tzinfo is None:
                     valid_from = valid_from.replace(tzinfo=UTC)
                 if valid_from > now:
+                    filter_counts["valid_from"] += 1
                     return False
 
             return True
