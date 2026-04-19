@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from sebastian.memory.consolidation import MemoryConsolidationScheduler
 from sebastian.protocol.events.bus import EventBus
 from sebastian.protocol.events.types import Event, EventType
 
@@ -37,8 +38,6 @@ def _make_mock_worker() -> AsyncMock:
 @pytest.mark.asyncio
 async def test_session_completed_with_memory_enabled_calls_worker() -> None:
     """Publishing SESSION_COMPLETED with memory enabled → consolidate_session called once."""
-    from sebastian.memory.consolidation import MemoryConsolidationScheduler
-
     event_bus = EventBus()
     worker = _make_mock_worker()
 
@@ -62,8 +61,6 @@ async def test_session_completed_with_memory_enabled_calls_worker() -> None:
 @pytest.mark.asyncio
 async def test_session_completed_with_memory_disabled_does_not_call_worker() -> None:
     """Publishing SESSION_COMPLETED with memory disabled → consolidate_session NOT called."""
-    from sebastian.memory.consolidation import MemoryConsolidationScheduler
-
     event_bus = EventBus()
     worker = _make_mock_worker()
 
@@ -86,8 +83,6 @@ async def test_session_completed_with_memory_disabled_does_not_call_worker() -> 
 @pytest.mark.asyncio
 async def test_session_completed_missing_session_id_skips_worker() -> None:
     """Event missing session_id → no task created."""
-    from sebastian.memory.consolidation import MemoryConsolidationScheduler
-
     event_bus = EventBus()
     worker = _make_mock_worker()
 
@@ -110,8 +105,6 @@ async def test_session_completed_missing_session_id_skips_worker() -> None:
 @pytest.mark.asyncio
 async def test_session_completed_missing_agent_type_skips_worker() -> None:
     """Event missing agent_type → no task created."""
-    from sebastian.memory.consolidation import MemoryConsolidationScheduler
-
     event_bus = EventBus()
     worker = _make_mock_worker()
 
@@ -134,8 +127,6 @@ async def test_session_completed_missing_agent_type_skips_worker() -> None:
 @pytest.mark.asyncio
 async def test_aclose_cancels_pending_tasks() -> None:
     """aclose() cancels all pending consolidation tasks."""
-    from sebastian.memory.consolidation import MemoryConsolidationScheduler
-
     event_bus = EventBus()
 
     # Worker that blocks indefinitely
@@ -165,8 +156,6 @@ async def test_aclose_cancels_pending_tasks() -> None:
 @pytest.mark.asyncio
 async def test_multiple_events_schedule_multiple_tasks() -> None:
     """Multiple SESSION_COMPLETED events each schedule their own consolidation task."""
-    from sebastian.memory.consolidation import MemoryConsolidationScheduler
-
     event_bus = EventBus()
     worker = _make_mock_worker()
 

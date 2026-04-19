@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
@@ -24,6 +25,7 @@ from sebastian.protocol.events.types import Event, EventType
 
 if TYPE_CHECKING:
     from sebastian.llm.registry import LLMProviderRegistry, ResolvedProvider
+    from sebastian.protocol.events.bus import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +70,7 @@ class MemoryConsolidator:
         self._registry = llm_registry
         self._max_retries = max_retries
 
-    async def consolidate(self, input: ConsolidatorInput) -> ConsolidationResult:
+    async def consolidate(self, consolidator_input: ConsolidatorInput) -> ConsolidationResult:
         """Call LLM to consolidate session memory.
 
         Returns empty ConsolidationResult on schema failure.
@@ -81,7 +83,7 @@ class MemoryConsolidator:
             '{"summaries": [...], "proposed_artifacts": [...], "proposed_actions": [...]}. '
             "No explanation, no markdown, no code blocks. Only JSON."
         )
-        messages = [{"role": "user", "content": input.model_dump_json()}]
+        messages = [{"role": "user", "content": consolidator_input.model_dump_json()}]
         empty = ConsolidationResult()
 
         for attempt in range(self._max_retries + 1):
@@ -95,7 +97,6 @@ class MemoryConsolidator:
                         attempt + 1,
                         e,
                     )
-                    continue
                 logger.warning(
                     "Consolidator failed after %d retries, returning empty: %s",
                     self._max_retries + 1,
@@ -158,26 +159,20 @@ class SessionConsolidationWorker:
 
         All writes happen in one atomic transaction; the marker record is
         added inside the same transaction so the operation is idempotent.
+        If a concurrent task already committed the marker, IntegrityError is
+        caught and we return early — our uncommitted writes are rolled back
+        automatically by the context manager.
         """
         # 1. Check feature flag
         if not self._memory_settings_fn():
             return
 
-        # 2. Check idempotency — open a read-only session
-        async with self._db_factory() as check_session:
-            existing = await check_session.get(
-                _consolidation_record_class(),
-                {"session_id": session_id, "agent_type": agent_type},
-            )
-            if existing is not None:
-                return
-
-        # 3. Fetch session messages
+        # 2. Fetch session messages
         messages: list[dict[str, Any]] = await self._session_store.get_messages(
             session_id, agent_type
         )
 
-        # 4. Build consolidator input
+        # 3. Build consolidator input
         consolidator_input = ConsolidatorInput(
             session_messages=messages,
             candidate_artifacts=[],
@@ -187,10 +182,12 @@ class SessionConsolidationWorker:
             entity_registry_snapshot=[],
         )
 
-        # 5. Call the consolidator
+        # 4. Call the consolidator
         result: ConsolidationResult = await self._consolidator.consolidate(consolidator_input)
 
-        # 6. Persist everything in one atomic transaction
+        # 5. Persist everything in one atomic transaction.
+        #    The marker insert will raise IntegrityError if a concurrent task
+        #    already committed for the same (session_id, agent_type) pair.
         async with self._db_factory() as session:
             from sebastian.memory.decision_log import MemoryDecisionLogger
             from sebastian.memory.episode_store import EpisodeMemoryStore
@@ -238,14 +235,11 @@ class SessionConsolidationWorker:
                 worker_version=self._RULE_VERSION,
             )
             session.add(marker)
-            await session.commit()
-
-
-def _consolidation_record_class() -> type:
-    """Return SessionConsolidationRecord avoiding circular import at module level."""
-    from sebastian.store.models import SessionConsolidationRecord
-
-    return SessionConsolidationRecord
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                return  # already consolidated by a concurrent task
 
 
 def _summary_to_artifact(summary: MemorySummary) -> MemoryArtifact:
@@ -286,7 +280,7 @@ class MemoryConsolidationScheduler:
     def __init__(
         self,
         *,
-        event_bus: Any,
+        event_bus: EventBus,
         worker: SessionConsolidationWorker,
         memory_settings_fn: Callable[[], bool],
     ) -> None:
@@ -307,8 +301,8 @@ class MemoryConsolidationScheduler:
             name=f"consolidation_{session_id}",
         )
         self._pending_tasks.add(task)
-        task.add_done_callback(self._pending_tasks.discard)
         task.add_done_callback(self._log_exception)
+        task.add_done_callback(self._pending_tasks.discard)
 
     @staticmethod
     def _log_exception(task: asyncio.Task[None]) -> None:
