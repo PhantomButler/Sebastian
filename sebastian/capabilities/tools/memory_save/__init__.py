@@ -1,7 +1,20 @@
 from __future__ import annotations
 
+import sebastian.gateway.state as state
 from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
+from sebastian.memory.decision_log import MemoryDecisionLogger
+from sebastian.memory.episode_store import EpisodeMemoryStore
+from sebastian.memory.profile_store import ProfileMemoryStore
+from sebastian.memory.resolver import resolve_candidate
+from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+from sebastian.memory.types import (
+    CandidateArtifact,
+    MemoryDecisionType,
+    MemoryKind,
+    MemoryScope,
+    MemorySource,
+)
 from sebastian.permissions.types import PermissionTier
 
 
@@ -19,8 +32,6 @@ async def memory_save(
     scope: str = "user",
     policy_tags: list[str] | None = None,
 ) -> ToolResult:
-    import sebastian.gateway.state as state
-
     # Check memory enabled
     if not state.memory_settings.enabled:
         return ToolResult(ok=False, error="记忆功能已关闭")
@@ -28,19 +39,6 @@ async def memory_save(
     # Check db_factory available
     if not hasattr(state, "db_factory") or state.db_factory is None:
         return ToolResult(ok=False, error="记忆存储不可用")
-
-    from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
-    from sebastian.memory.resolver import resolve_candidate
-    from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
-    from sebastian.memory.types import (
-        CandidateArtifact,
-        MemoryDecisionType,
-        MemoryKind,
-        MemoryScope,
-        MemorySource,
-    )
 
     # Phase B: owner is the fixed subject
     subject_id = "owner"
@@ -80,6 +78,13 @@ async def memory_save(
         )
 
         if decision.decision == MemoryDecisionType.DISCARD:
+            await decision_logger.append(
+                decision,
+                worker="memory_save_tool",
+                model=None,
+                rule_version="phase_b_v1",
+            )
+            await session.commit()
             return ToolResult(ok=False, error="记忆被丢弃：置信度不足或槽位不匹配")
 
         new_memory = decision.new_memory

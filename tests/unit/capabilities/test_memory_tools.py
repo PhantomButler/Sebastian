@@ -169,3 +169,40 @@ async def test_memory_search_no_db_returns_error(no_db_state) -> None:
 
     assert result.ok is False
     assert result.error is not None
+
+
+@pytest.mark.asyncio
+async def test_memory_save_discard_writes_decision_log(
+    enabled_memory_state, monkeypatch
+):
+    from sqlalchemy import select
+
+    from sebastian.capabilities.tools.memory_save import memory_save
+    from sebastian.memory.types import MemoryDecisionType, ResolveDecision
+    from sebastian.store.models import MemoryDecisionLogRecord
+
+    async def fake_resolve(candidate, *, subject_id, profile_store, slot_registry):
+        return ResolveDecision(
+            decision=MemoryDecisionType.DISCARD,
+            reason="test",
+            old_memory_ids=[],
+            new_memory=None,
+            candidate=candidate,
+            subject_id=subject_id,
+            scope=candidate.scope,
+            slot_id=candidate.slot_id,
+        )
+
+    monkeypatch.setattr(
+        "sebastian.capabilities.tools.memory_save.resolve_candidate",
+        fake_resolve,
+        raising=False,
+    )
+
+    result = await memory_save(content="x")
+    assert result.ok is False
+
+    async with enabled_memory_state() as s:
+        rows = (await s.scalars(select(MemoryDecisionLogRecord))).all()
+        assert len(rows) == 1
+        assert rows[0].decision == MemoryDecisionType.DISCARD.value
