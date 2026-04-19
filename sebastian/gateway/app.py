@@ -123,6 +123,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     state.consolidation_scheduler = consolidation_scheduler
 
+    # Catch-up sweep: consolidate sessions that completed while the gateway was down.
+    from sebastian.memory.consolidation import sweep_unconsolidated
+
+    await sweep_unconsolidated(
+        db_factory=db_factory,
+        worker=consolidation_worker,
+        index_store=index_store,
+        memory_settings_fn=lambda: state.memory_settings.enabled,
+    )
+
     conversation = ConversationManager(event_bus, db_factory=db_factory)
     task_manager = TaskManager(session_store, event_bus, index_store=index_store)
     sse_mgr = SSEManager(event_bus)

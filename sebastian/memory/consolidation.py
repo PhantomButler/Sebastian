@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -452,3 +453,54 @@ class MemoryConsolidationScheduler:
         if self._pending_tasks:
             await asyncio.gather(*list(self._pending_tasks), return_exceptions=True)
         self._pending_tasks.clear()
+
+
+async def sweep_unconsolidated(
+    *,
+    db_factory: async_sessionmaker[AsyncSession],
+    worker: SessionConsolidationWorker,
+    index_store: Any,
+    memory_settings_fn: Callable[[], bool],
+) -> None:
+    """Catch up sessions that completed while the gateway was down.
+
+    Queries the session index for ``status == "completed"`` entries, removes
+    those already marked by :class:`SessionConsolidationRecord`, and invokes
+    :meth:`SessionConsolidationWorker.consolidate_session` for the rest. A
+    single failing session is logged and skipped — it must not abort the sweep.
+    """
+    if not memory_settings_fn():
+        return
+
+    from sebastian.store.models import SessionConsolidationRecord
+
+    entries = await index_store.list_all()
+    completed = [e for e in entries if e.get("status") == "completed"]
+    if not completed:
+        return
+
+    async with db_factory() as db:
+        rows = await db.execute(
+            select(
+                SessionConsolidationRecord.session_id,
+                SessionConsolidationRecord.agent_type,
+            )
+        )
+        consolidated_pairs = {(r[0], r[1]) for r in rows.all()}
+
+    for entry in completed:
+        session_id = entry.get("id")
+        agent_type = entry.get("agent_type")
+        if not session_id or not agent_type:
+            continue
+        if (session_id, agent_type) in consolidated_pairs:
+            continue
+        try:
+            await worker.consolidate_session(session_id, agent_type)
+        except Exception as exc:  # noqa: BLE001 — never abort the sweep
+            logger.warning(
+                "sweep_unconsolidated: failed for (%s, %s): %s",
+                session_id,
+                agent_type,
+                exc,
+            )
