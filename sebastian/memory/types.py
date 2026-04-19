@@ -116,6 +116,8 @@ class MemoryArtifact(BaseModel):
 
 
 class ResolveDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     decision: MemoryDecisionType
     reason: str
     old_memory_ids: list[str]
@@ -124,8 +126,6 @@ class ResolveDecision(BaseModel):
     subject_id: str
     scope: MemoryScope
     slot_id: str | None
-
-    model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
     def _check_decision_shape(self) -> ResolveDecision:
@@ -143,4 +143,9 @@ class ResolveDecision(BaseModel):
             raise ValueError(f"{self.decision} must include old_memory_ids")
         if self.decision == MemoryDecisionType.DISCARD and self.new_memory is not None:
             raise ValueError("DISCARD must not have new_memory")
+        if self.decision == MemoryDecisionType.EXPIRE:
+            if not self.old_memory_ids:
+                raise ValueError("EXPIRE must include old_memory_ids")
+            if self.new_memory is not None:
+                raise ValueError("EXPIRE must not have new_memory")
         return self

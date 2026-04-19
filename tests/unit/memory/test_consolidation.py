@@ -405,3 +405,10 @@ class TestMemoryConsolidatorConsolidate:
 def test_memory_summary_rejects_invalid_scope() -> None:
     with pytest.raises(ValidationError):
         MemorySummary(content="x", subject_id="owner", scope="User", session_id=None)  # type: ignore[arg-type]
+
+
+def test_memory_summary_accepts_valid_scope() -> None:
+    s = MemorySummary(content="x", subject_id="owner", scope=MemoryScope.USER, session_id=None)
+    assert s.scope == MemoryScope.USER
+    s2 = MemorySummary(content="x", subject_id="owner", scope="user", session_id=None)
+    assert s2.scope == MemoryScope.USER

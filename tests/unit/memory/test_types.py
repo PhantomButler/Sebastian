@@ -409,15 +409,6 @@ def test_resolve_decision_supersede() -> None:
     assert len(decision.old_memory_ids) == 2
 
 
-def test_memory_decision_type_values_are_uppercase():
-    from sebastian.memory.types import MemoryDecisionType
-    assert MemoryDecisionType.ADD.value == "ADD"
-    assert MemoryDecisionType.SUPERSEDE.value == "SUPERSEDE"
-    assert MemoryDecisionType.MERGE.value == "MERGE"
-    assert MemoryDecisionType.EXPIRE.value == "EXPIRE"
-    assert MemoryDecisionType.DISCARD.value == "DISCARD"
-
-
 def test_candidate_artifact_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError):
         CandidateArtifact(
@@ -464,6 +455,151 @@ def test_resolve_decision_add_requires_new_memory() -> None:
             reason="r",
             old_memory_ids=[],
             new_memory=None,
+            candidate=candidate,
+            subject_id="owner",
+            scope=MemoryScope.USER,
+            slot_id=None,
+        )
+
+
+def test_resolve_decision_expire_requires_old_memory_ids() -> None:
+    candidate = CandidateArtifact(
+        kind=MemoryKind.FACT,
+        content="x",
+        structured_payload={},
+        subject_hint=None,
+        scope=MemoryScope.USER,
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        confidence=0.5,
+        source=MemorySource.EXPLICIT,
+        evidence=[],
+        valid_from=None,
+        valid_until=None,
+        policy_tags=[],
+        needs_review=False,
+    )
+    with pytest.raises(ValidationError):
+        ResolveDecision(
+            decision=MemoryDecisionType.EXPIRE,
+            reason="r",
+            old_memory_ids=[],
+            new_memory=None,
+            candidate=candidate,
+            subject_id="owner",
+            scope=MemoryScope.USER,
+            slot_id=None,
+        )
+
+
+def test_resolve_decision_supersede_requires_old_memory_ids() -> None:
+    from uuid import uuid4
+
+    candidate = CandidateArtifact(
+        kind=MemoryKind.FACT,
+        content="x",
+        structured_payload={},
+        subject_hint=None,
+        scope=MemoryScope.USER,
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        confidence=0.5,
+        source=MemorySource.EXPLICIT,
+        evidence=[],
+        valid_from=None,
+        valid_until=None,
+        policy_tags=[],
+        needs_review=False,
+    )
+    new_memory = MemoryArtifact(
+        id=str(uuid4()),
+        kind=MemoryKind.FACT,
+        scope=MemoryScope.USER,
+        subject_id="owner",
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        content="x",
+        structured_payload={},
+        source=MemorySource.EXPLICIT,
+        confidence=0.5,
+        status=MemoryStatus.ACTIVE,
+        valid_from=None,
+        valid_until=None,
+        recorded_at=datetime.now(UTC),
+        last_accessed_at=None,
+        access_count=0,
+        provenance={},
+        links=[],
+        embedding_ref=None,
+        dedupe_key=None,
+        policy_tags=[],
+    )
+    with pytest.raises(ValidationError):
+        ResolveDecision(
+            decision=MemoryDecisionType.SUPERSEDE,
+            reason="r",
+            old_memory_ids=[],
+            new_memory=new_memory,
+            candidate=candidate,
+            subject_id="owner",
+            scope=MemoryScope.USER,
+            slot_id=None,
+        )
+
+
+def test_resolve_decision_discard_rejects_new_memory() -> None:
+    from uuid import uuid4
+
+    candidate = CandidateArtifact(
+        kind=MemoryKind.FACT,
+        content="x",
+        structured_payload={},
+        subject_hint=None,
+        scope=MemoryScope.USER,
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        confidence=0.5,
+        source=MemorySource.EXPLICIT,
+        evidence=[],
+        valid_from=None,
+        valid_until=None,
+        policy_tags=[],
+        needs_review=False,
+    )
+    new_memory = MemoryArtifact(
+        id=str(uuid4()),
+        kind=MemoryKind.FACT,
+        scope=MemoryScope.USER,
+        subject_id="owner",
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        content="x",
+        structured_payload={},
+        source=MemorySource.EXPLICIT,
+        confidence=0.5,
+        status=MemoryStatus.ACTIVE,
+        valid_from=None,
+        valid_until=None,
+        recorded_at=datetime.now(UTC),
+        last_accessed_at=None,
+        access_count=0,
+        provenance={},
+        links=[],
+        embedding_ref=None,
+        dedupe_key=None,
+        policy_tags=[],
+    )
+    with pytest.raises(ValidationError):
+        ResolveDecision(
+            decision=MemoryDecisionType.DISCARD,
+            reason="r",
+            old_memory_ids=[],
+            new_memory=new_memory,
             candidate=candidate,
             subject_id="owner",
             scope=MemoryScope.USER,

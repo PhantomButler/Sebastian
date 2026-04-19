@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from sebastian.memory.errors import UnknownSlotError
 from sebastian.memory.types import (
     CandidateArtifact,
     Cardinality,
@@ -98,8 +99,6 @@ class SlotRegistry:
         """
         slot = self._slots.get(slot_id)
         if slot is None:
-            from sebastian.memory.errors import UnknownSlotError
-
             raise UnknownSlotError(f"slot_id '{slot_id}' not registered")
         return slot
 
