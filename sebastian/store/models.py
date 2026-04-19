@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sebastian.store.database import Base  # noqa: F401
@@ -130,7 +130,7 @@ class ProfileMemoryRecord(Base):
     content: Mapped[str] = mapped_column(String)
     structured_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
     source: Mapped[str] = mapped_column(String)
-    confidence: Mapped[float] = mapped_column(String)
+    confidence: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String, index=True)
     valid_from: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     valid_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -154,7 +154,7 @@ class EpisodeMemoryRecord(Base):
     content_segmented: Mapped[str] = mapped_column(String)
     structured_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
     source: Mapped[str] = mapped_column(String)
-    confidence: Mapped[float] = mapped_column(String)
+    confidence: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String, index=True)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     provenance: Mapped[dict[str, Any]] = mapped_column(JSON)
@@ -186,7 +186,7 @@ class RelationCandidateRecord(Base):
     target_entity_id: Mapped[str | None] = mapped_column(String, nullable=True)
     content: Mapped[str] = mapped_column(String)
     structured_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
-    confidence: Mapped[float] = mapped_column(String)
+    confidence: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String, index=True)
     provenance: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime)
