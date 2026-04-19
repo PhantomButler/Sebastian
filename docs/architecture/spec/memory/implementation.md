@@ -1,7 +1,7 @@
 ---
 version: "1.0"
 last_updated: 2026-04-19
-status: planned
+status: implemented
 ---
 
 # Memory（记忆）实现策略与 LLM（大语言模型）协议
@@ -48,12 +48,16 @@ status: planned
 
 记忆系统的模型来源不限定本地部署，可使用云 API，也可使用本地 provider。
 
-建议引入两个 provider binding：
+引入两个 provider binding 常量（`sebastian/memory/provider_bindings.py`）：
 
-- `memory_extractor`（记忆提取模型绑定）
-- `memory_consolidator`（记忆沉淀模型绑定）
+- `MEMORY_EXTRACTOR_BINDING = "memory_extractor"`
+- `MEMORY_CONSOLIDATOR_BINDING = "memory_consolidator"`
 
-两者可绑定到相同模型，也可分开绑定。
+**实现方式**：复用现有 `AgentLLMBindingRecord.agent_type` 字段作为组件 key，**不新建表**。两者可绑定到相同模型，也可分开绑定。
+
+### 调度器集成
+
+`MemoryConsolidationScheduler` 在 `sebastian/gateway/app.py` 的 lifespan startup 中创建并订阅 `SESSION_COMPLETED` 事件，shutdown 时调用 `aclose()` 清理 pending task。调度器收到事件后先检查 `memory_enabled` 标志，启用时才通过 `asyncio.create_task` 派发 `SessionConsolidationWorker`。
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 version: "1.0"
 last_updated: 2026-04-19
-status: planned
+status: partially-implemented
 ---
 
 # Memory（记忆）后台沉淀与审计
@@ -22,6 +22,8 @@ status: planned
 - 生成阶段摘要
 - 提取候选事实、偏好、关系
 - 产生新的 artifacts
+
+**Phase C 实现状态**：`SessionConsolidationWorker`（`sebastian/memory/consolidation.py`）已实现，由 `MemoryConsolidationScheduler` 订阅 `SESSION_COMPLETED` 事件触发。幂等性通过 `SessionConsolidationRecord(session_id, agent_type)` DB 标记保证；写入原子性通过单事务实现。
 
 ### 1.2 Cross-Session Consolidation（跨会话沉淀）
 

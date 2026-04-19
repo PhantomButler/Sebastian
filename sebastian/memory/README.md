@@ -11,6 +11,7 @@
 - **统一入口**：`MemoryStore`，当前聚合 working + session history compatibility layer。
 - **Phase A 长期记忆基础设施**：记忆 artifact 类型、slot 注册表、FTS 分词辅助、决策日志写入器。
 - **Phase B 画像与经历检索**：`ProfileMemoryStore`（profile 写入 / 查询）、`EpisodeMemoryStore`（经历 FTS 检索）、`retrieval.py`（检索 pipeline）、`resolver.py`（冲突解决）。检索结果在每次 LLM turn 前通过 `BaseAgent._memory_section()` 注入 system prompt。
+- **Phase C LLM 沉淀**：`extraction.py`（`MemoryExtractor`，从会话片段提取候选 artifact）、`consolidation.py`（`MemoryConsolidator` + `SessionConsolidationWorker` + `MemoryConsolidationScheduler`）、`provider_bindings.py`（LLM binding 常量）。会话结束后由调度器触发后台沉淀，LLM 结果经 Normalize / Resolve 后方可写入，永不直接修改记忆状态。
 
 语义记忆（向量检索）为后续规划能力，当前未实现。
 
@@ -31,7 +32,10 @@ memory/
 ├── startup.py            # init_memory_storage()：建 FTS 虚拟表，在 lifespan 中调用
 ├── store.py              # MemoryStore：统一聚合 working + 会话历史兼容层
 ├── types.py              # 记忆系统 Pydantic models 与 StrEnum 类型
-└── working_memory.py     # WorkingMemory：进程内 dict，按 task_id 隔离，任务结束后清除
+├── working_memory.py     # WorkingMemory：进程内 dict，按 task_id 隔离，任务结束后清除
+├── provider_bindings.py  # LLM binding 常量：MEMORY_EXTRACTOR_BINDING / MEMORY_CONSOLIDATOR_BINDING
+├── extraction.py         # MemoryExtractor：LLM 提取候选 artifact，严格 JSON 校验，失败重试一次返回 []
+└── consolidation.py      # MemoryConsolidator + SessionConsolidationWorker + MemoryConsolidationScheduler
 ```
 
 ## Phase A 基础文件
@@ -44,6 +48,49 @@ memory/
 | [decision_log.py](decision_log.py) | 提供 `MemoryDecisionLogger.append()`，把 `ResolveDecision` 写入 `MemoryDecisionLogRecord` |
 
 > Phase B 已完成注入：每次 LLM turn 前，`BaseAgent._memory_section()` 通过 `retrieve_memory_section()` 拉取画像和经历记录，拼入 system prompt。不要把 [episodic_memory.py](episodic_memory.py) 当作新的 Episode Store 扩展；它只负责现有 session 消息历史兼容。
+
+## Phase C LLM 沉淀组件
+
+### Provider Bindings（`provider_bindings.py`）
+
+定义两个 LLM binding 常量：
+
+- `MEMORY_EXTRACTOR_BINDING = "memory_extractor"`
+- `MEMORY_CONSOLIDATOR_BINDING = "memory_consolidator"`
+
+两者复用 `AgentLLMBindingRecord.agent_type` 字段作为组件 key，**不新建表**。可绑定到相同模型，也可分开绑定。
+
+### MemoryExtractor（`extraction.py`）
+
+- 通过 `memory_extractor` binding 解析 LLM
+- 输出严格 JSON，schema 为 `list[CandidateArtifact]`
+- schema 校验失败时重试一次，重试后仍失败则返回 `[]`
+- **永不写入任何存储**；提取结果由调用方决定是否送入 Normalize / Resolve
+
+### MemoryConsolidator（`consolidation.py`）
+
+- 通过 `memory_consolidator` binding 解析 LLM
+- 输出严格 JSON，schema 为 `ConsolidationResult`
+- schema 校验失败时重试一次，重试后仍失败则返回空 `ConsolidationResult`
+- **永不写入任何存储**；只生成 proposed artifacts，由 Worker 经 Normalize / Resolve 后写入
+
+### SessionConsolidationWorker（`consolidation.py`）
+
+- **幂等性**：通过 `SessionConsolidationRecord(session_id, agent_type)` DB 标记保证同一 session 只执行一次
+- **原子性**：存在检查 + 全部写入 + 标记插入在**一个事务**内完成；`IntegrityError` → 事务回滚 → 直接返回（防重复执行）
+- 执行前检查 `memory_settings_fn()` 返回的 `memory_enabled` 标志，未启用则跳过
+- proposed artifacts 必须经过 Normalize + Resolve 才能落库，Consolidator 的 LLM 输出绝不直接修改记忆状态
+
+### MemoryConsolidationScheduler（`consolidation.py`）
+
+- 订阅 EventBus 上的 `SESSION_COMPLETED` 事件
+- 收到事件后先检查 `memory_enabled`，通过才调用 `asyncio.create_task` 派发后台沉淀
+- 跟踪所有 pending task，`aclose()` 时等待清理
+- 在 `sebastian/gateway/app.py` 的 lifespan startup 中创建并订阅，shutdown 时调用 `aclose()`
+
+### 核心约束
+
+> **LLM 永远不直接修改记忆状态。** Extractor 和 Consolidator 的输出都是"建议"，最终写入前必须经过 Normalize 和 Resolve 流水线。
 
 ## 修改导航
 
@@ -62,6 +109,9 @@ memory/
 | 画像冲突检测与决策生成 | [resolver.py](resolver.py) |
 | 实体管理（CRUD） | [entity_registry.py](entity_registry.py) |
 | 语义记忆 / 向量检索（后续阶段，待实现） | 新建 `semantic_memory.py`，并按需要在 `store.py` 中注册 |
+| LLM binding 常量（extractor / consolidator） | [provider_bindings.py](provider_bindings.py) |
+| 从会话片段提取候选 artifact（LLM 提取） | [extraction.py](extraction.py) |
+| 会话沉淀 Worker、Consolidator、Scheduler | [consolidation.py](consolidation.py) |
 
 ---
 
