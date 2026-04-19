@@ -7,7 +7,8 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from sebastian.memory.segmentation import add_entity_terms
-from sebastian.store.models import EntityRecord
+from sebastian.memory.types import MemoryStatus
+from sebastian.store.models import EntityRecord, RelationCandidateRecord
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,6 +68,29 @@ class EntityRegistry:
             r for r in all_records
             if r.canonical_name == text or text in r.aliases
         ]
+
+    async def list_relations(
+        self,
+        *,
+        subject_id: str,
+        limit: int = 3,
+    ) -> list[RelationCandidateRecord]:
+        """Return active relation candidates for a subject, newest first.
+
+        Note: lifecycle filter (``valid_until``) deferred to Task F3 backfill;
+        for now we only filter on ``status == ACTIVE``.
+        """
+        statement = (
+            select(RelationCandidateRecord)
+            .where(
+                RelationCandidateRecord.subject_id == subject_id,
+                RelationCandidateRecord.status == MemoryStatus.ACTIVE.value,
+            )
+            .order_by(RelationCandidateRecord.created_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.scalars(statement)
+        return list(result.all())
 
     async def sync_jieba_terms(self) -> None:
         """Register all entity canonical names and aliases with jieba."""

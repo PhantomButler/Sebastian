@@ -143,6 +143,17 @@ async def retrieve_memory_section(
             limit=plan.episode_limit,
         )
 
+    relation_records: list[Any] = []
+    if plan.relation_lane:
+        from sebastian.memory.entity_registry import EntityRegistry
+
+        relation_registry = EntityRegistry(db_session)
+        relation_records = await relation_registry.list_relations(
+            subject_id=context.subject_id,
+            limit=plan.relation_limit,
+        )
+    _ = relation_records  # placeholder; assembler wiring in D4
+
     assembler = MemorySectionAssembler()
     return assembler.assemble(
         profile_records=profile_records,

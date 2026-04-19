@@ -293,3 +293,38 @@ async def test_retrieve_memory_section_skips_context_lane_when_inactive(db_sessi
     ) as spy:
         await retrieve_memory_section(context, db_session=db_session)
         spy.assert_not_awaited()
+
+
+async def test_retrieve_memory_section_calls_relation_lane(db_session) -> None:
+    """When planner activates relation_lane, list_relations must be invoked."""
+    context = RetrievalContext(
+        subject_id="owner",
+        session_id="sess-1",
+        agent_type="orchestrator",
+        user_message="老婆喜欢什么",
+    )
+    with patch(
+        "sebastian.memory.entity_registry.EntityRegistry.list_relations",
+        new=AsyncMock(return_value=[]),
+    ) as spy:
+        await retrieve_memory_section(context, db_session=db_session)
+        spy.assert_awaited_once()
+        kwargs = spy.await_args.kwargs
+        assert kwargs["subject_id"] == "owner"
+        assert kwargs["limit"] == 3
+
+
+async def test_retrieve_memory_section_skips_relation_lane_when_inactive(db_session) -> None:
+    """When planner does not activate relation_lane, list_relations must NOT be invoked."""
+    context = RetrievalContext(
+        subject_id="owner",
+        session_id="sess-1",
+        agent_type="orchestrator",
+        user_message="帮我设个提醒",
+    )
+    with patch(
+        "sebastian.memory.entity_registry.EntityRegistry.list_relations",
+        new=AsyncMock(return_value=[]),
+    ) as spy:
+        await retrieve_memory_section(context, db_session=db_session)
+        spy.assert_not_awaited()
