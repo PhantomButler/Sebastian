@@ -93,9 +93,7 @@ class MemorySectionAssembler:
         sections: list[str] = []
 
         if filtered_profiles:
-            lines = "\n".join(
-                f"- [{r.kind}] {r.content}" for r in filtered_profiles
-            )
+            lines = "\n".join(f"- [{r.kind}] {r.content}" for r in filtered_profiles)
             sections.append(f"## What I know about the user\n{lines}")
 
         if filtered_episodes:
@@ -127,6 +125,15 @@ async def retrieve_memory_section(
             subject_id=context.subject_id,
             limit=plan.profile_limit,
         )
+
+    # context_records will be wired into assembler in Task D4
+    context_records: list[Any] = []
+    if plan.context_lane:
+        context_records = await profile_store.search_recent_context(
+            subject_id=context.subject_id,
+            limit=plan.context_limit,
+        )
+    _ = context_records  # placeholder until D4 wires the assembler
 
     episode_records: list[Any] = []
     if plan.episode_lane:

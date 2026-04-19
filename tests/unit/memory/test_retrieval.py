@@ -2,13 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from sebastian.memory.retrieval import (
     MemoryRetrievalPlanner,
     MemorySectionAssembler,
     RetrievalContext,
     RetrievalPlan,
+    retrieve_memory_section,
 )
+from sebastian.store import models  # noqa: F401
+from sebastian.store.database import Base
 
 # ---------------------------------------------------------------------------
 # Minimal fake records (no DB required)
@@ -202,18 +209,14 @@ class TestMemorySectionAssembler:
             profile_records=[
                 FakeProfileRecord(kind="pref", content="x", policy_tags=["do_not_auto_inject"])
             ],
-            episode_records=[
-                FakeEpisodeRecord(content="y", policy_tags=["do_not_auto_inject"])
-            ],
+            episode_records=[FakeEpisodeRecord(content="y", policy_tags=["do_not_auto_inject"])],
             plan=self._plan(),
         )
         assert result == ""
 
     def test_respects_max_total_items(self) -> None:
         # Feed 10 profile records + 3 episode records → total must not exceed 8
-        profiles = [
-            FakeProfileRecord(kind="pref", content=f"profile-{i}") for i in range(10)
-        ]
+        profiles = [FakeProfileRecord(kind="pref", content=f"profile-{i}") for i in range(10)]
         episodes = [FakeEpisodeRecord(content=f"episode-{i}") for i in range(3)]
         assembler = MemorySectionAssembler()
         result = assembler.assemble(
@@ -239,3 +242,54 @@ class TestMemorySectionAssembler:
             plan=self._plan(),
         )
         assert "[preference]" in result
+
+
+# ---------------------------------------------------------------------------
+# retrieve_memory_section — integration with context lane
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def db_session():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        yield session
+    await engine.dispose()
+
+
+async def test_retrieve_memory_section_calls_context_lane(db_session) -> None:
+    """When planner activates context_lane, search_recent_context must be invoked."""
+    context = RetrievalContext(
+        subject_id="owner",
+        session_id="sess-1",
+        agent_type="orchestrator",
+        user_message="今天有什么安排",
+    )
+    with patch(
+        "sebastian.memory.profile_store.ProfileMemoryStore.search_recent_context",
+        new=AsyncMock(return_value=[]),
+    ) as spy:
+        await retrieve_memory_section(context, db_session=db_session)
+        spy.assert_awaited_once()
+        kwargs = spy.await_args.kwargs
+        assert kwargs["subject_id"] == "owner"
+        assert kwargs["limit"] == 3
+
+
+async def test_retrieve_memory_section_skips_context_lane_when_inactive(db_session) -> None:
+    """When planner does not activate context_lane, search_recent_context must NOT be invoked."""
+    context = RetrievalContext(
+        subject_id="owner",
+        session_id="sess-1",
+        agent_type="orchestrator",
+        user_message="帮我设个提醒",
+    )
+    with patch(
+        "sebastian.memory.profile_store.ProfileMemoryStore.search_recent_context",
+        new=AsyncMock(return_value=[]),
+    ) as spy:
+        await retrieve_memory_section(context, db_session=db_session)
+        spy.assert_not_awaited()

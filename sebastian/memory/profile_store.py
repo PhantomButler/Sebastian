@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import or_, select, update
@@ -82,6 +82,33 @@ class ProfileMemoryStore:
             statement = statement.where(ProfileMemoryRecord.scope == scope)
         statement = statement.order_by(ProfileMemoryRecord.created_at.desc()).limit(limit)
 
+        result = await self._session.scalars(statement)
+        return list(result.all())
+
+    async def search_recent_context(
+        self,
+        *,
+        subject_id: str,
+        window_days: int = 7,
+        limit: int = 3,
+    ) -> list[ProfileMemoryRecord]:
+        """Return recent active FACT/PREFERENCE records within the time window."""
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(days=window_days)
+        statement = (
+            select(ProfileMemoryRecord)
+            .where(
+                ProfileMemoryRecord.subject_id == subject_id,
+                ProfileMemoryRecord.status == MemoryStatus.ACTIVE.value,
+                or_(
+                    ProfileMemoryRecord.valid_until.is_(None),
+                    ProfileMemoryRecord.valid_until > now,
+                ),
+                ProfileMemoryRecord.created_at >= cutoff,
+            )
+            .order_by(ProfileMemoryRecord.created_at.desc())
+            .limit(limit)
+        )
         result = await self._session.scalars(statement)
         return list(result.all())
 

@@ -214,3 +214,78 @@ async def test_search_active_filters_expired_records(db_session) -> None:
     rows = await store.search_active(subject_id="owner")
     ids = {r.id for r in rows}
     assert ids == {"m-active"}
+
+
+async def test_search_recent_context_returns_recent_only(db_session) -> None:
+    store = ProfileMemoryStore(db_session)
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            _make_record(id="ctx-recent", created_at=now - timedelta(hours=2)),
+            _make_record(id="ctx-old", created_at=now - timedelta(days=30)),
+        ]
+    )
+    await db_session.flush()
+
+    rows = await store.search_recent_context(subject_id="owner", window_days=7)
+    ids = {r.id for r in rows}
+    assert ids == {"ctx-recent"}
+
+
+async def test_search_recent_context_respects_limit(db_session) -> None:
+    store = ProfileMemoryStore(db_session)
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [_make_record(id=f"ctx-{i}", created_at=now - timedelta(hours=i + 1)) for i in range(5)]
+    )
+    await db_session.flush()
+
+    rows = await store.search_recent_context(subject_id="owner", limit=2)
+    assert len(rows) == 2
+    # Most recent first (smaller offset → newer)
+    assert rows[0].id == "ctx-0"
+    assert rows[1].id == "ctx-1"
+
+
+async def test_search_recent_context_skips_expired(db_session) -> None:
+    store = ProfileMemoryStore(db_session)
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            _make_record(
+                id="ctx-expired",
+                created_at=now - timedelta(hours=2),
+                valid_until=now - timedelta(minutes=5),
+            ),
+            _make_record(
+                id="ctx-valid",
+                created_at=now - timedelta(hours=3),
+                valid_until=None,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    rows = await store.search_recent_context(subject_id="owner")
+    ids = {r.id for r in rows}
+    assert ids == {"ctx-valid"}
+
+
+async def test_search_recent_context_skips_inactive(db_session) -> None:
+    store = ProfileMemoryStore(db_session)
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            _make_record(
+                id="ctx-superseded",
+                created_at=now - timedelta(hours=1),
+                status=MemoryStatus.SUPERSEDED.value,
+            ),
+            _make_record(id="ctx-active", created_at=now - timedelta(hours=2)),
+        ]
+    )
+    await db_session.flush()
+
+    rows = await store.search_recent_context(subject_id="owner")
+    ids = {r.id for r in rows}
+    assert ids == {"ctx-active"}
