@@ -54,10 +54,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sebastian.core.task_manager import TaskManager
     from sebastian.gateway.sse import SSEManager
     from sebastian.log import setup_logging
+    from sebastian.memory.startup import init_memory_storage
     from sebastian.orchestrator.conversation import ConversationManager
     from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import bus
-    from sebastian.store.database import get_session_factory, init_db
+    from sebastian.store.database import get_engine, get_session_factory, init_db
     from sebastian.store.index_store import IndexStore
     from sebastian.store.session_store import SessionStore
     from sebastian.store.todo_store import TodoStore
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         sse=settings.sebastian_log_sse,
     )
     await init_db()
+    await init_memory_storage(get_engine())
     from sebastian.gateway.state import MemoryRuntimeSettings
 
     state.memory_settings = MemoryRuntimeSettings(enabled=settings.sebastian_memory_enabled)
