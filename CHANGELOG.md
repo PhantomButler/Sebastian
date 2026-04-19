@@ -39,7 +39,6 @@
 - `ExtractorInput` 补 `task: Literal["extract_memory_artifacts"]` 契约字段，与 spec 对齐
 - `memory_decision_log` 新增 `input_source` 字段，明确区分 `memory_save_tool` 与 `session_consolidation` 两条写入路径
 
-### Changed
 - `memory_search` 工具新增 `citation_type` 字段（`current_truth` / `historical_summary` / `historical_evidence`），保留 `is_current` 向后兼容
 
 ## [0.3.1] - 2026-04-18
