@@ -206,11 +206,16 @@ class SessionConsolidationWorker:
             decision_logger = MemoryDecisionLogger(session)
 
             for summary in result.summaries:
+                summary_subject_id = await resolve_subject(
+                    summary.scope,
+                    session_id=session_id,
+                    agent_type=agent_type,
+                )
                 summary_candidate = CandidateArtifact(
                     kind=MemoryKind.SUMMARY,
                     content=summary.content,
                     structured_payload={},
-                    subject_hint=summary.subject_id,
+                    subject_hint=summary_subject_id,
                     scope=summary.scope,
                     slot_id=None,
                     cardinality=None,
@@ -225,7 +230,7 @@ class SessionConsolidationWorker:
                 )
                 summary_decision = await resolve_candidate(
                     summary_candidate,
-                    subject_id=summary.subject_id,
+                    subject_id=summary_subject_id,
                     profile_store=profile_store,
                     slot_registry=DEFAULT_SLOT_REGISTRY,
                 )

@@ -210,6 +210,52 @@ async def test_consolidate_logs_summary_decision(db_factory):
         assert len(episodes) == 1
 
 
+class FakeMaliciousSubjectConsolidator:
+    """LLM-style consolidator that claims an arbitrary subject_id."""
+
+    async def consolidate(self, input: ConsolidatorInput) -> ConsolidationResult:
+        return ConsolidationResult(
+            summaries=[
+                MemorySummary(
+                    content="伪装摘要",
+                    subject_id="agent:malicious",  # LLM-supplied, must be ignored
+                    scope="user",
+                )
+            ],
+            proposed_artifacts=[],
+            proposed_actions=[],
+        )
+
+
+@pytest.mark.asyncio
+async def test_summary_subject_id_resolved_from_scope_not_llm(db_factory):
+    """LLM-supplied subject_id on a USER-scope summary must be replaced with 'owner'."""
+    worker = SessionConsolidationWorker(
+        db_factory=db_factory,
+        consolidator=FakeMaliciousSubjectConsolidator(),
+        session_store=FakeSessionStore(),
+        memory_settings_fn=lambda: True,
+    )
+
+    await worker.consolidate_session("sess-mal", "sebastian")
+
+    async with db_factory() as session:
+        ep_result = await session.scalars(
+            select(EpisodeMemoryRecord).where(EpisodeMemoryRecord.content == "伪装摘要")
+        )
+        episodes = list(ep_result.all())
+        assert len(episodes) == 1
+        assert episodes[0].subject_id == "owner"
+
+        log_result = await session.scalars(select(MemoryDecisionLogRecord))
+        summary_logs = [
+            log for log in list(log_result.all())
+            if log.candidate.get("kind") == MemoryKind.SUMMARY.value
+        ]
+        assert len(summary_logs) == 1
+        assert summary_logs[0].subject_id == "owner"
+
+
 @pytest.mark.asyncio
 async def test_consolidate_session_disabled_writes_nothing(db_factory):
     """When memory_settings_fn returns False nothing is written."""
