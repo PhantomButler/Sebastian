@@ -215,3 +215,109 @@ async def test_low_confidence_inferred_no_slot_is_discarded() -> None:
     )
 
     assert decision.decision == MemoryDecisionType.DISCARD
+
+
+@pytest.mark.asyncio
+async def test_resolver_discards_low_priority_overwrite() -> None:
+    """SUPERSEDE candidate is DISCARDed when weaker source AND lower confidence than existing."""
+    existing = _make_record(
+        "mem-tz-old",
+        slot_id="user.profile.timezone",
+        kind=MemoryKind.FACT.value,
+        source=MemorySource.EXPLICIT.value,
+        confidence=0.95,
+        content="Asia/Shanghai",
+    )
+    store = FakeProfileStore([existing])
+    registry = SlotRegistry()  # built-ins include user.profile.timezone (SINGLE/SUPERSEDE, FACT)
+
+    candidate = _make_candidate(
+        kind=MemoryKind.FACT,
+        source=MemorySource.INFERRED,
+        confidence=0.6,
+        slot_id="user.profile.timezone",
+        cardinality=Cardinality.SINGLE,
+        resolution_policy=ResolutionPolicy.SUPERSEDE,
+        content="Asia/Tokyo",
+    )
+
+    decision = await resolve_candidate(
+        candidate,
+        subject_id="user-1",
+        profile_store=store,
+        slot_registry=registry,
+    )
+
+    assert decision.decision == MemoryDecisionType.DISCARD
+    assert decision.old_memory_ids == []
+    assert decision.new_memory is None
+
+
+@pytest.mark.asyncio
+async def test_resolver_supersedes_when_new_has_higher_source() -> None:
+    """Higher source overrides even at lower confidence."""
+    existing = _make_record(
+        "mem-tz-old",
+        slot_id="user.profile.timezone",
+        kind=MemoryKind.FACT.value,
+        source=MemorySource.INFERRED.value,
+        confidence=0.5,
+        content="Asia/Tokyo",
+    )
+    store = FakeProfileStore([existing])
+    registry = SlotRegistry()
+
+    candidate = _make_candidate(
+        kind=MemoryKind.FACT,
+        source=MemorySource.EXPLICIT,
+        confidence=0.9,
+        slot_id="user.profile.timezone",
+        cardinality=Cardinality.SINGLE,
+        resolution_policy=ResolutionPolicy.SUPERSEDE,
+        content="Asia/Shanghai",
+    )
+
+    decision = await resolve_candidate(
+        candidate,
+        subject_id="user-1",
+        profile_store=store,
+        slot_registry=registry,
+    )
+
+    assert decision.decision == MemoryDecisionType.SUPERSEDE
+    assert decision.old_memory_ids == ["mem-tz-old"]
+
+
+@pytest.mark.asyncio
+async def test_resolver_supersedes_when_new_has_much_higher_confidence_same_source() -> None:
+    """Same source but much higher confidence → SUPERSEDE (new not strictly weaker)."""
+    existing = _make_record(
+        "mem-tz-old",
+        slot_id="user.profile.timezone",
+        kind=MemoryKind.FACT.value,
+        source=MemorySource.INFERRED.value,
+        confidence=0.3,
+        content="Asia/Tokyo",
+    )
+    store = FakeProfileStore([existing])
+    registry = SlotRegistry()
+
+    candidate = _make_candidate(
+        kind=MemoryKind.FACT,
+        source=MemorySource.INFERRED,
+        confidence=0.9,
+        slot_id="user.profile.timezone",
+        cardinality=Cardinality.SINGLE,
+        resolution_policy=ResolutionPolicy.SUPERSEDE,
+        content="Asia/Shanghai",
+    )
+
+    decision = await resolve_candidate(
+        candidate,
+        subject_id="user-1",
+        profile_store=store,
+        slot_registry=registry,
+    )
+
+    assert decision.decision == MemoryDecisionType.SUPERSEDE
+    assert decision.old_memory_ids == ["mem-tz-old"]

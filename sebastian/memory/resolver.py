@@ -10,6 +10,7 @@ from sebastian.memory.types import (
     MemoryArtifact,
     MemoryDecisionType,
     MemoryKind,
+    MemorySource,
     MemoryStatus,
     ResolutionPolicy,
     ResolveDecision,
@@ -18,9 +19,38 @@ from sebastian.memory.types import (
 if TYPE_CHECKING:
     from sebastian.memory.profile_store import ProfileMemoryStore
     from sebastian.memory.slots import SlotRegistry
+    from sebastian.store.models import ProfileMemoryRecord
 
 
 CONFIDENCE_DISCARD_THRESHOLD = 0.3
+
+# Source priority ranking (higher = more authoritative).
+# See docs/architecture/spec/memory/artifact-model.md §9.
+_SOURCE_PRIORITY: dict[MemorySource, int] = {
+    MemorySource.EXPLICIT: 5,
+    MemorySource.IMPORTED: 4,
+    MemorySource.OBSERVED: 3,
+    MemorySource.INFERRED: 2,
+    MemorySource.SYSTEM_DERIVED: 1,
+}
+
+
+def _new_is_weaker(
+    new: CandidateArtifact,
+    existing: ProfileMemoryRecord,
+) -> bool:
+    """Return True when ``new`` should not replace ``existing`` on a single-cardinality slot.
+
+    A new candidate is considered strictly weaker (→ DISCARD) when BOTH:
+    - its source rank is lower than the existing record's, AND
+    - its confidence is not at least ``existing.confidence + 0.1``.
+    """
+    existing_source = MemorySource(existing.source)
+    new_rank = _SOURCE_PRIORITY[new.source]
+    old_rank = _SOURCE_PRIORITY[existing_source]
+    if new_rank < old_rank and new.confidence < existing.confidence + 0.1:
+        return True
+    return False
 
 
 async def resolve_candidate(
@@ -124,6 +154,23 @@ async def resolve_candidate(
                 reason="single-cardinality slot has no existing active record",
                 old_memory_ids=[],
                 new_memory=_make_artifact(candidate, subject_id),
+                candidate=candidate,
+                subject_id=subject_id,
+                scope=candidate.scope,
+                slot_id=candidate.slot_id,
+            )
+
+        if all(_new_is_weaker(candidate, r) for r in existing):
+            return ResolveDecision(
+                decision=MemoryDecisionType.DISCARD,
+                reason=(
+                    f"new candidate (source={candidate.source.value}, "
+                    f"confidence={candidate.confidence:.2f}) has weaker "
+                    f"source/confidence than all {len(existing)} existing "
+                    f"record(s) on slot '{candidate.slot_id}'"
+                ),
+                old_memory_ids=[],
+                new_memory=None,
                 candidate=candidate,
                 subject_id=subject_id,
                 scope=candidate.scope,
