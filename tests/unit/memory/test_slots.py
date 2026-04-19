@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from sebastian.memory.errors import UnknownSlotError
 from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY, SlotRegistry
 from sebastian.memory.types import (
     CandidateArtifact,
@@ -70,9 +71,9 @@ class TestRegistryLookup:
         registry = SlotRegistry()
         assert registry.get("unknown.slot.id") is None
 
-    def test_require_unknown_raises_key_error(self) -> None:
+    def test_require_unknown_raises_unknown_slot_error(self) -> None:
         registry = SlotRegistry()
-        with pytest.raises(KeyError, match="unknown.slot.id"):
+        with pytest.raises(UnknownSlotError, match="unknown.slot.id"):
             registry.require("unknown.slot.id")
 
     def test_custom_slots_only_when_explicit(self) -> None:

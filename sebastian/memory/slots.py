@@ -94,11 +94,13 @@ class SlotRegistry:
         """Return the :class:`SlotDefinition` for *slot_id*.
 
         Raises:
-            KeyError: if *slot_id* is not registered.
+            UnknownSlotError: if *slot_id* is not registered.
         """
         slot = self._slots.get(slot_id)
         if slot is None:
-            raise KeyError(slot_id)
+            from sebastian.memory.errors import UnknownSlotError
+
+            raise UnknownSlotError(f"slot_id '{slot_id}' not registered")
         return slot
 
     def validate_candidate(self, candidate: CandidateArtifact) -> list[str]:
