@@ -209,3 +209,12 @@ class MemoryDecisionLogRecord(Base):
     model: Mapped[str | None] = mapped_column(String, nullable=True)
     rule_version: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class SessionConsolidationRecord(Base):
+    __tablename__ = "session_consolidations"
+
+    session_id: Mapped[str] = mapped_column(String, primary_key=True)
+    agent_type: Mapped[str] = mapped_column(String, primary_key=True)
+    consolidated_at: Mapped[datetime] = mapped_column(DateTime)
+    worker_version: Mapped[str] = mapped_column(String, default="phase_c_v1")
