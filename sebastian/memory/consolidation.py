@@ -5,7 +5,6 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.exc import IntegrityError
@@ -14,12 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
 from sebastian.memory.types import (
     CandidateArtifact,
-    MemoryArtifact,
     MemoryDecisionType,
     MemoryKind,
     MemoryScope,
     MemorySource,
-    MemoryStatus,
 )
 from sebastian.protocol.events.types import Event, EventType
 
@@ -203,8 +200,37 @@ class SessionConsolidationWorker:
             decision_logger = MemoryDecisionLogger(session)
 
             for summary in result.summaries:
-                artifact = _summary_to_artifact(summary)
-                await episode_store.add_summary(artifact)
+                summary_candidate = CandidateArtifact(
+                    kind=MemoryKind.SUMMARY,
+                    content=summary.content,
+                    structured_payload={},
+                    subject_hint=summary.subject_id,
+                    scope=summary.scope,
+                    slot_id=None,
+                    cardinality=None,
+                    resolution_policy=None,
+                    confidence=0.8,
+                    source=MemorySource.SYSTEM_DERIVED,
+                    evidence=[{"session_id": session_id}],
+                    valid_from=None,
+                    valid_until=None,
+                    policy_tags=[],
+                    needs_review=False,
+                )
+                summary_decision = await resolve_candidate(
+                    summary_candidate,
+                    subject_id=summary.subject_id,
+                    profile_store=profile_store,
+                    slot_registry=DEFAULT_SLOT_REGISTRY,
+                )
+                if summary_decision.new_memory is not None:
+                    await episode_store.add_summary(summary_decision.new_memory)
+                await decision_logger.append(
+                    summary_decision,
+                    worker=self._WORKER_ID,
+                    model=None,
+                    rule_version=self._RULE_VERSION,
+                )
 
             for candidate in result.proposed_artifacts:
                 decision = await resolve_candidate(
@@ -242,34 +268,6 @@ class SessionConsolidationWorker:
             except IntegrityError:
                 await session.rollback()
                 return  # already consolidated by a concurrent task
-
-
-def _summary_to_artifact(summary: MemorySummary) -> MemoryArtifact:
-    """Convert a :class:`MemorySummary` into a :class:`MemoryArtifact` ready for storage."""
-    return MemoryArtifact(
-        id=str(uuid4()),
-        kind=MemoryKind.SUMMARY,
-        scope=summary.scope,
-        subject_id=summary.subject_id,
-        slot_id=None,
-        cardinality=None,
-        resolution_policy=None,
-        content=summary.content,
-        structured_payload={},
-        source=MemorySource.SYSTEM_DERIVED,
-        confidence=0.8,
-        status=MemoryStatus.ACTIVE,
-        valid_from=None,
-        valid_until=None,
-        recorded_at=datetime.now(UTC),
-        last_accessed_at=None,
-        access_count=0,
-        provenance={},
-        links=[],
-        embedding_ref=None,
-        dedupe_key=None,
-        policy_tags=[],
-    )
 
 
 class MemoryConsolidationScheduler:

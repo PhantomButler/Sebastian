@@ -163,6 +163,53 @@ async def test_consolidate_session_idempotent(worker, db_factory):
         assert len(episodes) == 1
 
 
+class FakeSummaryOnlyConsolidator:
+    """Returns a ConsolidationResult that contains only summaries, no artifacts."""
+
+    async def consolidate(self, input: ConsolidatorInput) -> ConsolidationResult:
+        return ConsolidationResult(
+            summaries=[
+                MemorySummary(
+                    content="会话摘要（仅摘要）",
+                    subject_id="owner",
+                    scope="user",
+                )
+            ],
+            proposed_artifacts=[],
+            proposed_actions=[],
+        )
+
+
+@pytest.mark.asyncio
+async def test_consolidate_logs_summary_decision(db_factory):
+    """Summaries from consolidator must go through resolver and produce ADD log entries."""
+    worker = SessionConsolidationWorker(
+        db_factory=db_factory,
+        consolidator=FakeSummaryOnlyConsolidator(),
+        session_store=FakeSessionStore(),
+        memory_settings_fn=lambda: True,
+    )
+
+    await worker.consolidate_session("sess-summary", "sebastian")
+
+    async with db_factory() as session:
+        log_result = await session.scalars(select(MemoryDecisionLogRecord))
+        logs = list(log_result.all())
+        summary_logs = [
+            log for log in logs if log.candidate.get("kind") == MemoryKind.SUMMARY.value
+        ]
+        assert len(summary_logs) >= 1
+        assert all(log.decision == "ADD" for log in summary_logs)
+        # The corresponding episode record must also exist.
+        ep_result = await session.scalars(
+            select(EpisodeMemoryRecord).where(
+                EpisodeMemoryRecord.content == "会话摘要（仅摘要）"
+            )
+        )
+        episodes = list(ep_result.all())
+        assert len(episodes) == 1
+
+
 @pytest.mark.asyncio
 async def test_consolidate_session_disabled_writes_nothing(db_factory):
     """When memory_settings_fn returns False nothing is written."""
