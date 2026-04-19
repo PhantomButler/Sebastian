@@ -48,6 +48,24 @@ Sebastian 至少区分四类写入来源：
 
 这四类来源必须在 `source` 和 `provenance` 层面保留差异。
 
+### 3.1 首期实现取舍：不做 per-turn（逐轮）LLM 推断写入
+
+`Conversational Inference`（对话推断）是架构层面的写入来源分类，但首期实现不在每一轮对话结束后立即调用 LLM（大语言模型）提取并写入记忆。
+
+首期边界：
+
+- 即时路径只处理显式 `memory_save` 和规则可确定的高置信写入
+- 普通对话里的隐含 fact（事实）/ preference（偏好）先进入会话上下文
+- 会话结束后由 `SessionConsolidationWorker`（会话沉淀 Worker）统一提取、去重、冲突解析和持久化
+
+原因：
+
+- 避免在主对话路径增加额外延迟
+- 避免每轮都调用 LLM 带来的成本和噪声写入
+- 让显式记忆与后台沉淀先稳定，再单独评估实时推断是否值得引入
+
+如果后续需要“用户刚说完就能被下一轮检索到”的强实时能力，应作为独立阶段设计 per-turn inference（逐轮推断）hook（钩子）、debounce（防抖）、置信阈值和撤销/审计策略。
+
 ---
 
 ## 4. 即时写入与后台沉淀分工
@@ -55,7 +73,7 @@ Sebastian 至少区分四类写入来源：
 即时写入负责：
 
 - 显式 `memory_save`
-- 高确定性的 `fact` / `preference`
+- 规则可确定的高置信 `fact` / `preference`
 - 原始 `episode`
 - 关键 `entity` 注册
 

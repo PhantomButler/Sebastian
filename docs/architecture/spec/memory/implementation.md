@@ -65,7 +65,7 @@ status: planned
 
 - 从用户消息、assistant 回复、tool 结果或会话片段中提取候选 artifacts
 - 输出严格结构化 JSON
-- 高频调用，偏实时路径
+- 可用于显式写入辅助或后台沉淀输入整理；首期不在每轮对话结束后自动调用
 
 要求：
 
@@ -115,6 +115,12 @@ status: planned
 - LLM 永远不直接改数据库状态
 - LLM 永远不直接决定最终 `ADD / SUPERSEDE / MERGE / EXPIRE`
 - 最终写入前必须经过 Normalize 和 Resolve
+
+首期实现边界：
+
+- `memory_save`（显式记忆保存）可走确定性 Normalize / Resolve，不要求 LLM 参与
+- 会话结束后的 inferred memory（推断记忆）由后台 consolidation（沉淀）路径处理
+- per-turn（逐轮）LLM extraction hook（提取钩子）暂不实现，避免主对话路径增加延迟和噪声写入
 
 ---
 

@@ -154,6 +154,7 @@ FTS5 中文检索约束：
 - 对需要全文检索的文本同时保存 `content` 和 `content_segmented`
 - `content_segmented` 由 `jieba.cut_for_search()` 生成，并作为 FTS5 索引字段
 - 单字实体优先走 `Entity Registry`，不依赖 FTS 单字匹配
+- FTS5 virtual table（虚拟表）不由 SQLAlchemy `Base.metadata.create_all()` 创建，必须在 gateway startup（启动流程）中于 `init_db()` 之后显式调用初始化 helper
 
 ---
 
