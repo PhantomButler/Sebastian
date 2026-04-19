@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from sebastian.memory.errors import UnknownSlotError
+from sebastian.memory.errors import InvalidCandidateError, UnknownSlotError
 from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY, SlotRegistry
 from sebastian.memory.types import (
     CandidateArtifact,
@@ -96,62 +96,56 @@ class TestValidateCandidate:
     def test_fact_without_slot_is_invalid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.FACT, slot_id=None)
-        errors = registry.validate_candidate(candidate)
-        assert len(errors) > 0
+        with pytest.raises(InvalidCandidateError):
+            registry.validate_candidate(candidate)
 
     def test_preference_without_slot_is_invalid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.PREFERENCE, slot_id=None)
-        errors = registry.validate_candidate(candidate)
-        assert len(errors) > 0
+        with pytest.raises(InvalidCandidateError):
+            registry.validate_candidate(candidate)
 
     def test_fact_with_unknown_slot_is_invalid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.FACT, slot_id="nonexistent.slot")
-        errors = registry.validate_candidate(candidate)
-        assert len(errors) > 0
+        with pytest.raises(InvalidCandidateError):
+            registry.validate_candidate(candidate)
 
     def test_preference_with_unknown_slot_is_invalid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.PREFERENCE, slot_id="nonexistent.slot")
-        errors = registry.validate_candidate(candidate)
-        assert len(errors) > 0
+        with pytest.raises(InvalidCandidateError):
+            registry.validate_candidate(candidate)
 
     def test_fact_with_valid_slot_is_valid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.FACT, slot_id="user.current_project_focus")
-        errors = registry.validate_candidate(candidate)
-        assert errors == []
+        registry.validate_candidate(candidate)  # must not raise
 
     def test_preference_with_valid_slot_is_valid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.PREFERENCE, slot_id="user.preference.language")
-        errors = registry.validate_candidate(candidate)
-        assert errors == []
+        registry.validate_candidate(candidate)  # must not raise
 
     def test_episode_without_slot_is_valid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.EPISODE, slot_id=None)
-        errors = registry.validate_candidate(candidate)
-        assert errors == []
+        registry.validate_candidate(candidate)  # must not raise
 
     def test_entity_without_slot_is_valid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.ENTITY, slot_id=None)
-        errors = registry.validate_candidate(candidate)
-        assert errors == []
+        registry.validate_candidate(candidate)  # must not raise
 
     def test_relation_without_slot_is_valid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.RELATION, slot_id=None)
-        errors = registry.validate_candidate(candidate)
-        assert errors == []
+        registry.validate_candidate(candidate)  # must not raise
 
     def test_summary_without_slot_is_valid(self) -> None:
         registry = SlotRegistry()
         candidate = _make_candidate(MemoryKind.SUMMARY, slot_id=None)
-        errors = registry.validate_candidate(candidate)
-        assert errors == []
+        registry.validate_candidate(candidate)  # must not raise
 
     def test_validate_candidate_rejects_mismatched_kind(self) -> None:
         """FACT candidate in a PREFERENCE-only slot should be invalid."""
@@ -160,6 +154,36 @@ class TestValidateCandidate:
             kind=MemoryKind.FACT,
             slot_id="user.preference.response_style",  # kind_constraints=[PREFERENCE]
         )
-        errors = registry.validate_candidate(candidate)
-        assert len(errors) == 1
-        assert "user.preference.response_style" in errors[0]
+        with pytest.raises(InvalidCandidateError, match="user.preference.response_style"):
+            registry.validate_candidate(candidate)
+
+
+def test_validate_candidate_unknown_slot_raises_invalid_candidate_error() -> None:
+    from sebastian.memory.errors import InvalidCandidateError
+    from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+    from sebastian.memory.types import (
+        CandidateArtifact,
+        MemoryKind,
+        MemoryScope,
+        MemorySource,
+    )
+
+    candidate = CandidateArtifact(
+        kind=MemoryKind.FACT,
+        content="x",
+        structured_payload={},
+        subject_hint=None,
+        scope=MemoryScope.USER,
+        slot_id="no.such.slot",
+        cardinality=None,
+        resolution_policy=None,
+        confidence=0.5,
+        source=MemorySource.EXPLICIT,
+        evidence=[],
+        valid_from=None,
+        valid_until=None,
+        policy_tags=[],
+        needs_review=False,
+    )
+    with pytest.raises(InvalidCandidateError):
+        DEFAULT_SLOT_REGISTRY.validate_candidate(candidate)

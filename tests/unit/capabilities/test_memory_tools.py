@@ -92,15 +92,14 @@ async def test_memory_save_returns_ok(enabled_memory_state) -> None:
 
 
 @pytest.mark.asyncio
-async def test_memory_save_without_slot_id(enabled_memory_state) -> None:
-    """Saving without a slot_id uses MemoryKind.FACT and confidence=1.0 (above threshold)."""
+async def test_memory_save_without_slot_id_rejected(enabled_memory_state) -> None:
+    """Saving without a slot_id yields FACT kind, which requires a slot → validation rejects."""
     from sebastian.capabilities.tools.memory_save import memory_save
 
     result = await memory_save(content="用户喜欢深色主题")
 
-    assert result.ok is True
-    assert result.output["saved"] == "用户喜欢深色主题"
-    assert result.output["slot_id"] is None
+    assert result.ok is False
+    assert "slot" in (result.error or "").lower()
 
 
 @pytest.mark.asyncio
@@ -211,10 +210,19 @@ async def test_memory_save_discard_writes_decision_log(
         raising=False,
     )
 
-    result = await memory_save(content="x")
+    result = await memory_save(content="x", slot_id="user.preference.language")
     assert result.ok is False
 
     async with enabled_memory_state() as s:
         rows = (await s.scalars(select(MemoryDecisionLogRecord))).all()
         assert len(rows) == 1
         assert rows[0].decision == MemoryDecisionType.DISCARD.value
+
+
+@pytest.mark.asyncio
+async def test_memory_save_rejects_unknown_slot(enabled_memory_state) -> None:
+    from sebastian.capabilities.tools.memory_save import memory_save
+
+    result = await memory_save(content="x", slot_id="no.such.slot")
+    assert result.ok is False
+    assert "slot" in (result.error or "").lower()

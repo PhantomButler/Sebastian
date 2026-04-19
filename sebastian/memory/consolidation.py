@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from sebastian.memory.errors import InvalidCandidateError
 from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
 from sebastian.memory.types import (
     CandidateArtifact,
@@ -17,6 +18,7 @@ from sebastian.memory.types import (
     MemoryKind,
     MemoryScope,
     MemorySource,
+    ResolveDecision,
 )
 from sebastian.protocol.events.types import Event, EventType
 
@@ -233,6 +235,26 @@ class SessionConsolidationWorker:
                 )
 
             for candidate in result.proposed_artifacts:
+                try:
+                    DEFAULT_SLOT_REGISTRY.validate_candidate(candidate)
+                except InvalidCandidateError as e:
+                    bad_decision = ResolveDecision(
+                        decision=MemoryDecisionType.DISCARD,
+                        reason=f"validate: {e}",
+                        old_memory_ids=[],
+                        new_memory=None,
+                        candidate=candidate,
+                        subject_id="owner",
+                        scope=candidate.scope,
+                        slot_id=candidate.slot_id,
+                    )
+                    await decision_logger.append(
+                        bad_decision,
+                        worker=self._WORKER_ID,
+                        model=None,
+                        rule_version=self._RULE_VERSION,
+                    )
+                    continue
                 decision = await resolve_candidate(
                     candidate,
                     subject_id="owner",

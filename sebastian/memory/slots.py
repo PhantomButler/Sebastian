@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from sebastian.memory.errors import UnknownSlotError
+from sebastian.memory.errors import InvalidCandidateError, UnknownSlotError
 from sebastian.memory.types import (
     CandidateArtifact,
     Cardinality,
@@ -102,40 +102,38 @@ class SlotRegistry:
             raise UnknownSlotError(f"slot_id '{slot_id}' not registered")
         return slot
 
-    def validate_candidate(self, candidate: CandidateArtifact) -> list[str]:
+    def validate_candidate(self, candidate: CandidateArtifact) -> None:
         """Validate *candidate* against this registry.
-
-        Returns a list of error strings; an empty list means the candidate is
-        valid.
 
         Rules enforced here:
         - ``fact`` and ``preference`` candidates must have a non-None
           ``slot_id`` that is registered in this registry.
+        - The candidate kind must match the slot's ``kind_constraints``.
         - All other kinds (``episode``, ``entity``, ``relation``, ``summary``)
           may have ``slot_id=None``.
+
+        Raises:
+            InvalidCandidateError: if the candidate fails any rule above.
         """
         if candidate.kind not in _SLOT_REQUIRED_KINDS:
-            return []
+            return
 
-        errors: list[str] = []
         if candidate.slot_id is None:
-            errors.append(
+            raise InvalidCandidateError(
                 f"Candidate of kind '{candidate.kind}' must have a slot_id"
                 " (fact/preference require a registered slot)."
             )
-        elif candidate.slot_id not in self._slots:
-            errors.append(
+        if candidate.slot_id not in self._slots:
+            raise InvalidCandidateError(
                 f"slot_id '{candidate.slot_id}' is not registered in this SlotRegistry."
             )
-        else:
-            slot = self._slots[candidate.slot_id]
-            if candidate.kind not in slot.kind_constraints:
-                errors.append(
-                    f"Candidate kind '{candidate.kind}' is not allowed"
-                    f" for slot '{candidate.slot_id}'"
-                    f" (allowed: {[k.value for k in slot.kind_constraints]})."
-                )
-        return errors
+        slot = self._slots[candidate.slot_id]
+        if candidate.kind not in slot.kind_constraints:
+            raise InvalidCandidateError(
+                f"Candidate kind '{candidate.kind}' is not allowed"
+                f" for slot '{candidate.slot_id}'"
+                f" (allowed: {[k.value for k in slot.kind_constraints]})."
+            )
 
 
 DEFAULT_SLOT_REGISTRY: SlotRegistry = SlotRegistry()

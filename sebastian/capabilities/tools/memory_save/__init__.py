@@ -5,6 +5,7 @@ from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
 from sebastian.memory.decision_log import MemoryDecisionLogger
 from sebastian.memory.episode_store import EpisodeMemoryStore
+from sebastian.memory.errors import InvalidCandidateError
 from sebastian.memory.profile_store import ProfileMemoryStore
 from sebastian.memory.resolver import resolve_candidate
 from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
@@ -64,6 +65,11 @@ async def memory_save(
         policy_tags=policy_tags or [],
         needs_review=False,
     )
+
+    try:
+        DEFAULT_SLOT_REGISTRY.validate_candidate(candidate)
+    except InvalidCandidateError as e:
+        return ToolResult(ok=False, error=f"记忆参数校验失败：{e}")
 
     async with state.db_factory() as session:
         profile_store = ProfileMemoryStore(session)
