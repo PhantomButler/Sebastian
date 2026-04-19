@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from sebastian.memory.segmentation import add_entity_terms, segment_for_fts, terms_for_query
 
 
