@@ -30,7 +30,22 @@ async def persist_decision(
     - RELATION → relation_candidates table
     - FACT / PREFERENCE → ProfileMemoryStore (add or supersede)
     """
-    if decision.decision in (MemoryDecisionType.DISCARD, MemoryDecisionType.EXPIRE):
+    if decision.decision == MemoryDecisionType.DISCARD:
+        trace(
+            "persist.skip",
+            decision=decision.decision,
+            subject_id=decision.subject_id,
+            scope=decision.scope,
+            slot_id=decision.slot_id,
+            old_memory_ids=decision.old_memory_ids,
+        )
+        return
+    if decision.decision == MemoryDecisionType.EXPIRE:
+        if decision.candidate.kind in (MemoryKind.FACT, MemoryKind.PREFERENCE):
+            for memory_id in decision.old_memory_ids:
+                await profile_store.expire(memory_id)
+            _trace_write("profile", decision)
+            return
         trace(
             "persist.skip",
             decision=decision.decision,
@@ -107,7 +122,15 @@ def _trace_write(store: str, decision: ResolveDecision) -> None:
         subject_id=decision.subject_id,
         scope=decision.scope,
         slot_id=decision.slot_id,
-        kind=decision.new_memory.kind if decision.new_memory is not None else None,
-        new_memory_id=decision.new_memory.id if decision.new_memory is not None else None,
+        kind=(
+            decision.new_memory.kind
+            if decision.new_memory is not None
+            else decision.candidate.kind
+        ),
+        new_memory_id=(
+            decision.new_memory.id
+            if decision.new_memory is not None
+            else None
+        ),
         old_memory_ids=decision.old_memory_ids,
     )

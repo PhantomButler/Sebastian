@@ -421,7 +421,6 @@ class SessionConsolidationWorker:
             for action in result.proposed_actions:
                 if action.action != "EXPIRE" or not action.memory_id:
                     continue
-                await profile_store.expire(action.memory_id)
                 placeholder_candidate = CandidateArtifact(
                     kind=MemoryKind.FACT,
                     content=f"EXPIRE: {action.reason}",
@@ -448,6 +447,13 @@ class SessionConsolidationWorker:
                     subject_id=context_subject_id,
                     scope=MemoryScope.USER,
                     slot_id=None,
+                )
+                await persist_decision(
+                    expire_decision,
+                    session=session,
+                    profile_store=profile_store,
+                    episode_store=episode_store,
+                    entity_registry=entity_registry,
                 )
                 await decision_logger.append(
                     expire_decision,

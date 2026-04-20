@@ -470,6 +470,57 @@ async def test_persist_decision_relation_persists_empty_policy_tags(db_session) 
 # ---------------------------------------------------------------------------
 
 
+async def test_persist_decision_expire_marks_profile_row_expired(db_session, caplog) -> None:
+    """persist_decision with EXPIRE must mark the targeted profile row as expired."""
+    caplog.set_level(logging.DEBUG, logger="sebastian.memory.trace")
+    profile_store, episode_store, entity_registry = _stores(db_session)
+
+    old_artifact = _artifact(MemoryKind.FACT, content="no longer current")
+    await profile_store.add(old_artifact)
+
+    placeholder_candidate = CandidateArtifact(
+        kind=MemoryKind.FACT,
+        content=f"EXPIRE: no longer current",
+        structured_payload={},
+        subject_hint="user:owner",
+        scope=MemoryScope.USER,
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        confidence=0.0,
+        source=MemorySource.EXPLICIT,
+        evidence=[],
+        valid_from=None,
+        valid_until=None,
+        policy_tags=[],
+        needs_review=False,
+    )
+    decision = ResolveDecision(
+        decision=MemoryDecisionType.EXPIRE,
+        reason="no longer current",
+        old_memory_ids=[old_artifact.id],
+        new_memory=None,
+        candidate=placeholder_candidate,
+        subject_id="user:owner",
+        scope=MemoryScope.USER,
+        slot_id=None,
+    )
+
+    await persist_decision(
+        decision,
+        session=db_session,
+        profile_store=profile_store,
+        episode_store=episode_store,
+        entity_registry=entity_registry,
+    )
+
+    rows = (await db_session.scalars(select(ProfileMemoryRecord))).all()
+    assert len(rows) == 1
+    assert rows[0].status == MemoryStatus.EXPIRED.value
+    assert "MEMORY_TRACE persist.write" in caplog.text
+    assert "store=profile" in caplog.text
+
+
 async def test_persist_decision_fact_merge_marks_old_and_inserts_new(
     db_session,
 ) -> None:
