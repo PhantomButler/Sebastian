@@ -11,7 +11,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sebastian.memory.errors import InvalidCandidateError
 from sebastian.memory.extraction import ExtractorInput, MemoryExtractor
 from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
 from sebastian.memory.subject import resolve_subject
@@ -200,9 +199,8 @@ class SessionConsolidationWorker:
             from sebastian.memory.entity_registry import EntityRegistry
             from sebastian.memory.episode_store import EpisodeMemoryStore
             from sebastian.memory.profile_store import ProfileMemoryStore
-            from sebastian.memory.resolver import resolve_candidate
+            from sebastian.memory.pipeline import process_candidates
             from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
-            from sebastian.memory.write_router import persist_decision
             from sebastian.store.models import SessionConsolidationRecord
 
             episode_store = EpisodeMemoryStore(session)
@@ -299,17 +297,14 @@ class SessionConsolidationWorker:
                 "expire": 0,
             }
 
-            for summary in result.summaries:
-                summary_subject_id = await resolve_subject(
-                    summary.scope,
-                    session_id=session_id,
-                    agent_type=agent_type,
-                )
-                summary_candidate = CandidateArtifact(
+            # Build CandidateArtifact list from summaries, then combine with
+            # proposed_artifacts and run through the unified write pipeline.
+            summary_candidates: list[CandidateArtifact] = [
+                CandidateArtifact(
                     kind=MemoryKind.SUMMARY,
                     content=summary.content,
                     structured_payload={},
-                    subject_hint=summary_subject_id,
+                    subject_hint=context_subject_id,
                     scope=summary.scope,
                     slot_id=None,
                     cardinality=None,
@@ -322,98 +317,36 @@ class SessionConsolidationWorker:
                     policy_tags=[],
                     needs_review=False,
                 )
-                summary_decision = await resolve_candidate(
-                    summary_candidate,
-                    subject_id=summary_subject_id,
-                    profile_store=profile_store,
-                    slot_registry=DEFAULT_SLOT_REGISTRY,
-                    episode_store=episode_store,
-                )
-                if summary_decision.new_memory is not None:
-                    await persist_decision(
-                        summary_decision,
-                        session=session,
-                        profile_store=profile_store,
-                        episode_store=episode_store,
-                        entity_registry=entity_registry,
-                    )
-                    persisted_counts["summary"] += 1
-                await decision_logger.append(
-                    summary_decision,
-                    worker=self._WORKER_ID,
-                    model=model_name,
-                    rule_version=self._RULE_VERSION,
-                    input_source={
-                        "type": "session_consolidation",
-                        "session_id": session_id,
-                        "agent_type": agent_type,
-                    },
-                )
+                for summary in result.summaries
+            ]
 
-            for candidate in result.proposed_artifacts:
-                candidate_subject_id = await resolve_subject(
-                    candidate.scope,
-                    session_id=session_id,
-                    agent_type=agent_type,
-                )
-                try:
-                    DEFAULT_SLOT_REGISTRY.validate_candidate(candidate)
-                except InvalidCandidateError as e:
-                    bad_decision = ResolveDecision(
-                        decision=MemoryDecisionType.DISCARD,
-                        reason=f"validate: {e}",
-                        old_memory_ids=[],
-                        new_memory=None,
-                        candidate=candidate,
-                        subject_id=candidate_subject_id,
-                        scope=candidate.scope,
-                        slot_id=candidate.slot_id,
-                    )
-                    await decision_logger.append(
-                        bad_decision,
-                        worker=self._WORKER_ID,
-                        model=model_name,
-                        rule_version=self._RULE_VERSION,
-                        input_source={
-                            "type": "session_consolidation",
-                            "session_id": session_id,
-                            "agent_type": agent_type,
-                        },
-                    )
+            all_decisions = await process_candidates(
+                summary_candidates + result.proposed_artifacts,
+                session_id=session_id,
+                agent_type=agent_type,
+                db_session=session,
+                profile_store=profile_store,
+                episode_store=episode_store,
+                entity_registry=entity_registry,
+                decision_logger=decision_logger,
+                slot_registry=DEFAULT_SLOT_REGISTRY,
+                worker_id=self._WORKER_ID,
+                model_name=model_name,
+                rule_version=self._RULE_VERSION,
+                input_source={
+                    "type": "session_consolidation",
+                    "session_id": session_id,
+                    "agent_type": agent_type,
+                },
+            )
+
+            for d in all_decisions:
+                if d.decision == MemoryDecisionType.DISCARD:
                     persisted_counts["discard"] += 1
-                    continue
-                decision = await resolve_candidate(
-                    candidate,
-                    subject_id=candidate_subject_id,
-                    profile_store=profile_store,
-                    slot_registry=DEFAULT_SLOT_REGISTRY,
-                    episode_store=episode_store,
-                )
-                if (
-                    decision.decision != MemoryDecisionType.DISCARD
-                    and decision.new_memory is not None
-                ):
-                    await persist_decision(
-                        decision,
-                        session=session,
-                        profile_store=profile_store,
-                        episode_store=episode_store,
-                        entity_registry=entity_registry,
-                    )
-                    persisted_counts["artifact"] += 1
+                elif d.candidate.kind == MemoryKind.SUMMARY:
+                    persisted_counts["summary"] += 1
                 else:
-                    persisted_counts["discard"] += 1
-                await decision_logger.append(
-                    decision,
-                    worker=self._WORKER_ID,
-                    model=model_name,
-                    rule_version=self._RULE_VERSION,
-                    input_source={
-                        "type": "session_consolidation",
-                        "session_id": session_id,
-                        "agent_type": agent_type,
-                    },
-                )
+                    persisted_counts["artifact"] += 1
 
             # Execute EXPIRE actions proposed by the consolidator. SUPERSEDE
             # actions are paired with proposed_artifacts and handled above;
