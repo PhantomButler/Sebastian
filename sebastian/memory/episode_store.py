@@ -176,6 +176,23 @@ class EpisodeMemoryStore:
         result = await self._session.scalars(statement)
         return list(result.all())
 
+    async def find_active_exact(
+        self,
+        *,
+        subject_id: str,
+        kind: MemoryKind,
+        content: str,
+    ) -> EpisodeMemoryRecord | None:
+        """Return the first active record with an exact content match, or None."""
+        statement = select(EpisodeMemoryRecord).where(
+            EpisodeMemoryRecord.subject_id == subject_id,
+            EpisodeMemoryRecord.kind == kind.value,
+            EpisodeMemoryRecord.status == MemoryStatus.ACTIVE.value,
+            EpisodeMemoryRecord.content == content,
+        )
+        result = await self._session.scalars(statement)
+        return result.first()
+
     async def touch(self, memory_ids: list[str]) -> None:
         if not memory_ids:
             return

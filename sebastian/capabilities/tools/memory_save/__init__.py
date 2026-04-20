@@ -105,6 +105,7 @@ async def memory_save(
             subject_id=subject_id,
             profile_store=profile_store,
             slot_registry=DEFAULT_SLOT_REGISTRY,
+            episode_store=episode_store,
         )
 
         if decision.decision == MemoryDecisionType.DISCARD:

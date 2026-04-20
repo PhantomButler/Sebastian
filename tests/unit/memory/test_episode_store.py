@@ -359,3 +359,74 @@ async def test_add_episode_persists_null_valid_from_and_valid_until(db_session) 
 
     assert record.valid_from is None
     assert record.valid_until is None
+
+
+# ---------------------------------------------------------------------------
+# find_active_exact (exact-content deduplication, Step 1)
+# ---------------------------------------------------------------------------
+
+
+async def test_find_active_exact_returns_matching_record(db_session) -> None:
+    """find_active_exact must return the record when subject/kind/content all match."""
+    store = EpisodeMemoryStore(db_session)
+    content = "本次讨论了记忆模块"
+    await store.add_summary(
+        _make_artifact(
+            id="sum-exact",
+            kind=MemoryKind.SUMMARY,
+            content=content,
+            subject_id="user:owner",
+        )
+    )
+
+    result = await store.find_active_exact(
+        subject_id="user:owner",
+        kind=MemoryKind.SUMMARY,
+        content=content,
+    )
+
+    assert result is not None
+    assert result.id == "sum-exact"
+
+
+async def test_find_active_exact_returns_none_for_different_kind(db_session) -> None:
+    """find_active_exact must return None when kind does not match."""
+    store = EpisodeMemoryStore(db_session)
+    content = "本次讨论了记忆模块"
+    await store.add_episode(
+        _make_artifact(
+            id="ep-kind",
+            kind=MemoryKind.EPISODE,
+            content=content,
+            subject_id="user:owner",
+        )
+    )
+
+    result = await store.find_active_exact(
+        subject_id="user:owner",
+        kind=MemoryKind.SUMMARY,  # different kind
+        content=content,
+    )
+
+    assert result is None
+
+
+async def test_find_active_exact_returns_none_for_different_content(db_session) -> None:
+    """find_active_exact must return None when content does not match."""
+    store = EpisodeMemoryStore(db_session)
+    await store.add_summary(
+        _make_artifact(
+            id="sum-content",
+            kind=MemoryKind.SUMMARY,
+            content="本次讨论了记忆模块",
+            subject_id="user:owner",
+        )
+    )
+
+    result = await store.find_active_exact(
+        subject_id="user:owner",
+        kind=MemoryKind.SUMMARY,
+        content="完全不同的内容",  # different content
+    )
+
+    assert result is None

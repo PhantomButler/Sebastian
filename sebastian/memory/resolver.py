@@ -18,6 +18,7 @@ from sebastian.memory.types import (
 )
 
 if TYPE_CHECKING:
+    from sebastian.memory.episode_store import EpisodeMemoryStore
     from sebastian.memory.profile_store import ProfileMemoryStore
     from sebastian.memory.slots import SlotRegistry
     from sebastian.store.models import ProfileMemoryRecord
@@ -60,6 +61,7 @@ async def resolve_candidate(
     subject_id: str,
     profile_store: ProfileMemoryStore,
     slot_registry: SlotRegistry,
+    episode_store: EpisodeMemoryStore | None = None,
 ) -> ResolveDecision:
     """Determine how a :class:`CandidateArtifact` should be stored.
 
@@ -78,9 +80,26 @@ async def resolve_candidate(
     6. Fallback → ADD.
     """
     # ------------------------------------------------------------------
-    # 1. Episode / Summary → always ADD
+    # 1. Episode / Summary → ADD, unless an exact duplicate already exists
     # ------------------------------------------------------------------
     if candidate.kind in (MemoryKind.EPISODE, MemoryKind.SUMMARY):
+        if episode_store is not None:
+            existing = await episode_store.find_active_exact(
+                subject_id=subject_id,
+                kind=candidate.kind,
+                content=candidate.content,
+            )
+            if existing is not None:
+                return _trace_decision(ResolveDecision(
+                    decision=MemoryDecisionType.DISCARD,
+                    reason="exact duplicate episode/summary already exists",
+                    old_memory_ids=[existing.id],
+                    new_memory=None,
+                    candidate=candidate,
+                    subject_id=subject_id,
+                    scope=candidate.scope,
+                    slot_id=None,
+                ))
         return _trace_decision(ResolveDecision(
             decision=MemoryDecisionType.ADD,
             reason="episodes and summaries are always appended",

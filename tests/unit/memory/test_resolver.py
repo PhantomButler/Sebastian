@@ -5,18 +5,25 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from sebastian.memory.episode_store import EpisodeMemoryStore
 from sebastian.memory.resolver import resolve_candidate
 from sebastian.memory.slots import SlotRegistry
 from sebastian.memory.types import (
     CandidateArtifact,
     Cardinality,
+    MemoryArtifact,
     MemoryDecisionType,
     MemoryKind,
     MemoryScope,
     MemorySource,
+    MemoryStatus,
     ResolutionPolicy,
 )
+from sebastian.store import models  # noqa: F401
+from sebastian.store.database import Base
 from sebastian.store.models import ProfileMemoryRecord
 
 # ---------------------------------------------------------------------------
@@ -552,3 +559,148 @@ async def test_inferred_lower_confidence_vs_explicit_existing_returns_discard() 
     assert decision.old_memory_ids == []
     assert decision.new_memory is None
     assert "weaker" in decision.reason
+
+
+# ---------------------------------------------------------------------------
+# Episode exact-duplicate deduplication (Step 2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def episode_db_session():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(
+            text(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS episode_memories_fts "
+                "USING fts5(memory_id UNINDEXED, content_segmented, tokenize=unicode61)"
+            )
+        )
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        yield session
+    await engine.dispose()
+
+
+def _make_episode_artifact(artifact_id: str, kind: MemoryKind, content: str) -> MemoryArtifact:
+    now = datetime.now(UTC)
+    return MemoryArtifact(
+        id=artifact_id,
+        kind=kind,
+        scope=MemoryScope.USER,
+        subject_id="user:owner",
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        content=content,
+        structured_payload={},
+        source=MemorySource.OBSERVED,
+        confidence=0.85,
+        status=MemoryStatus.ACTIVE,
+        valid_from=None,
+        valid_until=None,
+        recorded_at=now,
+        last_accessed_at=None,
+        access_count=0,
+        provenance={"session_id": "sess-dedup"},
+        links=[],
+        embedding_ref=None,
+        dedupe_key=None,
+        policy_tags=[],
+    )
+
+
+@pytest.mark.asyncio
+async def test_episode_exact_duplicate_returns_discard(episode_db_session) -> None:
+    """resolve_candidate with episode_store must DISCARD exact-content duplicates."""
+    content = "本次讨论了记忆模块的去重逻辑"
+
+    # Pre-populate the store with an existing record
+    ep_store = EpisodeMemoryStore(episode_db_session)
+    existing = await ep_store.add_summary(
+        _make_episode_artifact("sum-existing", MemoryKind.SUMMARY, content)
+    )
+
+    profile_store = FakeProfileStore([])
+    registry = SlotRegistry()
+    candidate = _make_candidate(
+        kind=MemoryKind.SUMMARY,
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        source=MemorySource.SYSTEM_DERIVED,
+        confidence=0.8,
+        content=content,
+    )
+
+    decision = await resolve_candidate(
+        candidate,
+        subject_id="user:owner",
+        profile_store=profile_store,
+        slot_registry=registry,
+        episode_store=ep_store,
+    )
+
+    assert decision.decision == MemoryDecisionType.DISCARD
+    assert existing.id in decision.old_memory_ids
+    assert decision.new_memory is None
+    assert "duplicate" in decision.reason or "重复" in decision.reason
+
+
+@pytest.mark.asyncio
+async def test_episode_non_duplicate_still_returns_add(episode_db_session) -> None:
+    """resolve_candidate with episode_store must ADD when content differs."""
+    ep_store = EpisodeMemoryStore(episode_db_session)
+    await ep_store.add_episode(
+        _make_episode_artifact("ep-other", MemoryKind.EPISODE, "完全不同的内容")
+    )
+
+    profile_store = FakeProfileStore([])
+    registry = SlotRegistry()
+    candidate = _make_candidate(
+        kind=MemoryKind.EPISODE,
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        source=MemorySource.OBSERVED,
+        confidence=0.85,
+        content="全新内容，不重复",
+    )
+
+    decision = await resolve_candidate(
+        candidate,
+        subject_id="user:owner",
+        profile_store=profile_store,
+        slot_registry=registry,
+        episode_store=ep_store,
+    )
+
+    assert decision.decision == MemoryDecisionType.ADD
+    assert decision.new_memory is not None
+
+
+@pytest.mark.asyncio
+async def test_episode_without_episode_store_still_adds() -> None:
+    """resolve_candidate without episode_store keeps the old ADD-always behaviour."""
+    profile_store = FakeProfileStore([])
+    registry = SlotRegistry()
+    candidate = _make_candidate(
+        kind=MemoryKind.EPISODE,
+        slot_id=None,
+        cardinality=None,
+        resolution_policy=None,
+        source=MemorySource.OBSERVED,
+        confidence=0.85,
+        content="任意内容",
+    )
+
+    decision = await resolve_candidate(
+        candidate,
+        subject_id="user:owner",
+        profile_store=profile_store,
+        slot_registry=registry,
+        # no episode_store
+    )
+
+    assert decision.decision == MemoryDecisionType.ADD

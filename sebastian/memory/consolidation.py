@@ -327,6 +327,7 @@ class SessionConsolidationWorker:
                     subject_id=summary_subject_id,
                     profile_store=profile_store,
                     slot_registry=DEFAULT_SLOT_REGISTRY,
+                    episode_store=episode_store,
                 )
                 if summary_decision.new_memory is not None:
                     await persist_decision(
@@ -386,6 +387,7 @@ class SessionConsolidationWorker:
                     subject_id=candidate_subject_id,
                     profile_store=profile_store,
                     slot_registry=DEFAULT_SLOT_REGISTRY,
+                    episode_store=episode_store,
                 )
                 if (
                     decision.decision != MemoryDecisionType.DISCARD
