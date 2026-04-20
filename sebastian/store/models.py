@@ -115,6 +115,8 @@ class MemorySlotRecord(Base):
     kind_constraints: Mapped[list[str]] = mapped_column(JSON)
     description: Mapped[str] = mapped_column(String)
     is_builtin: Mapped[bool] = mapped_column(Boolean)
+    proposed_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    proposed_in_session: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
 
