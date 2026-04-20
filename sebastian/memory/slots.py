@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from sebastian.memory.errors import InvalidCandidateError, UnknownSlotError
 from sebastian.memory.types import (
@@ -11,6 +12,9 @@ from sebastian.memory.types import (
     ResolutionPolicy,
     SlotDefinition,
 )
+
+if TYPE_CHECKING:
+    from sebastian.memory.slot_definition_store import SlotDefinitionStore
 
 # Kinds that MUST be bound to a registered slot.
 _SLOT_REQUIRED_KINDS: frozenset[MemoryKind] = frozenset([MemoryKind.FACT, MemoryKind.PREFERENCE])
@@ -140,6 +144,12 @@ class SlotRegistry:
     def register(self, schema: SlotDefinition) -> None:
         """运行时注册 / 覆盖 slot。被 SlotProposalHandler 调用。"""
         self._slots[schema.slot_id] = schema
+
+    async def bootstrap_from_db(self, store: SlotDefinitionStore) -> None:
+        """服务启动时调用一次，把 DB 所有 slot 灌入内存。"""
+        schemas = await store.list_all()
+        for s in schemas:
+            self._slots[s.slot_id] = s
 
 
 DEFAULT_SLOT_REGISTRY: SlotRegistry = SlotRegistry()
