@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Memory 具体案例时序图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f1117;
+    color: #e1e4e8;
+    margin: 0;
+    padding: 24px;
+  }
+  h1 { color: #f0f6ff; font-size: 1.6rem; margin-bottom: 4px; }
+  h2 { color: #79b8ff; font-size: 1.15rem; margin: 32px 0 12px; border-bottom: 1px solid #30363d; padding-bottom: 6px; }
+  .subtitle { color: #8b949e; font-size: 0.9rem; margin-bottom: 16px; }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 32px;
+  }
+  .desc { color: #8b949e; font-size: 0.85rem; margin-bottom: 16px; line-height: 1.5; }
+  .mermaid { background: #161b22; }
+  .scenario-box {
+    background: #1a2a3a;
+    border: 1px solid #2a4a6a;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    font-size: 0.85rem;
+    line-height: 1.7;
+  }
+  .scenario-box strong { color: #79b8ff; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin-top: 16px; font-size: 0.78rem; color: #8b949e;
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* 实现状态图例 */
+  .status-legend {
+    display: flex; gap: 20px; flex-wrap: wrap;
+    margin-bottom: 24px; padding: 10px 16px;
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    font-size: 0.82rem; color: #8b949e;
+  }
+  .sl-item { display: flex; align-items: center; gap: 8px; }
+  .sl-dot { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; }
+  .sl-done   .sl-dot { background: #1a2e1a; border: 1px solid #3a7a3a; }
+  .sl-partial .sl-dot { background: #2a1e00; border: 1px solid #9a7020; }
+  .sl-deferred .sl-dot { background: #2a0f0f; border: 2px dashed #8a2020; }
+
+  /* 推迟路径卡片 */
+  .deferred-card {
+    background: #1a0f0f;
+    border: 1px dashed #6a2020;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+  }
+  .deferred-card h3 { color: #cc6666; font-size: 1rem; margin: 0 0 12px; }
+  .deferred-item {
+    display: flex; gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid #2a1a1a; font-size: 0.84rem; line-height: 1.6;
+  }
+  .deferred-item:last-child { border-bottom: none; }
+  .deferred-label { color: #cc6666; font-weight: 600; min-width: 200px; flex-shrink: 0; }
+  .deferred-desc { color: #9a7a7a; }
+  .partial-card {
+    background: #1a1400;
+    border: 1px dashed #6a5000;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+  }
+  .partial-card h3 { color: #c09030; font-size: 1rem; margin: 0 0 12px; }
+</style>
+</head>
+<body>
+
+<h1>Memory（记忆）具体案例时序图</h1>
+<p class="subtitle">对应 Spec：docs/architecture/spec/memory/ · 2026-04-20 · 从用户表达偏好到跨会话自动生效的完整链路</p>
+
+<div class="status-legend">
+  <div class="sl-item sl-done">   <span class="sl-dot"></span>✅ 已实现（Implemented）</div>
+  <div class="sl-item sl-partial"><span class="sl-dot"></span>⚠️ 部分实现 / 待细化 Spec（Partial / Needs Spec Refinement）</div>
+  <div class="sl-item sl-deferred"><span class="sl-dot"></span>❌ 已推迟 / 未实现（Deferred / Not Implemented）</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2>① 案例：用户偏好写入 → Session（会话）沉淀 → 下次对话自动注入 ✅</h2>
+<div class="card">
+  <div class="scenario-box">
+    <strong>场景描述</strong><br>
+    <strong>Session（会话）1 · Turn（轮次）1</strong>：用户明确说"以后回复我都用中文，不用英文"<br>
+    → Sebastian 调用 memory_save 工具（Tool），写入 Profile Store（画像存储）中的 preference（偏好）slot（语义槽位）<br>
+    → 写入决策：ADD（新增，首次写入该 slot）<br><br>
+    <strong>Session（会话）1 结束</strong>：SESSION_COMPLETED（会话完成）事件触发 Session Consolidation（会话沉淀）✅<br>
+    → SessionConsolidationWorker（会话沉淀任务）产出 summary（摘要），写入 Episode Store（经历存储）<br><br>
+    <strong>Session（会话）2 · Turn（轮次）1</strong>：用户发新消息，语言偏好自动注入生效<br>
+    → _memory_section() 调用 Retrieval Planner（检索规划器）→ Profile Lane（画像通道）命中偏好<br>
+    → ⚠️ Intent（意图）判定当前为关键词规则，非 LLM 推断
+  </div>
+  <p class="desc">
+    时序图覆盖完整链路：即时写入路径（Explicit Write Path）✅、Session 后台沉淀（Session Consolidation）✅、
+    跨会话检索注入（Cross-session Retrieval Injection）✅ 三个阶段均已实现。
+  </p>
+  <div class="mermaid">
+sequenceDiagram
+    participant U as 用户 / App
+    participant BA as BaseAgent<br/>run_streaming()
+    participant MS as _memory_section()<br/>+ Retrieval Planner（检索规划器）
+    participant LLM as LLM Provider<br/>（大语言模型）
+    participant PIPE as 写入流水线（Write Pipeline）<br/>Normalize→Resolve→Persist
+    participant PS as Profile Store<br/>（画像存储）
+    participant DL as memory_decision_log<br/>（记忆决策日志）
+    participant ES as Episode Store<br/>（经历存储）
+    participant CON as SessionConsolidation<br/>Worker（会话沉淀任务）
+
+    note over U,CON: ━━ ✅ Session（会话）1 · Turn（轮次）1：用户明确表达语言偏好 ━━
+
+    U->>BA: "帮我记住：以后回复我都用中文，不用英文"
+    BA->>MS: _memory_section(user_message, session_ctx)
+    note over MS: ⚠️ Intent（意图）判定：关键词规则<br/>首次对话，无匹配词 → 仅激活 Profile Lane<br/>Profile Store 无记录 → 注入内容为空
+    MS-->>BA: memory_section = ""（空，首次对话）
+
+    BA->>LLM: system_prompt（系统提示词，无记忆注入）<br/>+ messages（对话历史）
+    note over LLM: 识别到"记住"意图<br/>决定调用 memory_save 工具（Tool）
+    LLM-->>BA: tool_call（工具调用）: memory_save(<br/>  content="用户偏好中文回复",<br/>  kind="preference"（偏好）,<br/>  slot_id="user.preference.response_language"<br/>)
+
+    BA->>PIPE: Capture（捕获）(content, subject_id="owner", source="explicit"（显式）<br/>provenance 含 session_id 审计字段)
+    PIPE->>PIPE: Extract（提取）→ CandidateArtifact（候选记忆产物）<br/>{kind=preference, confidence=0.95（置信度）<br/>slot_id=user.preference.response_language}
+    PIPE->>PIPE: Normalize（规范化）: subject_hint→subject_id<br/>查 Slot Registry（槽位注册表）→ cardinality=single（单值）
+    PIPE->>PS: Resolve（冲突解析）: 查同 slot active（有效）记录
+    PS-->>PIPE: 无记录（首次写入）
+    note over PIPE: ✅ 决策：ADD（新增）
+    PIPE->>PS: INSERT artifact（记忆产物）{<br/>  status=active（有效）,<br/>  content="中文回复",<br/>  confidence=0.95,<br/>  valid_from=now（生效时间=当前）<br/>}
+    PIPE->>DL: INSERT decision（决策记录）{<br/>  action=ADD（新增）,<br/>  slot=user.preference.response_language,<br/>  input_source="memory_save_tool",<br/>  reason="no existing record"（无既有记录）,<br/>  new_id=artifact_001<br/>}
+    PIPE-->>BA: ToolResult（工具结果）(ok=True)
+
+    BA->>LLM: asend（回注）(tool_result（工具结果）)
+    LLM-->>BA: "好的，已记住您的语言偏好，以后回复都用中文。"
+    BA->>BA: add_turn("assistant", response)
+
+    note over U,CON: ━━ ✅ Session（会话）1 结束 → Session Consolidation（会话沉淀）━━
+    note over U,CON: ❌ Cross-Session Consolidation（跨会话沉淀）不在此触发（已推迟，需单独 spec）
+
+    BA->>BA: 发布 SESSION_COMPLETED（会话完成）事件
+    note over CON: ✅ MemoryConsolidationScheduler（记忆沉淀调度器）<br/>订阅到事件，asyncio.create_task 派发后台任务
+    CON->>DL: 检查 SessionConsolidationRecord（会话沉淀记录）<br/>确认未重复处理（幂等性检查）
+    CON->>PS: 读取本次 session 产出的 candidate artifacts（候选产物）
+    CON->>LLM: ConsolidatorInput（沉淀器输入）{<br/>  session_messages（会话消息）,<br/>  candidate_artifacts（候选产物）,<br/>  active_memories（当前有效记忆）,<br/>  slot_definitions（槽位定义）,<br/>  entity_registry_snapshot（实体快照）<br/>}
+    LLM-->>CON: ConsolidationResult（沉淀结果）{<br/>  summaries=["用户要求中文回复（session_1）"],<br/>  proposed_artifacts=[]（无新增建议产物）<br/>}
+    CON->>PIPE: Normalize→Resolve→Persist(summary（摘要）)
+    PIPE->>ES: INSERT episode_summary（经历摘要）{<br/>  content="用户要求中文回复",<br/>  session_id=session_1<br/>}
+    PIPE->>DL: INSERT decision {input_source="session_consolidation"}
+    CON->>DL: INSERT SessionConsolidationRecord {<br/>  session_id=session_1, status=completed（已完成）<br/>}
+
+    note over U,CON: ━━ ✅ Session（会话）2 · Turn（轮次）1：新对话，偏好自动生效 ━━
+
+    U->>BA: "帮我分析一下这段代码有没有性能问题"
+    BA->>MS: _memory_section(user_message, session_ctx)
+    note over MS: ⚠️ Intent（意图）判定：关键词规则<br/>消息中无 Episode / Relation 匹配关键词<br/>→ 仅激活 Profile Lane（budget=5）
+    MS->>PS: Profile Lane（画像通道）: SELECT artifacts<br/>WHERE subject_id=owner AND status=active<br/>AND valid_from <= now AND confidence >= 0.3
+    PS-->>MS: [preference]（偏好）user.preference.response_language<br/>= "中文", confidence=0.95, status=active（有效）
+
+    note over MS: ✅ Assembler（上下文装配器）过滤：<br/>✓ status=active / valid_from≤now / subject 匹配<br/>✓ policy_tags 无 do_not_auto_inject<br/>→ 打 [preference]（偏好）标记
+
+    MS-->>BA: memory_section（记忆注入段）:<br/>"## Current facts about user\n- [preference] 用户偏好中文回复"
+
+    BA->>LLM: system_prompt（含偏好注入）+ messages
+    note over LLM: 读到 [preference]（偏好）标记：用户偏好中文<br/>→ 用中文分析代码性能问题
+    LLM-->>BA: "好的，我来用中文分析这段代码的性能问题……"
+    BA->>BA: add_turn("assistant", response)
+  </div>
+  <div class="legend">
+    <span><div class="dot" style="background:#68d391"></div>✅ Session 1 写入路径（Explicit Write Path）：memory_save 工具 → ADD 决策 → Profile Store 首次写入</span>
+    <span><div class="dot" style="background:#f6ad55"></div>✅ Session 1 结束：SESSION_COMPLETED → 异步沉淀 → Summary 写入 Episode Store（经历存储）</span>
+    <span><div class="dot" style="background:#79b8ff"></div>✅ Session 2 注入：Profile Lane 命中偏好 → Assembler 打 [preference] 标记 → LLM 生效</span>
+    <span><div class="dot" style="background:#e3b341"></div>⚠️ Intent 判定当前为关键词规则（"帮我分析代码"无 Episode/Relation 关键词 → 仅 Profile Lane 激活）</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2>② 案例：偏好更新（SUPERSEDE · 取代）路径 ✅</h2>
+<div class="card">
+  <div class="scenario-box">
+    <strong>场景描述</strong><br>
+    <strong>Turn（轮次）1</strong>：用户说"以后回复我都用中文"→ ADD（新增）写入 slot（语义槽位）<br>
+    <strong>Turn（轮次）2</strong>（同一 session）：用户说"其实技术问题请用中英双语，其他问题还是中文"<br>
+    → Resolve（冲突解析）检测到同 slot 有 active（有效）记录 → 决策 SUPERSEDE（取代）<br>
+    → 旧记录 status → superseded（已取代），新记录写入，Decision Log（决策日志）记录 old_id / new_id 关联
+  </div>
+  <p class="desc">
+    展示 single-value slot（单值语义槽位）的覆盖更新路径：旧 Artifact（记忆产物）不删除而是标记为 superseded（已取代），
+    保留历史轨迹，支持"为什么偏好变了"的审计查询。全路径已实现。
+  </p>
+  <div class="mermaid">
+sequenceDiagram
+    participant U as 用户 / App
+    participant BA as BaseAgent<br/>run_streaming()
+    participant LLM as LLM Provider<br/>（大语言模型）
+    participant PIPE as 写入流水线（Write Pipeline）<br/>Normalize→Resolve→Persist
+    participant PS as Profile Store<br/>（画像存储）
+    participant DL as memory_decision_log<br/>（记忆决策日志）
+
+    note over U,DL: ━━ ✅ Turn（轮次）1：首次写入偏好 ━━
+
+    U->>BA: "以后回复我都用中文，不用英文"
+    BA->>LLM: system_prompt + messages
+    LLM-->>BA: tool_call（工具调用）: memory_save(<br/>  content="用户偏好中文回复",<br/>  slot_id="user.preference.response_language"<br/>)
+    BA->>PIPE: Capture（捕获）+ Extract（提取）+ Normalize（规范化）
+    PIPE->>PS: Resolve（冲突解析）: 查同 slot active（有效）记录
+    PS-->>PIPE: 无记录
+    note over PIPE: ✅ 决策：ADD（新增）
+    PIPE->>PS: INSERT {id=art_001, content="中文回复", status=active（有效）<br/>cardinality=single（单值）已写入 DB}
+    PIPE->>DL: INSERT {action=ADD, new_id=art_001, input_source="memory_save_tool"}
+    PIPE-->>BA: ToolResult（工具结果）(ok=True)
+    LLM-->>BA: "好的，已记住，以后用中文回复。"
+
+    note over U,DL: ━━ ✅ Turn（轮次）2：用户更新偏好 → SUPERSEDE（取代）━━
+
+    U->>BA: "其实技术问题麻烦中英双语，其他问题还是中文就好"
+    BA->>LLM: system_prompt + messages（含 art_001 注入）
+    note over LLM: 识别到偏好变更（更新同一 slot）<br/>调用 memory_save 覆盖写入
+    LLM-->>BA: tool_call（工具调用）: memory_save(<br/>  content="技术问题中英双语，其他问题中文",<br/>  slot_id="user.preference.response_language"<br/>)
+    BA->>PIPE: Capture（捕获）+ Extract（提取）+ Normalize（规范化）
+    PIPE->>PS: Resolve（冲突解析）: 查同 slot active（有效）记录
+    PS-->>PIPE: 命中 art_001 {status=active, cardinality=single（单值）,<br/>resolution_policy=supersede（取代策略）}
+    note over PIPE: ✅ 决策：SUPERSEDE（取代）<br/>cardinality=single + 新 confidence ≥ 旧 confidence
+
+    PIPE->>PS: UPDATE art_001 SET<br/>  status=superseded（已取代）,<br/>  valid_until=now（失效时间=当前）
+    PIPE->>PS: INSERT art_002 {<br/>  content="技术问题中英双语，其他中文",<br/>  status=active（有效）,<br/>  links=[art_001]（关联旧记录 ID）<br/>}
+    PIPE->>DL: INSERT decision（决策记录）{<br/>  action=SUPERSEDE（取代）,<br/>  slot=user.preference.response_language,<br/>  old_ids=[art_001], new_id=art_002,<br/>  input_source="memory_save_tool",<br/>  reason="single-value slot update"（单值槽位更新）<br/>}
+    PIPE-->>BA: ToolResult（工具结果）(ok=True)
+    LLM-->>BA: "明白了，技术问题我会用中英双语，其他问题继续用中文。"
+
+    note over PS: art_001: status=superseded（已取代）→ 不参与检索，可历史回溯<br/>art_002: status=active（有效）→ 参与检索与自动注入（Auto-inject）
+  </div>
+  <div class="legend">
+    <span><div class="dot" style="background:#68d391"></div>✅ SUPERSEDE（取代）路径：旧记录 valid_until=now + status=superseded，新记录写入，links 字段关联</span>
+    <span><div class="dot" style="background:#f6ad55"></div>✅ Decision Log（决策日志）记录 old_ids / new_id 关联，支持"为什么偏好变了"的完整审计链路</span>
+    <span><div class="dot" style="background:#79b8ff"></div>✅ cardinality（基数）和 resolution_policy（冲突策略）在首次写入时一并持久化到 DB，Resolve 无需重复查 Slot Registry</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2>③ 案例：memory_search（记忆搜索）工具的 Lane-aware Budget（按通道分配预算）✅</h2>
+<div class="card">
+  <div class="scenario-box">
+    <strong>场景描述</strong><br>
+    Agent 主动调用 memory_search(query="用户最近讨论的项目", limit=2)<br>
+    → Retrieval Planner（检索规划器）激活 3 条 Lane（检索通道）<br>
+    → effective_limit = max(2, 3) = 3（每条 Lane 至少 1 个名额）<br>
+    → Profile Lane（画像通道）1 条 + Context Lane（上下文通道）⚠️ 1 条 + Episode Lane（经历通道）1 条<br>
+    → Assembler（装配器）过滤后返回 3 条，含 citation_type（引用类型）字段区分来源语义
+  </div>
+  <p class="desc">
+    展示 memory_search 工具的 lane-aware budget（按通道分配预算）机制 ✅ 已实现。
+    effective_limit（实际上限）保证每条激活 Lane 至少 1 个候选名额，防止 Starvation（饿死）。
+    ⚠️ Context Lane 当前由 profile_store.search_recent_context() 提供，非独立 Context Store。
+  </p>
+  <div class="mermaid">
+sequenceDiagram
+    participant AG as Agent<br/>（工具调用方）
+    participant TOOL as memory_search 工具（Tool）
+    participant PLN as Retrieval Planner<br/>（检索规划器）
+    participant PL as Profile Lane<br/>（画像通道）✅
+    participant CL as Context Lane ⚠️<br/>（上下文通道）
+    participant EL as Episode Lane<br/>（经历通道）✅
+    participant ASM as Assembler<br/>（上下文装配器）✅
+
+    AG->>TOOL: memory_search(<br/>  query="用户最近讨论的项目",<br/>  limit=2（请求条数）<br/>)
+
+    TOOL->>PLN: Intent（意图）判定 + 生成 Retrieval Plan（检索计划）
+    note over PLN: ⚠️ Intent 判定为关键词规则<br/>"项目" 命中 RELATION_LANE_KEYWORDS<br/>"最近" 命中 CONTEXT_LANE_KEYWORDS<br/>→ Profile + Context + Episode 激活（假设含经历关键词）
+
+    note over PLN: ✅ effective_limit 计算<br/>requested_limit = max(1, 2) = 2<br/>active_lane_count = 3<br/>effective_limit = max(2, 3) = 3<br/>→ 每条 Lane 至少 1 个名额
+
+    PLN-->>TOOL: Plan（检索计划）{<br/>  profile_budget=1（画像通道预算）,<br/>  context_budget=1（上下文通道预算）,<br/>  episode_budget=1（经历通道预算）,<br/>  effective_limit=3（实际上限）<br/>}
+
+    par 并行检索（Parallel Retrieval）✅
+        TOOL->>PL: 检索（budget=1）
+        note over PL: ✅ profile_store.search_active()<br/>返回 active preference / fact
+        PL-->>TOOL: [preference]（偏好）用户偏好 Python 3.12 项目<br/>citation_type="current_truth"（当前真值）
+
+        TOOL->>CL: 检索（budget=1）
+        note over CL: ⚠️ profile_store.search_recent_context()<br/>非独立 Context Store<br/>返回最近 active profile 记录，非 query-aware FTS
+        CL-->>TOOL: [fact]（事实）当前项目：Sebastian AI 管家系统<br/>citation_type="current_truth"（当前真值）
+
+        TOOL->>EL: 检索（budget=1, query="项目"）
+        note over EL: ✅ 先查 summary，不足再补 episode<br/>FTS5 + jieba 分词检索
+        EL-->>TOOL: [summary]（摘要）上次讨论：Sebastian memory 模块架构设计<br/>citation_type="historical_summary"（历史摘要）
+    end
+
+    TOOL->>ASM: Assembler（装配器）过滤 + 分区
+    note over ASM: ✅ 过滤：status=active / valid_until / policy_tags / subject_id<br/>3 条均通过 → 不超过 effective_limit=3<br/>各条目附 lane 字段区分通道来源
+
+    ASM-->>TOOL: results（结果）[<br/>  {kind=preference, citation_type="current_truth", lane="profile"},<br/>  {kind=fact, citation_type="current_truth", lane="context"},<br/>  {kind=summary, citation_type="historical_summary", lane="episode"}<br/>]
+
+    TOOL-->>AG: ToolResult（工具结果）{ok=True, results=[3条]}
+
+    note over AG: ✅ Agent 基于检索结果继续推理（Reasoning）<br/>citation_type 字段帮助 Agent 区分当前事实 vs 历史证据
+  </div>
+  <div class="legend">
+    <span><div class="dot" style="background:#68d391"></div>✅ effective_limit = max(requested_limit, active_lane_count) 已实现，防止任意 Lane 因 limit 过小被完全饿死</span>
+    <span><div class="dot" style="background:#e3b341"></div>⚠️ Context Lane 当前由 profile_store.search_recent_context() 提供，按时间排序，非 query-aware（查询感知）FTS 检索</span>
+    <span><div class="dot" style="background:#79b8ff"></div>✅ citation_type（引用类型）字段：profile → current_truth / episode summary → historical_summary / episode detail → historical_evidence</span>
+    <span><div class="dot" style="background:#f6ad55"></div>✅ 返回结果含 lane 字段，Agent 可区分各条目来自哪条检索通道</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2>④ 已推迟路径（Deferred Paths）与待细化 Spec 项目</h2>
+
+<div class="deferred-card">
+  <h3>❌ 已推迟 / 未实现（Deferred / Not Implemented）</h3>
+  <div class="deferred-item">
+    <div class="deferred-label">Cross-Session Consolidation<br/>（跨会话沉淀）</div>
+    <div class="deferred-desc">
+      当前只有 Session Consolidation（会话沉淀）由 SESSION_COMPLETED 事件触发。跨会话的偏好强化、模式归纳、多来源证据合并尚未实现。
+      需要单独 spec 定义：触发频率、扫描窗口、证据合并规则、幂等 key、Decision Log 记录方式和人工审核边界。
+    </div>
+  </div>
+  <div class="deferred-item">
+    <div class="deferred-label">Full Memory Maintenance Worker<br/>（完整记忆维护任务）</div>
+    <div class="deferred-desc">
+      当前仅有 EXPIRE 生命周期动作（通过 write_router.persist_decision() 路由）。
+      尚未实现的：降权（Confidence Decay）、重复压缩（Dedup Compression）、索引修复（Index Repair）、独立周期性 Maintenance Worker 及其触发机制。
+    </div>
+  </div>
+  <div class="deferred-item">
+    <div class="deferred-label">Exclusive Relation（互斥关系）<br/>时间边界语义</div>
+    <div class="deferred-desc">
+      relation_candidates（关系候选）写入已实现，但互斥关系（Exclusive Relation）的时间边界覆盖语义（新关系如何关闭旧关系 valid_until）尚未 spec 化和实现。
+    </div>
+  </div>
+  <div class="deferred-item">
+    <div class="deferred-label">relation_facts（确认关系表）<br/>晋升机制</div>
+    <div class="deferred-desc">
+      relation_candidates 何时晋升为正式 relation_facts，以及 Relation Lane（关系通道）是否需要多跳查询（Multi-hop Query），均需单独 spec。
+    </div>
+  </div>
+  <div class="deferred-item">
+    <div class="deferred-label">per-turn Conversational Inference<br/>（逐轮对话推断）</div>
+    <div class="deferred-desc">
+      "用户刚说完就能被下一轮检索到"的强实时能力。当前所有 Conversational Inference（对话推断）在会话结束后由 SessionConsolidationWorker 批量处理。
+      实时路径需要单独设计 debounce（防抖）、置信度阈值和撤销 / 审计策略。
+    </div>
+  </div>
+</div>
+
+<div class="partial-card">
+  <h3>⚠️ 部分实现 / 待细化 Spec（Partial / Needs Spec Refinement）</h3>
+  <div class="deferred-item">
+    <div class="deferred-label" style="color:#c09030">Intent 判定<br/>（Keyword-based Rules）</div>
+    <div class="deferred-desc" style="color:#9a8040">
+      当前实现为关键词词表匹配（EPISODE_LANE_KEYWORDS / RELATION_LANE_KEYWORDS 等小词表）。
+      Spec 描述为"轻量 LLM 或规则"。关键词覆盖不完整，边界模糊场景（如隐含的经历追问）可能激活失败。
+    </div>
+  </div>
+  <div class="deferred-item">
+    <div class="deferred-label" style="color:#c09030">Context Lane<br/>（上下文通道）</div>
+    <div class="deferred-desc" style="color:#9a8040">
+      当前由 profile_store.search_recent_context() 返回最近 active 的 Profile 记录，按时间排序。
+      Spec 描述为"query-aware（查询感知）动态事实检索 + FTS5 + Entity 命中"。当前实现无 FTS 检索，无独立 Context Store，与 Spec 存在差距。
+    </div>
+  </div>
+  <div class="deferred-item">
+    <div class="deferred-label" style="color:#c09030">Relation Lane<br/>（关系通道）</div>
+    <div class="deferred-desc" style="color:#9a8040">
+      当前从 relation_candidates（关系候选表）按 created_at 时间降序返回，无 query-aware FTS 检索。
+      entity_registry.list_relations() 仅按时间排序，实体名称匹配和关键词召回均未实现。
+    </div>
+  </div>
+  <div class="deferred-item">
+    <div class="deferred-label" style="color:#c09030">Summary Replacement<br/>（摘要替换策略）</div>
+    <div class="deferred-desc" style="color:#9a8040">
+      当前 episode summary（经历摘要）为 append-only（仅追加）。
+      何时替换已有摘要、何时追加新摘要、如何保留历史 evidence（证据），策略未 spec 化。
+      find_active_exact() 提供了精确去重，但无语义级替换策略。
+    </div>
+  </div>
+  <div class="deferred-item">
+    <div class="deferred-label" style="color:#c09030">Behavioral Observation<br/>（行为观察）源 pipeline</div>
+    <div class="deferred-desc" style="color:#9a8040">
+      MemorySource.observed 类型已定义，但首期无独立的行为观察采集 pipeline。
+      工具使用习惯、行为模式等目前暂由 SessionConsolidationWorker 从对话消息中隐式归纳，非专项处理。
+    </div>
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#2d3748',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#4a5568',
+      lineColor: '#68d391',
+      secondaryColor: '#1a202c',
+      tertiaryColor: '#2d3748',
+      background: '#161b22',
+      mainBkg: '#161b22',
+      nodeBorder: '#4a5568',
+      clusterBkg: '#1a202c',
+      titleColor: '#90cdf4',
+      edgeLabelBackground: '#2d3748',
+      actorBkg: '#2d3748',
+      actorBorder: '#68d391',
+      actorTextColor: '#e2e8f0',
+      actorLineColor: '#4a5568',
+      signalColor: '#68d391',
+      signalTextColor: '#e2e8f0',
+      labelBoxBkgColor: '#2d3748',
+      labelBoxBorderColor: '#4a5568',
+      labelTextColor: '#e2e8f0',
+      loopTextColor: '#e2e8f0',
+      noteBorderColor: '#f6ad55',
+      noteBkgColor: '#2d3748',
+      noteTextColor: '#e2e8f0',
+      activationBorderColor: '#68d391',
+      activationBkgColor: '#1a202c',
+      sequenceNumberColor: '#90cdf4',
+    },
+    flowchart: { curve: 'basis', useMaxWidth: true },
+    sequence: { useMaxWidth: true, showSequenceNumbers: false },
+  });
+</script>
+</body>
+</html>

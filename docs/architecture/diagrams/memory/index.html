@@ -21,19 +21,29 @@
 <h1>Sebastian Memory（记忆）架构图索引</h1>
 <p class="sub">docs/architecture/diagrams/memory/ · 与 docs/architecture/spec/memory/ 分层 Spec 对应</p>
 <div class="grid">
+  <a class="card" href="memory-full-arch.html">
+    <div class="card-title">全流程架构图 ★</div>
+    <div class="card-desc">系统层次总览、写入流水线（Write Pipeline）完整视图、四条检索通道（Retrieval Lane）详解、后台沉淀（Consolidation）触发链、Artifact（记忆产物）生命周期状态机。五节一图。</div>
+    <span class="tag v">v1.0</span>
+  </a>
+  <a class="card" href="memory-sequence.html">
+    <div class="card-title">具体案例时序图 ★</div>
+    <div class="card-desc">三个完整案例：①偏好写入→Session 沉淀→跨会话注入；②SUPERSEDE（取代）覆盖更新路径；③memory_search 工具的 Lane-aware Budget（按通道分配预算）机制。</div>
+    <span class="tag v">v1.0</span>
+  </a>
   <a class="card" href="overview.html">
-    <div class="card-title">总体架构</div>
-    <div class="card-desc">输入来源、统一写入协议、长期记忆存储、读取路径的整体关系。</div>
+    <div class="card-title">总体架构（简版）</div>
+    <div class="card-desc">输入来源、统一写入协议（Write Protocol）、长期记忆存储（Long-term Memory Store）、读取路径的整体关系。</div>
     <span class="tag v">v1.0</span> <span class="tag planned">planned</span>
   </a>
   <a class="card" href="write-pipeline.html">
     <div class="card-title">写入与冲突决策</div>
-    <div class="card-desc">Extractor（提取器）输出 CandidateArtifact（候选记忆产物），Normalize/Resolve 决定最终写入动作。</div>
+    <div class="card-desc">Extractor（提取器）输出 CandidateArtifact（候选记忆产物），Normalize（规范化）/Resolve（冲突解析）决定最终写入动作。</div>
     <span class="tag v">v1.0</span> <span class="tag planned">planned</span>
   </a>
   <a class="card" href="retrieval.html">
     <div class="card-title">读取与注入</div>
-    <div class="card-desc">Intent（意图）→ Retrieval Planner（检索规划器）→ 四条检索通道 → Assembler（上下文装配器）。</div>
+    <div class="card-desc">Intent（意图）→ Retrieval Planner（检索规划器）→ 四条检索通道（Retrieval Lane）→ Assembler（上下文装配器）。</div>
     <span class="tag v">v1.0</span> <span class="tag planned">planned</span>
   </a>
   <a class="card" href="consolidation.html">
