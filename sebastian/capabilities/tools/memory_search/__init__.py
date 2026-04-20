@@ -54,9 +54,18 @@ async def memory_search(query: str, limit: int = 5) -> ToolResult:
     planner = MemoryRetrievalPlanner()
     plan = planner.plan(retrieval_ctx)
 
-    # Lane-aware budget allocation: distribute `limit` across activated lanes so
-    # every lane gets at least 1 slot, then spread the remainder to earlier lanes.
-    # This prevents high-cardinality lanes (profile) from silently starving others.
+    # Lane-aware budget allocation.
+    #
+    # `limit` is the requested total result count.  When the number of activated
+    # lanes exceeds `limit` we raise the effective limit to `n_active` so that
+    # every activated lane can contribute at least one item — the planner decided
+    # that lane matters, so silently returning zero items from it is wrong.
+    #
+    # effective_limit = max(requested_limit, n_active)
+    #
+    # The remainder is distributed to earlier (higher-priority) lanes first.
+    # No global slice is applied after assembly; the per-lane fetch budgets already
+    # bound the total.
     active_lanes: list[tuple[str, int]] = []
     if plan.profile_lane:
         active_lanes.append(("profile", plan.profile_limit))
@@ -67,10 +76,11 @@ async def memory_search(query: str, limit: int = 5) -> ToolResult:
     if plan.relation_lane:
         active_lanes.append(("relation", plan.relation_limit))
 
-    safe_limit = max(1, limit)
+    requested_limit = max(1, limit)
     n_active = len(active_lanes)
-    base = max(1, safe_limit // n_active) if n_active else safe_limit
-    remainder = safe_limit % n_active if n_active else 0
+    effective_limit = max(requested_limit, n_active) if n_active else requested_limit
+    base = effective_limit // n_active if n_active else effective_limit
+    remainder = effective_limit % n_active if n_active else 0
 
     lane_budgets: dict[str, int] = {}
     for idx, (lane_name, plan_limit) in enumerate(active_lanes):
@@ -183,6 +193,10 @@ async def memory_search(query: str, limit: int = 5) -> ToolResult:
     trace(
         "tool.memory_search.done",
         query_preview=preview_text(query),
+        requested_limit=requested_limit,
+        effective_limit=effective_limit,
+        active_lane_count=n_active,
+        lane_budgets=lane_budgets,
         result_count=len(items),
         current_count=sum(1 for item in items if item["is_current"]),
         historical_count=sum(1 for item in items if not item["is_current"]),

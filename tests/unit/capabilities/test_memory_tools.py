@@ -771,7 +771,8 @@ async def test_memory_search_profile_does_not_starve_episode_lane(
     assert result.ok is True
     items = result.output["items"]
     lanes = [item["lane"] for item in items]
-    assert len(items) <= 5, f"Total items must not exceed limit=5, got {len(items)}"
+    # effective_limit = max(5, 2 active lanes) = 5
+    assert len(items) <= 5, f"Total must not exceed effective lane-aware budget, got {len(items)}"
     assert "episode" in lanes, (
         f"Episode lane must appear despite 5 profile records; lanes={lanes}"
     )
@@ -880,7 +881,120 @@ async def test_memory_search_all_lanes_represented_within_limit(
     assert result.ok is True
     items = result.output["items"]
     lanes = [item["lane"] for item in items]
-    assert len(items) <= 5, f"Total must not exceed limit=5, got {len(items)}"
+    # effective_limit = max(5, 4 active lanes) = 5, so hard cap is 5
+    assert len(items) <= 5, f"Total must not exceed effective lane-aware budget, got {len(items)}"
+    assert "profile" in lanes, f"Profile lane missing; lanes={lanes}"
+    assert "context" in lanes, f"Context lane missing; lanes={lanes}"
+    assert "episode" in lanes, f"Episode lane missing; lanes={lanes}"
+    assert "relation" in lanes, f"Relation lane missing; lanes={lanes}"
+
+
+@pytest.mark.asyncio
+async def test_memory_search_raises_effective_limit_to_cover_active_lanes(
+    enabled_memory_state,
+) -> None:
+    """When limit < active lane count, effective_limit is raised to n_active so every lane gets 1."""
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from sebastian.capabilities.tools.memory_search import memory_search
+    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.types import (
+        MemoryArtifact,
+        MemoryKind,
+        MemoryScope,
+        MemorySource,
+        MemoryStatus,
+    )
+    from sebastian.store.models import RelationCandidateRecord
+
+    now = datetime.now(UTC)
+    async with enabled_memory_state() as session:
+        profile_store = ProfileMemoryStore(session)
+        for idx in range(3):
+            await profile_store.add(
+                MemoryArtifact(
+                    id=f"profile-eff-{idx}",
+                    kind=MemoryKind.FACT,
+                    scope=MemoryScope.USER,
+                    subject_id="owner",
+                    slot_id=f"user.fact.eff_{idx}",
+                    cardinality=None,
+                    resolution_policy=None,
+                    content=f"事实 {idx}",
+                    structured_payload={},
+                    source=MemorySource.EXPLICIT,
+                    confidence=1.0,
+                    status=MemoryStatus.ACTIVE,
+                    valid_from=None,
+                    valid_until=None,
+                    recorded_at=now,
+                    last_accessed_at=None,
+                    access_count=0,
+                    provenance={},
+                    links=[],
+                    embedding_ref=None,
+                    dedupe_key=None,
+                    policy_tags=[],
+                )
+            )
+        await EpisodeMemoryStore(session).add_episode(
+            MemoryArtifact(
+                id="episode-eff-1",
+                kind=MemoryKind.EPISODE,
+                scope=MemoryScope.USER,
+                subject_id="owner",
+                slot_id=None,
+                cardinality=None,
+                resolution_policy=None,
+                content="上次讨论了项目架构",
+                structured_payload={},
+                source=MemorySource.OBSERVED,
+                confidence=0.9,
+                status=MemoryStatus.ACTIVE,
+                valid_from=None,
+                valid_until=None,
+                recorded_at=now,
+                last_accessed_at=None,
+                access_count=0,
+                provenance={},
+                links=[],
+                embedding_ref=None,
+                dedupe_key=None,
+                policy_tags=[],
+            )
+        )
+        session.add(
+            RelationCandidateRecord(
+                id=str(uuid4()),
+                subject_id="owner",
+                predicate="works_on",
+                source_entity_id="owner",
+                target_entity_id="sebastian-project",
+                content="owner works_on sebastian-project",
+                structured_payload={},
+                confidence=0.9,
+                status="active",
+                valid_from=None,
+                valid_until=None,
+                provenance={},
+                policy_tags=[],
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+
+    # limit=2, but 4 lanes are activated → effective_limit = max(2, 4) = 4
+    # Each lane gets exactly 1 slot; total should be 4, not 2
+    result = await memory_search(query="现在上次项目讨论", limit=2)
+
+    assert result.ok is True
+    items = result.output["items"]
+    lanes = [item["lane"] for item in items]
+    # effective_limit raised to 4 (n_active), so total ≤ 4 not ≤ 2
+    assert len(items) <= 4, f"Total must not exceed effective_limit=4 (n_active), got {len(items)}"
     assert "profile" in lanes, f"Profile lane missing; lanes={lanes}"
     assert "context" in lanes, f"Context lane missing; lanes={lanes}"
     assert "episode" in lanes, f"Episode lane missing; lanes={lanes}"
