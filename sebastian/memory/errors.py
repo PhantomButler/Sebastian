@@ -15,3 +15,7 @@ class InvalidCandidateError(MemoryError):
 
 class DecisionLogPersistenceError(MemoryError):
     """Raised when decision_log append fails at persistence layer."""
+
+
+class InvalidSlotProposalError(MemoryError):
+    """Slot proposal 违反命名规则 / 字段约束。"""
