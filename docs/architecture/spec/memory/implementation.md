@@ -219,15 +219,77 @@ class ConsolidationResult(TypedDict):
     summaries: list[dict[str, Any]]
     proposed_artifacts: list[CandidateArtifact]
     proposed_actions: list[dict[str, Any]]
+    proposed_slots: list[ProposedSlot]          # 新增：LLM 提议的新 slot 定义
 ```
 
 Consolidator 的职责是提出建议，而不是最终执行状态迁移。
 
-三个字段的语义分工：
+四个字段的语义分工：
 
 - `summaries`：Consolidator 生成的会话摘要，经 `resolve_candidate` 判断后写入 Episode Store
 - `proposed_artifacts`：Consolidator 提议的新候选记忆；最终 ADD / SUPERSEDE / MERGE / DISCARD 由 Resolver 决定，LLM 不直接控制写入结果
 - `proposed_actions`：对数据库中**已存在**记忆的生命周期操作建议，`action` 只允许 `"EXPIRE"`
+- `proposed_slots`：LLM 提议注册的新 slot；Worker 校验格式后自动注册，校验失败时触发一次重试（详见 §9.1）
+
+`ProposedSlot` schema：
+
+```python
+class ProposedSlot(TypedDict):
+    slot_id: str                # 必须符合 {scope}.{category}.{attribute} 格式
+    scope: str                  # "user" | "session" | "project" | "agent"
+    subject_kind: str           # e.g. "user", "project"
+    cardinality: str            # "single" | "multi"
+    resolution_policy: str      # "supersede" | "merge" | "append_only" | "time_bound"
+    kind_constraints: list[str] # e.g. ["fact"] 或 ["preference"]
+    description: str            # 人类可读描述
+```
+
+### 9.1 Slot 动态注册与多轮重试机制
+
+#### 触发条件
+
+LLM 在 `proposed_artifacts` 中提议一个 `fact` 或 `preference` 候选，但其 `slot_id` 未在当前 `SlotRegistry` 中注册时，应同时在 `proposed_slots` 中提议注册该 slot。
+
+Worker 在处理 `ConsolidationResult` 时：
+
+1. **先处理 `proposed_slots`**，再处理 `proposed_artifacts`
+2. 对每个 `ProposedSlot` 执行格式校验（见下方规则）
+3. 校验通过 → 自动注册到 `SlotRegistry`，写 decision log（`input_source: "slot_proposal"`）
+4. 校验失败 → 收集所有失败的 slot_id 和原因，触发一次重试
+
+#### Slot 命名规范（系统层强制校验）
+
+```
+格式：{scope}.{category}.{attribute}
+示例：user.profile.name / user.preference.food / project.meta.priority
+
+规则：
+- 全小写，只允许字母、数字、下划线和点
+- 必须恰好包含 2 个点（三段式）
+- scope 段必须是 "user" | "session" | "project" | "agent" 之一
+- 每段长度 2-40 字符
+- 不允许与已注册 slot_id 完全相同（精确去重）
+```
+
+#### 重试机制
+
+校验失败时，Worker 构造一次补充提示，把失败原因反馈给 LLM：
+
+```python
+{
+    "task": "fix_slot_proposals",
+    "failed_slots": [
+        {"slot_id": "user.name", "error": "格式不符：必须为三段式 {scope}.{category}.{attribute}"},
+        {"slot_id": "user.pref.language", "error": "与已注册 slot 'user.preference.language' 完全重复"},
+    ],
+    "valid_slots_registered": ["user.profile.dietary_preference"],
+    "instruction": "请修正上述 slot_id 后重新提交 proposed_slots，或将相关 artifact 的 slot_id 改为已有 slot。"
+}
+```
+
+LLM 返回修正后的 `proposed_slots`（不需要重新输出全部 ConsolidationResult）。
+
+**最多重试 1 次**。重试后仍校验失败的 slot → 对应 artifact 改为 `DISCARD`，写 decision log（`reason: "slot_proposal_failed_after_retry"`）。
 
 `ProposedAction` schema：
 
@@ -273,6 +335,94 @@ class ResolveDecision(TypedDict):
 
 - **schema validation**：已实现。`MemoryExtractor` 和 `MemoryConsolidator` 均在 LLM 输出后立即做 Pydantic schema 校验，失败时重试一次，重试后仍失败则返回空结果。
 - **low temperature**：暂不通过 provider 抽象暴露。本轮使用 provider 默认值；仅当实测中出现不可接受的结构化输出波动时，再讨论是否扩展 provider 抽象以支持显式 temperature 设置。
+
+---
+
+## 12. 记忆系统降级行为
+
+本节汇总各路径在**功能关闭、基础设施不可用或 LLM 失败**时的确定性降级行为，供实现者和测试者参考。
+
+### 12.1 降级原则
+
+- **记忆路径任何失败都不允许中断主对话流**：检索失败、存储失败、LLM 失败均降级为"无记忆上下文继续"，不抛出未捕获异常。
+- **写入路径失败必须有可观测信号**：至少有 warning / error 日志和 trace；不允许静默吞掉写入失败（除非已记录 decision log）。
+- **幂等标记写入时机决定重试窗口**（见 §12.4）。
+
+### 12.2 功能开关降级（`memory_settings.enabled = false`）
+
+| 路径 | 降级行为 |
+|------|----------|
+| `_memory_section()`（检索注入） | 立即返回 `""`，不进入检索流程 |
+| `MemoryConsolidationScheduler._handle()` | 跳过任务调度，写 trace `consolidation.schedule_skip` |
+| `SessionConsolidationWorker.consolidate_session()` | 立即返回，写 trace `consolidation.skip` |
+| `sweep_unconsolidated()` | 立即返回，不处理任何 session |
+| `memory_save` 工具 | 返回 `ToolResult(ok=False, error="记忆功能已关闭")` |
+
+功能开关为运行时热切换（`PUT /api/v1/memory/settings`）；关闭后不影响已有数据，重新开启后下一轮会话正常触发沉淀。
+
+### 12.3 基础设施不可用降级（DB 未就绪）
+
+| 路径 | 降级行为 |
+|------|----------|
+| `_memory_section()`（`_db_factory is None`） | 立即返回 `""` |
+| `memory_save` 工具 | 返回 `ToolResult(ok=False, error="记忆存储不可用")` |
+| `SessionConsolidationWorker` | DB 操作抛出异常 → `MemoryConsolidationScheduler._log_exception()` 记录 error 日志，任务丢弃 |
+
+DB 不可用时已触发的 consolidation task 失败后**不写幂等标记**，下次 startup sweep 会重试（见 §12.4）。
+
+### 12.4 LLM 失败降级
+
+#### Extractor 失败
+
+`MemoryExtractor.extract()` 按指数退避（0.5s、1s、2s …）重试；用尽重试后返回 `[]`，**从不抛出异常**。
+
+后果：consolidation 继续执行，但 `candidate_artifacts = []`；Consolidator 仍能根据原始 session 消息生成 summary，但 fact / preference 候选为空，本次会话的偏好提取可能缺失。
+
+#### Consolidator 失败
+
+`MemoryConsolidator.consolidate()` 同样指数退避重试；用尽后返回空 `ConsolidationResult`（`summaries=[], proposed_artifacts=[], proposed_actions=[]`），**从不抛出异常**。
+
+> **已知数据丢失窗口**：当前实现中，Consolidator 返回空结果后，`SessionConsolidationWorker` 仍会写入 `SessionConsolidationRecord` 幂等标记（marker）并提交。这意味着：
+> - 该 session 被标记为"已沉淀"
+> - startup sweep 不会重试
+> - **LLM 失败导致的空沉淀在数据库层面无法与正常空会话区分**
+
+当前接受此行为，因为：
+1. Consolidator 多次重试后仍失败属于极低概率事件
+2. 主对话路径不受影响
+3. 引入"失败标记"以支持重试会增加工作量，当前不做
+
+**后续改进方向**（不在当前实现范围）：在 `SessionConsolidationRecord` 增加 `status` 字段（`success / failed_empty`），sweep 对 `failed_empty` 记录补重试一次。
+
+### 12.5 检索路径异常降级
+
+`_memory_section()` 内的所有异常均被 `except Exception` 捕获：
+
+```python
+except Exception:
+    logger.warning("Memory section retrieval failed, continuing without memory context", exc_info=True)
+    return ""
+```
+
+Agent 继续执行，本轮无记忆注入。`warning` 级日志包含完整 traceback，可由外层监控工具采集。
+
+不记录 decision log（决策日志记录的是写入决策，不是检索失败）。
+
+### 12.6 `memory_save` 工具错误响应
+
+`memory_save` 是非阻塞工具，只有前置检查（功能开关、DB 可用性）会同步返回 `ok=false`；实际写入在后台执行，失败只记 error log 和 trace。详见 write-pipeline.md §9.4。
+
+### 12.7 降级行为汇总表
+
+| 场景 | 主对话影响 | 记忆数据影响 | 可观测信号 | 重试机制 |
+|------|-----------|------------|-----------|---------|
+| 功能关闭 | 无 | 不写入、不读取 | trace | N/A |
+| DB 不可用（检索） | 无记忆注入 | 无 | — | 下次请求自动恢复 |
+| DB 不可用（consolidation） | 无 | 不写入 | error log | startup sweep 重试 |
+| Extractor LLM 失败 | 无 | fact/preference 候选丢失 | trace（候选数=0） | consolidation 继续执行 |
+| Consolidator LLM 失败 | 无 | **整次沉淀静默丢失** | trace（count=0） + error log | **不重试（已知缺口）** |
+| 检索抛出异常 | 无记忆注入 | 无 | warning log + traceback | 下次请求自动恢复 |
+| Consolidation task 异常 | 无 | 不写入 | error log | startup sweep 重试 |
 
 ---
 

@@ -35,13 +35,17 @@ Sebastian 不做“统一 search top-k 然后塞进 prompt”，而做：
 
 Planner 输入：
 
-- `user_message`
-- `session_context`
-- `subject_id`
-- `active_project_or_agent_context`
-- `reader_agent_type`
-- `reader_session_id`
-- `access_purpose`
+| 字段 | 说明 |
+|------|------|
+| `user_message` | 当前用户消息 |
+| `session_context` | 当前 session 主题、近期消息摘要 |
+| `subject_id` | 当前记忆主体（通常为 owner entity id） |
+| `active_project_or_agent_context` | 当前激活的项目或 agent 上下文 |
+| `reader_agent_type` | 调用方 agent 类型；用于 policy_tags 中 `owner_only` 等访问控制过滤 |
+| `reader_session_id` | 调用方 session id；用于 scope=session 的记忆隔离 |
+| `access_purpose` | 本次检索目的，枚举值：`auto_inject`（自动注入）/ `explicit_search`（工具显式检索）/ `consolidation`（后台沉淀读取） |
+
+**Agent 层级前置检查**：`_memory_section()` 在构造 Planner 输入之前，必须先确认调用方 depth=1。depth >= 2 的 agent 不进入检索流程，直接返回空记忆注入。详见 [artifact-model.md §10.4](artifact-model.md)。
 
 Planner 输出：
 
@@ -168,17 +172,38 @@ Assembler 在最终注入前，必须统一执行以下过滤：
 
 ---
 
-## 7. Token Budget（上下文预算）
+## 7. Retrieval Budget（检索预算）
 
-各 lane 需要独立预算，不能共享抢占。
+### 7.1 预算单位：条数，非 token 数
 
-否则会出现：
+当前实现以**条数（items）**为预算单位，不做 token 计数。每条 lane 独立上限，不共享抢占——否则 episode 会抢光 profile 名额，或 relation 饿死 context lane。
 
-- episode 抢光上下文
-- preference 被挤掉
-- 历史经历覆盖当前事实
+### 7.2 默认 per-lane limit（`RetrievalPlan` 默认值）
 
-### 7.1 `memory_search` 工具的 effective limit
+| Lane | 默认条数上限 | 代码常量位置 |
+|------|------------|-------------|
+| Profile Lane | **5** | `RetrievalPlan.profile_limit = 5` |
+| Context Lane | **3** | `RetrievalPlan.context_limit = 3` |
+| Episode Lane | **3** | `RetrievalPlan.episode_limit = 3`（summary 优先，不足时补 detail） |
+| Relation Lane | **3** | `RetrievalPlan.relation_limit = 3` |
+
+修改默认值只需改 `RetrievalPlan` 字段默认值，无需改 planner 或 assembler 逻辑。
+
+### 7.3 最小置信度过滤线
+
+`MIN_CONFIDENCE = 0.3`：低于此值的记录在 Assembler 过滤阶段丢弃，不计入 lane 条数配额。
+
+此值与 confidence spec（artifact-model.md §9.3）中的"不自动注入阈值 0.5"不同——`MIN_CONFIDENCE` 是**绝对过滤线**（低于它的记录连候选都不是），0.5 是**注入优先级线**（低于 0.5 但高于 0.3 的记录不自动注入，但 `memory_search` 仍可返回）。
+
+> **当前实现状态**：`memory_search` 工具路径使用 `MIN_CONFIDENCE = 0.3` 作为过滤线，与自动注入路径一致。如需让 `memory_search` 返回更低置信度的候选，应在工具层单独传入 `min_confidence` 参数，不修改全局常量。
+
+### 7.4 `pinned` tag 的 budget 豁免
+
+标有 `pinned` 的记录不受 per-lane limit 剪裁，强制进入注入结果。
+
+**实现状态**：`pinned` 豁免逻辑当前尚未在 `MemorySectionAssembler` 中实现，为待补功能。实现时应在 assembler 中先单独收集 `pinned` 记录，再对剩余记录应用 limit，最后合并输出；`pinned` 总数上限为 10 条，超出时按 confidence 降序截断（见 artifact-model.md §10.1）。
+
+### 7.5 `memory_search` 工具的 effective limit
 
 `memory_search(query, limit)` 是显式工具检索入口，和自动注入路径共享 Retrieval Planner 与 lane 语义，但 `limit` 是工具调用方请求的总结果目标值，不应直接覆盖每条 lane 的独立预算。
 

@@ -77,26 +77,164 @@ status: partially-implemented
 
 ### 1.2 Cross-Session Consolidation（跨会话沉淀）
 
-针对多个 session 做：
+针对多个已沉淀 session 做偏好强化、模式归纳、多来源证据合并。
 
-- 偏好强化
-- 模式归纳
-- 长期主题聚合
-- 多来源证据合并
+**实现状态**：未实现，本节为完整 spec。
 
-**实现状态**：未实现。Cross-Session Consolidation 属于后续增强能力，不能直接复用当前 Session Consolidation 的完成事件语义。实现前需要单独 spec 讨论触发频率、扫描窗口、证据合并规则、幂等 key、decision log 记录方式和人工审核边界。
+#### 职责边界
 
-### 1.3 Memory Maintenance（记忆维护）
+Cross-Session Consolidation **不重复处理原始 session 消息**，只看已经 session-consolidated 过的结果：
 
-负责：
+- 现有 `active` profile 记忆（含 `inferred` / `observed` 来源）
+- 近期 summaries
+- 低置信候选 artifacts（`confidence < 0.75`）
 
-- 过期
-- 降权
-- 重复压缩
-- 摘要替换
-- 索引修复
+目标是识别跨多个 session 稳定出现的模式，将多次印证的 `inferred` 事实提升置信度，将长期稳定偏好固化为更高可信的记忆。
 
-**实现状态**：部分实现。当前已有 EXPIRE 类生命周期动作和 startup catch-up sweep，但还没有独立周期性 Maintenance Worker。降权、重复压缩、摘要替换和索引修复都需要单独 spec，先定义可观测输入、决策规则、审计字段和回滚方式。
+#### 触发机制
+
+**计数触发**：每当累计新增 **10 个** session-consolidated session 后，触发一次 Cross-Session Consolidation。
+
+触发判断逻辑：
+1. 读取 `CrossSessionConsolidationRecord` 中最近一次运行的 `processed_through` 时间戳
+2. 查询 `SessionConsolidationRecord` 中 `completed_at > processed_through` 的记录数
+3. 达到 10 条时，调度一次 `CrossSessionConsolidationWorker`
+4. 此检查在每次 `SESSION_COMPLETED` 处理后触发（piggyback on existing scheduler）
+
+**Startup 补偿**：启动时如距上次 cross-session 运行超过 7 天，且有未处理的 session，自动补运行一次，不等待凑满 10 条。
+
+#### 幂等 key
+
+新建 DB 表 `cross_session_consolidation_records`：
+
+```
+run_id            TEXT PRIMARY KEY   -- uuid
+processed_through DATETIME           -- 扫描到哪个时间点的 session
+session_count     INTEGER            -- 本次处理了多少个 session
+completed_at      DATETIME
+worker_version    TEXT
+```
+
+下次运行从上一次 `processed_through` 往后扫，不重复处理同一批 session。并发安全：`run_id` 唯一约束 + `IntegrityError` 回滚（与 Session Consolidation 相同模式）。
+
+#### 证据合并规则（confidence 提升）
+
+同一 `(slot_id, value)` 在 **N 个不同 session** 的 summaries 或 `inferred` artifacts 中出现，视为多次印证：
+
+| 出现次数 | confidence 提升目标 |
+|---------|-------------------|
+| 2 个 session | `inferred 0.60 → 0.75` |
+| 3 个及以上 session | 上限 `0.85`，不超过 `explicit` 基线 0.95 |
+
+提升方式：生成一条新 `CandidateArtifact`（`source=inferred`，提升后 confidence），走标准 Resolve 路径（SUPERSEDE 旧记录，写 decision log）。
+
+#### 与 explicit 来源的冲突规则
+
+Cross-Session Consolidation **不得覆盖 `source=explicit` 的记忆**：
+
+- 若归纳结论与现有 `explicit` 记录冲突 → 新候选打 `needs_review` tag，进入待审核队列，不执行 SUPERSEDE
+- 若无冲突，或现有记录为 `inferred`/`observed` → 正常走 Resolve
+
+这条规则确保用户明确说过的事情不会被模型归纳静默覆盖。
+
+#### Decision Log
+
+每次 Cross-Session Consolidation 的写入、提升、丢弃，全部进入 `memory_decision_log`，`input_source` 标记为：
+
+```python
+{"type": "cross_session_consolidation", "run_id": "...", "session_count": N}
+```
+
+### 1.3 Summary 替换策略
+
+#### 核心规则：一个 session 最多一条 active summary
+
+Session Consolidation 每次运行只生成一条 summary，key 是 `session_id`（来自 `structured_payload.source_session_ids` 或 `provenance.session_id`）。
+
+Resolver 对 `summary` kind 的处理：
+
+| 场景 | 决策 |
+|------|------|
+| 相同 content（精确匹配） | `DISCARD`（已有 `find_active_exact` 实现） |
+| 相同 `session_id`，content 不同 | `SUPERSEDE`：新 summary 替换旧 summary，旧记录 status → `superseded` |
+| 不同 `session_id` | `ADD`：追加，不影响其他 session 的 summary |
+
+**"相同 session_id" 的判断来源**（优先级从高到低）：
+1. `structured_payload.source_session_ids` 包含该 session_id
+2. `provenance.session_id` 等于该 session_id
+
+#### 历史 summary 保留规则
+
+- `superseded` 状态的旧 summary **保留在 DB**，不物理删除
+- 检索路径（`search_summaries_by_query`、`search_summaries`）只查 `status=active`，历史 summary 不参与自动注入
+- `memory_search` 工具可通过加 `status` 过滤参数查到历史 summary（审计、回溯用途）
+
+#### Active summary 总量上限
+
+单个 subject 的 active summary 累积上限为 **50 条**。超出时，Maintenance Worker 将最旧（`recorded_at` 最早）且 `access_count=0` 的 summary 状态置为 `expired`，直到降至 50 条以内。
+
+此规则由 Maintenance Worker（§1.4）执行，Session Consolidation 本身不做总量检查。
+
+#### Cross-Session summary（未来）
+
+Cross-Session Consolidation 生成的跨多个 session 的聚合 summary，`source_session_ids` 包含多个 session_id：
+- 不触发单 session summary 的 SUPERSEDE 规则
+- 作为独立 `ADD` 追加
+- `structured_payload.source_session_ids` 长度 > 1 时，Resolver 识别为 cross-session summary
+
+### 1.4 Memory Maintenance（记忆维护）
+
+负责：过期、降权、重复压缩、摘要总量清理、索引修复。
+
+**实现状态**：部分实现。当前已有 EXPIRE 类生命周期动作和 startup catch-up sweep，但还没有独立周期性 Maintenance Worker。规则如下：
+
+**降权规则**：`confidence < 0.3` 且 `access_count = 0` 且距 `recorded_at` 超过 **30 天** → 标记 `needs_review`；再过 30 天仍未访问 → status 置为 `expired`（除非有 `do_not_expire` tag）。
+
+**重复压缩规则**：同一 `(subject_id, slot_id, value)` 存在多条 `active` 记录时（正常流程不应出现，但可能因 bug 产生）→ 保留 confidence 最高且 `recorded_at` 最新的一条，其余置为 `superseded`，写 decision log。
+
+**摘要总量清理**：单个 subject active summary 超过 **50 条**时，将最旧（`recorded_at` 最早）且 `access_count = 0` 的 summary 置为 `expired`，直到降至 50 条。
+
+**触发时机**：启动时执行一次（catch-up），之后每 **24 小时**执行一次（scheduler 驱动）。
+
+### 1.5 Relation 写入规则与 Exclusive 时间边界
+
+`relation_candidates` 是唯一的 relation 存储，无独立 `relation_facts` 表。
+
+#### 写入去重
+
+新 relation artifact 写入前，检查是否已存在相同 `(subject_id, predicate, source_entity_id, target_entity_id)` 且 `status=active` 的记录：
+
+- 完全匹配 → `DISCARD`，写 decision log
+- 不匹配 → 继续走 exclusive 检查
+
+#### Exclusive Relation 时间边界
+
+`is_exclusive=True` 的 relation 表示：同一 `(subject_id, predicate)` 下**只能有一条 active 记录**（如"用户当前居住地"、"用户当前主用设备"）。
+
+写入新 exclusive relation 时：
+
+1. 查询 `relation_candidates` 中所有 `subject_id=X, predicate=P, status=active, is_exclusive=True` 的记录
+2. 对每条旧记录：将 `valid_until` 设为新记录的 `valid_from`（或当前时间，如新记录无 `valid_from`）；`status` 保持 `active` 不变——`valid_until` 到期后检索层自然过滤
+3. 写入新记录，`status=active`
+4. 所有操作写 decision log，decision 类型为 `SUPERSEDE`，`old_memory_ids` 列旧记录 ID
+
+**不支持 back-dated relation**：`valid_from` 只允许设为当前时间或未来时间，不允许回填过去时间（避免破坏已有 valid_until 链）。
+
+#### Non-exclusive Relation
+
+`is_exclusive=False`：直接 `ADD`，不影响同 predicate 下其他记录。
+
+#### Relation Lane 过滤条件
+
+Relation Lane 查询 `relation_candidates` 时应用以下过滤（与 `_keep_record` 通用过滤一致）：
+
+```
+status = active
+confidence >= MIN_CONFIDENCE (0.3)
+valid_from <= now  (或为 None)
+valid_until > now  (或为 None)
+subject_id = context.subject_id
+```
 
 ---
 

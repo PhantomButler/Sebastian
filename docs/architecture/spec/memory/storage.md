@@ -69,6 +69,18 @@ status: planned
 - 原始 episode
 - 派生 summary
 
+### Episode 边界定义
+
+**一个 session 最多对应一个 episode artifact**，session_id 是唯一 key（与 summary 对齐）。
+
+| 规则 | 说明 |
+|------|------|
+| 粒度 | session 级，不按 task 拆分 |
+| 内容 | Consolidator 对"这段对话发生了什么"的提炼；必须有 `topic`，`outcome` 为空表示无明确结论 |
+| 空会话 | 消息数 < 2 或无实质交流的 session 不生成 episode |
+| 去重 key | `(subject_id, session_id)`：同一 session 已有 episode → SUPERSEDE（同 summary 替换规则） |
+| task 细节 | session 内多个 task 的细节通过 `structured_payload.task_id` 和 `outcome` 在同一条 episode 里表达，不拆多条 |
+
 ---
 
 ## 4. Entity Registry（实体注册表）
@@ -107,14 +119,24 @@ status: planned
 - 图数据库依赖
 - 多跳图遍历作为主检索路径
 
-首期建议物化方式：
+物化方式（已定型，不再引入 relation_facts 表）：
 
-- `relation_candidates`（关系候选表）
-  - 保存抽取得到但尚未进入主关系索引的 relation artifacts
-- `relation_facts`（确认关系表）
-  - 保存已确认、可供当前读取链路使用的轻量关系记录
+- **`relation_candidates`** 是唯一的 relation 存储表，同时承担候选层和事实层的职责
+  - 写入时所有 relation artifacts 进入此表
+  - 检索时以 `confidence >= 0.5 + status=active + valid_from/valid_until` 过滤作为"可用 relation"标准
+  - 不再新建独立的 `relation_facts` 表——两张表内容高度重合，区别仅是"审查状态"，增加复杂度而无实质收益
 
-如果首期不启用 `relation_facts` 做主注入，至少也要把 relation artifacts 持久化到 `relation_candidates` 和 `memory_decision_log`。
+relation 写入和检索规则详见 [consolidation.md §1.5](consolidation.md)（Exclusive Relation 时间边界）及本文 §5.1（字段扩展）。
+
+### 5.1 relation_candidates 待补字段
+
+当前 `RelationCandidateRecord` 缺少 `is_exclusive` 字段，需迁移补加：
+
+```sql
+ALTER TABLE relation_candidates ADD COLUMN is_exclusive INTEGER NOT NULL DEFAULT 0;
+```
+
+Python 侧对应 `Mapped[bool]`，默认 `False`。写入时由 `structured_payload.is_exclusive` 填充。
 
 ---
 
