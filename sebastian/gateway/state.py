@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from sebastian.gateway.sse import SSEManager
     from sebastian.llm.registry import LLMProviderRegistry
     from sebastian.memory.consolidation import MemoryConsolidationScheduler
+    from sebastian.memory.extraction import MemoryExtractor
     from sebastian.orchestrator.conversation import ConversationManager
     from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import EventBus
@@ -36,6 +37,7 @@ db_factory: async_sessionmaker[AsyncSession]
 llm_registry: LLMProviderRegistry
 memory_settings: MemoryRuntimeSettings
 consolidation_scheduler: MemoryConsolidationScheduler | None = None
+memory_extractor: MemoryExtractor | None = None
 agent_instances: dict[str, BaseAgent] = {}
 agent_registry: dict[str, AgentConfig] = {}
 
