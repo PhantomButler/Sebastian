@@ -190,15 +190,17 @@ class MemorySectionAssembler:
             sections.append(f"## Current facts about user\n{lines}")
 
         if contexts:
-            lines = "\n".join(f"- {r.content}" for r in contexts)
+            lines = "\n".join(f"- [{_record_kind(r, 'fact')}] {r.content}" for r in contexts)
             sections.append(f"## Current context\n{lines}")
 
         if relations:
-            lines = "\n".join(f"- {_render_relation(r)}" for r in relations)
+            lines = "\n".join(f"- [relation] {_render_relation(r)}" for r in relations)
             sections.append(f"## Important relationships\n{lines}")
 
         if episodes:
-            lines = "\n".join(f"- {r.content}" for r in episodes)
+            lines = "\n".join(
+                f"- [{_record_kind(r, 'episode')}] {r.content}" for r in episodes
+            )
             sections.append(f"## Historical evidence (may be outdated)\n{lines}")
 
         trace(
@@ -216,6 +218,19 @@ class MemorySectionAssembler:
             ],
         )
         return "\n\n".join(sections)
+
+
+def _record_kind(record: Any, fallback: str) -> str:
+    """Return the kind label for a record as a plain string.
+
+    Handles both string kinds and enum-valued kinds (via ``.value``).
+    Falls back to *fallback* when the attribute is absent or None.
+    """
+    kind = getattr(record, "kind", None)
+    if kind is None:
+        return fallback
+    value = getattr(kind, "value", kind)
+    return str(value)
 
 
 def _render_relation(record: Any) -> str:

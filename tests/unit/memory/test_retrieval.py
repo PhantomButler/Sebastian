@@ -649,6 +649,63 @@ class TestMemorySectionAssembler:
         assert "no-subject" in result
         assert "wrong-subject" not in result
 
+    def test_context_lane_includes_kind_label(self) -> None:
+        """Context lane must render [kind] label before content."""
+        records = [FakeContextRecord(content="当前项目是 Sebastian", kind="fact")]
+        assembler = MemorySectionAssembler()
+        result = assembler.assemble(
+            profile_records=[],
+            context_records=records,
+            episode_records=[],
+            relation_records=[],
+            plan=_plan(),
+        )
+        assert "- [fact] 当前项目是 Sebastian" in result
+
+    def test_episode_lane_includes_kind_label_summary(self) -> None:
+        """Episode lane must render [kind] label for summary records."""
+        records = [FakeEpisodeRecord(content="上次讨论了记忆模块", kind="summary")]
+        assembler = MemorySectionAssembler()
+        result = assembler.assemble(
+            profile_records=[],
+            context_records=[],
+            episode_records=records,
+            relation_records=[],
+            plan=_plan(),
+        )
+        assert "- [summary] 上次讨论了记忆模块" in result
+
+    def test_episode_lane_includes_kind_label_episode(self) -> None:
+        """Episode lane must render [kind] label for episode records."""
+        records = [FakeEpisodeRecord(content="用户确认了方案", kind="episode")]
+        assembler = MemorySectionAssembler()
+        result = assembler.assemble(
+            profile_records=[],
+            context_records=[],
+            episode_records=records,
+            relation_records=[],
+            plan=_plan(),
+        )
+        assert "- [episode] 用户确认了方案" in result
+
+    def test_relation_lane_includes_relation_kind_prefix(self) -> None:
+        """Relation lane must render [relation] prefix before the rendered triple."""
+        assembler = MemorySectionAssembler()
+        result = assembler.assemble(
+            profile_records=[],
+            context_records=[],
+            episode_records=[],
+            relation_records=[
+                FakeRelationRecord(
+                    source_entity_id="user",
+                    predicate="has_spouse",
+                    target_entity_id="alice",
+                )
+            ],
+            plan=_plan(),
+        )
+        assert "- [relation] user has_spouse alice" in result
+
 
 # ---------------------------------------------------------------------------
 # retrieve_memory_section — integration with context lane
