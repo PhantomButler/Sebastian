@@ -14,6 +14,7 @@ from sebastian.memory.consolidation import (
     SessionConsolidationWorker,
     sweep_unconsolidated,
 )
+from sebastian.memory.extraction import ExtractorOutput
 from sebastian.memory.types import MemoryScope
 from sebastian.store.index_store import IndexStore
 from sebastian.store.models import (
@@ -30,7 +31,7 @@ from sebastian.store.session_store import SessionStore
 
 class FakeExtractor:
     async def extract(self, input):  # type: ignore[no-untyped-def]
-        return []
+        return ExtractorOutput(artifacts=[])
 
 
 class FakeConsolidator:

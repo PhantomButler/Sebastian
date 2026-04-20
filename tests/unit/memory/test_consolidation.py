@@ -18,6 +18,7 @@ from sebastian.memory.consolidation import (
     MemorySummary,
     ProposedAction,
 )
+from sebastian.memory.extraction import ExtractorOutput
 from sebastian.memory.types import (
     CandidateArtifact,
     MemoryKind,
@@ -534,7 +535,6 @@ class TestMemoryConsolidatorConsolidate:
         finally:
             await engine.dispose()
 
-
     @pytest.mark.asyncio
     async def test_worker_logs_discard_for_non_expire_action(self) -> None:
         """Non-EXPIRE proposed_actions must be logged as DISCARD in the decision log."""
@@ -572,7 +572,7 @@ class TestMemoryConsolidatorConsolidate:
 
             class _FakeExtractor:
                 async def extract(self, extractor_input):  # type: ignore[no-untyped-def]
-                    return []
+                    return ExtractorOutput(artifacts=[])
 
             class _FakeConsolidator:
                 last_resolved = None

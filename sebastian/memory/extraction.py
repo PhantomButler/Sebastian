@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel
 
 from sebastian.memory.provider_bindings import MEMORY_EXTRACTOR_BINDING
-from sebastian.memory.types import CandidateArtifact
+from sebastian.memory.types import CandidateArtifact, ProposedSlot
 
 if TYPE_CHECKING:
     from sebastian.llm.registry import LLMProviderRegistry, ResolvedProvider
@@ -24,6 +24,7 @@ class ExtractorInput(BaseModel):
 
 class ExtractorOutput(BaseModel):
     artifacts: list[CandidateArtifact]
+    proposed_slots: list[ProposedSlot] = []
 
 
 class MemoryExtractor:
@@ -38,28 +39,27 @@ class MemoryExtractor:
         self._registry = llm_registry
         self._max_retries = max_retries
 
-    async def extract(self, input: ExtractorInput) -> list[CandidateArtifact]:
+    async def extract(self, input: ExtractorInput) -> ExtractorOutput:
         """Call LLM to extract candidate memory artifacts.
 
-        Returns [] on any failure after retries.
+        Returns ExtractorOutput(artifacts=[], proposed_slots=[]) on any failure after retries.
         """
         resolved = await self._registry.get_provider(MEMORY_EXTRACTOR_BINDING)
         system = (
             "You are a memory extraction assistant. "
             "Analyze the conversation and extract memory artifacts. "
             "Respond with ONLY valid JSON in this exact format: "
-            '{"artifacts": [<CandidateArtifact objects>]}. '
+            '{"artifacts": [<CandidateArtifact objects>], "proposed_slots": []}. '
             "No explanation, no markdown, no code blocks. Only JSON."
         )
         user_content = input.model_dump_json()
         messages = [{"role": "user", "content": user_content}]
-        empty: list[CandidateArtifact] = []
+        empty = ExtractorOutput(artifacts=[], proposed_slots=[])
 
         for attempt in range(self._max_retries + 1):
             try:
                 raw = await self._call_llm(resolved, system, messages)
-                output = ExtractorOutput.model_validate_json(raw)
-                return output.artifacts
+                return ExtractorOutput.model_validate_json(raw)
             except Exception as exc:  # noqa: BLE001 — provider exception types vary
                 if attempt < self._max_retries:
                     logger.warning(

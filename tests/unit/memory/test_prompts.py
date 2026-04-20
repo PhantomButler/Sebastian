@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from sebastian.memory.prompts import (
     build_consolidator_prompt,
     build_extractor_prompt,
@@ -38,7 +36,6 @@ def test_consolidator_prompt_includes_extractor_sections_plus_summary() -> None:
     assert "EXPIRE" in prompt
 
 
-@pytest.mark.xfail(reason="depends on Task 9 ExtractorOutput extension")
 def test_embedded_examples_parse_as_extractor_output() -> None:
     """示例 JSON 必须能被 ExtractorOutput 解析，防止 prompt 示例随代码演进腐坏。"""
     from sebastian.memory.extraction import ExtractorOutput

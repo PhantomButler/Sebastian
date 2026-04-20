@@ -242,7 +242,8 @@ class SessionConsolidationWorker:
                 conversation_window=messages,
                 known_slots=[s.model_dump() for s in DEFAULT_SLOT_REGISTRY.list_all()],
             )
-            candidate_artifacts = await self._extractor.extract(extractor_input)
+            extractor_output = await self._extractor.extract(extractor_input)
+            candidate_artifacts = extractor_output.artifacts
             trace(
                 "consolidation.extractor_result",
                 session_id=session_id,

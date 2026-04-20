@@ -10,6 +10,7 @@ from sebastian.memory.consolidation import (
     MemorySummary,
     SessionConsolidationWorker,
 )
+from sebastian.memory.extraction import ExtractorOutput
 from sebastian.memory.types import (
     CandidateArtifact,
     Cardinality,
@@ -55,7 +56,7 @@ class FakeExtractor:
     async def extract(self, input):  # type: ignore[no-untyped-def]
         self.called = True
         self.last_input = input
-        return list(self.artifacts)
+        return ExtractorOutput(artifacts=list(self.artifacts))
 
 
 class FakeConsolidator:

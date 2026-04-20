@@ -62,7 +62,8 @@ async def _do_save(content: str, session_id: str | None, agent_type: str) -> Non
         conversation_window=[{"role": "user", "content": content}],
         known_slots=[s.model_dump() for s in DEFAULT_SLOT_REGISTRY.list_all()],
     )
-    candidates = await extractor.extract(extractor_input)
+    extractor_output = await extractor.extract(extractor_input)
+    candidates = extractor_output.artifacts
 
     if not candidates:
         trace("tool.memory_save.bg_skip", reason="extractor_empty")

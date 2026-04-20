@@ -239,9 +239,9 @@ class TestMemoryExtractorExtract:
             known_slots=[],
         )
         result = await extractor.extract(inp)
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], CandidateArtifact)
+        assert isinstance(result, ExtractorOutput)
+        assert len(result.artifacts) == 1
+        assert isinstance(result.artifacts[0], CandidateArtifact)
 
     @pytest.mark.asyncio
     async def test_malformed_json_retries_once_then_returns_empty(self) -> None:
@@ -264,7 +264,7 @@ class TestMemoryExtractorExtract:
             known_slots=[],
         )
         result = await extractor.extract(inp)
-        assert result == []
+        assert result.artifacts == []
         # 1 initial attempt + 1 retry = 2 calls
         assert call_count == 2
 
@@ -293,7 +293,7 @@ class TestMemoryExtractorExtract:
             known_slots=[],
         )
         result = await extractor.extract(inp)
-        assert result == []
+        assert result.artifacts == []
         assert call_count == 2
 
     @pytest.mark.asyncio
@@ -313,12 +313,12 @@ class TestMemoryExtractorExtract:
 
         inp = ExtractorInput(subject_context={}, conversation_window=[], known_slots=[])
         result = await extractor.extract(inp)
-        assert result == []
+        assert result.artifacts == []
         assert call_count == 1
 
     @pytest.mark.asyncio
     async def test_returns_empty_list_not_raises_on_failure(self) -> None:
-        """Extractor must never raise — always returns [] on any parse failure."""
+        """Extractor must never raise — always returns empty ExtractorOutput on failure."""
         provider = FakeLLMProvider("{completely broken}")
         registry = FakeRegistry(provider)
         extractor = MemoryExtractor(registry, max_retries=0)  # type: ignore[arg-type]
@@ -326,11 +326,11 @@ class TestMemoryExtractorExtract:
         inp = ExtractorInput(subject_context={}, conversation_window=[], known_slots=[])
         # Should not raise
         result = await extractor.extract(inp)
-        assert result == []
+        assert result.artifacts == []
 
     @pytest.mark.asyncio
     async def test_extractor_returns_empty_when_stream_raises(self) -> None:
-        """Provider raising arbitrary exception during stream → empty list, no crash."""
+        """Provider raising arbitrary exception during stream → empty output, no crash."""
 
         class _RaisingProvider(LLMProvider):
             async def stream(  # type: ignore[override]
@@ -351,7 +351,7 @@ class TestMemoryExtractorExtract:
         extractor = MemoryExtractor(_RaisingRegistry(), max_retries=0)  # type: ignore[arg-type]
         inp = ExtractorInput(subject_context={}, conversation_window=[], known_slots=[])
         result = await extractor.extract(inp)
-        assert result == []
+        assert result.artifacts == []
 
     @pytest.mark.asyncio
     async def test_multiple_artifacts_returned(self) -> None:
@@ -366,9 +366,9 @@ class TestMemoryExtractorExtract:
 
         inp = ExtractorInput(subject_context={}, conversation_window=[], known_slots=[])
         result = await extractor.extract(inp)
-        assert len(result) == 2
-        assert result[1].content == "Another memory"
-        assert result[1].kind == MemoryKind.FACT
+        assert len(result.artifacts) == 2
+        assert result.artifacts[1].content == "Another memory"
+        assert result.artifacts[1].kind == MemoryKind.FACT
 
     @pytest.mark.asyncio
     async def test_extractor_prompt_contains_schema_instruction(self) -> None:
@@ -386,7 +386,7 @@ class TestMemoryExtractorExtract:
             known_slots=[{"slot_id": "user.preference.theme", "description": "UI theme"}],
         )
         result = await extractor.extract(inp)
-        assert isinstance(result, list)
+        assert isinstance(result, ExtractorOutput)
 
         # Exactly one LLM call was made
         assert len(provider.calls) == 1
