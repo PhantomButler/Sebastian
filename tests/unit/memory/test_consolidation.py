@@ -535,6 +535,91 @@ class TestMemoryConsolidatorConsolidate:
             await engine.dispose()
 
 
+    @pytest.mark.asyncio
+    async def test_worker_logs_discard_for_non_expire_action(self) -> None:
+        """Non-EXPIRE proposed_actions must be logged as DISCARD in the decision log."""
+        from sqlalchemy import select, text
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        from sebastian.memory.consolidation import SessionConsolidationWorker
+        from sebastian.store.models import Base, MemoryDecisionLogRecord
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                await conn.execute(
+                    text(
+                        "CREATE VIRTUAL TABLE IF NOT EXISTS episode_memories_fts "
+                        "USING fts5(memory_id UNINDEXED, content_segmented, "
+                        "tokenize=unicode61)"
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE VIRTUAL TABLE IF NOT EXISTS profile_memories_fts "
+                        "USING fts5(memory_id UNINDEXED, content_segmented, "
+                        "tokenize=unicode61)"
+                    )
+                )
+            factory = async_sessionmaker(engine, expire_on_commit=False)
+
+            class _FakeSessionStore:
+                async def get_messages(
+                    self, session_id: str, agent_type: str = "sebastian"
+                ) -> list[dict[str, Any]]:
+                    return []
+
+            class _FakeExtractor:
+                async def extract(self, extractor_input):  # type: ignore[no-untyped-def]
+                    return []
+
+            class _FakeConsolidator:
+                last_resolved = None
+
+                async def consolidate(
+                    self, consolidator_input: ConsolidatorInput
+                ) -> ConsolidationResult:
+                    return ConsolidationResult(
+                        proposed_actions=[
+                            ProposedAction(
+                                action="ADD",
+                                memory_id=None,
+                                reason="test ignored action",
+                            )
+                        ],
+                        summaries=[],
+                        proposed_artifacts=[],
+                    )
+
+            worker = SessionConsolidationWorker(
+                db_factory=factory,
+                consolidator=_FakeConsolidator(),  # type: ignore[arg-type]
+                extractor=_FakeExtractor(),  # type: ignore[arg-type]
+                session_store=_FakeSessionStore(),
+                memory_settings_fn=lambda: True,
+            )
+
+            await worker.consolidate_session("sess-1", "sebastian")
+
+            async with factory() as s:
+                log_rows = list(
+                    (
+                        await s.scalars(
+                            select(MemoryDecisionLogRecord).where(
+                                MemoryDecisionLogRecord.decision == "DISCARD"
+                            )
+                        )
+                    ).all()
+                )
+            assert len(log_rows) >= 1, "Expected at least one DISCARD log entry"
+            assert any("ADD" in row.reason for row in log_rows), (
+                f"Expected 'ADD' in DISCARD reason, got: {[r.reason for r in log_rows]}"
+            )
+        finally:
+            await engine.dispose()
+
+
 def test_consolidator_input_task_rejects_invalid_literal() -> None:
     with pytest.raises(Exception):
         ConsolidatorInput(

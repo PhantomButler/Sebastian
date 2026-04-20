@@ -420,6 +420,51 @@ class SessionConsolidationWorker:
             # ignore them here to prevent double-processing.
             for action in result.proposed_actions:
                 if action.action != "EXPIRE" or not action.memory_id:
+                    # Non-EXPIRE actions are not directly executable.
+                    # ADD/SUPERSEDE intent must come via proposed_artifacts → resolver.
+                    # Log as DISCARD so the audit trail is complete.
+                    ignored_candidate = CandidateArtifact(
+                        kind=MemoryKind.FACT,
+                        content=f"ignored_action: {action.action} — {action.reason}",
+                        structured_payload={},
+                        subject_hint=context_subject_id,
+                        scope=MemoryScope.USER,
+                        slot_id=None,
+                        cardinality=None,
+                        resolution_policy=None,
+                        confidence=0.0,
+                        source=MemorySource.SYSTEM_DERIVED,
+                        evidence=[{"session_id": session_id}],
+                        valid_from=None,
+                        valid_until=None,
+                        policy_tags=[],
+                        needs_review=False,
+                    )
+                    ignored_decision = ResolveDecision(
+                        decision=MemoryDecisionType.DISCARD,
+                        reason=(
+                            f"proposed_actions only supports EXPIRE; "
+                            f"unsupported action '{action.action}' ignored"
+                        ),
+                        old_memory_ids=[],
+                        new_memory=None,
+                        candidate=ignored_candidate,
+                        subject_id=context_subject_id,
+                        scope=MemoryScope.USER,
+                        slot_id=None,
+                    )
+                    await decision_logger.append(
+                        ignored_decision,
+                        worker=self._WORKER_ID,
+                        model=model_name,
+                        rule_version=self._RULE_VERSION,
+                        input_source={
+                            "type": "session_consolidation",
+                            "session_id": session_id,
+                            "agent_type": agent_type,
+                        },
+                    )
+                    persisted_counts["discard"] += 1
                     continue
                 placeholder_candidate = CandidateArtifact(
                     kind=MemoryKind.FACT,
