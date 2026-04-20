@@ -104,6 +104,17 @@ memory/
 | memory_search citation_type | 已实现 | profile item → `current_truth`；episode summary → `historical_summary`；episode detail → `historical_evidence` |
 | decision_log input_source | 已实现 | `MemoryDecisionLogRecord` / `MemoryDecisionLogger.append()` 新增 `input_source` 字段，标记 `memory_save_tool` 或 `session_consolidation` |
 | Session Consolidation | 已实现 | `SessionConsolidationWorker` + startup catch-up sweep |
+| Assembler kind labels 全通道 | 已实现 | Context/Episode/Relation 通道均保留 `[kind]` 前缀，与 Profile 通道行为一致 |
+| `memory_search` 全通道检索 | 已实现 | profile/context/episode(summary-first)/relation 四通道；返回 `lane` 字段区分通道来源 |
+| Profile 行持久化协议字段 | 已实现 | `cardinality`/`resolution_policy` 已写入 DB；支持存量数据库幂等迁移 |
+| Episode 行持久化有效期字段 | 已实现 | `valid_from`/`valid_until` 已写入 DB；支持存量数据库幂等迁移 |
+| Relation candidate 持久化 policy_tags | 已实现 | `policy_tags` 已写入 DB（JSON）；支持存量数据库幂等迁移 |
+| `memory_save` provenance 含 session_id | 已实现 | session 上下文存在时注入 `evidence=[{"session_id": ...}]`，提升审计追踪可靠性 |
+| Episode/Summary 精确去重 | 已实现 | `EpisodeMemoryStore.find_active_exact()` 新增；相同 content 二次写入返回 DISCARD |
+| MERGE 最小执行路径 | 已实现 | `ProfileMemoryStore.find_active_exact()` 新增；merge-policy slot 精确匹配走 MERGE → supersede；无模糊语义合并 |
+| EXPIRE 统一走写入路由 | 已实现 | consolidation 不再直接调 `profile_store.expire()`；所有 EXPIRE 生命周期动作经 `write_router.persist_decision()` 路由 |
+| `ConsolidatorInput.task` Literal 契约 | 已实现 | `ConsolidatorInput.task: Literal["consolidate_memory"]`，非法值在运行时被 Pydantic 拒绝 |
+| `RetrievalContext.active_project_or_agent_context` | 已实现 | 字段已添加（`dict[str, Any] \| None = None`）；`BaseAgent._memory_section()` 注入基本 agent 上下文；planner 后续阶段可消费 |
 | Cross-Session Consolidation | **deferred** | 需单独 spec，明确触发频率、扫描窗口、证据合并规则和幂等 key |
 | Full Maintenance Worker | **deferred** | 降权、重复压缩、索引修复需单独 spec |
 | Exclusive Relation | **deferred** | 互斥关系语义需单独设计 |

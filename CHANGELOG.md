@@ -40,6 +40,15 @@
 - `memory_decision_log` 新增 `input_source` 字段，明确区分 `memory_save_tool` 与 `session_consolidation` 两条写入路径
 
 - `memory_search` 工具新增 `citation_type` 字段（`current_truth` / `historical_summary` / `historical_evidence`），保留 `is_current` 向后兼容
+- 记忆注入在所有检索通道保留类型标签（Context/Episode/Relation 均显示 `[kind]` 前缀），避免注入内容类型混淆。
+- `memory_search` 主动检索覆盖 context/relation 通道，与自动注入路径保持 summary-first episode 策略一致；返回 `lane` 字段区分通道来源。
+- 记忆存储补齐协议字段持久化：ProfileMemory 保存 `cardinality`/`resolution_policy`，EpisodeMemory 保存 `valid_from`/`valid_until`，RelationCandidate 保存 `policy_tags`；支持存量数据库幂等迁移。
+- `memory_save` provenance 在 session 上下文存在时注入 `evidence=[{"session_id": ...}]`，提升审计追踪可靠性。
+- Episode/Summary 精确去重：相同 content 的二次写入返回 DISCARD，避免历史证据重复堆积。
+- MERGE 最小执行路径：merge-policy slot 精确匹配时走 MERGE 决策（supersede 旧记录），不引入模糊语义合并。
+- EXPIRE 生命周期统一经 `write_router.persist_decision()` 路由，不再由 consolidation 直接操作 store。
+- `ConsolidatorInput.task` 收紧为 `Literal["consolidate_memory"]`，运行时拒绝非法任务值。
+- `RetrievalContext` 新增 `active_project_or_agent_context` 字段，`BaseAgent` 注入基本 agent 上下文；planner 后续阶段可消费。
 
 ## [0.3.1] - 2026-04-18
 
