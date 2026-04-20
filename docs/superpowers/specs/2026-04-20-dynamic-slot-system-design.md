@@ -441,64 +441,245 @@ register_or_reuse(X)           register_or_reuse(X)
 
 ### 11.2 Extractor system prompt（新增 slot 选择 / 提议规则）
 
+**设计决策**：prompt 中**不**注入 Pydantic 自动生成的 JSON Schema（过于冗长、含 `$defs`/`$ref` 会干扰 LLM），改为**手工维护的紧凑字段表 + 2~3 个完整 JSON 示例**。示例覆盖「复用已有 slot」「提议新 slot」「无可提取内容」三种场景，让 LLM 按示例模仿。
+
+**模板由共享 helper 生成**：新增 `sebastian/memory/prompts.py::build_extractor_prompt()`，Extractor / Consolidator 都调用（避免双份 prompt 漂移，§11.4 Consolidator 复用同一 helper 再追加 summary/EXPIRE 指令）。
+
+**完整 prompt 模板**：
+
 ```
-You are a memory extraction assistant. Analyze the conversation and extract memory artifacts.
+你是记忆提取助手。分析给定的对话内容，抽取出有记忆价值的信息。
 
-# Task
-For each piece of memorable content, output a CandidateArtifact with:
-- kind: one of {fact, preference, episode, summary, entity, relation}
-- slot_id: MUST match a registered slot (see known_slots_by_kind) OR be null
+# 输出契约
 
-# Slot Selection Rules
-1. Only kind=fact and kind=preference REQUIRE a slot_id. Others may have slot_id=null.
-2. ALWAYS prefer reusing an existing slot from known_slots_by_kind[kind] that semantically matches.
-3. If NO existing slot fits, you may propose a new slot. Output it in "proposed_slots".
-   - naming MUST be: {scope}.{category}.{attribute}, all lowercase, underscores allowed
-   - scope MUST be one of: user / session / project / agent
-   - total length ≤ 64 chars
-   - description MUST be in Chinese, ≤ 40 chars
-4. When you propose a slot AND produce an artifact using it in the same output:
-   - The artifact's slot_id must equal the proposed slot_id.
-   - The pipeline will register the slot first, then store the artifact.
+响应必须是**纯 JSON**，不能有任何解释文字、Markdown 围栏、代码块。顶层结构：
 
-# Cardinality / Resolution Policy Reference Table
-Use this table when proposing new slots:
-
-| Semantic Pattern | cardinality | resolution_policy | Example |
-|---|---|---|---|
-| 唯一属性（姓名/时区/当前焦点） | single | supersede | user.profile.name |
-| 可枚举爱好（喜欢的书/音乐/电影） | multi | append_only | user.profile.like_book |
-| 可合并集合（擅长领域列表） | multi | merge | user.profile.skill |
-| 时效性状态（本周安排/年度目标） | single | time_bound | user.goal.current_quarter |
-| 行为/事件记录 | multi | append_only | user.behavior.login_event |
-
-# Output Format
-Respond with ONLY valid JSON:
 {
-  "artifacts": [<CandidateArtifact>, ...],
-  "proposed_slots": [<ProposedSlot>, ...]
+  "artifacts": [ CandidateArtifact, ... ],
+  "proposed_slots": [ ProposedSlot, ... ]
 }
 
-No explanation, no markdown, no code blocks.
+两个数组允许为空 []。若本次对话没有任何记忆价值，输出 {"artifacts": [], "proposed_slots": []}。
+
+## CandidateArtifact 字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| kind | enum | 是 | "fact" / "preference" / "episode" / "summary" / "entity" / "relation" |
+| content | string | 是 | 自然语言描述，≤ 200 字 |
+| structured_payload | object | 是 | 结构化载荷；无则填 {} |
+| subject_hint | string \| null | 是 | 记忆归属提示，一般为 null（由 pipeline 解析 subject_id） |
+| scope | enum | 是 | "user" / "session" / "project" / "agent" |
+| slot_id | string \| null | 是 | 见「Slot 选择规则」 |
+| cardinality | enum \| null | 是 | "single" / "multi" / null；仅在提议新 slot 时与 ProposedSlot 保持一致，复用已有 slot 时填 null |
+| resolution_policy | enum \| null | 是 | "supersede" / "merge" / "append_only" / "time_bound" / null；同上 |
+| confidence | float | 是 | 0.0 ~ 1.0，基于原文证据强度 |
+| source | enum | 是 | "explicit"（用户明说） / "inferred"（推断） / "observed"（行为观察） |
+| evidence | array | 是 | 至少 1 项 {"quote": "...原文片段..."}；pipeline 会补 session_id |
+| valid_from | ISO-8601 string \| null | 是 | 记忆起效时间，一般 null |
+| valid_until | ISO-8601 string \| null | 是 | 失效时间，一般 null |
+| policy_tags | array<string> | 是 | 策略标签，一般 []；"pinned" 表示用户显式要求钉住 |
+| needs_review | bool | 是 | 不确定时填 true |
+
+## ProposedSlot 字段（提议新 slot 时才输出）
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| slot_id | string | 是 | 三段式 {scope}.{category}.{attribute}，纯小写 + 下划线，总长 ≤ 64 |
+| scope | enum | 是 | 与 slot_id 首段一致 |
+| subject_kind | string | 是 | "user" / "project" / "agent" |
+| cardinality | enum | 是 | "single" / "multi" |
+| resolution_policy | enum | 是 | "supersede" / "merge" / "append_only" / "time_bound" |
+| kind_constraints | array<enum> | 是 | 至少 1 项，子集 of {fact, preference, episode, summary, entity, relation} |
+| description | string | 是 | 中文，≤ 40 字 |
+
+# Slot 选择规则
+
+1. 只有 kind=fact 和 kind=preference 必须 slot_id 非 null；其余 kind 可 slot_id=null。
+2. **优先复用**：先在 known_slots_by_kind[当前 artifact 的 kind] 里找语义匹配，description 相近即可复用，slot_id 名字不完全一致无所谓。
+3. **再提议**：确实找不到才进 proposed_slots 数组。同一轮输出里 artifact.slot_id 必须和 proposed_slots[i].slot_id 完全一致，pipeline 会先注册 slot 再落库。
+4. 提议的 slot_id **禁止和 known_slots 中任何已存在的重名**（即使语义不同也要换名）。
+
+# Cardinality / Resolution Policy 参照表
+
+提议新 slot 时按此表选组合：
+
+| 语义模式 | cardinality | resolution_policy | 举例 |
+|---|---|---|---|
+| 唯一属性（姓名 / 时区 / 当前焦点） | single | supersede | user.profile.name |
+| 可枚举偏好（喜欢的书 / 音乐） | multi | append_only | user.profile.like_book |
+| 可合并集合（擅长领域 / 技能列表） | multi | merge | user.profile.skill |
+| 时效性状态（本周安排 / 季度目标） | single | time_bound | user.goal.current_quarter |
+| 行为 / 事件流 | multi | append_only | user.behavior.login_event |
+
+禁止组合：cardinality=single + resolution_policy=append_only。
+
+# 示例
+
+## 示例 1：复用已有 slot
+
+输入对话片段：
+  [{"role": "user", "content": "帮我记住我喜欢看三体"}]
+
+known_slots_by_kind.preference 包含:
+  [{"slot_id": "user.profile.like_book", "cardinality": "multi", "resolution_policy": "append_only",
+    "description": "用户喜欢的书"}]
+
+预期输出：
+{
+  "artifacts": [
+    {
+      "kind": "preference",
+      "content": "用户喜欢看《三体》",
+      "structured_payload": {"title": "三体"},
+      "subject_hint": null,
+      "scope": "user",
+      "slot_id": "user.profile.like_book",
+      "cardinality": null,
+      "resolution_policy": null,
+      "confidence": 0.95,
+      "source": "explicit",
+      "evidence": [{"quote": "我喜欢看三体"}],
+      "valid_from": null,
+      "valid_until": null,
+      "policy_tags": [],
+      "needs_review": false
+    }
+  ],
+  "proposed_slots": []
+}
+
+## 示例 2：提议新 slot + 同一轮落 artifact
+
+输入对话片段：
+  [{"role": "user", "content": "我住在上海浦东"}]
+
+known_slots_by_kind.fact 中**没有**和「居住地」匹配的 slot。
+
+预期输出：
+{
+  "artifacts": [
+    {
+      "kind": "fact",
+      "content": "用户居住在上海浦东",
+      "structured_payload": {"city": "上海", "district": "浦东"},
+      "subject_hint": null,
+      "scope": "user",
+      "slot_id": "user.profile.location",
+      "cardinality": "single",
+      "resolution_policy": "supersede",
+      "confidence": 0.9,
+      "source": "explicit",
+      "evidence": [{"quote": "我住在上海浦东"}],
+      "valid_from": null,
+      "valid_until": null,
+      "policy_tags": [],
+      "needs_review": false
+    }
+  ],
+  "proposed_slots": [
+    {
+      "slot_id": "user.profile.location",
+      "scope": "user",
+      "subject_kind": "user",
+      "cardinality": "single",
+      "resolution_policy": "supersede",
+      "kind_constraints": ["fact"],
+      "description": "用户居住地"
+    }
+  ]
+}
+
+## 示例 3：无可提取内容
+
+输入对话片段：
+  [{"role": "user", "content": "今天天气怎么样？"}]
+
+预期输出：
+{"artifacts": [], "proposed_slots": []}
 ```
+
+**识别与匹配策略**（pipeline 端）：
+
+- 解析：`ExtractorOutput.model_validate_json(raw)` 直接走 Pydantic 校验
+- 任一字段缺失 / 类型不符 → Pydantic 抛 ValidationError → 进入现有 Extractor retry（`max_retries` 默认 1 次，指数退避）
+- 重试仍失败 → 返回 `ExtractorOutput(artifacts=[], proposed_slots=[])`（现有 `extraction.py` 的 "never raise" 语义保持）
+- **禁用 Pydantic `extra="allow"`**：`CandidateArtifact` 和新 `ProposedSlot` 都保持 `extra="forbid"`，LLM 塞了多余字段直接 fail，逼它规范输出
 
 ### 11.3 Extractor 第二次重试（slot 命名失败后）
 
-第二次调用时在 system 前追加：
+**注意区分两种重试**：
+
+- **现有 "JSON 解析失败" 重试**（`extraction.py` 中 `max_retries`）：由 Pydantic 校验失败触发，追加"上次输出不是合法 JSON 或字段不符，请严格按 schema 输出"即可
+- **本 spec 新增 "slot proposal 被拒" 重试**（方案 C）：JSON 本身合法，但 `SlotProposalHandler.register_or_reuse()` 抛 `InvalidSlotProposalError`
+
+第二次调用时 **追加到 messages 末尾一条 assistant + user 对话对**：
+
+```json
+[
+  {"role": "user", "content": "<第一次的 user_content>"},
+  {"role": "assistant", "content": "<第一次 LLM 产出的完整 JSON>"},
+  {"role": "user", "content": "<retry 反馈，见下>"}
+]
+```
+
+retry 反馈文本：
 
 ```
-# Retry Context
-Previous attempt proposed slots that were rejected:
-{failed_proposals_json}
+上一轮提议的以下 slot 不合规，请重命名后再输出一轮完整 JSON（artifacts + proposed_slots）：
 
-Reject reasons: {reason_summary}
+失败项：
+- "user.Profile.like-book"：含大写或连字符，必须纯小写 + 下划线
+- "hobby"：未按三段式 {scope}.{category}.{attribute}
 
-Please rename and resubmit. Do not repeat the same names.
+约束提醒：
+- 三段式命名，纯小写，下划线分隔，总长 ≤ 64
+- 首段必须是 user / session / project / agent 之一
+- 禁止与 known_slots 已有 slot_id 重名
+
+请重新给出完整 JSON。被拒 slot 对应的 artifact 也请一并重新给出（slot_id 改为新名字）。
 ```
 
 ### 11.4 Consolidator prompt 扩展
 
-在现有 Consolidator prompt 末尾追加相同的 "Slot Selection Rules" + "Cardinality Reference Table"，并把输出 schema 的 `proposed_slots` 字段加入 JSON 结构说明。重试协议复用 Consolidator 现有的 spec §9.1 多轮迭代（上限 3 次）。
+**共用 helper**：在 `sebastian/memory/prompts.py` 定义：
+
+```python
+def build_slot_rules_section(known_slots_by_kind: dict[str, list[dict]]) -> str:
+    """返回 §11.2 中 `Slot 选择规则` + `Cardinality 参照表` + 3 个示例。
+    Extractor 和 Consolidator 都调用。"""
+
+def build_extractor_prompt(known_slots_by_kind: dict[str, list[dict]]) -> str:
+    """完整 Extractor prompt。"""
+
+def build_consolidator_prompt(
+    known_slots_by_kind: dict[str, list[dict]],
+) -> str:
+    """Consolidator prompt = Extractor 字段表 + slot 规则 + 追加的 summary/EXPIRE 指令。"""
+```
+
+Consolidator prompt 在 Extractor 部分基础上追加：
+
+```
+# Consolidator 额外任务
+
+除了抽取 artifacts 和 proposed_slots，你还需要：
+
+1. summaries: 对整个会话生成 1 条中文摘要（≤ 300 字），加入输出 JSON
+2. proposed_actions: 对与新信息冲突的既有 artifact 提出 EXPIRE 动作
+
+完整输出 schema：
+{
+  "artifacts": [...],
+  "proposed_slots": [...],
+  "summaries": [{"content": "...", "scope": "session"}],
+  "proposed_actions": [{"action": "EXPIRE", "old_memory_id": "...", "reason": "..."}]
+}
+```
+
+**示例**：Consolidator prompt 里除了 Extractor 的 3 个示例外，再追加 1 个「会话结束时同时产出 summary + proposed_slots + EXPIRE」的完整示例（spec 实现阶段补完）。
+
+**重试协议**：Consolidator 使用现有 spec §9.1 多轮迭代（上限 3 次）。每轮迭代的 retry 反馈按 §11.3 同样的"追加 assistant + user 对话对"方式。
 
 ---
 
@@ -547,18 +728,24 @@ Please rename and resubmit. Do not repeat the same names.
 4. `test_extraction_with_proposed_slots.py`
    - 返回 ExtractorOutput 含 proposed_slots
    - 第二次重试拿到失败反馈
-5. `test_pipeline_proposed_slots_flow.py`
+   - JSON 字段缺失 / 类型不符时 Pydantic ValidationError → 走现有 retry
+   - 多余字段（extra="forbid"）导致 retry
+5. `test_prompts.py`（新增）
+   - `build_extractor_prompt()` 输出包含 3 个示例段、字段表、slot 规则段
+   - `build_consolidator_prompt()` 在 Extractor 段基础上追加 summary/EXPIRE 指令
+   - 对 3 个示例 JSON 做 `ExtractorOutput.model_validate_json()` 验证：**示例本身必须合法**（防止 prompt 里的示例随代码演进腐坏）
+6. `test_pipeline_proposed_slots_flow.py`
    - proposed_slots 先于 candidates 处理
    - slot 注册失败时对应 candidate 降级为无 slot（不整体 DISCARD）
 
 集成测试（`tests/integration/memory/`）：
 
-6. `test_memory_save_proposes_new_slot.py`
+7. `test_memory_save_proposes_new_slot.py`
    - memory_save 触发 Extractor 提议新 slot
    - DB `slot_definitions` 多一行
    - `DEFAULT_SLOT_REGISTRY` 内存同步
    - 后续第二条 memory_save 引用该 slot 成功入库
-7. `test_session_consolidation_proposes_slots.py`
+8. `test_session_consolidation_proposes_slots.py`
    - 会话结束触发 Consolidator，结果中含 proposed_slots
    - slot 被注册，相关 artifact 正确落库
 
