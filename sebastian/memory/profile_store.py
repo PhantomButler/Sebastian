@@ -137,7 +137,10 @@ class ProfileMemoryStore:
         )
         if scope is not None:
             statement = statement.where(ProfileMemoryRecord.scope == scope)
-        statement = statement.order_by(ProfileMemoryRecord.created_at.desc()).limit(limit)
+        statement = statement.order_by(
+            ProfileMemoryRecord.confidence.desc(),
+            ProfileMemoryRecord.created_at.desc(),
+        ).limit(limit)
 
         result = await self._session.scalars(statement)
         return list(result.all())

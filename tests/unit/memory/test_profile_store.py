@@ -574,6 +574,40 @@ async def test_find_active_exact_ignores_superseded_record(db_session) -> None:
     assert result is None
 
 
+async def test_search_active_returns_high_confidence_first(db_session) -> None:
+    """search_active must sort by confidence.desc() before created_at.desc()."""
+    store = ProfileMemoryStore(db_session)
+    now = datetime.now(UTC)
+
+    # Newer, but low confidence
+    db_session.add(
+        _make_record(
+            id="mem-low-conf",
+            slot_id="user.preference.language",
+            confidence=0.4,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    # Older, but high confidence
+    db_session.add(
+        _make_record(
+            id="mem-high-conf",
+            slot_id="user.preference.response_style",
+            confidence=0.95,
+            created_at=now - timedelta(hours=1),
+            updated_at=now - timedelta(hours=1),
+        )
+    )
+    await db_session.flush()
+
+    results = await store.search_active(subject_id="owner", limit=10)
+    ids = [r.id for r in results]
+    assert ids.index("mem-high-conf") < ids.index("mem-low-conf"), (
+        f"Expected high-conf first, got order: {ids}"
+    )
+
+
 async def test_expire_nonexistent_returns_zero(db_session) -> None:
     """expire() on a non-existent id must return 0."""
     store = ProfileMemoryStore(db_session)
