@@ -23,6 +23,7 @@ from sebastian.memory.types import (
     MemorySource,
     ResolveDecision,
 )
+from sebastian.memory.write_router import persist_decision
 from sebastian.protocol.events.types import Event, EventType
 
 if TYPE_CHECKING:
@@ -198,8 +199,8 @@ class SessionConsolidationWorker:
             from sebastian.memory.decision_log import MemoryDecisionLogger
             from sebastian.memory.entity_registry import EntityRegistry
             from sebastian.memory.episode_store import EpisodeMemoryStore
-            from sebastian.memory.profile_store import ProfileMemoryStore
             from sebastian.memory.pipeline import process_candidates
+            from sebastian.memory.profile_store import ProfileMemoryStore
             from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
             from sebastian.store.models import SessionConsolidationRecord
 
