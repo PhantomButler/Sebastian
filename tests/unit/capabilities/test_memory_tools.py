@@ -766,6 +766,63 @@ async def test_memory_save_decision_log_has_input_source(enabled_memory_state, m
 
 
 @pytest.mark.asyncio
+async def test_memory_save_provenance_contains_session_id(
+    enabled_memory_state, monkeypatch
+) -> None:
+    """memory_save 保存的记忆 provenance 应包含 session_id 和 evidence。"""
+    from sqlalchemy import select
+
+    import sebastian.gateway.state as _state
+    from sebastian.capabilities.tools.memory_save import memory_save
+    from sebastian.store.models import ProfileMemoryRecord
+
+    monkeypatch.setattr(_state, "current_session_id", "sess-memory-save", raising=False)
+
+    result = await memory_save(
+        content="以后回答简洁中文",
+        slot_id="user.preference.response_style",
+    )
+    assert result.ok is True
+
+    async with enabled_memory_state() as s:
+        rows = (await s.scalars(select(ProfileMemoryRecord))).all()
+    assert len(rows) == 1
+    prov = rows[0].provenance
+    assert prov is not None
+    assert prov.get("session_id") == "sess-memory-save"
+    assert prov.get("evidence") == [{"session_id": "sess-memory-save"}]
+
+
+@pytest.mark.asyncio
+async def test_memory_save_provenance_no_session_id_when_absent(
+    enabled_memory_state, monkeypatch
+) -> None:
+    """未设置 session_id 时 provenance.evidence 应为空列表，无 session_id 键。"""
+    from sqlalchemy import select
+
+    import sebastian.gateway.state as _state
+    from sebastian.capabilities.tools.memory_save import memory_save
+    from sebastian.store.models import ProfileMemoryRecord
+
+    # Ensure no session_id is set
+    monkeypatch.setattr(_state, "current_session_id", None, raising=False)
+
+    result = await memory_save(
+        content="以后回答简洁中文",
+        slot_id="user.preference.response_style",
+    )
+    assert result.ok is True
+
+    async with enabled_memory_state() as s:
+        rows = (await s.scalars(select(ProfileMemoryRecord))).all()
+    assert len(rows) == 1
+    prov = rows[0].provenance
+    assert prov is not None
+    assert prov.get("evidence") == []
+    assert "session_id" not in prov
+
+
+@pytest.mark.asyncio
 async def test_memory_save_discard_decision_log_has_input_source(
     enabled_memory_state, monkeypatch
 ) -> None:

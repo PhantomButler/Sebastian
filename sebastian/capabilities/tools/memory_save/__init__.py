@@ -63,6 +63,7 @@ async def memory_save(
     slot = DEFAULT_SLOT_REGISTRY.get(slot_id) if slot_id else None
     kind = slot.kind_constraints[0] if slot else MemoryKind.FACT
 
+    evidence = [{"session_id": tool_session_id}] if tool_session_id is not None else []
     candidate = CandidateArtifact(
         kind=kind,
         content=content,
@@ -74,7 +75,7 @@ async def memory_save(
         resolution_policy=slot.resolution_policy if slot else None,
         confidence=1.0,
         source=MemorySource.EXPLICIT,
-        evidence=[],
+        evidence=evidence,
         valid_from=None,
         valid_until=None,
         policy_tags=policy_tags or [],
