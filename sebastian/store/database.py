@@ -80,6 +80,7 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
         ("episode_memories", "valid_from", "DATETIME"),
         ("episode_memories", "valid_until", "DATETIME"),
         ("relation_candidates", "policy_tags", "TEXT"),
+        ("relation_candidates", "source", "VARCHAR DEFAULT 'system_derived'"),
     ]
     for table, column, ddl in patches:
         result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")

@@ -100,6 +100,7 @@ async def persist_decision(
                 content=artifact.content,
                 structured_payload=payload,
                 confidence=artifact.confidence,
+                source=artifact.source.value,
                 status=artifact.status.value,
                 valid_from=artifact.valid_from,
                 valid_until=artifact.valid_until,

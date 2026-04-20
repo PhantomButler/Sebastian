@@ -192,7 +192,7 @@ async def memory_search(query: str, limit: int = 5) -> ToolResult:
                 "lane": "relation",
                 "kind": "relation",
                 "content": record.content,
-                "source": MemorySource.SYSTEM_DERIVED.value,
+                "source": getattr(record, "source", MemorySource.SYSTEM_DERIVED.value),
                 "confidence": record.confidence if record.confidence is not None else 1.0,
                 "citation_type": "current_truth",
                 "is_current": True,

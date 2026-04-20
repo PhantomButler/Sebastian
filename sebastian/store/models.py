@@ -192,6 +192,7 @@ class RelationCandidateRecord(Base):
     content: Mapped[str] = mapped_column(String)
     structured_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
     confidence: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String, default="system_derived")
     status: Mapped[str] = mapped_column(String, index=True)
     valid_from: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     valid_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

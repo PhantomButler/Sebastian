@@ -601,3 +601,40 @@ async def test_persist_decision_expire_zero_hit_traces_miss(db_session, caplog) 
 
     assert "persist.expire_miss" in caplog.text
     assert "does-not-exist" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_persist_decision_relation_persists_source(db_session) -> None:
+    """Relation candidate record must preserve the artifact's source field."""
+    profile_store, episode_store, entity_registry = _stores(db_session)
+    artifact = _artifact(
+        MemoryKind.RELATION,
+        source=MemorySource.INFERRED,
+        structured_payload={
+            "predicate": "knows",
+            "source_entity_id": "owner",
+            "target_entity_id": "entity-bob",
+        },
+    )
+    decision = ResolveDecision(
+        decision=MemoryDecisionType.ADD,
+        reason="r",
+        old_memory_ids=[],
+        new_memory=artifact,
+        candidate=_candidate(MemoryKind.RELATION),
+        subject_id="owner",
+        scope=MemoryScope.USER,
+        slot_id=None,
+    )
+
+    await persist_decision(
+        decision,
+        session=db_session,
+        profile_store=profile_store,
+        episode_store=episode_store,
+        entity_registry=entity_registry,
+    )
+
+    rows = (await db_session.scalars(select(RelationCandidateRecord))).all()
+    assert len(rows) == 1
+    assert rows[0].source == MemorySource.INFERRED.value
