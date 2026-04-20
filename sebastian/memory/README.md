@@ -134,6 +134,10 @@ memory/
 | Exclusive Relation | **deferred** | 互斥关系语义需单独设计 |
 | Summary Replacement | **deferred** | episode summary 替换策略需单独设计 |
 
+## 链路文档
+
+- [data-flow.md](data-flow.md) — 读写链路完整解析：检索注入流程、各通道查库方式（FTS/SQL）、memory_save 工具、Session Consolidation、process_candidates 管道、Slot 边界
+
 ## 修改导航
 
 | 如果要修改… | 看这里 |
