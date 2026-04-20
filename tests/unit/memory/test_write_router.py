@@ -480,7 +480,7 @@ async def test_persist_decision_expire_marks_profile_row_expired(db_session, cap
 
     placeholder_candidate = CandidateArtifact(
         kind=MemoryKind.FACT,
-        content=f"EXPIRE: no longer current",
+        content="EXPIRE: no longer current",
         structured_payload={},
         subject_hint="user:owner",
         scope=MemoryScope.USER,
