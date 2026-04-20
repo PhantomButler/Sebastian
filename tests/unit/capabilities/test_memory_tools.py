@@ -1142,6 +1142,175 @@ async def test_memory_save_provenance_no_session_id_when_absent(
     assert "session_id" not in prov
 
 
+# ---------------------------------------------------------------------------
+# memory_search filtering tests (Task 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_memory_search_excludes_low_confidence_record(enabled_memory_state) -> None:
+    """Record with confidence < 0.3 must not appear in memory_search results."""
+    from datetime import UTC, datetime
+
+    from sebastian.capabilities.tools.memory_search import memory_search
+    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.types import (
+        MemoryArtifact,
+        MemoryKind,
+        MemoryScope,
+        MemorySource,
+        MemoryStatus,
+    )
+
+    now = datetime.now(UTC)
+    async with enabled_memory_state() as session:
+        await ProfileMemoryStore(session).add(
+            MemoryArtifact(
+                id="low-conf-1",
+                kind=MemoryKind.PREFERENCE,
+                scope=MemoryScope.USER,
+                subject_id="owner",
+                slot_id="user.preference.response_style",
+                cardinality=None,
+                resolution_policy=None,
+                content="低置信度记录不应出现",
+                structured_payload={},
+                source=MemorySource.OBSERVED,
+                confidence=0.1,
+                status=MemoryStatus.ACTIVE,
+                valid_from=None,
+                valid_until=None,
+                recorded_at=now,
+                last_accessed_at=None,
+                access_count=0,
+                provenance={},
+                links=[],
+                embedding_ref=None,
+                dedupe_key=None,
+                policy_tags=[],
+            )
+        )
+        await session.commit()
+
+    result = await memory_search(query="偏好")
+
+    assert result.ok is True
+    items = result.output["items"]
+    for item in items:
+        assert item["confidence"] >= 0.3, (
+            f"Record with confidence {item['confidence']} below threshold should be excluded"
+        )
+
+
+@pytest.mark.asyncio
+async def test_memory_search_excludes_expired_record(enabled_memory_state) -> None:
+    """Record with valid_until in the past must not appear in memory_search results."""
+    from datetime import UTC, datetime, timedelta
+
+    from sebastian.capabilities.tools.memory_search import memory_search
+    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.types import (
+        MemoryArtifact,
+        MemoryKind,
+        MemoryScope,
+        MemorySource,
+        MemoryStatus,
+    )
+
+    now = datetime.now(UTC)
+    expired_until = now - timedelta(days=1)
+    async with enabled_memory_state() as session:
+        await ProfileMemoryStore(session).add(
+            MemoryArtifact(
+                id="expired-1",
+                kind=MemoryKind.PREFERENCE,
+                scope=MemoryScope.USER,
+                subject_id="owner",
+                slot_id="user.preference.language",
+                cardinality=None,
+                resolution_policy=None,
+                content="已过期的记录不应出现",
+                structured_payload={},
+                source=MemorySource.OBSERVED,
+                confidence=1.0,
+                status=MemoryStatus.ACTIVE,
+                valid_from=None,
+                valid_until=expired_until,
+                recorded_at=now,
+                last_accessed_at=None,
+                access_count=0,
+                provenance={},
+                links=[],
+                embedding_ref=None,
+                dedupe_key=None,
+                policy_tags=[],
+            )
+        )
+        await session.commit()
+
+    result = await memory_search(query="偏好语言")
+
+    assert result.ok is True
+    items = result.output["items"]
+    assert not any("已过期的记录不应出现" in item.get("content", "") for item in items), (
+        "Expired record should not appear in memory_search results"
+    )
+
+
+@pytest.mark.asyncio
+async def test_memory_search_returns_do_not_auto_inject_record(enabled_memory_state) -> None:
+    """Record tagged do_not_auto_inject MUST appear in tool_search results (not blocked)."""
+    from datetime import UTC, datetime
+
+    from sebastian.capabilities.tools.memory_search import memory_search
+    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.types import (
+        MemoryArtifact,
+        MemoryKind,
+        MemoryScope,
+        MemorySource,
+        MemoryStatus,
+    )
+
+    now = datetime.now(UTC)
+    async with enabled_memory_state() as session:
+        await ProfileMemoryStore(session).add(
+            MemoryArtifact(
+                id="dna-1",
+                kind=MemoryKind.PREFERENCE,
+                scope=MemoryScope.USER,
+                subject_id="owner",
+                slot_id="user.preference.response_style",
+                cardinality=None,
+                resolution_policy=None,
+                content="只在显式搜索时出现",
+                structured_payload={},
+                source=MemorySource.EXPLICIT,
+                confidence=1.0,
+                status=MemoryStatus.ACTIVE,
+                valid_from=None,
+                valid_until=None,
+                recorded_at=now,
+                last_accessed_at=None,
+                access_count=0,
+                provenance={},
+                links=[],
+                embedding_ref=None,
+                dedupe_key=None,
+                policy_tags=["do_not_auto_inject"],
+            )
+        )
+        await session.commit()
+
+    result = await memory_search(query="偏好")
+
+    assert result.ok is True
+    items = result.output["items"]
+    assert any("只在显式搜索时出现" in item.get("content", "") for item in items), (
+        "Record tagged do_not_auto_inject should appear in tool_search results"
+    )
+
+
 @pytest.mark.asyncio
 async def test_memory_save_discard_decision_log_has_input_source(
     enabled_memory_state, monkeypatch

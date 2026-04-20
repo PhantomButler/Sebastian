@@ -22,6 +22,73 @@ DO_NOT_AUTO_INJECT_TAG = "do_not_auto_inject"
 MIN_CONFIDENCE = 0.3
 
 
+def _keep_record(
+    record: Any,
+    *,
+    context: RetrievalContext,
+    min_confidence: float = MIN_CONFIDENCE,
+) -> bool:
+    """Return True if *record* should be included in retrieval results.
+
+    Shared by :class:`MemorySectionAssembler` (auto-inject) and the
+    ``memory_search`` tool so both paths apply identical filtering.
+
+    The ``do_not_auto_inject`` tag is only a blocker when
+    ``context.access_purpose == "context_injection"``; explicit tool-search
+    calls (``access_purpose="tool_search"``) still receive those records.
+    """
+    now = datetime.now(UTC)
+    policy_tags = getattr(record, "policy_tags", None) or []
+
+    if (
+        context.access_purpose == "context_injection"
+        and DO_NOT_AUTO_INJECT_TAG in policy_tags
+    ):
+        return False
+
+    for tag in policy_tags:
+        if tag.startswith("access:"):
+            _, allowed_purpose = tag.split(":", 1)
+            if allowed_purpose != context.access_purpose:
+                return False
+        if tag.startswith("agent:"):
+            _, allowed_agent = tag.split(":", 1)
+            if allowed_agent != context.agent_type:
+                return False
+
+    confidence = getattr(record, "confidence", 1.0)
+    if confidence is not None and confidence < min_confidence:
+        return False
+
+    valid_until = getattr(record, "valid_until", None)
+    if valid_until is not None:
+        if valid_until.tzinfo is None:
+            valid_until = valid_until.replace(tzinfo=UTC)
+        if valid_until <= now:
+            return False
+
+    status = getattr(record, "status", None)
+    if status is not None and status != "active":
+        return False
+
+    record_subject = getattr(record, "subject_id", None)
+    if (
+        record_subject is not None
+        and context.subject_id
+        and record_subject != context.subject_id
+    ):
+        return False
+
+    valid_from = getattr(record, "valid_from", None)
+    if valid_from is not None:
+        if valid_from.tzinfo is None:
+            valid_from = valid_from.replace(tzinfo=UTC)
+        if valid_from > now:
+            return False
+
+    return True
+
+
 class RetrievalContext(BaseModel):
     subject_id: str
     session_id: str

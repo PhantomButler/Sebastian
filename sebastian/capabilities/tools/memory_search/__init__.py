@@ -33,7 +33,7 @@ async def memory_search(query: str, limit: int = 5) -> ToolResult:
     from sebastian.memory.entity_registry import EntityRegistry
     from sebastian.memory.episode_store import EpisodeMemoryStore
     from sebastian.memory.profile_store import ProfileMemoryStore
-    from sebastian.memory.retrieval import MemoryRetrievalPlanner, RetrievalContext
+    from sebastian.memory.retrieval import MemoryRetrievalPlanner, RetrievalContext, _keep_record
 
     ctx = get_tool_context()
     session_id = ctx.session_id if ctx else "unknown"
@@ -137,6 +137,14 @@ async def memory_search(query: str, limit: int = 5) -> ToolResult:
             if plan.relation_lane
             else []
         )
+
+    # Apply the same record-level filters as MemorySectionAssembler so that
+    # the tool-search path is consistent with the auto-inject path.
+    # do_not_auto_inject is NOT blocked here (access_purpose="tool_search").
+    profile_records = [r for r in profile_records if _keep_record(r, context=retrieval_ctx)]
+    context_records = [r for r in context_records if _keep_record(r, context=retrieval_ctx)]
+    episode_records = [r for r in episode_records if _keep_record(r, context=retrieval_ctx)]
+    relation_records = [r for r in relation_records if _keep_record(r, context=retrieval_ctx)]
 
     items: list[dict[str, Any]] = []
     for record in profile_records:
