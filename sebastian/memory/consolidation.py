@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sebastian.memory.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor
+from sebastian.memory.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor, _strip_code_fence
 from sebastian.memory.prompts import build_consolidator_prompt, group_slots_by_kind
 from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
 from sebastian.memory.subject import resolve_subject
@@ -99,7 +99,7 @@ class MemoryConsolidator:
         for attempt in range(self._max_retries + 1):
             try:
                 raw = await self._call_llm(resolved, system, messages)
-                return ConsolidationResult.model_validate_json(raw)
+                return ConsolidationResult.model_validate_json(_strip_code_fence(raw))
             except Exception as exc:  # noqa: BLE001 — provider exception types vary
                 if attempt < self._max_retries:
                     logger.warning(

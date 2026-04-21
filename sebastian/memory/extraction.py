@@ -97,7 +97,7 @@ class MemoryExtractor:
         for attempt in range(self._max_retries + 1):
             try:
                 raw = await self._call_llm(resolved, system, messages)
-                return ExtractorOutput.model_validate_json(raw)
+                return ExtractorOutput.model_validate_json(_strip_code_fence(raw))
             except Exception as exc:  # noqa: BLE001 — provider exception types vary
                 if attempt < self._max_retries:
                     logger.warning(
@@ -137,6 +137,16 @@ class MemoryExtractor:
             if isinstance(event, TextDelta):
                 text += event.delta
         return text
+
+
+def _strip_code_fence(raw: str) -> str:
+    """Strip markdown code fences (```json ... ```) from LLM output before JSON parsing."""
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+    return raw.strip()
 
 
 def _group_known_slots(known_slots: list[dict[str, Any]]) -> dict[str, list[dict[str, str]]]:
