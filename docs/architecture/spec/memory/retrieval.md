@@ -71,6 +71,8 @@ Relation Lane 还维护动态触发词集合：gateway 启动时调用 `DEFAULT_
 
 > **实现增强**：`bootstrap_entity_triggers()` 同时调用 `segmentation.add_entity_terms()`，把实体名注册到 jieba 用户词典，降低私有实体被拆词导致 relation lane 不触发的概率。
 
+> **Planner 的适用路径**：Planner 的 lane 激活判断**只对 `context_injection` 自动注入路径生效**。`memory_search` 工具作为显式检索入口，**跳过 planner 的意图分类**，始终激活全部四条 lane——调用方已经明确要"尽量查到"，再套一层意图过滤反而会漏召。详见 §7.5。
+
 ---
 
 ## 4. 四条检索通道（Retrieval Lane）
@@ -327,18 +329,20 @@ Assembler 在最终注入前，必须统一执行以下过滤：
 
 ### 7.5 `memory_search` 工具的 effective limit
 
-`memory_search(query, limit)` 是显式工具检索入口，和自动注入路径共享 Retrieval Planner 与 lane 语义，但 `limit` 是工具调用方请求的总结果目标值，不应直接覆盖每条 lane 的独立预算。
+`memory_search(query, limit)` 是显式工具检索入口。**与自动注入路径的关键差异：memory_search 绕过 `MemoryRetrievalPlanner` 的意图分类，四条 lane（profile / context / episode / relation）强制全部激活。** Planner 的词表路由专为 `context_injection` 路径设计——系统代替用户决定“本轮是否注入哪种记忆”；在工具检索路径上，调用方（用户或 agent）已经明确要查所有相关记忆，再套一层意图过滤会导致漏召。
 
-工具路径采用 lane-aware budget（按通道分配预算）：
+典型误伤场景：query `"项目 project"` 在词表里只对应 relation lane；若走 planner，画像里 `slot=user.current_project_focus` 的 FACT 永远匹配不到。因此 tool search 必须跳过门控。
 
-- 先根据 Retrieval Planner 得到已激活 lane。
+`limit` 是工具调用方请求的总结果目标值，不应直接覆盖每条 lane 的独立预算。工具路径采用 lane-aware budget（按通道分配预算）：
+
+- 四条 lane 全部视为已激活（`active_lane_count = 4`）。
 - `requested_limit = max(1, limit)`。
 - `effective_limit = max(requested_limit, active_lane_count)`。
-- 当 `requested_limit < active_lane_count` 时，提高 effective limit，确保每条已激活 lane 至少有 1 个候选名额。
-- 当 `requested_limit >= active_lane_count` 时，在不超过 `effective_limit` 的前提下，按 lane 顺序分配余数；较早 lane 拿到额外预算。
+- 当 `requested_limit < active_lane_count` 时，提高 effective limit，确保每条 lane 至少有 1 个候选名额。
+- 当 `requested_limit >= active_lane_count` 时，在不超过 `effective_limit` 的前提下，按 lane 顺序分配余数；较早 lane（profile → context → episode → relation）拿到额外预算。
 - 不允许先拼接所有 lane 再做全局截断，因为这会让 Profile Lane 等高召回通道饿死 Episode / Context / Relation Lane。
 
-因此 `memory_search` 的 `limit` 是“请求的目标总数”，实际返回上限是 `effective_limit`。这个规则只适用于显式工具检索；自动注入路径仍由 `MemorySectionAssembler` 对各 lane 独立应用 `plan.xxx_limit`。
+因此 `memory_search` 的 `limit` 是“请求的目标总数”，实际返回上限是 `effective_limit`。这个规则只适用于显式工具检索；自动注入路径仍由 `MemoryRetrievalPlanner` 决定 lane 激活，由 `MemorySectionAssembler` 对各 lane 独立应用 `plan.xxx_limit`。
 
 ---
 

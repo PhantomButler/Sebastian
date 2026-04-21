@@ -8,11 +8,13 @@ from sebastian.memory.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
 
 
 @pytest.mark.asyncio
-async def test_memory_search_uses_default_planner_with_entity_triggers(
+async def test_default_planner_activates_relation_lane_for_registered_entities(
     tmp_memory_env,
 ) -> None:
-    """memory_search should use DEFAULT_RETRIEVAL_PLANNER so entity names
-    bootstrapped at startup trigger relation_lane correctly."""
+    """DEFAULT_RETRIEVAL_PLANNER (used by the context_injection / auto-inject path)
+    should activate relation_lane when the query mentions an entity registered via
+    EntityRegistry. Note: memory_search tool bypasses the planner and always probes
+    all four lanes — this test covers the planner itself, not the tool."""
     # Reset planner to baseline (no custom entities)
     DEFAULT_RETRIEVAL_PLANNER._relation_trigger_set = RELATION_LANE_STATIC_WORDS
 

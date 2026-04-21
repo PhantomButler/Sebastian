@@ -47,12 +47,35 @@ async def _backfill_profile_fts(conn: AsyncConnection) -> None:
         )
 
 
+async def _backfill_episode_fts(conn: AsyncConnection) -> None:
+    """Index episode_memories rows not yet in the FTS virtual table."""
+    from sebastian.memory.segmentation import segment_for_fts
+
+    result = await conn.execute(
+        text(
+            "SELECT id, content FROM episode_memories "
+            "WHERE id NOT IN (SELECT memory_id FROM episode_memories_fts)"
+        )
+    )
+    rows = result.fetchall()
+    for row in rows:
+        segmented = segment_for_fts(row[1])
+        await conn.execute(
+            text(
+                "INSERT INTO episode_memories_fts(memory_id, content_segmented) "
+                "VALUES (:memory_id, :content_segmented)"
+            ),
+            {"memory_id": row[0], "content_segmented": segmented},
+        )
+
+
 async def init_memory_storage(engine: AsyncEngine) -> None:
     """Initialize memory storage virtual tables. Idempotent. Call after init_db()."""
     async with engine.begin() as conn:
         await ensure_episode_fts(conn)
         await ensure_profile_fts(conn)
         await _backfill_profile_fts(conn)
+        await _backfill_episode_fts(conn)
 
 
 async def seed_builtin_slots(session: AsyncSession) -> None:

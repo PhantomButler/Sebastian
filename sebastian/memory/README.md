@@ -140,7 +140,7 @@ LLM 在对话中可提议新的记忆 slot，提议经校验后写入 `memory_sl
 | decision_log input_source | 已实现 | `MemoryDecisionLogRecord` / `MemoryDecisionLogger.append()` 新增 `input_source` 字段，标记 `memory_save_tool` 或 `session_consolidation` |
 | Session Consolidation | 已实现 | `SessionConsolidationWorker` + startup catch-up sweep |
 | Assembler kind labels 全通道 | 已实现 | Context/Episode/Relation 通道均保留 `[kind]` 前缀，与 Profile 通道行为一致 |
-| `memory_search` 全通道检索 | 已实现 | profile/context/episode(summary-first)/relation 四通道；返回 `lane` 字段区分通道来源；`effective_limit = max(requested_limit, active_lane_count)`，确保每条 active lane 至少有 1 个候选名额 |
+| `memory_search` 全通道检索 | 已实现 | profile/context/episode(summary-first)/relation 四通道；返回 `lane` 字段区分通道来源；`effective_limit = max(requested_limit, active_lane_count)`，确保每条 active lane 至少有 1 个候选名额。**绕过 `MemoryRetrievalPlanner`**：工具搜索是用户/agent 显式触发，四条 lane 强制激活；planner 的词表路由只服务于 context_injection 自动注入路径（详见 `docs/architecture/spec/memory/retrieval.md` §7.5） |
 | Profile 行持久化协议字段 | 已实现 | `cardinality`/`resolution_policy` 已写入 DB；支持存量数据库幂等迁移 |
 | Episode 行持久化有效期字段 | 已实现 | `valid_from`/`valid_until` 已写入 DB；支持存量数据库幂等迁移 |
 | Relation candidate 持久化 policy_tags | 已实现 | `policy_tags` 已写入 DB（JSON）；支持存量数据库幂等迁移 |

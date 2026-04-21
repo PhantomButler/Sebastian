@@ -474,29 +474,35 @@ async def test_memory_search_returns_structured_items(enabled_memory_state, capl
         await EpisodeMemoryStore(session).add_episode(episode_artifact)
         await session.commit()
 
-    # Query must contain both an episode-lane keyword ("上次") and a profile-lane
-    # keyword ("喜欢") so that both lanes activate simultaneously under the jieba planner.
+    # memory_search bypasses MemoryRetrievalPlanner — all four lanes run. The
+    # profile PREFERENCE record will surface via the profile lane; the episode
+    # via the episode lane. The context lane's recency fallback may also return
+    # the profile record when FTS terms miss, so we assert on lane presence
+    # rather than exact item count.
     result = await memory_search(query="上次我喜欢")
 
     assert result.ok is True
     assert isinstance(result.output, dict)
     items = result.output["items"]
     assert isinstance(items, list)
-    assert len(items) == 2
+    assert len(items) >= 2
 
     required_keys = {"kind", "content", "source", "confidence", "is_current"}
     for item in items:
         assert required_keys <= set(item.keys())
 
-    profile_item = next(i for i in items if i["kind"] == MemoryKind.PREFERENCE.value)
-    episode_item = next(i for i in items if i["kind"] == MemoryKind.EPISODE.value)
+    profile_item = next(
+        i for i in items if i["kind"] == MemoryKind.PREFERENCE.value and i["lane"] == "profile"
+    )
+    episode_item = next(
+        i for i in items if i["kind"] == MemoryKind.EPISODE.value and i["lane"] == "episode"
+    )
     assert profile_item["is_current"] is True
     assert profile_item["source"] == MemorySource.EXPLICIT.value
     assert episode_item["is_current"] is False
     assert episode_item["source"] == MemorySource.OBSERVED.value
     assert "MEMORY_TRACE tool.memory_search.start" in caplog.text
     assert "MEMORY_TRACE tool.memory_search.done" in caplog.text
-    assert "result_count=2" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -922,8 +928,9 @@ async def test_memory_search_summary_first(enabled_memory_state) -> None:
         )
         await session.commit()
 
-    # "上次讨论" triggers episode lane
-    result = await memory_search(query="上次讨论", limit=5)
+    # "上次讨论" triggers episode lane. limit=8 so episode lane still gets >=2
+    # after being split across all 4 active lanes (memory_search bypasses planner).
+    result = await memory_search(query="上次讨论", limit=8)
 
     assert result.ok is True
     items = result.output["items"]
@@ -1425,3 +1432,66 @@ async def test_memory_search_returns_do_not_auto_inject_record(enabled_memory_st
     assert any("只在显式搜索时出现" in item.get("content", "") for item in items), (
         "Record tagged do_not_auto_inject should appear in tool_search results"
     )
+
+
+@pytest.mark.asyncio
+async def test_memory_search_bypasses_planner_trigger_words(enabled_memory_state) -> None:
+    """Regression: memory_search must NOT gate lanes via MemoryRetrievalPlanner.
+
+    The query "项目 project" only matches the relation-lane lexicon, so planner-gated
+    routing would skip the profile lane entirely and miss a FACT record living there.
+    memory_search is an explicit user/agent search path, so every lane must be probed.
+    """
+    from datetime import UTC, datetime
+
+    from sebastian.capabilities.tools.memory_search import memory_search
+    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.types import (
+        MemoryArtifact,
+        MemoryKind,
+        MemoryScope,
+        MemorySource,
+        MemoryStatus,
+    )
+
+    now = datetime.now(UTC)
+    async with enabled_memory_state() as session:
+        store = ProfileMemoryStore(session)
+        await store.add(
+            MemoryArtifact(
+                id="fact-project-focus",
+                kind=MemoryKind.FACT,
+                scope=MemoryScope.USER,
+                subject_id="owner",
+                slot_id="user.current_project_focus",
+                cardinality=None,
+                resolution_policy=None,
+                content="用户当前主要关注的项目是开发 Sebastian 的记忆系统",
+                structured_payload={},
+                source=MemorySource.EXPLICIT,
+                confidence=0.95,
+                status=MemoryStatus.ACTIVE,
+                valid_from=None,
+                valid_until=None,
+                recorded_at=now,
+                last_accessed_at=None,
+                access_count=0,
+                provenance={},
+                links=[],
+                embedding_ref=None,
+                dedupe_key=None,
+                policy_tags=[],
+            )
+        )
+        await session.commit()
+
+    # "项目" / "project" 词表里仅匹配 relation lane。若 memory_search 仍走 planner，
+    # profile lane 将不被激活，这条 FACT 永远查不到。
+    result = await memory_search(query="项目 project", limit=5)
+
+    assert result.ok is True
+    items = result.output["items"]
+    assert any(
+        "用户当前主要关注的项目" in item.get("content", "") and item.get("lane") == "profile"
+        for item in items
+    ), f"Expected profile-lane FACT in results, got: {items}"

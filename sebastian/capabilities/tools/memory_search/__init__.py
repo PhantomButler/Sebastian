@@ -46,7 +46,7 @@ async def _do_search(query: str, limit: int) -> ToolResult:
     from sebastian.memory.entity_registry import EntityRegistry
     from sebastian.memory.episode_store import EpisodeMemoryStore
     from sebastian.memory.profile_store import ProfileMemoryStore
-    from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER, RetrievalContext, _keep_record
+    from sebastian.memory.retrieval import RetrievalContext, RetrievalPlan, _keep_record
 
     ctx = get_tool_context()
     session_id = ctx.session_id if ctx else "unknown"
@@ -64,8 +64,19 @@ async def _do_search(query: str, limit: int) -> ToolResult:
         access_purpose="tool_search",
     )
 
-    planner = DEFAULT_RETRIEVAL_PLANNER
-    plan = planner.plan(retrieval_ctx)
+    # memory_search 是用户/agent 显式触发的检索工具，绕过 planner 的意图分类，
+    # 全部四条 lane 强制激活。planner 的词表路由专为 context_injection 路径设计
+    # ——系统代替用户决定「这轮要不要注入哪种记忆」；在 tool search 路径上，
+    # 调用方已经明确要查所有相关记忆，再套一层意图过滤反而会漏召。
+    # 典型误伤场景：query "项目 project" 在词表里只对应 relation lane，
+    # 画像里 slot=user.current_project_focus 的 FACT 永远匹配不到。
+    # 详见 docs/architecture/spec/memory/retrieval.md §7.5。
+    plan = RetrievalPlan(
+        profile_lane=True,
+        context_lane=True,
+        episode_lane=True,
+        relation_lane=True,
+    )
 
     # Lane-aware budget allocation.
     #
