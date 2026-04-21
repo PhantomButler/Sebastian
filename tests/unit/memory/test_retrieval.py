@@ -109,9 +109,9 @@ def _plan(**kw: Any) -> RetrievalPlan:
 
 
 class TestMemoryRetrievalPlanner:
-    def test_profile_lane_always_enabled(self) -> None:
+    def test_profile_lane_enabled_when_preference_word_present(self) -> None:
         planner = MemoryRetrievalPlanner()
-        plan = planner.plan(_ctx("普通打招呼"))
+        plan = planner.plan(_ctx("我喜欢简短的回答"))
         assert plan.profile_lane is True
 
     def test_episode_lane_disabled_for_normal_turn(self) -> None:
@@ -149,10 +149,10 @@ class TestMemoryRetrievalPlanner:
         assert plan.episode_limit > 0
         assert plan.relation_limit > 0
 
-    def test_planner_keeps_profile_lane_for_small_talk(self) -> None:
+    def test_planner_short_circuits_all_lanes_for_small_talk(self) -> None:
         planner = MemoryRetrievalPlanner()
         plan = planner.plan(_ctx("hi"))
-        assert plan.profile_lane is True
+        assert plan.profile_lane is False
         assert plan.context_lane is False
         assert plan.episode_lane is False
         assert plan.relation_lane is False
@@ -161,7 +161,6 @@ class TestMemoryRetrievalPlanner:
         planner = MemoryRetrievalPlanner()
         plan = planner.plan(_ctx("上次我们讨论的事"))
         assert plan.episode_lane is True
-        assert plan.profile_lane is True
 
     def test_planner_activates_context_lane_on_keyword(self) -> None:
         planner = MemoryRetrievalPlanner()

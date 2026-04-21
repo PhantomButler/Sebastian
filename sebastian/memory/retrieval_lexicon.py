@@ -17,8 +17,7 @@ from __future__ import annotations
 # Profile Lane — 画像/偏好/稳定身份触发语
 PROFILE_LANE_WORDS: frozenset[str] = frozenset(
     {
-        # 自指代词
-        "我",
+        # 自指代词（不含 '我'，因其出现频率过高、区分度不足，会对无画像意图的句子产生误触发）
         "我的",
         "本人",
         "自己",

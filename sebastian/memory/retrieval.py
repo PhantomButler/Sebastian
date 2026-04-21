@@ -3,20 +3,22 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import jieba  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
+from sebastian.memory.retrieval_lexicon import (
+    CONTEXT_LANE_WORDS,
+    EPISODE_LANE_WORDS,
+    PROFILE_LANE_WORDS,
+    RELATION_LANE_STATIC_WORDS,
+    SMALL_TALK_WORDS,
+)
 from sebastian.memory.trace import record_ref, trace
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-
-# Keywords that trigger each retrieval lane (Phase R-D, spec §2)
-PROFILE_LANE_KEYWORDS = ["我", "我的", "我喜欢", "我是", "my", "i am", "i like", "i prefer"]
-EPISODE_LANE_KEYWORDS = ["上次", "讨论", "之前", "记得", "last time", "remember", "we discussed"]
-RELATION_LANE_KEYWORDS = ["老婆", "孩子", "同事", "项目", "team", "project", "related to"]
-CONTEXT_LANE_KEYWORDS = ["现在", "今天", "本周", "正在", "now", "today", "this week", "current"]
-SMALL_TALK_PATTERNS = ["hi", "hello", "你好", "嗨", "ok", "谢谢", "thanks"]
+    from sebastian.memory.entity_registry import EntityRegistry
 
 DO_NOT_AUTO_INJECT_TAG = "do_not_auto_inject"
 MIN_CONFIDENCE = 0.3
@@ -103,23 +105,53 @@ class RetrievalPlan(BaseModel):
 
 
 class MemoryRetrievalPlanner:
+    """Intent-based lane activator using jieba precise tokenization + set intersection.
+
+    Relation lane's trigger set is dynamic: `bootstrap_entity_triggers()` merges
+    all canonical entity names + aliases from EntityRegistry at startup; each
+    EntityRegistry.upsert_entity() call invokes `reload_entity_triggers()` to
+    keep the cache in sync. See spec §7.6 / §7.7.
+    """
+
+    def __init__(self) -> None:
+        self._relation_trigger_set: frozenset[str] = RELATION_LANE_STATIC_WORDS
+
+    async def bootstrap_entity_triggers(self, registry: EntityRegistry) -> None:
+        """启动期调用：把 Entity Registry 全量 name/aliases 合并进 relation 触发词。"""
+        entity_names = await registry.list_all_names_and_aliases()  # type: ignore[attr-defined]
+        self._relation_trigger_set = RELATION_LANE_STATIC_WORDS | frozenset(entity_names)
+
+    async def reload_entity_triggers(self, registry: EntityRegistry) -> None:
+        """Entity 写入末尾调用，刷新触发词缓存。"""
+        await self.bootstrap_entity_triggers(registry)
+
     def plan(self, context: RetrievalContext) -> RetrievalPlan:
-        """Determine which retrieval lanes to activate."""
         msg = context.user_message.lower().strip()
-        if any(msg == p or msg.startswith(p + " ") for p in SMALL_TALK_PATTERNS):
+        if not msg:
             plan = RetrievalPlan(
-                profile_lane=True,
+                profile_lane=False,
                 context_lane=False,
                 episode_lane=False,
                 relation_lane=False,
             )
         else:
-            plan = RetrievalPlan(
-                profile_lane=True,  # always on for non-small-talk (Phase R-D rule)
-                context_lane=any(k in msg for k in CONTEXT_LANE_KEYWORDS),
-                episode_lane=any(k in msg for k in EPISODE_LANE_KEYWORDS),
-                relation_lane=any(k in msg for k in RELATION_LANE_KEYWORDS),
-            )
+            tokens: set[str] = set(jieba.lcut(msg))
+
+            # Small-talk 短路（短消息 + 问候/致谢词）
+            if tokens & SMALL_TALK_WORDS and len(tokens) <= 3:
+                plan = RetrievalPlan(
+                    profile_lane=False,
+                    context_lane=False,
+                    episode_lane=False,
+                    relation_lane=False,
+                )
+            else:
+                plan = RetrievalPlan(
+                    profile_lane=bool(tokens & PROFILE_LANE_WORDS),
+                    context_lane=bool(tokens & CONTEXT_LANE_WORDS),
+                    episode_lane=bool(tokens & EPISODE_LANE_WORDS),
+                    relation_lane=bool(tokens & self._relation_trigger_set),
+                )
         trace(
             "retrieval.plan",
             session_id=context.session_id,
@@ -135,6 +167,10 @@ class MemoryRetrievalPlanner:
             relation_limit=plan.relation_limit,
         )
         return plan
+
+
+# Module-level singleton — gateway bootstrap 写入，retrieve_memory_section 读取
+DEFAULT_RETRIEVAL_PLANNER: MemoryRetrievalPlanner = MemoryRetrievalPlanner()
 
 
 class MemorySectionAssembler:
@@ -314,7 +350,7 @@ async def retrieve_memory_section(
     from sebastian.memory.episode_store import EpisodeMemoryStore
     from sebastian.memory.profile_store import ProfileMemoryStore
 
-    planner = MemoryRetrievalPlanner()
+    planner = DEFAULT_RETRIEVAL_PLANNER
     plan = planner.plan(context)
 
     profile_store = ProfileMemoryStore(db_session)
