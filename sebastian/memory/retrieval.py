@@ -70,7 +70,7 @@ def _keep_record(
                 return False
 
     confidence = getattr(record, "confidence", 1.0)
-    if confidence is not None and confidence < min_confidence:
+    if confidence is not None and float(confidence) < min_confidence:
         return False
 
     valid_until = getattr(record, "valid_until", None)
