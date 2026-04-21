@@ -6,6 +6,7 @@ import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.remote.ApiService
 import com.sebastian.android.data.remote.dto.LogConfigPatchDto
 import com.sebastian.android.data.remote.dto.LogStateDto
+import com.sebastian.android.data.remote.dto.MemorySettingsDto
 import com.sebastian.android.data.remote.dto.ProviderDto
 import com.sebastian.android.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
@@ -139,5 +140,13 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun patchLogState(llmStreamEnabled: Boolean?, sseEnabled: Boolean?): Result<LogStateDto> = runCatching {
         apiService.patchLogState(LogConfigPatchDto(llmStreamEnabled = llmStreamEnabled, sseEnabled = sseEnabled))
+    }
+
+    override suspend fun getMemorySettings(): Result<MemorySettingsDto> = runCatching {
+        apiService.getMemorySettings()
+    }
+
+    override suspend fun setMemoryEnabled(enabled: Boolean): Result<MemorySettingsDto> = runCatching {
+        apiService.putMemorySettings(MemorySettingsDto(enabled = enabled))
     }
 }

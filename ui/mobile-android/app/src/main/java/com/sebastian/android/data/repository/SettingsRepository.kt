@@ -2,6 +2,7 @@ package com.sebastian.android.data.repository
 
 import com.sebastian.android.data.model.Provider
 import com.sebastian.android.data.remote.dto.LogStateDto
+import com.sebastian.android.data.remote.dto.MemorySettingsDto
 import kotlinx.coroutines.flow.Flow
 
 interface SettingsRepository {
@@ -22,4 +23,6 @@ interface SettingsRepository {
     suspend fun testConnection(url: String): Result<Unit>
     suspend fun getLogState(): Result<LogStateDto>
     suspend fun patchLogState(llmStreamEnabled: Boolean? = null, sseEnabled: Boolean? = null): Result<LogStateDto>
+    suspend fun getMemorySettings(): Result<MemorySettingsDto>
+    suspend fun setMemoryEnabled(enabled: Boolean): Result<MemorySettingsDto>
 }
