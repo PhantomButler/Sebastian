@@ -239,7 +239,15 @@ class BaseAgent(ABC):
         agent_context: str,
         user_message: str,
     ) -> str:
-        """Return assembled memory context string. Empty string on any failure or if disabled."""
+        """Return assembled memory context string. Empty string on any failure or if disabled.
+
+        depth 守卫（spec §5 / artifact-model.md §10.4）：长期记忆只注入给 depth=1
+        的 Sebastian 本体。depth != 1（包括未初始化 → None）一律 fail-closed 返回 "".
+        """
+        depth = self._current_depth.get(session_id)
+        if depth != 1:
+            return ""
+
         if self._db_factory is None:
             return ""
         try:

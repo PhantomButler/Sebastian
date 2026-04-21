@@ -337,6 +337,7 @@ async def test_memory_section_passes_active_project_or_agent_context(mem_factory
     from sebastian.memory.retrieval import RetrievalContext
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s-ctx"] = 1  # depth guard: only depth=1 injects memory
 
     fake_settings = MagicMock()
     fake_settings.enabled = True
@@ -372,6 +373,7 @@ async def test_memory_section_returns_empty_on_exception(mem_factory, caplog) ->
     import logging
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s4"] = 1  # depth guard: only depth=1 reaches retrieval logic
 
     import sebastian.gateway.state as gw_state
 
