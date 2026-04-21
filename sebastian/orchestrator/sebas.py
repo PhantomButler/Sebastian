@@ -97,6 +97,8 @@ class Sebastian(BaseAgent):
         "resume_agent",
         "stop_agent",
         "todo_write",
+        "memory_save",
+        "memory_search",
         "Read",
         "Write",
         "Edit",
