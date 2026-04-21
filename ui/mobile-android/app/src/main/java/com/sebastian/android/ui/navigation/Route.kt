@@ -39,4 +39,7 @@ sealed class Route {
 
     @Serializable
     data object SettingsDebugLogging : Route()
+
+    @Serializable
+    data object SettingsMemory : Route()
 }

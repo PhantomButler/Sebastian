@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -91,8 +92,14 @@ fun SettingsScreen(navController: NavController) {
                         icon = Icons.Outlined.Extension,
                         title = "Agent LLM Bindings",
                         subtitle = "为每个 Agent 选择 Provider",
-                        isLast = true,
                         onClick = { navController.navigate(Route.SettingsAgentBindings) { launchSingleTop = true } },
+                    )
+                    SettingsRow(
+                        icon = Icons.Outlined.Psychology,
+                        title = "记忆功能",
+                        subtitle = "长期记忆开关",
+                        isLast = true,
+                        onClick = { navController.navigate(Route.SettingsMemory) { launchSingleTop = true } },
                     )
                 }
             }
