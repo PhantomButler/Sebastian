@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from sebastian.memory.entity_registry import EntityRegistry
@@ -12,7 +13,7 @@ from sebastian.memory.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
 from sebastian.store.database import Base
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session_factory():
     """Return an async session factory backed by an in-memory SQLite database."""
     from sebastian.store import models  # noqa: F401 – registers ORM models
