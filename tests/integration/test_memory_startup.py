@@ -33,8 +33,7 @@ async def test_init_memory_storage_creates_fts_table(engine):
     async with engine.connect() as conn:
         result = await conn.execute(
             text(
-                "SELECT name FROM sqlite_master"
-                " WHERE type='table' AND name='episode_memories_fts'"
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='episode_memories_fts'"
             )
         )
         assert result.fetchone() is not None

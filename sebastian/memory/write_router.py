@@ -131,14 +131,8 @@ def _trace_write(store: str, decision: ResolveDecision) -> None:
         scope=decision.scope,
         slot_id=decision.slot_id,
         kind=(
-            decision.new_memory.kind
-            if decision.new_memory is not None
-            else decision.candidate.kind
+            decision.new_memory.kind if decision.new_memory is not None else decision.candidate.kind
         ),
-        new_memory_id=(
-            decision.new_memory.id
-            if decision.new_memory is not None
-            else None
-        ),
+        new_memory_id=(decision.new_memory.id if decision.new_memory is not None else None),
         old_memory_ids=decision.old_memory_ids,
     )

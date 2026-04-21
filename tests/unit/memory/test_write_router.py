@@ -203,8 +203,7 @@ async def test_persist_decision_fact_supersede_marks_old_and_inserts_new(
     )
 
     rows_by_id = {
-        row.id: row
-        for row in (await db_session.scalars(select(ProfileMemoryRecord))).all()
+        row.id: row for row in (await db_session.scalars(select(ProfileMemoryRecord))).all()
     }
     assert rows_by_id[old_artifact.id].status == MemoryStatus.SUPERSEDED.value
     assert rows_by_id[new_artifact.id].status == MemoryStatus.ACTIVE.value
@@ -566,8 +565,7 @@ async def test_persist_decision_fact_merge_marks_old_and_inserts_new(
     )
 
     rows_by_id = {
-        row.id: row
-        for row in (await db_session.scalars(select(ProfileMemoryRecord))).all()
+        row.id: row for row in (await db_session.scalars(select(ProfileMemoryRecord))).all()
     }
     assert rows_by_id[old_artifact.id].status == MemoryStatus.SUPERSEDED.value
     assert rows_by_id[new_artifact.id].status == MemoryStatus.ACTIVE.value

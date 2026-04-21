@@ -232,9 +232,7 @@ class ProfileMemoryStore:
             kind=artifact.kind.value,
             cardinality=artifact.cardinality.value if artifact.cardinality is not None else None,
             resolution_policy=(
-                artifact.resolution_policy.value
-                if artifact.resolution_policy is not None
-                else None
+                artifact.resolution_policy.value if artifact.resolution_policy is not None else None
             ),
             content=artifact.content,
             content_segmented=segment_for_fts(artifact.content),

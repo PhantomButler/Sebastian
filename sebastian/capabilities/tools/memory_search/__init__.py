@@ -172,9 +172,7 @@ async def memory_search(query: str, limit: int = 5) -> ToolResult:
             }
         )
     for record in episode_records:
-        citation_type = (
-            "historical_summary" if record.kind == "summary" else "historical_evidence"
-        )
+        citation_type = "historical_summary" if record.kind == "summary" else "historical_evidence"
         items.append(
             {
                 "lane": "episode",

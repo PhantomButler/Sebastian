@@ -33,6 +33,9 @@ class FakeExtractor:
     async def extract(self, input):  # type: ignore[no-untyped-def]
         return ExtractorOutput(artifacts=[])
 
+    async def extract_with_slot_retry(self, input, *, attempt_register):  # type: ignore[no-untyped-def]
+        return ExtractorOutput(artifacts=[])
+
 
 class FakeConsolidator:
     async def consolidate(self, input: ConsolidatorInput) -> ConsolidationResult:

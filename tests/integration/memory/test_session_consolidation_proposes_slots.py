@@ -228,9 +228,11 @@ async def test_worker_proposed_slot_persisted_in_db(
     """consolidate_session() 全链路运行后 memory_slots 表出现 proposed_slot 对应行。
 
     不 mock process_candidates，让完整 pipeline 执行，验证 DB 落库断言。
+    使用隔离的 SlotRegistry，避免污染模块级 DEFAULT_SLOT_REGISTRY 单例。
     """
     from sqlalchemy import select
 
+    from sebastian.memory.slots import _BUILTIN_SLOTS, SlotRegistry
     from sebastian.store.models import MemorySlotRecord
 
     factory = tmp_memory_env
@@ -265,7 +267,10 @@ async def test_worker_proposed_slot_persisted_in_db(
         memory_settings_fn=lambda: True,
     )
 
-    await worker.consolidate_session("test-session-db", "default")
+    # 用隔离的 registry 替换全局单例，避免跨测试状态污染
+    isolated_registry = SlotRegistry(slots=list(_BUILTIN_SLOTS))
+    with patch("sebastian.memory.slots.DEFAULT_SLOT_REGISTRY", isolated_registry):
+        await worker.consolidate_session("test-session-db", "default")
 
     # 断言 memory_slots 表已有 proposed slot 对应行
     async with factory() as db_session:

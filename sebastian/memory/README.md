@@ -13,6 +13,7 @@
 - **Phase B 画像与经历检索**：`ProfileMemoryStore`（profile 写入 / 查询，含 `valid_from/valid_until/status/subject_id` 四项 current truth 过滤）、`EpisodeMemoryStore`（经历 FTS 检索，含 summary-first 两阶段检索）、`retrieval.py`（检索 pipeline，含 Episode Lane query-aware summary-first 策略）、`resolver.py`（冲突解决）。检索结果在每次 LLM turn 前通过 `BaseAgent._memory_section()` 注入 system prompt；`memory_search` 工具输出 `citation_type`（`current_truth` / `historical_summary` / `historical_evidence`），并按 active lane 数量把用户请求的 `limit` 提升为 `effective_limit`，避免已激活通道被全局截断饿死。
 - **Phase C LLM 沉淀**：`extraction.py`（`MemoryExtractor`，从会话片段提取候选 artifact；`ExtractorInput.task` 已对齐 spec，值为 `"extract_memory_artifacts"`）、`consolidation.py`（`MemoryConsolidator` + `SessionConsolidationWorker` + `MemoryConsolidationScheduler`）、`provider_bindings.py`（LLM binding 常量）。会话结束后由调度器触发后台沉淀，LLM 结果经 Normalize / Resolve 后方可写入，永不直接修改记忆状态。`memory_decision_log` 新增 `input_source` 字段，记录写入来源（`memory_save_tool` / `session_consolidation`）。
 - **统一写入 pipeline**：`pipeline.py`（`process_candidates()`，将 validate → resolve → persist → log 四步封装为单一可复用入口）。`memory_save` 工具后台任务和 `SessionConsolidationWorker` 均通过此函数写入，消除重复逻辑。
+- **Dynamic Slot System（动态 Slot 系统）**：`types.py` 新增 `ProposedSlot`、`slot_definition_store.py`（DB CRUD for `memory_slots` 表）、`slot_proposals.py`（`SlotProposalHandler`：校验 + 写 DB + 热更新 registry，savepoint 防并发 race）、`prompts.py`（Extractor / Consolidator 共享 prompt 模板）、`feedback.py`（`MemorySaveResult` 结构化结果 + `render_memory_save_summary()`）。Extractor 通过 `extract_with_slot_retry()` 支持 slot 被拒后注入反馈重试一次；`pipeline.py` 的 `process_candidates()` 在 `proposed_slots` 非空时强制要求 `slot_proposal_handler` 参数（否则 `raise ValueError`）。内置 seed slot 新增 `user.profile.name` / `user.profile.location` / `user.profile.occupation`（共 9 个）。
 - **Memory Trace 日志**：`trace.py` 提供 `MEMORY_TRACE` 调试日志辅助，贯穿检索、注入、决策、写入、工具和会话沉淀链路，输出到现有 `main.log`。
 
 语义记忆（向量检索）为后续规划能力，当前未实现。
@@ -21,25 +22,32 @@
 
 ```
 memory/
-├── __init__.py           # 空，包入口
-├── decision_log.py       # MemoryDecisionLogger：把 ResolveDecision 写入 memory_decision_log
-├── entity_registry.py    # EntityRegistry：实体 CRUD（entities 表）
-├── episode_store.py      # EpisodeMemoryStore：经历写入、FTS 检索；ensure_episode_fts 建表
-├── episodic_memory.py    # EpisodicMemory：会话历史兼容层，底层依赖 SessionStore，不是新 Episode Store
-├── profile_store.py      # ProfileMemoryStore：画像 CRUD、search_active、supersede
-├── resolver.py           # MemoryResolver：冲突检测 + ResolveDecision 生成
-├── retrieval.py          # 检索 pipeline：MemoryRetrievalPlanner → 查 DB → MemorySectionAssembler → str
-├── segmentation.py       # jieba FTS 分词辅助：索引分词、查询分词、实体词注入
-├── slots.py              # SlotRegistry + 6 个内置 SlotDefinition + DEFAULT_SLOT_REGISTRY
-├── startup.py            # init_memory_storage()：建 FTS 虚拟表，在 lifespan 中调用
-├── store.py              # MemoryStore：统一聚合 working + 会话历史兼容层
-├── trace.py              # MEMORY_TRACE 调试日志辅助：trace、preview_text、record_ref
-├── types.py              # 记忆系统 Pydantic models 与 StrEnum 类型
-├── working_memory.py     # WorkingMemory：进程内 dict，按 task_id 隔离，任务结束后清除
-├── provider_bindings.py  # LLM binding 常量：MEMORY_EXTRACTOR_BINDING / MEMORY_CONSOLIDATOR_BINDING
-├── extraction.py         # MemoryExtractor：LLM 提取候选 artifact，严格 JSON 校验，失败重试一次返回 []
-├── pipeline.py           # process_candidates()：统一 validate→resolve→persist→log 写入流程
-└── consolidation.py      # MemoryConsolidator + SessionConsolidationWorker + MemoryConsolidationScheduler
+├── __init__.py              # 空，包入口
+├── decision_log.py          # MemoryDecisionLogger：把 ResolveDecision 写入 memory_decision_log
+├── entity_registry.py       # EntityRegistry：实体 CRUD（entities 表）
+├── episode_store.py         # EpisodeMemoryStore：经历写入、FTS 检索；ensure_episode_fts 建表
+├── episodic_memory.py       # EpisodicMemory：会话历史兼容层，底层依赖 SessionStore，不是新 Episode Store
+├── errors.py                # 记忆系统异常体系（InvalidCandidateError / InvalidSlotProposalError 等）
+├── feedback.py              # MemorySaveResult + render_memory_save_summary()：memory_save 结果摘要渲染
+├── profile_store.py         # ProfileMemoryStore：画像 CRUD、search_active、supersede
+├── prompts.py               # Extractor / Consolidator 共享 prompt 模板（build_extractor_prompt 等）
+├── resolver.py              # MemoryResolver：冲突检测 + ResolveDecision 生成
+├── retrieval.py             # 检索 pipeline：MemoryRetrievalPlanner → 查 DB → MemorySectionAssembler → str
+├── segmentation.py          # jieba FTS 分词辅助：索引分词、查询分词、实体词注入
+├── slot_definition_store.py # SlotDefinitionStore：memory_slots 表 CRUD（insert / get / list）
+├── slot_proposals.py        # SlotProposalHandler：proposed slot 校验 + 写 DB + 热更新 registry，savepoint 防 race
+├── slots.py                 # SlotRegistry + 9 个内置 SlotDefinition + DEFAULT_SLOT_REGISTRY
+├── startup.py               # init_memory_storage()：建 FTS 虚拟表；seed_builtin_slots；bootstrap_slot_registry
+├── store.py                 # MemoryStore：统一聚合 working + 会话历史兼容层
+├── subject.py               # resolve_subject()：按 scope/session/agent 派生 subject_id
+├── trace.py                 # MEMORY_TRACE 调试日志辅助：trace、preview_text、record_ref
+├── types.py                 # 记忆系统 Pydantic models 与 StrEnum 类型（含 ProposedSlot）
+├── working_memory.py        # WorkingMemory：进程内 dict，按 task_id 隔离，任务结束后清除
+├── write_router.py          # persist_decision()：按 kind 分发 memory artifact 到各 store
+├── provider_bindings.py     # LLM binding 常量：MEMORY_EXTRACTOR_BINDING / MEMORY_CONSOLIDATOR_BINDING
+├── extraction.py            # MemoryExtractor：LLM 提取候选 artifact；extract_with_slot_retry() 支持 slot 拒绝重试
+├── pipeline.py              # process_candidates()：统一 validate→resolve→persist→log 写入流程（含 slot 注册）
+└── consolidation.py         # MemoryConsolidator + SessionConsolidationWorker + MemoryConsolidationScheduler
 ```
 
 ## Phase A 基础文件
@@ -103,6 +111,20 @@ memory/
 - 跟踪所有 pending task，`aclose()` 时等待清理
 - 在 `sebastian/gateway/app.py` 的 lifespan startup 中创建并订阅，shutdown 时调用 `aclose()`
 
+### Dynamic Slot System（`slot_definition_store.py` + `slot_proposals.py` + `prompts.py` + `feedback.py`）
+
+LLM 在对话中可提议新的记忆 slot，提议经校验后写入 `memory_slots` 表并热加载到 `SlotRegistry`：
+
+- **`types.ProposedSlot`**：LLM 提议的 slot 结构（三段式 slot_id 命名、scope、cardinality 等）
+- **`slot_definition_store.SlotDefinitionStore`**：`memory_slots` 表的 DB CRUD（insert / get / list_builtin / list_dynamic）
+- **`slot_proposals.SlotProposalHandler`**：
+  - `validate_proposed_slot()`：命名规则（三段式、首段 ∈ scope、≤64 字符）+ 字段组合校验
+  - `register_or_reuse()`：savepoint 隔离 INSERT；`IntegrityError` → 读赢家 → 同步内存 registry（并发 race 保护）
+- **`extraction.MemoryExtractor.extract_with_slot_retry()`**：Extractor 调 `attempt_register` 回调预注册 proposed slot；被拒项附原因注入对话，最多重试 1 次 LLM 请求
+- **`pipeline.process_candidates()`**：`proposed_slots` 非空时 `slot_proposal_handler` 必须传入（否则 `raise ValueError`）；被拒 slot 对应 candidate 的 `slot_id` 降级为 `None`
+- **`prompts.py`**：Extractor / Consolidator 共享的 prompt 构建函数，按 kind 分组展示已知 slot 清单
+- **`feedback.MemorySaveResult`** + **`render_memory_save_summary()`**：`memory_save` 工具的结构化返回值与自然语言摘要渲染
+
 ### 核心约束
 
 > **LLM 永远不直接修改记忆状态。** Extractor 和 Consolidator 的输出都是"建议"，最终写入前必须经过 Normalize 和 Resolve 流水线。
@@ -160,6 +182,10 @@ memory/
 | 从会话片段提取候选 artifact（LLM 提取） | [extraction.py](extraction.py) |
 | 候选 artifact 统一写入（validate→resolve→persist→log） | [pipeline.py](pipeline.py) |
 | 会话沉淀 Worker、Consolidator、Scheduler | [consolidation.py](consolidation.py) |
+| Extractor / Consolidator 共享 prompt 模板 | [prompts.py](prompts.py) |
+| 动态 slot 的 DB 存储（memory_slots 表 CRUD） | [slot_definition_store.py](slot_definition_store.py) |
+| 动态 slot 校验、注册、并发 race 保护 | [slot_proposals.py](slot_proposals.py) |
+| memory_save 结构化结果与自然语言摘要渲染 | [feedback.py](feedback.py) |
 
 ---
 

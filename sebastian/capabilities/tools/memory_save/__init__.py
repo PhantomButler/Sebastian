@@ -22,8 +22,7 @@ logger = logging.getLogger(__name__)
 @tool(
     name="memory_save",
     description=(
-        "保存用户明确要求记住的内容。"
-        "仅当用户直接要求你记住某件事时调用，例如'帮我记住……'。"
+        "保存用户明确要求记住的内容。仅当用户直接要求你记住某件事时调用，例如'帮我记住……'。"
     ),
     permission_tier=PermissionTier.LOW,
 )

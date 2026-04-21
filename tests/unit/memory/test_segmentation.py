@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from sebastian.memory.segmentation import add_entity_terms, build_match_query, segment_for_fts, terms_for_query
+from sebastian.memory.segmentation import (
+    add_entity_terms,
+    build_match_query,
+    segment_for_fts,
+    terms_for_query,
+)
 
 
 def test_segment_for_fts_chinese_contains_expected_words() -> None:

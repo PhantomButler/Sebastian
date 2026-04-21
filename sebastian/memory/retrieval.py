@@ -40,10 +40,7 @@ def _keep_record(
     now = datetime.now(UTC)
     policy_tags = getattr(record, "policy_tags", None) or []
 
-    if (
-        context.access_purpose == "context_injection"
-        and DO_NOT_AUTO_INJECT_TAG in policy_tags
-    ):
+    if context.access_purpose == "context_injection" and DO_NOT_AUTO_INJECT_TAG in policy_tags:
         return False
 
     for tag in policy_tags:
@@ -72,11 +69,7 @@ def _keep_record(
         return False
 
     record_subject = getattr(record, "subject_id", None)
-    if (
-        record_subject is not None
-        and context.subject_id
-        and record_subject != context.subject_id
-    ):
+    if record_subject is not None and context.subject_id and record_subject != context.subject_id:
         return False
 
     valid_from = getattr(record, "valid_from", None)
@@ -266,9 +259,7 @@ class MemorySectionAssembler:
             sections.append(f"## Important relationships\n{lines}")
 
         if episodes:
-            lines = "\n".join(
-                f"- [{_record_kind(r, 'episode')}] {r.content}" for r in episodes
-            )
+            lines = "\n".join(f"- [{_record_kind(r, 'episode')}] {r.content}" for r in episodes)
             sections.append(f"## Historical evidence (may be outdated)\n{lines}")
 
         trace(
@@ -280,10 +271,7 @@ class MemorySectionAssembler:
             context_count=len(contexts),
             relation_count=len(relations),
             episode_count=len(episodes),
-            items=[
-                record_ref(r)
-                for r in [*profiles, *contexts, *relations, *episodes]
-            ],
+            items=[record_ref(r) for r in [*profiles, *contexts, *relations, *episodes]],
         )
         return "\n\n".join(sections)
 
@@ -307,9 +295,7 @@ def _render_relation(record: Any) -> str:
     ``RelationCandidateRecord`` has no ``object_ref`` column; prefer
     ``target_entity_id`` and fall back to ``content`` when both IDs are unset.
     """
-    subject_id = getattr(record, "source_entity_id", None) or getattr(
-        record, "subject_id", ""
-    )
+    subject_id = getattr(record, "source_entity_id", None) or getattr(record, "subject_id", "")
     predicate = getattr(record, "predicate", "")
     object_ref = (
         getattr(record, "target_entity_id", None)

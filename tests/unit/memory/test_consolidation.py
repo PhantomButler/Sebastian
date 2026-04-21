@@ -525,6 +525,9 @@ class TestMemoryConsolidatorConsolidate:
                 async def extract(self, extractor_input):  # type: ignore[no-untyped-def]
                     raise AssertionError("extractor must not run when memory is disabled")
 
+                async def extract_with_slot_retry(self, extractor_input, *, attempt_register):  # type: ignore[no-untyped-def]
+                    raise AssertionError("extractor must not run when memory is disabled")
+
             worker = SessionConsolidationWorker(
                 db_factory=factory,
                 consolidator=_FailingConsolidator(),  # type: ignore[arg-type]
@@ -585,6 +588,9 @@ class TestMemoryConsolidatorConsolidate:
 
             class _FakeExtractor:
                 async def extract(self, extractor_input):  # type: ignore[no-untyped-def]
+                    return ExtractorOutput(artifacts=[])
+
+                async def extract_with_slot_retry(self, extractor_input, *, attempt_register):  # type: ignore[no-untyped-def]
                     return ExtractorOutput(artifacts=[])
 
             class _FakeConsolidator:

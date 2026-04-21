@@ -201,9 +201,7 @@ async def test_no_proposed_slots_backward_compatible() -> None:
         needs_review=False,
     )
 
-    result, _, _ = await _run_with_proposed(
-        [candidate], [], registry=DEFAULT_SLOT_REGISTRY
-    )
+    result, _, _ = await _run_with_proposed([candidate], [], registry=DEFAULT_SLOT_REGISTRY)
 
     assert result.proposed_slots_registered == []
     assert result.proposed_slots_rejected == []

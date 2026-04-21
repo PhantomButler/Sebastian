@@ -238,9 +238,9 @@ class SessionConsolidationWorker:
             # 4a. Run the extractor first so the consolidator sees explicit
             #     candidate artifacts instead of having to re-extract from raw
             #     messages. Extractor returns [] on LLM failure, never raises.
+            from sebastian.memory.errors import InvalidSlotProposalError
             from sebastian.memory.slot_definition_store import SlotDefinitionStore
             from sebastian.memory.slot_proposals import SlotProposalHandler
-            from sebastian.memory.errors import InvalidSlotProposalError
 
             slot_store = SlotDefinitionStore(session)
             slot_handler = SlotProposalHandler(store=slot_store, registry=DEFAULT_SLOT_REGISTRY)

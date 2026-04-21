@@ -408,9 +408,7 @@ async def test_memory_section_returns_empty_when_disabled(mem_factory) -> None:
     fake_settings.enabled = False
 
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
-        with patch(
-            "sebastian.memory.retrieval.retrieve_memory_section"
-        ) as mock_retrieve:
+        with patch("sebastian.memory.retrieval.retrieve_memory_section") as mock_retrieve:
             result = await agent._memory_section(
                 session_id="s5", agent_context="test", user_message="query"
             )

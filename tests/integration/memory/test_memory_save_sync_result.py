@@ -68,9 +68,7 @@ async def test_timeout_returns_ok_false(tmp_memory_env) -> None:
         "sebastian.memory.extraction.MemoryExtractor.extract_with_slot_retry",
         side_effect=slow_extract,
     ):
-        with patch(
-            "sebastian.capabilities.tools.memory_save.MEMORY_SAVE_TIMEOUT_SECONDS", 0.1
-        ):
+        with patch("sebastian.capabilities.tools.memory_save.MEMORY_SAVE_TIMEOUT_SECONDS", 0.1):
             result = await memory_save(content="x")
 
     assert result.ok is False

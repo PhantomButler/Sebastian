@@ -201,9 +201,7 @@ async def test_memory_save_no_db_returns_error(no_db_state) -> None:
 
 
 @pytest.mark.asyncio
-async def test_memory_save_invalid_slot_logs_discard(
-    enabled_memory_state, monkeypatch
-) -> None:
+async def test_memory_save_invalid_slot_logs_discard(enabled_memory_state, monkeypatch) -> None:
     """extractor 返回未知 slot 的 candidate → validate 失败 → DISCARD 进 decision log，无记录。"""
     from sqlalchemy import select
 
@@ -247,9 +245,7 @@ async def test_memory_save_invalid_slot_logs_discard(
 
 
 @pytest.mark.asyncio
-async def test_memory_save_discard_writes_decision_log(
-    enabled_memory_state, monkeypatch
-) -> None:
+async def test_memory_save_discard_writes_decision_log(enabled_memory_state, monkeypatch) -> None:
     """resolver 返回 DISCARD 时 decision log 有记录。"""
     from sqlalchemy import select
 
@@ -290,9 +286,7 @@ async def test_memory_save_discard_writes_decision_log(
 
 
 @pytest.mark.asyncio
-async def test_memory_save_decision_log_has_input_source(
-    enabled_memory_state, monkeypatch
-) -> None:
+async def test_memory_save_decision_log_has_input_source(enabled_memory_state, monkeypatch) -> None:
     """decision log 的 input_source["type"] == "memory_save_tool"。"""
     from sqlalchemy import select
 
@@ -1035,9 +1029,7 @@ async def test_memory_search_profile_does_not_starve_episode_lane(
     lanes = [item["lane"] for item in items]
     # effective_limit = max(5, 2 active lanes) = 5
     assert len(items) <= 5, f"Total must not exceed effective lane-aware budget, got {len(items)}"
-    assert "episode" in lanes, (
-        f"Episode lane must appear despite 5 profile records; lanes={lanes}"
-    )
+    assert "episode" in lanes, f"Episode lane must appear despite 5 profile records; lanes={lanes}"
 
 
 @pytest.mark.asyncio
@@ -1430,5 +1422,3 @@ async def test_memory_search_returns_do_not_auto_inject_record(enabled_memory_st
     assert any("只在显式搜索时出现" in item.get("content", "") for item in items), (
         "Record tagged do_not_auto_inject should appear in tool_search results"
     )
-
-

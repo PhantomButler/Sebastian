@@ -5,6 +5,9 @@
 ## [Unreleased]
 
 ### Added
+- 动态 Slot 系统（Dynamic Slot System）：LLM 可在对话中提议新记忆 slot，经三段式命名校验后写入 `memory_slots` 表并热加载到 `SlotRegistry`；`SlotProposalHandler` 用 savepoint 隔离并发 race，冲突时自动复用已有赢家
+- `memory_save` tool 同步化：改为 await 等待并返回结构化 `MemorySaveResult`（`saved_count`、`proposed_slots_registered` 等），前台 Agent 可据此判断是否通知用户
+- 新增 3 个内建 seed slot：`user.profile.name` / `user.profile.location` / `user.profile.occupation`（总计 9 个内建 slot）
 - `write_router`：按 kind 分发 memory artifact 到 Profile/Episode/Entity/Relation 存储
 - `subject resolver`：替换硬编码 owner，按 scope/session/agent 派生 subject_id
 - `Context Lane`：检索注入近期时效性记忆

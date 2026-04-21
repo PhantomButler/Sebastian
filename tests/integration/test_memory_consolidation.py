@@ -58,6 +58,11 @@ class FakeExtractor:
         self.last_input = input
         return ExtractorOutput(artifacts=list(self.artifacts))
 
+    async def extract_with_slot_retry(self, input, *, attempt_register):  # type: ignore[no-untyped-def]
+        self.called = True
+        self.last_input = input
+        return ExtractorOutput(artifacts=list(self.artifacts))
+
 
 class FakeConsolidator:
     """Returns a preset ConsolidationResult without calling any LLM."""

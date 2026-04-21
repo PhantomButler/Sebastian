@@ -280,9 +280,7 @@ class TestMemorySectionAssembler:
                 FakeProfileRecord(kind="pref", content="x", policy_tags=["do_not_auto_inject"])
             ],
             context_records=[],
-            episode_records=[
-                FakeEpisodeRecord(content="y", policy_tags=["do_not_auto_inject"])
-            ],
+            episode_records=[FakeEpisodeRecord(content="y", policy_tags=["do_not_auto_inject"])],
             relation_records=[],
             plan=_plan(),
         )
@@ -337,9 +335,7 @@ class TestMemorySectionAssembler:
     def test_assembler_filters_do_not_auto_inject_tag(self) -> None:
         records = [
             FakeProfileRecord(kind="pref", content="keep"),
-            FakeProfileRecord(
-                kind="pref", content="drop", policy_tags=["do_not_auto_inject"]
-            ),
+            FakeProfileRecord(kind="pref", content="drop", policy_tags=["do_not_auto_inject"]),
         ]
         assembler = MemorySectionAssembler()
         result = assembler.assemble(
@@ -481,9 +477,7 @@ class TestMemorySectionAssembler:
         assert result == ""
 
     def test_assembler_respects_per_lane_limits(self) -> None:
-        records = [
-            FakeProfileRecord(kind="pref", content=f"profile-{i}") for i in range(5)
-        ]
+        records = [FakeProfileRecord(kind="pref", content=f"profile-{i}") for i in range(5)]
         assembler = MemorySectionAssembler()
         result = assembler.assemble(
             profile_records=records,

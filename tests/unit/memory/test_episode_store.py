@@ -209,9 +209,7 @@ async def test_search_escapes_fts_operators(db_session) -> None:
     """Query strings containing FTS operators like OR / AND / quotes must not crash
     and must only match literal content."""
     store = EpisodeMemoryStore(db_session)
-    await store.add_episode(
-        _make_artifact(id="ep-or", content="We use OR in SQL queries")
-    )
+    await store.add_episode(_make_artifact(id="ep-or", content="We use OR in SQL queries"))
 
     # Querying with a literal "OR" — must not raise, must return the one record
     results = await store.search(subject_id="owner", query="OR", limit=5)
@@ -274,9 +272,7 @@ async def test_search_summaries_by_query_returns_only_summary_kind(db_session) -
         )
     )
 
-    results = await store.search_summaries_by_query(
-        subject_id="owner", query="健身", limit=8
-    )
+    results = await store.search_summaries_by_query(subject_id="owner", query="健身", limit=8)
 
     ids = [r.id for r in results]
     assert "sum-match" in ids
@@ -315,9 +311,7 @@ async def test_search_episodes_only_returns_only_episode_kind(db_session) -> Non
         )
     )
 
-    results = await store.search_episodes_only(
-        subject_id="owner", query="健身", limit=8
-    )
+    results = await store.search_episodes_only(subject_id="owner", query="健身", limit=8)
 
     ids = [r.id for r in results]
     assert "ep-match" in ids
