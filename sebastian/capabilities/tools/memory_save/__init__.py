@@ -5,6 +5,7 @@ import logging
 
 import sebastian.gateway.state as state
 from sebastian.core.tool import tool
+from sebastian.core.tool_context import get_tool_context
 from sebastian.core.types import ToolResult
 from sebastian.memory.constants import MEMORY_SAVE_TIMEOUT_SECONDS
 from sebastian.memory.feedback import MemorySaveResult, render_memory_save_summary
@@ -38,8 +39,9 @@ async def memory_save(content: str) -> ToolResult:
     if not hasattr(state, "db_factory") or state.db_factory is None:
         return ToolResult(ok=False, error="记忆存储暂时不可用，无法保存，请稍后再试。")
 
-    session_id: str | None = getattr(state, "current_session_id", None) or None
-    agent_type: str = getattr(state, "current_agent_type", "default") or "default"
+    ctx = get_tool_context()
+    session_id: str | None = ctx.session_id if ctx else None
+    agent_type: str = (ctx.agent_type if ctx else None) or "default"
 
     try:
         result = await asyncio.wait_for(
