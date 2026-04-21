@@ -21,14 +21,19 @@ if TYPE_CHECKING:
     from sebastian.memory.entity_registry import EntityRegistry
 
 DO_NOT_AUTO_INJECT_TAG = "do_not_auto_inject"
-MIN_CONFIDENCE = 0.3
+
+# 硬过滤线：任何路径丢 confidence < 0.3 的记录（spec §6 / artifact-model.md §9.3）
+MIN_CONFIDENCE_HARD: float = 0.3
+
+# 自动注入门槛：仅 context_injection 路径额外要求 confidence >= 0.5
+MIN_CONFIDENCE_AUTO_INJECT: float = 0.5
 
 
 def _keep_record(
     record: Any,
     *,
     context: RetrievalContext,
-    min_confidence: float = MIN_CONFIDENCE,
+    min_confidence: float = MIN_CONFIDENCE_HARD,
 ) -> bool:
     """Return True if *record* should be included in retrieval results.
 
@@ -192,7 +197,7 @@ class MemorySectionAssembler:
         relation_records: list[Any],
         plan: RetrievalPlan,
         context: RetrievalContext | None = None,
-        min_confidence: float = MIN_CONFIDENCE,
+        min_confidence: float = MIN_CONFIDENCE_HARD,
     ) -> str:
         """Build memory context string with 4 sections for system prompt injection.
 
@@ -242,9 +247,21 @@ class MemorySectionAssembler:
                         filter_counts["agent_policy"] += 1
                         return False
             confidence = getattr(record, "confidence", 1.0)
+
+            # 硬线（任何路径都丢）
             if confidence is not None and confidence < min_confidence:
                 filter_counts["confidence"] += 1
                 return False
+
+            # 自动注入门槛（仅 context_injection 应用）
+            if (
+                effective_context.access_purpose == "context_injection"
+                and confidence is not None
+                and confidence < MIN_CONFIDENCE_AUTO_INJECT
+            ):
+                filter_counts["confidence"] += 1
+                return False
+
             valid_until = getattr(record, "valid_until", None)
             if valid_until is not None:
                 # Treat naive datetimes as UTC to stay compatible with sqlite storage.
