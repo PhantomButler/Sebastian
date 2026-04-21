@@ -139,9 +139,10 @@ async def test_slot_retry_succeeds_second_attempt() -> None:
 
     extractor = MemoryExtractor(mock_registry, max_retries=0)
 
-    async def attempt_register(output: ExtractorOutput) -> list[str]:
+    async def attempt_register(output: ExtractorOutput) -> list[tuple[str, str]]:
         # 把 slot_id == "BAD" 的视为被拒
-        return [p.slot_id for p in output.proposed_slots if p.slot_id == "BAD"]
+        reason = "命名不符合三段式规范"
+        return [(p.slot_id, reason) for p in output.proposed_slots if p.slot_id == "BAD"]
 
     result = await extractor.extract_with_slot_retry(
         ExtractorInput(
@@ -172,8 +173,9 @@ async def test_slot_retry_gives_up_after_one_retry() -> None:
 
     extractor = MemoryExtractor(mock_registry, max_retries=0)
 
-    async def attempt_register(output: ExtractorOutput) -> list[str]:
-        return [p.slot_id for p in output.proposed_slots if p.slot_id == "BAD"]
+    async def attempt_register(output: ExtractorOutput) -> list[tuple[str, str]]:
+        reason = "命名不符合三段式规范"
+        return [(p.slot_id, reason) for p in output.proposed_slots if p.slot_id == "BAD"]
 
     result = await extractor.extract_with_slot_retry(
         ExtractorInput(
@@ -187,6 +189,7 @@ async def test_slot_retry_gives_up_after_one_retry() -> None:
     assert provider.call_count == 2
     # 返回最后一次输出（仍含被拒 slot，由外层决定如何处理）
     assert isinstance(result, ExtractorOutput)
+    assert len(result.proposed_slots) > 0
 
 
 @pytest.mark.asyncio
@@ -201,7 +204,7 @@ async def test_slot_retry_no_rejected_slots_calls_llm_once() -> None:
 
     extractor = MemoryExtractor(mock_registry, max_retries=0)
 
-    async def attempt_register(output: ExtractorOutput) -> list[str]:
+    async def attempt_register(output: ExtractorOutput) -> list[tuple[str, str]]:
         return []  # 无被拒
 
     result = await extractor.extract_with_slot_retry(

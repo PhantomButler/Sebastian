@@ -56,13 +56,13 @@ class MemoryExtractor:
         self,
         input: ExtractorInput,
         *,
-        attempt_register: Callable[[ExtractorOutput], Awaitable[list[str]]],
+        attempt_register: Callable[[ExtractorOutput], Awaitable[list[tuple[str, str]]]],
     ) -> ExtractorOutput:
         """与 extract() 的区别：
 
         - attempt_register 回调由调用方传入（SlotProposalHandler.register_or_reuse 的包装或预检）
-        - 回调返回被拒的 slot_id 列表
-        - 若列表非空：把被拒列表追加到对话里作为反馈，再调一次 LLM（共最多 2 次 LLM 请求）
+        - 回调返回被拒的 (slot_id, reason) 元组列表
+        - 若列表非空：把被拒列表（含原因）追加到对话里作为反馈，再调一次 LLM（共最多 2 次 LLM 请求）
         - 无论重试结果如何，最多重试 1 次（slot_retry=1）
         """
         resolved = await self._registry.get_provider(MEMORY_EXTRACTOR_BINDING)
@@ -72,12 +72,12 @@ class MemoryExtractor:
 
         output = await self._try_once(resolved, system, messages)
 
-        rejected = await attempt_register(output)
-        if not rejected:
+        rejected_with_reasons = await attempt_register(output)
+        if not rejected_with_reasons:
             return output
 
         # 追加 assistant + user 消息，注入失败反馈后重试一次
-        feedback = _build_slot_retry_feedback(rejected)
+        feedback = _build_slot_retry_feedback(rejected_with_reasons)
         messages.extend(
             [
                 {"role": "assistant", "content": output.model_dump_json()},
@@ -154,9 +154,9 @@ def _group_known_slots(known_slots: list[dict[str, Any]]) -> dict[str, list[dict
     return grouped
 
 
-def _build_slot_retry_feedback(rejected_ids: list[str]) -> str:
+def _build_slot_retry_feedback(rejected: list[tuple[str, str]]) -> str:
     """生成回注 prompt 的反馈文本，要求 LLM 修正被拒 slot 后重新输出完整 JSON。"""
-    bullets = "\n".join(f'- "{slot_id}"' for slot_id in rejected_ids)
+    bullets = "\n".join(f"- slot_id: {slot_id}，拒绝原因：{reason}" for slot_id, reason in rejected)
     return f"""\
 上一轮提议的以下 slot 不合规，请重命名后再输出一轮完整 JSON（artifacts + proposed_slots）：
 
