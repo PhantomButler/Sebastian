@@ -25,14 +25,6 @@ async def db_session_factory():
     await engine.dispose()
 
 
-@pytest.fixture(autouse=True)
-def _reset_planner() -> None:
-    """Reset DEFAULT_RETRIEVAL_PLANNER before and after each test."""
-    DEFAULT_RETRIEVAL_PLANNER._relation_trigger_set = RELATION_LANE_STATIC_WORDS
-    yield  # type: ignore[misc]
-    DEFAULT_RETRIEVAL_PLANNER._relation_trigger_set = RELATION_LANE_STATIC_WORDS
-
-
 @pytest.mark.asyncio
 async def test_gateway_startup_bootstraps_planner_entity_triggers(
     db_session_factory,
