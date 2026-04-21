@@ -50,11 +50,11 @@ async def memory_save(content: str) -> ToolResult:
         return ToolResult(ok=True, output=result.model_dump())
     except TimeoutError:
         trace("tool.memory_save.timeout")
-        return ToolResult(ok=False, error="记忆处理超时，未能保存。")
+        return ToolResult(ok=False, error="保存失败，请告知用户稍后再试。")
     except Exception as exc:  # noqa: BLE001
         logger.exception("memory_save failed")
         trace("tool.memory_save.error", reason=str(exc))
-        return ToolResult(ok=False, error=f"保存失败：{exc}")
+        return ToolResult(ok=False, error="保存失败，请告知用户并建议其排查后台日志。")
 
 
 async def _do_save(content: str, session_id: str | None, agent_type: str) -> MemorySaveResult:

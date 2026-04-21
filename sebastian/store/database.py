@@ -74,6 +74,7 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
         ("llm_providers", "thinking_capability", "VARCHAR(20)"),
         ("agent_llm_bindings", "thinking_effort", "VARCHAR(16)"),
         ("memory_decision_log", "input_source", "TEXT"),
+        ("memory_decision_log", "session_id", "TEXT"),
         ("profile_memories", "cardinality", "VARCHAR"),
         ("profile_memories", "resolution_policy", "VARCHAR"),
         ("profile_memories", "content_segmented", "VARCHAR DEFAULT ''"),
