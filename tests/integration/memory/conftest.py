@@ -32,6 +32,18 @@ async def _create_in_memory_factory():
 
 
 @pytest.fixture
+async def db_session():
+    """Bare async SQLite session with all ORM tables — no gateway state patching."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        yield session
+    await engine.dispose()
+
+
+@pytest.fixture
 async def tmp_memory_env(monkeypatch):
     """Patch gateway.state with memory enabled, in-memory DB, and a stub llm_registry."""
     fake_settings = MagicMock()

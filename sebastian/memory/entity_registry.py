@@ -13,10 +13,18 @@ from sebastian.store.models import EntityRecord, RelationCandidateRecord
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from sebastian.memory.retrieval import MemoryRetrievalPlanner
+
 
 class EntityRegistry:
-    def __init__(self, db_session: AsyncSession) -> None:
+    def __init__(
+        self,
+        db_session: AsyncSession,
+        *,
+        planner: MemoryRetrievalPlanner | None = None,
+    ) -> None:
         self._session = db_session
+        self._planner = planner
 
     async def upsert_entity(
         self,
@@ -45,6 +53,7 @@ class EntityRegistry:
                 existing.entity_metadata = metadata
             existing.updated_at = now
             await self._session.flush()
+            await self._notify_planner_reload()
             return existing
 
         record = EntityRecord(
@@ -58,6 +67,7 @@ class EntityRegistry:
         )
         self._session.add(record)
         await self._session.flush()
+        await self._notify_planner_reload()
         return record
 
     async def lookup(self, text: str) -> list[EntityRecord]:
@@ -119,14 +129,25 @@ class EntityRegistry:
         result = await self._session.scalars(statement)
         return list(result.all())
 
+    async def list_all_names_and_aliases(self) -> list[str]:
+        """Return all canonical_names and aliases as a flat list.
+
+        Shared by sync_jieba_terms() and MemoryRetrievalPlanner
+        .bootstrap_entity_triggers(). No deduplication — callers handle dedup.
+        """
+        result = await self._session.scalars(select(EntityRecord))
+        names: list[str] = []
+        for record in result.all():
+            names.append(record.canonical_name)
+            names.extend(record.aliases)
+        return names
+
     async def sync_jieba_terms(self) -> None:
         """Register all entity canonical names and aliases with jieba."""
-        result = await self._session.scalars(select(EntityRecord))
-        all_records = result.all()
-
-        terms: list[str] = []
-        for record in all_records:
-            terms.append(record.canonical_name)
-            terms.extend(record.aliases)
-
+        terms = await self.list_all_names_and_aliases()
         add_entity_terms(terms)
+
+    async def _notify_planner_reload(self) -> None:
+        """Trigger planner trigger-set refresh after a write. No-op if unwired."""
+        if self._planner is not None:
+            await self._planner.reload_entity_triggers(self)

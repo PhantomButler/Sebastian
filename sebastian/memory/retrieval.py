@@ -117,8 +117,14 @@ class MemoryRetrievalPlanner:
         self._relation_trigger_set: frozenset[str] = RELATION_LANE_STATIC_WORDS
 
     async def bootstrap_entity_triggers(self, registry: EntityRegistry) -> None:
-        """启动期调用：把 Entity Registry 全量 name/aliases 合并进 relation 触发词。"""
-        entity_names = await registry.list_all_names_and_aliases()  # type: ignore[attr-defined]  # added in Task 3
+        """启动期调用：把 Entity Registry 全量 name/aliases 合并进 relation 触发词。
+
+        同时向 jieba 注册自定义词，确保分词时实体名不被拆散。
+        """
+        from sebastian.memory.segmentation import add_entity_terms
+
+        entity_names = await registry.list_all_names_and_aliases()
+        add_entity_terms(entity_names)
         self._relation_trigger_set = RELATION_LANE_STATIC_WORDS | frozenset(entity_names)
 
     async def reload_entity_triggers(self, registry: EntityRegistry) -> None:
