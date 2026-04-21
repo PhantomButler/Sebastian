@@ -85,7 +85,7 @@ async def test_depth_1_injects_memory(base_agent_with_memory) -> None:
     out = await agent._memory_section(
         session_id="s1", agent_context="sebastian", user_message="我喜欢茶"
     )
-    assert "Current facts about user" in out or out != ""
+    assert out != ""
 
 
 @pytest.mark.asyncio
