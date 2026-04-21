@@ -1,13 +1,16 @@
 # sebastian/gateway/routes/memory_components.py
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from sebastian.gateway.auth import require_auth
 from sebastian.memory.provider_bindings import MEMORY_COMPONENT_META, MEMORY_COMPONENT_TYPES
+
+if TYPE_CHECKING:
+    from sebastian.store.models import AgentLLMBindingRecord
 
 router = APIRouter(tags=["memory"])
 
@@ -20,7 +23,7 @@ class ComponentBindingUpdate(BaseModel):
     thinking_effort: str | None = None
 
 
-def _binding_to_dict(component_type: str, binding: Any | None) -> JSONDict:
+def _binding_to_dict(component_type: str, binding: AgentLLMBindingRecord | None) -> JSONDict:
     return {
         "component_type": component_type,
         "provider_id": binding.provider_id if binding is not None else None,

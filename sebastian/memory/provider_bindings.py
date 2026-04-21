@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Memory component binding keys — must not overlap with any agent type registered in agent_registry.
+# Convention: agent types use agent name (e.g., "coder"), memory components use "memory_" prefix.
 MEMORY_EXTRACTOR_BINDING = "memory_extractor"
 MEMORY_CONSOLIDATOR_BINDING = "memory_consolidator"
 
