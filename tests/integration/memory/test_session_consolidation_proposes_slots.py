@@ -81,7 +81,7 @@ async def test_worker_merges_extractor_and_consolidator_proposed_slots(
     )
 
     mock_extractor = MagicMock(spec=MemoryExtractor)
-    mock_extractor.extract = AsyncMock(return_value=fake_extractor_output)
+    mock_extractor.extract_with_slot_retry = AsyncMock(return_value=fake_extractor_output)
 
     mock_consolidator = MagicMock(spec=MemoryConsolidator)
     mock_consolidator.consolidate = AsyncMock(return_value=fake_consolidation_result)
@@ -137,7 +137,7 @@ async def test_worker_passes_slot_proposal_handler_to_process_candidates(
     fake_consolidation_result = ConsolidationResult()
 
     mock_extractor = MagicMock(spec=MemoryExtractor)
-    mock_extractor.extract = AsyncMock(return_value=fake_extractor_output)
+    mock_extractor.extract_with_slot_retry = AsyncMock(return_value=fake_extractor_output)
 
     mock_consolidator = MagicMock(spec=MemoryConsolidator)
     mock_consolidator.consolidate = AsyncMock(return_value=fake_consolidation_result)
@@ -187,7 +187,7 @@ async def test_worker_proposed_by_is_consolidator(
     fake_consolidation_result = ConsolidationResult()
 
     mock_extractor = MagicMock(spec=MemoryExtractor)
-    mock_extractor.extract = AsyncMock(return_value=fake_extractor_output)
+    mock_extractor.extract_with_slot_retry = AsyncMock(return_value=fake_extractor_output)
 
     mock_consolidator = MagicMock(spec=MemoryConsolidator)
     mock_consolidator.consolidate = AsyncMock(return_value=fake_consolidation_result)

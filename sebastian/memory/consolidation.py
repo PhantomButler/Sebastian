@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sebastian.memory.extraction import ExtractorInput, MemoryExtractor
+from sebastian.memory.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor
 from sebastian.memory.prompts import build_consolidator_prompt, group_slots_by_kind
 from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
 from sebastian.memory.subject import resolve_subject
@@ -238,6 +238,26 @@ class SessionConsolidationWorker:
             # 4a. Run the extractor first so the consolidator sees explicit
             #     candidate artifacts instead of having to re-extract from raw
             #     messages. Extractor returns [] on LLM failure, never raises.
+            from sebastian.memory.slot_definition_store import SlotDefinitionStore
+            from sebastian.memory.slot_proposals import SlotProposalHandler
+            from sebastian.memory.errors import InvalidSlotProposalError
+
+            slot_store = SlotDefinitionStore(session)
+            slot_handler = SlotProposalHandler(store=slot_store, registry=DEFAULT_SLOT_REGISTRY)
+
+            async def _attempt_register(output: ExtractorOutput) -> list[tuple[str, str]]:
+                rejected: list[tuple[str, str]] = []
+                for p in output.proposed_slots:
+                    try:
+                        await slot_handler.register_or_reuse(
+                            p,
+                            proposed_by="extractor",
+                            proposed_in_session=session_id,
+                        )
+                    except InvalidSlotProposalError as exc:
+                        rejected.append((p.slot_id, str(exc)))
+                return rejected
+
             extractor_input = ExtractorInput(
                 subject_context={
                     "subject_id": context_subject_id,
@@ -246,7 +266,9 @@ class SessionConsolidationWorker:
                 conversation_window=messages,
                 known_slots=[s.model_dump() for s in DEFAULT_SLOT_REGISTRY.list_all()],
             )
-            extractor_output = await self._extractor.extract(extractor_input)
+            extractor_output = await self._extractor.extract_with_slot_retry(
+                extractor_input, attempt_register=_attempt_register
+            )
             candidate_artifacts = extractor_output.artifacts
             trace(
                 "consolidation.extractor_result",
@@ -324,12 +346,6 @@ class SessionConsolidationWorker:
                 )
                 for summary in result.summaries
             ]
-
-            from sebastian.memory.slot_definition_store import SlotDefinitionStore
-            from sebastian.memory.slot_proposals import SlotProposalHandler
-
-            slot_store = SlotDefinitionStore(session)
-            slot_handler = SlotProposalHandler(store=slot_store, registry=DEFAULT_SLOT_REGISTRY)
 
             # Merge proposed slots from both extractor and consolidator;
             # register_or_reuse naturally deduplicates by slot_id.
