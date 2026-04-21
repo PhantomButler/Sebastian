@@ -78,10 +78,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     await init_db()
     await init_memory_storage(get_engine())
-    from sebastian.gateway.state import MemoryRuntimeSettings
-
-    state.memory_settings = MemoryRuntimeSettings(enabled=settings.sebastian_memory_enabled)
     db_factory = get_session_factory()
+
+    from sebastian.gateway.state import MemoryRuntimeSettings
+    from sebastian.store.app_settings_store import APP_SETTING_MEMORY_ENABLED, AppSettingsStore
+
+    async with db_factory() as _app_settings_session:
+        _app_store = AppSettingsStore(_app_settings_session)
+        _mem_val = await _app_store.get(APP_SETTING_MEMORY_ENABLED)
+    mem_enabled = (
+        (_mem_val.lower() == "true") if _mem_val is not None else settings.sebastian_memory_enabled
+    )
+    state.memory_settings = MemoryRuntimeSettings(enabled=mem_enabled)
 
     async with db_factory() as _seed_session:
         await seed_builtin_slots(_seed_session)

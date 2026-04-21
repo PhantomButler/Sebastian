@@ -25,5 +25,11 @@ async def put_memory_settings(
     body: MemoryRuntimeSettings,
     _auth: AuthPayload = Depends(require_auth),
 ) -> MemoryRuntimeSettings:
+    from sebastian.store.app_settings_store import APP_SETTING_MEMORY_ENABLED, AppSettingsStore
+
+    async with state.db_factory() as session:
+        store = AppSettingsStore(session)
+        await store.set(APP_SETTING_MEMORY_ENABLED, str(body.enabled).lower())
+        await session.commit()
     state.memory_settings = body
     return state.memory_settings
