@@ -430,7 +430,17 @@ class TestMemoryConsolidatorConsolidate:
             candidate_artifacts=[],
             active_memories_for_subject=[{"id": "m1", "content": "old preference"}],
             recent_summaries=[{"content": "summary one", "subject_id": "user:u1"}],
-            slot_definitions=[{"slot_id": "user.preference.theme", "description": "UI theme"}],
+            slot_definitions=[
+                {
+                    "slot_id": "user.preference.theme",
+                    "scope": "user",
+                    "subject_kind": "user",
+                    "cardinality": "single",
+                    "resolution_policy": "supersede",
+                    "kind_constraints": ["preference"],
+                    "description": "UI theme",
+                }
+            ],
             entity_registry_snapshot=[{"entity_id": "e1", "name": "Alice"}],
         )
         result = await consolidator.consolidate(inp)

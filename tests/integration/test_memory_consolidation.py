@@ -407,8 +407,8 @@ async def test_consolidator_input_includes_full_context(db_factory):
     assert len(inp.recent_summaries) >= 1
     assert inp.recent_summaries[0]["content"] == "上次会话摘要"
 
-    # Six built-in slots
-    assert len(inp.slot_definitions) == 6
+    # Nine built-in slots (updated in Tasks 13-14)
+    assert len(inp.slot_definitions) == 9
     defined_ids = {s["slot_id"] for s in inp.slot_definitions}
     assert "user.preference.response_style" in defined_ids
 

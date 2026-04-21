@@ -325,9 +325,19 @@ class SessionConsolidationWorker:
                 for summary in result.summaries
             ]
 
+            from sebastian.memory.slot_definition_store import SlotDefinitionStore
+            from sebastian.memory.slot_proposals import SlotProposalHandler
+
+            slot_store = SlotDefinitionStore(session)
+            slot_handler = SlotProposalHandler(store=slot_store, registry=DEFAULT_SLOT_REGISTRY)
+
+            # Merge proposed slots from both extractor and consolidator;
+            # register_or_reuse naturally deduplicates by slot_id.
+            all_proposed_slots = list(extractor_output.proposed_slots) + list(result.proposed_slots)
+
             pipeline_result = await process_candidates(
                 summary_candidates + result.proposed_artifacts,
-                result.proposed_slots if result.proposed_slots else [],
+                all_proposed_slots,
                 session_id=session_id,
                 agent_type=agent_type,
                 db_session=session,
@@ -336,6 +346,7 @@ class SessionConsolidationWorker:
                 entity_registry=entity_registry,
                 decision_logger=decision_logger,
                 slot_registry=DEFAULT_SLOT_REGISTRY,
+                slot_proposal_handler=slot_handler,
                 worker_id=self._WORKER_ID,
                 model_name=model_name,
                 rule_version=self._RULE_VERSION,
@@ -603,18 +614,15 @@ def _slot_dicts_to_definitions(slot_dicts: list[dict[str, Any]]) -> list[SlotDef
     """
     result: list[SlotDefinition] = []
     for d in slot_dicts:
-        try:
-            result.append(
-                SlotDefinition(
-                    slot_id=d["slot_id"],
-                    scope=d["scope"],
-                    subject_kind=d["subject_kind"],
-                    cardinality=Cardinality(d["cardinality"]),
-                    resolution_policy=ResolutionPolicy(d["resolution_policy"]),
-                    kind_constraints=[MemoryKind(k) for k in d.get("kind_constraints", [])],
-                    description=d.get("description", ""),
-                )
+        result.append(
+            SlotDefinition(
+                slot_id=d["slot_id"],
+                scope=d["scope"],
+                subject_kind=d["subject_kind"],
+                cardinality=Cardinality(d["cardinality"]),
+                resolution_policy=ResolutionPolicy(d["resolution_policy"]),
+                kind_constraints=[MemoryKind(k) for k in d.get("kind_constraints", [])],
+                description=d.get("description", ""),
             )
-        except (KeyError, ValueError) as exc:
-            logger.warning("_slot_dicts_to_definitions: skipping malformed slot dict: %s", exc)
+        )
     return result

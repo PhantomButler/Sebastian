@@ -383,7 +383,17 @@ class TestMemoryExtractorExtract:
         inp = ExtractorInput(
             subject_context={"user_id": "u1", "name": "Alice"},
             conversation_window=[{"role": "user", "content": "I prefer dark mode"}],
-            known_slots=[{"slot_id": "user.preference.theme", "description": "UI theme"}],
+            known_slots=[
+                {
+                    "slot_id": "user.preference.theme",
+                    "scope": "user",
+                    "subject_kind": "user",
+                    "cardinality": "single",
+                    "resolution_policy": "supersede",
+                    "kind_constraints": ["preference"],
+                    "description": "UI theme",
+                }
+            ],
         )
         result = await extractor.extract(inp)
         assert isinstance(result, ExtractorOutput)
