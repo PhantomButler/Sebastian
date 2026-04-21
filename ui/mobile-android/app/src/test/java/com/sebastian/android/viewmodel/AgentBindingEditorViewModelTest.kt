@@ -49,8 +49,8 @@ class AgentBindingEditorViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeVm(agentType: String) =
-        AgentBindingEditorViewModel(agentType, agentRepo, settingsRepo, appScope)
+    private fun makeVm(agentType: String, isMemoryComponent: Boolean = false) =
+        AgentBindingEditorViewModel(agentType, isMemoryComponent, agentRepo, settingsRepo, appScope)
 
     private fun provider(
         id: String,

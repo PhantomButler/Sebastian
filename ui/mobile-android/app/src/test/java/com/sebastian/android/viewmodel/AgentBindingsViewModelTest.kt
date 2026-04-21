@@ -64,6 +64,7 @@ class AgentBindingsViewModelTest {
     @Test
     fun `load emits agents and providers`() = runTest(dispatcher) {
         wheneverBlocking { agentRepo.getAgents() }.thenReturn(Result.success(listOf(sampleAgent())))
+        wheneverBlocking { agentRepo.listMemoryComponents() }.thenReturn(Result.success(emptyList()))
         wheneverBlocking { settingsRepo.getProviders() }.thenReturn(Result.success(listOf(sampleProvider())))
 
         val vm = AgentBindingsViewModel(agentRepo, settingsRepo)
@@ -83,6 +84,7 @@ class AgentBindingsViewModelTest {
         wheneverBlocking { agentRepo.getAgents() }.thenReturn(
             Result.success(listOf(orchestrator, subAgent))
         )
+        wheneverBlocking { agentRepo.listMemoryComponents() }.thenReturn(Result.success(emptyList()))
         wheneverBlocking { settingsRepo.getProviders() }.thenReturn(Result.success(emptyList()))
 
         val vm = AgentBindingsViewModel(agentRepo, settingsRepo)
