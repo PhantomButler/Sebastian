@@ -17,6 +17,7 @@ data class MemorySettingsUiState(
     val enabled: Boolean = false,
     val isLoading: Boolean = true,
     val error: String? = null,
+    val errorSerial: Int = 0,
 )
 
 @HiltViewModel
@@ -40,7 +41,7 @@ class MemorySettingsViewModel @Inject constructor(
                     _uiState.update { it.copy(enabled = dto.enabled, isLoading = false) }
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                    _uiState.update { it.copy(isLoading = false, error = e.message, errorSerial = it.errorSerial + 1) }
                 }
         }
     }
@@ -55,7 +56,7 @@ class MemorySettingsViewModel @Inject constructor(
                     _uiState.update { it.copy(enabled = dto.enabled, isLoading = false) }
                 }
                 .onFailure { _ ->
-                    _uiState.update { it.copy(enabled = prev, isLoading = false, error = "更新失败，已回滚") }
+                    _uiState.update { it.copy(enabled = prev, isLoading = false, error = "更新失败，已回滚", errorSerial = it.errorSerial + 1) }
                 }
         }
     }

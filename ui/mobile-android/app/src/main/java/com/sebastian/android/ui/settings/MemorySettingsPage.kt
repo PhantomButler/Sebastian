@@ -40,7 +40,7 @@ fun MemorySettingsPage(
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(state.error) {
+    LaunchedEffect(state.errorSerial) {
         state.error?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             viewModel.clearError()
