@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -14,6 +13,13 @@ APP_SETTING_MEMORY_ENABLED = "memory_enabled"
 
 
 class AppSettingsStore:
+    """Key-value store for global application settings backed by the ``app_settings`` table.
+
+    Receives an injected :class:`AsyncSession` rather than a factory — callers are
+    responsible for committing and closing the session.  This allows callers to batch
+    multiple store operations in a single transaction.
+    """
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
@@ -33,9 +39,7 @@ class AppSettingsStore:
             select(AppSettingsRecord).where(AppSettingsRecord.key == key)
         )
         record = result.scalar_one_or_none()
-        now = datetime.now(UTC)
         if record is None:
-            self._session.add(AppSettingsRecord(key=key, value=value, updated_at=now))
+            self._session.add(AppSettingsRecord(key=key, value=value))
         else:
             record.value = value
-            record.updated_at = now

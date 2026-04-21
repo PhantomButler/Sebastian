@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 import sebastian.gateway.state as state
 from sebastian.gateway.auth import require_auth
 from sebastian.gateway.state import MemoryRuntimeSettings
+from sebastian.store.app_settings_store import APP_SETTING_MEMORY_ENABLED, AppSettingsStore
 
 router = APIRouter(tags=["memory"])
 
@@ -25,8 +26,6 @@ async def put_memory_settings(
     body: MemoryRuntimeSettings,
     _auth: AuthPayload = Depends(require_auth),
 ) -> MemoryRuntimeSettings:
-    from sebastian.store.app_settings_store import APP_SETTING_MEMORY_ENABLED, AppSettingsStore
-
     async with state.db_factory() as session:
         store = AppSettingsStore(session)
         await store.set(APP_SETTING_MEMORY_ENABLED, str(body.enabled).lower())
