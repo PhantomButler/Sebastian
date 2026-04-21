@@ -4,6 +4,12 @@ Each lane has a frozenset of trigger words matched against
 ``jieba.lcut(user_message.lower())`` tokens. See spec §7 of
 docs/superpowers/specs/2026-04-20-memory-retrieval-fixes-design.md
 for rationale.
+
+Note: High-frequency tokens like '是', 'i', 'my', 'this', 'how'
+are intentional — they serve as weak signals in combination with
+other tokens after jieba segmentation. Planner callers are
+responsible for any additional context-based filtering (e.g., the
+small-talk short-circuit uses ``len(tokens) <= 3``).
 """
 
 from __future__ import annotations
