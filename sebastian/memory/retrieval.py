@@ -129,7 +129,9 @@ class MemoryRetrievalPlanner:
 
     async def reload_entity_triggers(self, registry: EntityRegistry) -> None:
         """Entity 写入末尾调用，刷新触发词缓存。与 bootstrap_entity_triggers 行为相同，
-        命名区分是为了调用场景语义清晰（写入触发 vs 启动初始化）。"""
+        命名区分是为了调用场景语义清晰（写入触发 vs 启动初始化）。
+        当前实现全量重扫 DB；实体数量增大后可优化为增量合并。
+        """
         await self.bootstrap_entity_triggers(registry)
 
     def plan(self, context: RetrievalContext) -> RetrievalPlan:

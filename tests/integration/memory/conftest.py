@@ -37,6 +37,8 @@ async def db_session():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # 注：不含 FTS 虚表（profile_memories_fts / episode_memories_fts）。
+        # 如需测试 FTS 查询功能，请在该 conftest 或测试文件中单独初始化 FTS 表。
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         yield session
