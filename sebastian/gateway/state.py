@@ -34,7 +34,7 @@ session_store: SessionStore
 todo_store: TodoStore
 index_store: IndexStore
 db_factory: async_sessionmaker[AsyncSession]
-llm_registry: LLMProviderRegistry
+llm_registry: LLMProviderRegistry = None  # type: ignore[assignment]
 memory_settings: MemoryRuntimeSettings
 consolidation_scheduler: MemoryConsolidationScheduler | None = None
 memory_extractor: MemoryExtractor | None = None
