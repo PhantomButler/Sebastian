@@ -148,6 +148,7 @@ async def test_memory_section_returns_profile_content(mem_factory) -> None:
         await session.commit()
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s1"] = 1  # depth guard: only depth=1 injects memory
 
     import sebastian.gateway.state as gw_state
 
@@ -156,7 +157,7 @@ async def test_memory_section_returns_profile_content(mem_factory) -> None:
 
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
         result = await agent._memory_section(
-            session_id="s1", agent_context="test", user_message="你好"
+            session_id="s1", agent_context="test", user_message="我喜欢中文"
         )
 
     assert "用户偏好中文简洁回复" in result
@@ -199,6 +200,7 @@ async def test_stream_inner_includes_memory_in_system_prompt(mem_factory) -> Non
         await session.commit()
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s2"] = 1  # depth guard: only depth=1 injects memory
     _stub_episodic(agent)
 
     captured_prompts: list[str] = []
@@ -226,7 +228,7 @@ async def test_stream_inner_includes_memory_in_system_prompt(mem_factory) -> Non
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
         with patch.object(gw_state, "todo_store", empty_todo_store, create=True):
             await agent._stream_inner(
-                messages=[{"role": "user", "content": "解释一下 asyncio"}],
+                messages=[{"role": "user", "content": "我喜欢详细解释"}],
                 session_id="s2",
                 task_id=None,
                 agent_context="test",
@@ -274,6 +276,7 @@ async def test_stream_inner_includes_both_memory_and_todo(mem_factory) -> None:
         await session.commit()
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s3"] = 1  # depth guard: only depth=1 injects memory
     _stub_episodic(agent)
 
     captured_prompts: list[str] = []
@@ -312,7 +315,7 @@ async def test_stream_inner_includes_both_memory_and_todo(mem_factory) -> None:
     with patch.object(gw_state, "memory_settings", fake_mem_settings, create=True):
         with patch.object(gw_state, "todo_store", fake_todo_store, create=True):
             await agent._stream_inner(
-                messages=[{"role": "user", "content": "你好"}],
+                messages=[{"role": "user", "content": "我喜欢中文"}],
                 session_id="s3",
                 task_id=None,
                 agent_context="test",
