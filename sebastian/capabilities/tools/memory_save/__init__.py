@@ -65,6 +65,7 @@ async def _do_save(content: str, session_id: str | None, agent_type: str) -> Mem
     from sebastian.memory.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor
     from sebastian.memory.pipeline import process_candidates
     from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
     from sebastian.memory.slot_definition_store import SlotDefinitionStore
     from sebastian.memory.slot_proposals import SlotProposalHandler, validate_proposed_slot
     from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
@@ -117,7 +118,7 @@ async def _do_save(content: str, session_id: str | None, agent_type: str) -> Mem
             db_session=db_session,
             profile_store=ProfileMemoryStore(db_session),
             episode_store=EpisodeMemoryStore(db_session),
-            entity_registry=EntityRegistry(db_session),
+            entity_registry=EntityRegistry(db_session, planner=DEFAULT_RETRIEVAL_PLANNER),
             decision_logger=MemoryDecisionLogger(db_session),
             slot_registry=DEFAULT_SLOT_REGISTRY,
             slot_proposal_handler=handler,

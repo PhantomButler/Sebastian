@@ -59,3 +59,18 @@ def _reset_jwt_signer() -> Generator[None, None, None]:
     from sebastian.gateway.auth import reset_signer
 
     reset_signer()
+
+
+@pytest.fixture(autouse=True)
+def _reset_default_planner() -> Generator[None, None, None]:
+    """Reset DEFAULT_RETRIEVAL_PLANNER singleton between tests.
+
+    The planner accumulates entity triggers via bootstrap/reload; without
+    cleanup, entity names from one test leak into subsequent tests.
+    """
+    from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
+    from sebastian.memory.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
+
+    DEFAULT_RETRIEVAL_PLANNER._relation_trigger_set = RELATION_LANE_STATIC_WORDS
+    yield
+    DEFAULT_RETRIEVAL_PLANNER._relation_trigger_set = RELATION_LANE_STATIC_WORDS

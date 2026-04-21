@@ -86,9 +86,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with db_factory() as _seed_session:
         await seed_builtin_slots(_seed_session)
         try:
-            await EntityRegistry(_seed_session).sync_jieba_terms()
+            _entity_registry = EntityRegistry(_seed_session)
+            await _entity_registry.sync_jieba_terms()
+            # 把 Entity 名灌入 Planner relation 触发词缓存
+            from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
+
+            await DEFAULT_RETRIEVAL_PLANNER.bootstrap_entity_triggers(_entity_registry)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("jieba sync failed at startup: %s", exc)
+            logger.warning("memory bootstrap (jieba + planner) failed at startup: %s", exc)
 
     from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
 

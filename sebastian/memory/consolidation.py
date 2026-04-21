@@ -209,7 +209,9 @@ class SessionConsolidationWorker:
 
             episode_store = EpisodeMemoryStore(session)
             profile_store = ProfileMemoryStore(session)
-            entity_registry = EntityRegistry(session)
+            from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
+
+            entity_registry = EntityRegistry(session, planner=DEFAULT_RETRIEVAL_PLANNER)
             decision_logger = MemoryDecisionLogger(session)
 
             # 4. Pull consolidator context inside the transaction so the LLM
