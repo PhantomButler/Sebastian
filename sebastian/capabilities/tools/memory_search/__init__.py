@@ -16,7 +16,13 @@ logger = logging.getLogger(__name__)
 
 @tool(
     name="memory_search",
-    description="Search long-term memory for relevant facts, preferences, summaries, or episodes.",
+    description=(
+        "Search long-term memory for relevant facts, preferences, summaries, or episodes. "
+        "返回的 items 带有 lane / confidence / citation_type / is_current / source 等元数据，"
+        "这些字段仅供你判断如何组织回答（例如区分『当前事实』与『历史回忆』的措辞），"
+        "**除非用户明确要求查看这些信息，否则不要在回复中向用户复述置信度、通道、来源等字段**，"
+        "只基于记忆 content 自然地回答。"
+    ),
     permission_tier=PermissionTier.LOW,
 )
 async def memory_search(query: str, limit: int = 5) -> ToolResult:
@@ -237,10 +243,17 @@ async def _do_search(query: str, limit: int) -> ToolResult:
         ],
     )
 
+    from sebastian.memory.feedback import render_memory_search_display
+
     if not items:
         return ToolResult(
             ok=True,
             output={"items": []},
             empty_hint="记忆库中暂无匹配内容",
+            display="记忆库中暂无匹配内容。",
         )
-    return ToolResult(ok=True, output={"items": items})
+    return ToolResult(
+        ok=True,
+        output={"items": items},
+        display=render_memory_search_display(items),
+    )
