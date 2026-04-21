@@ -25,7 +25,7 @@ async def memory_search(query: str, limit: int = 5) -> ToolResult:
         limit=limit,
     )
     if not state.memory_settings.enabled:
-        return ToolResult(ok=False, error="记忆功能已关闭")
+        return ToolResult(ok=False, error="记忆功能当前已关闭，无法查询记忆。")
 
     if not hasattr(state, "db_factory") or state.db_factory is None:
         return ToolResult(ok=False, error="记忆存储不可用")
