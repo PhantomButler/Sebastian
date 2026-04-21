@@ -36,6 +36,7 @@ from sebastian.core.stream_events import (
     ToolResult as StreamToolResult,
 )
 from sebastian.core.types import ToolResult
+from sebastian.memory.depth_guard import is_memory_eligible
 from sebastian.memory.episodic_memory import EpisodicMemory
 from sebastian.memory.working_memory import WorkingMemory
 from sebastian.permissions.gate import PolicyGate
@@ -244,8 +245,7 @@ class BaseAgent(ABC):
         depth 守卫（spec §5 / artifact-model.md §10.4）：长期记忆只注入给 depth=1
         的 Sebastian 本体。depth != 1（包括未初始化 → None）一律 fail-closed 返回 "".
         """
-        depth = self._current_depth.get(session_id)
-        if depth != 1:
+        if not is_memory_eligible(self._current_depth.get(session_id)):
             return ""
 
         if self._db_factory is None:

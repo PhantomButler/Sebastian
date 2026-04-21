@@ -80,6 +80,7 @@ async def run_agent_session(
                             "agent_type": session.agent_type,
                             "goal": session.goal,
                             "status": session.status.value,
+                            "depth": session.depth,
                         },
                     )
                 )

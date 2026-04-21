@@ -72,11 +72,10 @@ class FakeConsolidator:
             summaries=[
                 MemorySummary(
                     content="会话摘要",
-                    subject_id="owner",
                     scope="user",
                 )
             ],
-            proposed_artifacts=[
+            artifacts=[
                 CandidateArtifact(
                     kind=MemoryKind.PREFERENCE,
                     content="用户喜欢简洁回复",
@@ -203,11 +202,10 @@ class FakeSummaryOnlyConsolidator:
             summaries=[
                 MemorySummary(
                     content="会话摘要（仅摘要）",
-                    subject_id="owner",
                     scope="user",
                 )
             ],
-            proposed_artifacts=[],
+            artifacts=[],
             proposed_actions=[],
         )
 
@@ -242,25 +240,24 @@ async def test_consolidate_logs_summary_decision(db_factory):
 
 
 class FakeMaliciousSubjectConsolidator:
-    """LLM-style consolidator that claims an arbitrary subject_id."""
+    """Consolidator that returns a summary; subject_id is always resolved server-side."""
 
     async def consolidate(self, input: ConsolidatorInput) -> ConsolidationResult:
         return ConsolidationResult(
             summaries=[
                 MemorySummary(
                     content="伪装摘要",
-                    subject_id="agent:malicious",  # LLM-supplied, must be ignored
                     scope="user",
                 )
             ],
-            proposed_artifacts=[],
+            artifacts=[],
             proposed_actions=[],
         )
 
 
 @pytest.mark.asyncio
-async def test_summary_subject_id_resolved_from_scope_not_llm(db_factory):
-    """LLM-supplied subject_id on a USER-scope summary must be replaced with 'owner'."""
+async def test_summary_subject_id_resolved_from_scope(db_factory):
+    """USER-scope summary subject_id must always be resolved server-side to 'owner'."""
     worker = SessionConsolidationWorker(
         db_factory=db_factory,
         consolidator=FakeMaliciousSubjectConsolidator(),
@@ -494,7 +491,7 @@ class FakeExpireConsolidator:
 
         return ConsolidationResult(
             summaries=[],
-            proposed_artifacts=[],
+            artifacts=[],
             proposed_actions=[
                 ProposedAction(action="EXPIRE", memory_id="m-old", reason="stale data")
             ],
@@ -618,7 +615,7 @@ async def test_consolidation_expire_log_has_input_source(db_factory):
 
             return ConsolidationResult(
                 summaries=[],
-                proposed_artifacts=[],
+                artifacts=[],
                 proposed_actions=[
                     ProposedAction(action="EXPIRE", memory_id="m-old-src", reason="stale")
                 ],

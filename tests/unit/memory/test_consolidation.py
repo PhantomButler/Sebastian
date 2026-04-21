@@ -93,20 +93,18 @@ def _make_valid_artifact_dict() -> dict[str, Any]:
 
 def _make_valid_consolidation_result_json(
     summaries: list[dict[str, Any]] | None = None,
-    proposed_artifacts: list[dict[str, Any]] | None = None,
+    artifacts: list[dict[str, Any]] | None = None,
     proposed_actions: list[dict[str, Any]] | None = None,
 ) -> str:
     if summaries is None:
         summaries = [
             {
                 "content": "User prefers concise replies",
-                "subject_id": "user:u1",
                 "scope": "user",
-                "session_id": None,
             }
         ]
-    if proposed_artifacts is None:
-        proposed_artifacts = [_make_valid_artifact_dict()]
+    if artifacts is None:
+        artifacts = [_make_valid_artifact_dict()]
     if proposed_actions is None:
         proposed_actions = [
             {
@@ -118,7 +116,7 @@ def _make_valid_consolidation_result_json(
     return json.dumps(
         {
             "summaries": summaries,
-            "proposed_artifacts": proposed_artifacts,
+            "artifacts": artifacts,
             "proposed_actions": proposed_actions,
         }
     )
@@ -197,7 +195,7 @@ class TestConsolidationResultParsing:
         raw = _make_valid_consolidation_result_json()
         result = ConsolidationResult.model_validate_json(raw)
         assert isinstance(result.summaries, list)
-        assert isinstance(result.proposed_artifacts, list)
+        assert isinstance(result.artifacts, list)
         assert isinstance(result.proposed_actions, list)
 
     def test_summaries_parsed_correctly(self) -> None:
@@ -207,15 +205,13 @@ class TestConsolidationResultParsing:
         summary = result.summaries[0]
         assert isinstance(summary, MemorySummary)
         assert summary.content == "User prefers concise replies"
-        assert summary.subject_id == "user:u1"
         assert summary.scope == "user"
-        assert summary.session_id is None
 
-    def test_proposed_artifacts_parsed_correctly(self) -> None:
+    def test_artifacts_parsed_correctly(self) -> None:
         raw = _make_valid_consolidation_result_json()
         result = ConsolidationResult.model_validate_json(raw)
-        assert len(result.proposed_artifacts) == 1
-        artifact = result.proposed_artifacts[0]
+        assert len(result.artifacts) == 1
+        artifact = result.artifacts[0]
         assert isinstance(artifact, CandidateArtifact)
         assert artifact.kind == MemoryKind.EPISODE
         assert artifact.confidence == 0.85
@@ -233,43 +229,39 @@ class TestConsolidationResultParsing:
         assert action.reason == "New preference detected"
 
     def test_empty_lists_are_valid(self) -> None:
-        raw = json.dumps({"summaries": [], "proposed_artifacts": [], "proposed_actions": []})
+        raw = json.dumps({"summaries": [], "artifacts": [], "proposed_actions": []})
         result = ConsolidationResult.model_validate_json(raw)
         assert result.summaries == []
-        assert result.proposed_artifacts == []
+        assert result.artifacts == []
         assert result.proposed_actions == []
 
     def test_all_fields_default_to_empty_lists(self) -> None:
         result = ConsolidationResult()
         assert result.summaries == []
-        assert result.proposed_artifacts == []
+        assert result.artifacts == []
         assert result.proposed_actions == []
 
     def test_multiple_summaries_parsed(self) -> None:
         summaries = [
             {
                 "content": "summary one",
-                "subject_id": "user:u1",
                 "scope": "user",
-                "session_id": None,
             },
             {
                 "content": "summary two",
-                "subject_id": "user:u2",
                 "scope": "session",
-                "session_id": "s1",
             },
         ]
         raw = _make_valid_consolidation_result_json(summaries=summaries)
         result = ConsolidationResult.model_validate_json(raw)
         assert len(result.summaries) == 2
+        assert result.summaries[0].scope == "user"
         assert result.summaries[1].scope == "session"
-        assert result.summaries[1].session_id == "s1"
 
     def test_invalid_artifact_enum_raises_validation_error(self) -> None:
         bad_artifact = _make_valid_artifact_dict()
         bad_artifact["kind"] = "NOT_VALID"
-        raw = _make_valid_consolidation_result_json(proposed_artifacts=[bad_artifact])
+        raw = _make_valid_consolidation_result_json(artifacts=[bad_artifact])
         with pytest.raises(ValidationError):
             ConsolidationResult.model_validate_json(raw)
 
@@ -300,7 +292,7 @@ class TestMemoryConsolidatorConsolidate:
         result = await consolidator.consolidate(self._make_input())
         assert isinstance(result, ConsolidationResult)
         assert len(result.summaries) == 1
-        assert len(result.proposed_artifacts) == 1
+        assert len(result.artifacts) == 1
         assert len(result.proposed_actions) == 1
 
     @pytest.mark.asyncio
@@ -321,7 +313,7 @@ class TestMemoryConsolidatorConsolidate:
         result = await consolidator.consolidate(self._make_input())
         assert isinstance(result, ConsolidationResult)
         assert result.summaries == []
-        assert result.proposed_artifacts == []
+        assert result.artifacts == []
         assert result.proposed_actions == []
         # 1 initial + 1 retry
         assert call_count == 2
@@ -339,7 +331,7 @@ class TestMemoryConsolidatorConsolidate:
                 payload = json.dumps(
                     {
                         "summaries": [],
-                        "proposed_artifacts": [bad_artifact],
+                        "artifacts": [bad_artifact],
                         "proposed_actions": [],
                     }
                 )
@@ -353,7 +345,7 @@ class TestMemoryConsolidatorConsolidate:
         result = await consolidator.consolidate(self._make_input())
         assert isinstance(result, ConsolidationResult)
         assert result.summaries == []
-        assert result.proposed_artifacts == []
+        assert result.artifacts == []
         assert result.proposed_actions == []
         assert call_count == 2
 
@@ -412,7 +404,7 @@ class TestMemoryConsolidatorConsolidate:
         result = await consolidator.consolidate(self._make_input())
         assert isinstance(result, ConsolidationResult)
         assert result.summaries == []
-        assert result.proposed_artifacts == []
+        assert result.artifacts == []
         assert result.proposed_actions == []
 
     @pytest.mark.asyncio
@@ -608,7 +600,7 @@ class TestMemoryConsolidatorConsolidate:
                             )
                         ],
                         summaries=[],
-                        proposed_artifacts=[],
+                        artifacts=[],
                     )
 
             worker = SessionConsolidationWorker(
@@ -654,11 +646,11 @@ def test_consolidator_input_task_rejects_invalid_literal() -> None:
 
 def test_memory_summary_rejects_invalid_scope() -> None:
     with pytest.raises(ValidationError):
-        MemorySummary(content="x", subject_id="owner", scope="User", session_id=None)  # type: ignore[arg-type]
+        MemorySummary(content="x", scope="User")  # type: ignore[arg-type]
 
 
 def test_memory_summary_accepts_valid_scope() -> None:
-    s = MemorySummary(content="x", subject_id="owner", scope=MemoryScope.USER, session_id=None)
+    s = MemorySummary(content="x", scope=MemoryScope.USER)
     assert s.scope == MemoryScope.USER
-    s2 = MemorySummary(content="x", subject_id="owner", scope="user", session_id=None)
+    s2 = MemorySummary(content="x", scope="user")
     assert s2.scope == MemoryScope.USER

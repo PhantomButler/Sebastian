@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from sebastian.memory.depth_guard import is_memory_eligible
 from sebastian.memory.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor, _strip_code_fence
 from sebastian.memory.prompts import build_consolidator_prompt, group_slots_by_kind
 from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
@@ -51,9 +52,7 @@ class ConsolidatorInput(BaseModel):
 class MemorySummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
     content: str
-    subject_id: str
     scope: MemoryScope = MemoryScope.USER
-    session_id: str | None = None
 
 
 class ProposedAction(BaseModel):
@@ -64,7 +63,7 @@ class ProposedAction(BaseModel):
 
 class ConsolidationResult(BaseModel):
     summaries: list[MemorySummary] = []
-    proposed_artifacts: list[CandidateArtifact] = []
+    artifacts: list[CandidateArtifact] = []
     proposed_actions: list[ProposedAction] = []
     proposed_slots: list[ProposedSlot] = []
 
@@ -315,7 +314,7 @@ class SessionConsolidationWorker:
                 session_id=session_id,
                 agent_type=agent_type,
                 summary_count=len(result.summaries),
-                proposed_artifact_count=len(result.proposed_artifacts),
+                proposed_artifact_count=len(result.artifacts),
                 proposed_action_count=len(result.proposed_actions),
                 model=model_name,
             )
@@ -327,7 +326,7 @@ class SessionConsolidationWorker:
             }
 
             # Build CandidateArtifact list from summaries, then combine with
-            # proposed_artifacts and run through the unified write pipeline.
+            # artifacts and run through the unified write pipeline.
             summary_candidates: list[CandidateArtifact] = [
                 CandidateArtifact(
                     kind=MemoryKind.SUMMARY,
@@ -354,7 +353,7 @@ class SessionConsolidationWorker:
             all_proposed_slots = list(extractor_output.proposed_slots) + list(result.proposed_slots)
 
             pipeline_result = await process_candidates(
-                summary_candidates + result.proposed_artifacts,
+                summary_candidates + result.artifacts,
                 all_proposed_slots,
                 session_id=session_id,
                 agent_type=agent_type,
@@ -385,12 +384,12 @@ class SessionConsolidationWorker:
                     persisted_counts["artifact"] += 1
 
             # Execute EXPIRE actions proposed by the consolidator. SUPERSEDE
-            # actions are paired with proposed_artifacts and handled above;
+            # actions are paired with artifacts and handled above;
             # ignore them here to prevent double-processing.
             for action in result.proposed_actions:
                 if action.action != "EXPIRE" or not action.memory_id:
                     # Non-EXPIRE actions are not directly executable.
-                    # ADD/SUPERSEDE intent must come via proposed_artifacts → resolver.
+                    # ADD/SUPERSEDE intent must come via artifacts → resolver.
                     # Log as DISCARD so the audit trail is complete.
                     ignored_candidate = CandidateArtifact(
                         kind=MemoryKind.FACT,
@@ -540,7 +539,17 @@ class MemoryConsolidationScheduler:
             return
         session_id = event.data.get("session_id", "")
         agent_type = event.data.get("agent_type", "")
+        depth = event.data.get("depth", 1)
         if not session_id or not agent_type:
+            return
+        if not is_memory_eligible(depth):
+            trace(
+                "consolidation.schedule_skip",
+                reason="non_root_depth",
+                session_id=session_id,
+                agent_type=agent_type,
+                depth=depth,
+            )
             return
         trace("consolidation.schedule", session_id=session_id, agent_type=agent_type)
         task: asyncio.Task[None] = asyncio.create_task(
@@ -594,7 +603,10 @@ async def sweep_unconsolidated(
     from sebastian.store.models import SessionConsolidationRecord
 
     entries = await index_store.list_all()
-    completed = [e for e in entries if e.get("status") == "completed"]
+    completed = [
+        e for e in entries
+        if e.get("status") == "completed" and is_memory_eligible(e.get("depth", 1))
+    ]
     if not completed:
         return
 
