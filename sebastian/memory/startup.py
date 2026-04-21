@@ -12,6 +12,8 @@ from sebastian.store.models import MemorySlotRecord
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
+    from sebastian.memory.slots import SlotRegistry
+
 
 async def ensure_profile_fts(conn: AsyncConnection) -> None:
     """Create the profile_memories_fts virtual table if it does not exist."""
@@ -76,3 +78,14 @@ async def seed_builtin_slots(session: AsyncSession) -> None:
             )
         )
     await session.commit()
+
+
+async def bootstrap_slot_registry(
+    session: AsyncSession,
+    registry: SlotRegistry,
+) -> None:
+    """服务启动时调用：把 memory_slots 表全部数据灌入 registry。"""
+    from sebastian.memory.slot_definition_store import SlotDefinitionStore
+
+    store = SlotDefinitionStore(session)
+    await registry.bootstrap_from_db(store)
