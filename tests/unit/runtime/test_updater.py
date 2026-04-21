@@ -81,6 +81,10 @@ def _make_install_dir(root: Path) -> Path:
     return inst
 
 
+def _write_project_version(root: Path, version: str) -> None:
+    (root / "pyproject.toml").write_text(f'[project]\nname = "sebastian"\nversion = "{version}"\n')
+
+
 @pytest.fixture()
 def _patch_backup_parent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Redirect backup directory to tmp_path/backups for all tests."""
@@ -93,6 +97,28 @@ def _patch_backup_parent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pat
 # ---------------------------------------------------------------------------
 # pure helpers
 # ---------------------------------------------------------------------------
+
+
+def test_resolve_install_dir_prefers_bootstrap_install_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    inst = tmp_path / ".sebastian" / "app"
+    inst.mkdir(parents=True)
+    (inst / "sebastian").mkdir()
+    _write_project_version(inst, "1.2.3")
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("SEBASTIAN_INSTALL_DIR", raising=False)
+
+    assert updater.resolve_install_dir() == inst
+
+
+def test_current_version_reads_install_dir_pyproject(tmp_path: Path) -> None:
+    inst = tmp_path / "app"
+    inst.mkdir()
+    _write_project_version(inst, "1.2.3")
+
+    assert updater.current_version(inst) == "1.2.3"
 
 
 def test_verify_sha256_ok(tmp_path: Path) -> None:
@@ -210,7 +236,7 @@ def test_prune_backups_keeps_newest(tmp_path: Path, _patch_backup_parent: Path) 
 def test_run_update_already_latest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     inst = _make_install_dir(tmp_path)
     monkeypatch.setattr(updater, "resolve_install_dir", lambda: inst)
-    monkeypatch.setattr(updater, "current_version", lambda: "1.2.3")
+    monkeypatch.setattr(updater, "current_version", lambda install_dir: "1.2.3")
     monkeypatch.setattr(updater, "fetch_latest_tag", lambda: "v1.2.3")
 
     out: list[str] = []
@@ -222,7 +248,7 @@ def test_run_update_already_latest(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 def test_run_update_check_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     inst = _make_install_dir(tmp_path)
     monkeypatch.setattr(updater, "resolve_install_dir", lambda: inst)
-    monkeypatch.setattr(updater, "current_version", lambda: "1.0.0")
+    monkeypatch.setattr(updater, "current_version", lambda install_dir: "1.0.0")
     monkeypatch.setattr(updater, "fetch_latest_tag", lambda: "v1.1.0")
 
     out: list[str] = []
@@ -239,7 +265,7 @@ def test_run_update_full_flow(
     sums_text = f"{updater._sha256(tar)}  {tar.name}\n"
 
     monkeypatch.setattr(updater, "resolve_install_dir", lambda: inst)
-    monkeypatch.setattr(updater, "current_version", lambda: "0.0.1")
+    monkeypatch.setattr(updater, "current_version", lambda install_dir: "0.0.1")
     monkeypatch.setattr(updater, "fetch_latest_tag", lambda: "v9.9.9")
     monkeypatch.setattr(updater, "_try_restart_daemon", lambda printer: None)
 
@@ -272,7 +298,7 @@ def test_run_update_pip_failure_rolls_back(
     sums_text = f"{updater._sha256(tar)}  {tar.name}\n"
 
     monkeypatch.setattr(updater, "resolve_install_dir", lambda: inst)
-    monkeypatch.setattr(updater, "current_version", lambda: "0.0.1")
+    monkeypatch.setattr(updater, "current_version", lambda install_dir: "0.0.1")
     monkeypatch.setattr(updater, "fetch_latest_tag", lambda: "v9.9.9")
 
     def fake_download(url: str, dest: Path) -> None:

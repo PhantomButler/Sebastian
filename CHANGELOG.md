@@ -47,7 +47,6 @@
 - Episode Lane 改为 query-aware summary-first，先检索摘要再按需补 episode detail，降低 prompt 噪声
 - `ExtractorInput` 补 `task: Literal["extract_memory_artifacts"]` 契约字段，与 spec 对齐
 - `memory_decision_log` 新增 `input_source` 字段，明确区分 `memory_save_tool` 与 `session_consolidation` 两条写入路径
-
 - `memory_search` 工具新增 `citation_type` 字段（`current_truth` / `historical_summary` / `historical_evidence`），保留 `is_current` 向后兼容
 - 记忆注入在所有检索通道保留类型标签（Context/Episode/Relation 均显示 `[kind]` 前缀），避免注入内容类型混淆。
 - `memory_search` 主动检索覆盖 context/relation 通道，与自动注入路径保持 summary-first episode 策略一致；返回 `lane` 字段区分通道来源。
@@ -59,6 +58,8 @@
 - EXPIRE 生命周期统一经 `write_router.persist_decision()` 路由，不再由 consolidation 直接操作 store。
 - `ConsolidatorInput.task` 收紧为 `Literal["consolidate_memory"]`，运行时拒绝非法任务值。
 - `RetrievalContext` 新增 `active_project_or_agent_context` 字段，`BaseAgent` 注入基本 agent 上下文；planner 后续阶段可消费。
+- App 与后端会校验 LLM Provider 的 Base URL 必须是 http(s) 地址，避免把 API Key 等非 URL 内容误保存到 Base URL。
+- `sebastian update` 在源码 checkout 也被当前 Python 环境导入时，仍会优先识别 `~/.sebastian/app` 安装目录，并显示安装目录中的真实版本号。
 
 ## [0.3.1] - 2026-04-18
 

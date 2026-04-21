@@ -4,8 +4,9 @@ Replaces the current source tree under the installer-managed directory
 (typically ``~/.sebastian/app``) with the latest GitHub release tarball.
 
 Flow:
-1. Resolve install dir from ``sebastian.__file__``.
-2. Read current version from package metadata.
+1. Resolve install dir from ``SEBASTIAN_INSTALL_DIR``, ``~/.sebastian/app``,
+   or ``sebastian.__file__``.
+2. Read current version from the install dir's ``pyproject.toml``.
 3. Resolve latest tag via the ``releases/latest`` 302 redirect (avoids the
    60/hr unauthenticated api.github.com rate limit).
 4. Download ``sebastian-backend-<tag>.tar.gz`` + ``SHA256SUMS`` to a tmp dir.
@@ -22,15 +23,16 @@ Flow:
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
 import time
+import tomllib
 import urllib.request
 from collections.abc import Callable
-from importlib import metadata
 from pathlib import Path
 from urllib.error import URLError
 
@@ -63,24 +65,44 @@ def resolve_install_dir() -> Path:
 
     For an installer-managed setup this is e.g. ``~/.sebastian/app``.
     """
+    explicit = os.environ.get("SEBASTIAN_INSTALL_DIR")
+    if explicit:
+        return _validate_install_dir(Path(explicit).expanduser().resolve())
+
+    default_install_dir = Path(os.environ.get("HOME", str(Path.home()))) / ".sebastian" / "app"
+    if _is_install_dir(default_install_dir):
+        return default_install_dir.resolve()
+
     import sebastian  # local import to avoid cycles
 
     pkg_file = Path(sebastian.__file__).resolve()
     # .../app/sebastian/__init__.py -> .../app
     install_dir = pkg_file.parents[1]
-    if not (install_dir / "pyproject.toml").exists():
+    return _validate_install_dir(install_dir)
+
+
+def _is_install_dir(path: Path) -> bool:
+    return (path / "pyproject.toml").exists() and (path / "sebastian").is_dir()
+
+
+def _validate_install_dir(install_dir: Path) -> Path:
+    if not _is_install_dir(install_dir):
         raise UpdateError(
-            f"无法识别安装目录：{install_dir} 下没有 pyproject.toml。\n"
+            f"无法识别安装目录：{install_dir} 下没有 pyproject.toml 或 sebastian/。\n"
             "sebastian update 仅支持通过 bootstrap.sh / install.sh 安装的部署。"
         )
     return install_dir
 
 
-def current_version() -> str:
+def current_version(install_dir: Path) -> str:
     try:
-        return metadata.version("sebastian")
-    except metadata.PackageNotFoundError as e:  # pragma: no cover - install bug
+        data = tomllib.loads((install_dir / "pyproject.toml").read_text())
+        version = data["project"]["version"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
         raise UpdateError(f"无法读取当前 sebastian 版本：{e}") from e
+    if not isinstance(version, str) or not version:
+        raise UpdateError("无法读取当前 sebastian 版本：pyproject.toml 中 version 无效")
+    return version
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +290,7 @@ def run_update(
 ) -> int:
     """Entry point used by the CLI. Returns process exit code."""
     install_dir = resolve_install_dir()
-    cur = current_version()
+    cur = current_version(install_dir)
     printer(f"安装目录: {install_dir}")
     printer(f"当前版本: {cur}")
 

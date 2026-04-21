@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -50,6 +51,21 @@ def _record_to_dict(record: Any) -> dict[str, Any]:
     }
 
 
+def _validate_base_url(base_url: str) -> str:
+    value = base_url.strip()
+    parsed = urlparse(value)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname is None
+        or any(ch.isspace() for ch in value)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="base_url must be an http(s) URL",
+        )
+    return value
+
+
 @router.get("/llm-providers")
 async def list_llm_providers(
     _auth: AuthPayload = Depends(require_auth),
@@ -69,12 +85,13 @@ async def create_llm_provider(
     from sebastian.llm.crypto import encrypt
     from sebastian.store.models import LLMProviderRecord
 
+    base_url = _validate_base_url(body.base_url)
     record = LLMProviderRecord(
         name=body.name,
         provider_type=body.provider_type,
         api_key_enc=encrypt(body.api_key),
         model=body.model,
-        base_url=body.base_url,
+        base_url=base_url,
         thinking_format=body.thinking_format,
         thinking_capability=body.thinking_capability,
         is_default=body.is_default,
@@ -111,7 +128,7 @@ async def update_llm_provider(
     if "model" in data:
         updates["model"] = data["model"]
     if "base_url" in data:
-        updates["base_url"] = data["base_url"]
+        updates["base_url"] = _validate_base_url(data["base_url"])
     if "thinking_format" in data:
         updates["thinking_format"] = data["thinking_format"]
     if "thinking_capability" in data:

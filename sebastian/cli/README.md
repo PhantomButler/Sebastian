@@ -41,14 +41,15 @@ cli/
 
 自升级逻辑，实现 `sebastian update` 命令的完整流程：
 
-1. 解析安装目录（从 `sebastian.__file__` 反推）
-2. 通过 GitHub releases/latest 302 重定向获取最新 tag（避免 API 限流）
-3. 下载 `sebastian-backend-<tag>.tar.gz` + `SHA256SUMS`
-4. 强制 SHA256 校验
-5. 解压到 staging 目录，原子交换 `MANAGED_ENTRIES`（sebastian/、pyproject.toml、scripts/ 等）
-6. `pip install -e .` 更新依赖
-7. 失败自动回滚到备份，成功后清理旧备份
-8. 若检测到后台进程在运行，自动重启
+1. 解析安装目录（优先 `SEBASTIAN_INSTALL_DIR`，其次 `~/.sebastian/app`，最后从 `sebastian.__file__` 反推）
+2. 从安装目录的 `pyproject.toml` 读取当前版本
+3. 通过 GitHub releases/latest 302 重定向获取最新 tag（避免 API 限流）
+4. 下载 `sebastian-backend-<tag>.tar.gz` + `SHA256SUMS`
+5. 强制 SHA256 校验
+6. 解压到 staging 目录，原子交换 `MANAGED_ENTRIES`（sebastian/、pyproject.toml、scripts/ 等）
+7. `pip install -e .` 更新依赖
+8. 失败自动回滚到备份，成功后清理旧备份
+9. 若检测到后台进程在运行，自动重启
 
 关键常量：
 - `MANAGED_ENTRIES`：更新时替换的顶层条目，`.venv`/`.env`/`secret.key` 等不会被触碰
