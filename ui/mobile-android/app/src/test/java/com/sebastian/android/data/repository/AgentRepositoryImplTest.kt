@@ -3,6 +3,9 @@ package com.sebastian.android.data.repository
 import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.remote.ApiService
 import com.sebastian.android.data.remote.dto.AgentBindingDto
+import com.sebastian.android.data.remote.dto.MemoryComponentBindingDto
+import com.sebastian.android.data.remote.dto.MemoryComponentDto
+import com.sebastian.android.data.remote.dto.MemoryComponentsResponse
 import com.sebastian.android.data.remote.dto.SetBindingRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
@@ -74,5 +77,128 @@ class AgentRepositoryImplTest {
         val result = repo.clearBinding("forge")
         assertTrue(result.isSuccess)
         verify(api).clearAgentBinding("forge")
+    }
+
+    // ── Memory Component tests ──────────────────────────────────────────────
+
+    @Test
+    fun `listMemoryComponents maps null binding to null boundProviderId and OFF effort`() = runTest {
+        val api = mock(ApiService::class.java)
+        `when`(api.listMemoryComponents()).thenReturn(
+            MemoryComponentsResponse(
+                components = listOf(
+                    MemoryComponentDto(
+                        componentType = "episodic",
+                        displayName = "Episodic Memory",
+                        description = "Stores episodic events",
+                        binding = null,
+                    )
+                )
+            )
+        )
+        val repo = AgentRepositoryImpl(api, Dispatchers.Unconfined)
+
+        val result = repo.listMemoryComponents()
+
+        assertTrue(result.isSuccess)
+        val components = result.getOrThrow()
+        assertEquals(1, components.size)
+        val info = components[0]
+        assertEquals("episodic", info.componentType)
+        assertNull(info.boundProviderId)
+        assertEquals(ThinkingEffort.OFF, info.thinkingEffort)
+    }
+
+    @Test
+    fun `listMemoryComponents maps binding to correct boundProviderId and thinkingEffort`() = runTest {
+        val api = mock(ApiService::class.java)
+        `when`(api.listMemoryComponents()).thenReturn(
+            MemoryComponentsResponse(
+                components = listOf(
+                    MemoryComponentDto(
+                        componentType = "semantic",
+                        displayName = "Semantic Memory",
+                        description = "Stores semantic facts",
+                        binding = MemoryComponentBindingDto(
+                            componentType = "semantic",
+                            providerId = "prov-42",
+                            thinkingEffort = "high",
+                        ),
+                    )
+                )
+            )
+        )
+        val repo = AgentRepositoryImpl(api, Dispatchers.Unconfined)
+
+        val result = repo.listMemoryComponents()
+
+        assertTrue(result.isSuccess)
+        val info = result.getOrThrow()[0]
+        assertEquals("prov-42", info.boundProviderId)
+        assertEquals(ThinkingEffort.HIGH, info.thinkingEffort)
+    }
+
+    @Test
+    fun `getMemoryComponentBinding fills agentType with componentType`() = runTest {
+        val api = mock(ApiService::class.java)
+        `when`(api.getMemoryComponentBinding("episodic")).thenReturn(
+            MemoryComponentBindingDto(
+                componentType = "episodic",
+                providerId = "prov-1",
+                thinkingEffort = null,
+            )
+        )
+        val repo = AgentRepositoryImpl(api, Dispatchers.Unconfined)
+
+        val result = repo.getMemoryComponentBinding("episodic")
+
+        assertTrue(result.isSuccess)
+        val dto = result.getOrThrow()
+        assertEquals("episodic", dto.agentType)
+        assertEquals("prov-1", dto.providerId)
+        assertNull(dto.thinkingEffort)
+    }
+
+    @Test
+    fun `setMemoryComponentBinding sends correct request with OFF effort as null`() = runTest {
+        val api = mock(ApiService::class.java)
+        `when`(api.setMemoryComponentBinding(eq("semantic"), any())).thenReturn(
+            MemoryComponentBindingDto(componentType = "semantic", providerId = "p2", thinkingEffort = null)
+        )
+        val repo = AgentRepositoryImpl(api, Dispatchers.Unconfined)
+
+        val result = repo.setMemoryComponentBinding("semantic", "p2", ThinkingEffort.OFF)
+
+        assertTrue(result.isSuccess)
+        val captor = argumentCaptor<SetBindingRequest>()
+        verify(api).setMemoryComponentBinding(eq("semantic"), captor.capture())
+        assertEquals("p2", captor.firstValue.providerId)
+        assertNull(captor.firstValue.thinkingEffort)
+    }
+
+    @Test
+    fun `setMemoryComponentBinding maps HIGH effort to high string`() = runTest {
+        val api = mock(ApiService::class.java)
+        `when`(api.setMemoryComponentBinding(eq("semantic"), any())).thenReturn(
+            MemoryComponentBindingDto(componentType = "semantic", providerId = "p2", thinkingEffort = "high")
+        )
+        val repo = AgentRepositoryImpl(api, Dispatchers.Unconfined)
+
+        repo.setMemoryComponentBinding("semantic", "p2", ThinkingEffort.HIGH)
+
+        val captor = argumentCaptor<SetBindingRequest>()
+        verify(api).setMemoryComponentBinding(eq("semantic"), captor.capture())
+        assertEquals("high", captor.firstValue.thinkingEffort)
+    }
+
+    @Test
+    fun `clearMemoryComponentBinding calls correct API endpoint and returns success`() = runTest {
+        val api = mock(ApiService::class.java)
+        val repo = AgentRepositoryImpl(api, Dispatchers.Unconfined)
+
+        val result = repo.clearMemoryComponentBinding("episodic")
+
+        assertTrue(result.isSuccess)
+        verify(api).clearMemoryComponentBinding("episodic")
     }
 }

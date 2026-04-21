@@ -65,6 +65,8 @@ class AgentRepositoryImpl @Inject constructor(
     ): Result<AgentBindingDto> = runCatching {
         withContext(dispatcher) {
             val dto = apiService.getMemoryComponentBinding(componentType)
+            // agentType field carries componentType — AgentBindingEditorViewModel only reads providerId/thinkingEffort,
+            // so we reuse AgentBindingDto as a binding carrier here.
             AgentBindingDto(
                 agentType = dto.componentType,
                 providerId = dto.providerId,
