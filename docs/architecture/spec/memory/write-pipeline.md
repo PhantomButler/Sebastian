@@ -1,7 +1,7 @@
 ---
-version: "1.0"
-last_updated: 2026-04-19
-status: planned
+version: "1.1"
+last_updated: 2026-04-21
+status: in-progress
 ---
 
 # Memory（记忆）写入流水线
@@ -119,11 +119,11 @@ Extractor（提取器）可以产出 `CandidateArtifact`（候选记忆产物）
 
 ---
 
-## 7. Slot Registry 动态扩展
+## 7. Dynamic Slot System（动态 Slot 系统）
 
 ### 7.1 内置 Seed Slot 集合
 
-`SlotRegistry` 预置以下内置 slot（`slots.py` 中硬编码），覆盖最高频的 user profile 场景：
+`SlotRegistry` 预置以下内置 slot（`sebastian/memory/slots.py` 中硬编码），覆盖最高频的 user profile 场景：
 
 | slot_id | kind | cardinality | 说明 |
 |---------|------|-------------|------|
@@ -132,38 +132,46 @@ Extractor（提取器）可以产出 `CandidateArtifact`（候选记忆产物）
 | `user.profile.name` | fact | single | 用户姓名 |
 | `user.profile.location` | fact | single | 当前所在城市/地区 |
 | `user.profile.occupation` | fact | single | 职业/职位 |
-| `user.profile.timezone` | fact | single | 用户所在时区 |
 | `user.current_project_focus` | fact | single | 用户当前主要关注的项目 |
+| `user.profile.timezone` | fact | single | 用户所在时区 |
 | `project.current_phase` | fact | single | 项目当前所处阶段 |
 | `agent.current_assignment` | fact | single | Agent 当前被分配的任务 |
 
-内置 slot 不在 DB 中存储，只在进程启动时由 `SlotRegistry` 加载。
+内置 slot 同时保留在代码中作为 seed fallback，并在 gateway 启动期通过 `seed_builtin_slots()` 幂等写入 `memory_slots` 表。随后 `bootstrap_slot_registry()` 从 DB 加载所有 slot（builtin + LLM proposed）到进程内 registry。
+
+> **实现差异**：新设计草案使用表名 `slot_definitions` 与字段 `source`；当前代码已落地为 `memory_slots` 表，使用 `is_builtin: bool` 区分 builtin / dynamic，字段位于 `sebastian/store/models.py::MemorySlotRecord`。
+
+> **实现增强**：`SlotRegistry(slots=None)` 仍会加载 9 个 builtin，避免测试或空 DB 场景下 registry 完全不可用；服务启动路径再从 DB additive bootstrap。
 
 ### 7.2 动态注册规则
 
-LLM（`MemoryConsolidator`）可在 `proposed_slots` 中提议新 slot，Worker 收到后：
+LLM（`MemoryExtractor` / `MemoryConsolidator`）可在 `proposed_slots` 中提议新 slot，调用方收到后：
 
-1. 格式校验：`{scope}.{category}.{attribute}` 三段式，全小写字母数字下划线，scope 必须是合法枚举值
-2. 重复检查：精确匹配已注册 slot_id，重复则拒绝
-3. 校验通过 → 立即注册到运行时 `SlotRegistry`（内存），同时持久化到 `slot_definitions` DB 表
-4. 校验失败 → 错误回传 LLM，最多重试 1 次（详见 implementation.md §9.1）
+1. `validate_proposed_slot()` 校验命名：`{scope}.{category}.{attribute}` 三段式，纯小写 + 下划线，首段必须是合法 `MemoryScope`，总长不超过 64。
+2. 校验字段组合：`kind_constraints` 非空；禁止 `single + append_only`；`time_bound` 至少适用于 `fact` 或 `preference`。
+3. `SlotProposalHandler.register_or_reuse()` 先查内存 registry，已有则复用，不覆盖 metadata。
+4. 不存在时在 `session.begin_nested()` savepoint 内 INSERT `memory_slots`；成功后热更新 `SlotRegistry`。
+5. `IntegrityError` 表示并发 race，handler rollback 到 savepoint 后重新读取 DB 赢家，并把赢家 schema 注册回内存。
+6. 校验失败由调用方反馈给 LLM，最多额外重试 1 次（详见 [implementation.md §9.1](implementation.md#91-slot-动态注册与重试机制)）。
 
-动态注册的 slot 在进程重启后从 `slot_definitions` DB 表恢复，与内置 slot 合并，保证持久生效。
+动态注册的 slot 在进程重启后从 `memory_slots` DB 表恢复，与内置 slot 合并，保证持久生效。
 
-### 7.3 ConsolidatorInput 中的 slot 上下文
+### 7.3 Extractor / Consolidator 中的 slot 上下文
 
-`ConsolidatorInput.slot_definitions` 传入当前**所有已注册 slot**（内置 + 动态注册），让 LLM 在提议之前能判断：
+`ExtractorInput.known_slots` 与 `ConsolidatorInput.slot_definitions` 都传入当前**所有已注册 slot**（内置 + 动态注册）。prompt 层通过 `prompts.py::group_slots_by_kind()` 按 `kind_constraints` 分桶展示，让 LLM 在提议之前能判断：
 
 - 现有 slot 是否已覆盖此场景 → 直接使用，不新建
 - 无合适 slot → 提议新建
 
 系统提示词中需明确：**优先使用已有 slot；仅在没有语义吻合的已有 slot 时才提议新建。**
 
+> **实现增强**：Extractor 和 Consolidator 共用 `prompts.py` 的 slot 规则与示例，避免两套 prompt 漂移；`policy_tags` 字段说明明确为“一般 []，不要主动设置任何值”，避免 LLM 误设 `pinned`。
+
 ## 8. subject_id 在 Normalize 阶段的赋值规则
 
 Normalize 阶段负责把 `CandidateArtifact.subject_hint`（Extractor 产出的松散提示）转为正式的 `subject_id`，写入最终 `MemoryArtifact`。
 
-### 7.1 解析逻辑（当前 Phase B / C）
+### 8.1 解析逻辑（当前 Phase B / C）
 
 解析函数：`sebastian/memory/subject.py::resolve_subject(scope, *, session_id, agent_type)`
 
@@ -174,7 +182,7 @@ Normalize 阶段负责把 `CandidateArtifact.subject_hint`（Extractor 产出的
 | `AGENT` | `f"agent:{agent_type}"` | 按 agent_type 编码，隔离各 agent 的记忆空间 |
 | `SESSION` | `f"session:{session_id}"` | 按 session_id 编码，仅在 session 内有效 |
 
-### 7.2 subject_hint 的当前角色
+### 8.2 subject_hint 的当前角色
 
 `CandidateArtifact.subject_hint` 是 Extractor / Consolidator 产出的提示字段，**当前不参与实际 subject_id 解析**。Normalize 直接根据 `candidate.scope` 调用 `resolve_subject()`，忽略 hint。
 
@@ -184,7 +192,7 @@ Normalize 阶段负责把 `CandidateArtifact.subject_hint`（Extractor 产出的
 
 **当前约束**：如果 Extractor 把 `subject_hint` 设成了具体用户名或实体 ID，Normalize 不使用该值，以避免 subject 污染。
 
-### 7.3 Phase 5 扩展方向
+### 8.3 Phase 5 扩展方向
 
 多用户阶段（Phase 5）将扩展 `resolve_subject()` 逻辑：
 
@@ -212,62 +220,71 @@ Agent 只需传一个字段：
 |------|------|------|------|
 | `content` | `str` | 是 | 要记住的内容，用自然语言描述 |
 
-**Agent 不传、也不需要知道的字段**（全部由工具后台任务确定）：
+**Agent 不传、也不需要知道的字段**（由 Extractor / pipeline 确定）：
 
 | 字段 | 推断规则 |
 |------|----------|
-| `slot_id` / `kind` | 由后台任务调用 `MemoryExtractor` 从 `content` 提取（LLM 分配） |
-| `scope` | 固定 `USER` |
-| `confidence` | LLM 提取结果强制覆盖为 `0.95`（`explicit` 来源基线） |
-| `source` | 强制覆盖为 `explicit` |
-| `subject_id` | 由 `resolve_subject(USER, session_id, agent_type)` 确定 |
-| `policy_tags` | 固定 `[]` |
+| `slot_id` / `kind` | 由 `MemoryExtractor` 从 `content` 提取（LLM 分配） |
+| `scope` | 由 Extractor 输出；显式记忆保存通常为 `USER` |
+| `confidence` | 由 Extractor 输出；显式来源建议接近 `0.95` |
+| `source` | 由 Extractor 输出；显式记忆保存通常为 `explicit` |
+| `subject_id` | 由 `resolve_subject(candidate.scope, session_id, agent_type)` 确定 |
+| `policy_tags` | 由 Extractor 输出；prompt 要求一般为 `[]`，不要主动设置 |
 | `structured_payload` | 来自 extractor 输出，工具层不另行填充 |
-| `valid_from` / `valid_until` | 固定 `null` |
-| `needs_review` | 固定 `false` |
+| `valid_from` / `valid_until` | 来自 Extractor 输出；一般为 `null` |
+| `needs_review` | 来自 Extractor 输出；不确定时为 `true` |
 
-### 9.3 非阻塞执行与后台任务流程
+> **实现差异**：早期设计要求 `memory_save` 工具层强制覆盖 `scope/source/confidence/policy_tags`；当前代码把这些字段交给 `ExtractorOutput` 与统一 validate/resolve 流程处理，工具层只负责同步执行、slot proposal 注册和事务提交。
 
-`memory_save` 是**非阻塞工具**：收到调用后立即返回成功 ack，后台任务通过 `asyncio.create_task()` 异步执行，写入失败只记录 `error` 日志和 trace，不影响当前 turn。
+### 9.3 同步执行流程
 
-**后台任务完整流程**：
+`memory_save` 是**同步工具**：tool call 会 await Extractor、slot proposal 校验/注册、`process_candidates()` 与 `commit()`，然后把真实保存结果作为 `ToolResult.output` 返回给 Agent。
+
+**完整流程**：
 
 ```
-1. 调用 MemoryExtractor.extract(
+1. 调用 MemoryExtractor.extract_with_slot_retry(
        conversation_window=[{"role": "user", "content": content}],
        known_slots=[所有已注册 slot]
    )
-   → 得到 [CandidateArtifact]（含 LLM 分配的 slot_id / kind）
+   → 得到 ExtractorOutput(artifacts, proposed_slots)
 
-2. 对每条 candidate 强制覆盖：
-       source = EXPLICIT
-       confidence = 0.95
+2. proposed_slots 先经过 validate_proposed_slot 预检；若失败，反馈给 LLM 重试一次
 
-3. 调用 process_candidates(candidates, session_id, agent_type, ...)
-   → validate → resolve → persist → log（见 §10）
+3. 调用 process_candidates(candidates, proposed_slots, session_id, agent_type, ...)
+   → register proposed slots → validate → resolve → persist → log（见 §10）
 
-4. extractor 返回空（LLM 失败或未提取到任何 artifact）→ 跳过保存，写 trace
-   不做 fallback，避免保存无 slot_id 的裸 FACT（validate 会拒绝）
+4. commit 成功后返回 MemorySaveResult：
+   saved_count / discarded_count / proposed_slots_registered /
+   proposed_slots_rejected / summary
 ```
 
-**成功通知约束**：当前 agent 调用链中不存在"工具完成后向 agent 注入独立系统消息"的通道；后台保存结果目前只通过 trace 和 decision log 可观测，成功通知机制为 future work。
+同步化的原因：Claude tool-use 协议要求 `tool_use` / `tool_result` 1:1 配对，后台完成后无法再以同一次 tool result 补充真实状态。短文本记忆保存的 LLM 调用延迟可接受，直接同步返回能让 Agent 准确回复“已记住 / 未保存 / 新增了分类”。
 
-### 9.4 错误响应（仅前置校验阶段）
+### 9.4 错误响应
 
-后台写入失败不反馈给 Agent。仅以下两种前置检查会同步返回 `ok=false`：
+以下错误同步返回 `ok=false`：
 
 | 错误消息 | 触发条件 | Agent 应对策略 |
 |---------|---------|---------------|
 | `记忆功能当前已关闭，无法保存。` | `memory_settings.enabled = false` | 告知用户，不重试 |
 | `记忆存储暂时不可用，无法保存，请稍后再试。` | DB 连接未就绪 | 告知用户可稍后重试 |
+| `记忆处理超时，未能保存。` | `MEMORY_SAVE_TIMEOUT_SECONDS = 15.0` 超时 | 告知用户可稍后重试 |
+| `保存失败：...` | Extractor / DB / pipeline 未捕获异常 | 告知用户保存失败 |
 
 ### 9.5 成功响应
 
 ```json
-{ "message": "已记住，正在后台保存。" }
+{
+  "saved_count": 1,
+  "discarded_count": 0,
+  "proposed_slots_registered": [],
+  "proposed_slots_rejected": [],
+  "summary": "已记住 1 条记忆。"
+}
 ```
 
-`ok=true` 表示任务已派发，Agent 可直接向用户确认已接受记忆请求。
+`ok=true` 表示本次同步处理已完成。`summary` 由 `sebastian/memory/feedback.py::render_memory_save_summary()` 生成，Agent 可直接引用或改写。
 
 ---
 
@@ -282,6 +299,7 @@ Agent 只需传一个字段：
 ```python
 async def process_candidates(
     candidates: list[CandidateArtifact],
+    proposed_slots: list[ProposedSlot] | None = None,
     *,
     session_id: str,
     agent_type: str,
@@ -291,28 +309,32 @@ async def process_candidates(
     entity_registry: EntityRegistry,
     decision_logger: MemoryDecisionLogger,
     slot_registry: SlotRegistry,
+    slot_proposal_handler: SlotProposalHandler | None = None,
     worker_id: str,
     model_name: str | None,
     rule_version: str,
     input_source: dict[str, Any],
-) -> list[ResolveDecision]:
+    proposed_by: Literal["extractor", "consolidator"] = "extractor",
+) -> PipelineResult:
 ```
 
-对每条 candidate 执行：
+处理顺序：
 
-1. **Validate**：`slot_registry.validate_candidate(candidate)`；校验失败 → 直接构造 `DISCARD` decision，写 log，跳过后续步骤
-2. **Normalize subject**：`resolve_subject(candidate.scope, session_id, agent_type)` → `subject_id`
-3. **Resolve**：`resolve_candidate(candidate, subject_id=..., ...)` → `ResolveDecision`
-4. **Persist**：`decision.decision != DISCARD` 时调 `persist_decision(...)`（含 FTS Index）
-5. **Log**：`decision_logger.append(decision, worker=worker_id, ...)`
+1. **Register proposed slots**：若 `proposed_slots` 非空，必须传入 `slot_proposal_handler`；注册失败的 slot_id 记录到 `PipelineResult.proposed_slots_rejected`。
+2. **Downgrade affected candidates**：引用失败 slot_id 的 candidate 会复制一份并把 `slot_id=None`，再进入统一 validate。
+3. **Normalize subject**：`resolve_subject(candidate.scope, session_id, agent_type)` → `subject_id`。
+4. **Validate**：`slot_registry.validate_candidate(candidate)`；校验失败 → 构造 `DISCARD` decision，写 log，跳过后续步骤。
+5. **Resolve**：`resolve_candidate(candidate, subject_id=..., ...)` → `ResolveDecision`。
+6. **Persist**：`decision.decision != DISCARD` 时调 `persist_decision(...)`（含 FTS Index）。
+7. **Log**：`decision_logger.append(decision, worker=worker_id, ...)`。
 
-返回所有 candidate 对应的 `ResolveDecision` 列表（含 DISCARD 项，供调用方统计）。
+返回 `PipelineResult`，包含所有 decisions、已注册 slot_id、被拒 slot 明细，以及 `saved_count` / `discarded_count` 统计。
 
 ### 10.2 调用方
 
 | 调用方 | 传入的 candidates 来源 |
 |--------|----------------------|
-| `memory_save` 后台任务 | `MemoryExtractor.extract(单条消息)` → override source/confidence |
+| `memory_save` 同步工具 | `MemoryExtractor.extract_with_slot_retry(单条消息)` |
 | `SessionConsolidationWorker` | `MemoryExtractor.extract(全文)` + `MemoryConsolidator.consolidate()` 输出的 summaries / proposed_artifacts |
 
 两者传入同一函数，保证 Validate → Resolve → Persist → Log 逻辑完全一致，不各自维护一套。
@@ -320,12 +342,10 @@ async def process_candidates(
 ### 10.3 不在此函数内的职责
 
 - **Extract**（B）：由调用方自行完成（LLM Extractor / Consolidator）
-- **source / confidence 覆盖**：`memory_save` 路径在调用前完成；consolidation 路径由 LLM 输出决定
+- **source / confidence 覆盖策略**：由调用方和 Extractor prompt 协议决定，pipeline 不隐式改写 candidate 内容
 - **proposed_actions（EXPIRE）**：`SessionConsolidationWorker` 在调用 `process_candidates()` 之外单独处理，因为 EXPIRE 不经过 validate/resolve，直接调 `persist_decision` + log
 - **Session 幂等标记**：`SessionConsolidationWorker` 在所有 `process_candidates()` 调用完成后写入，不在此函数内
 
 ---
-
-*← 返回 [Memory 索引](INDEX.md)*
 
 *← 返回 [Memory 索引](INDEX.md)*

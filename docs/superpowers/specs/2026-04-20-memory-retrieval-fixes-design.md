@@ -1,3 +1,8 @@
+---
+integrated_to: memory/retrieval.md
+integrated_at: 2026-04-21
+---
+
 # Memory Retrieval Path Fixes — Design Spec
 
 **Date**: 2026-04-20

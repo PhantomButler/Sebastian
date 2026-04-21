@@ -1,3 +1,8 @@
+---
+integrated_to: memory/write-pipeline.md
+integrated_at: 2026-04-21
+---
+
 # Dynamic Slot System — Design Spec
 
 **Date**: 2026-04-20

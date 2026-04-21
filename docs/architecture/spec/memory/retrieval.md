@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-04-20
+version: "1.1"
+last_updated: 2026-04-21
 status: in-progress
 ---
 
@@ -54,6 +54,22 @@ Planner 输出：
 - 是否优先当前事实还是历史回忆
 - 是否允许深挖原始 episode
 - 基于 `policy_tags` 的过滤条件
+
+### 3.1 Planner 当前实现
+
+当前 `MemoryRetrievalPlanner` 位于 `sebastian/memory/retrieval.py`，使用 `jieba.lcut()` 精确分词 + `frozenset` 词库交集判断 lane 激活。静态词库拆到 `sebastian/memory/retrieval_lexicon.py`：
+
+| 词库 | 作用 |
+|------|------|
+| `PROFILE_LANE_WORDS` | 画像、偏好、身份与推荐/建议类触发词 |
+| `CONTEXT_LANE_WORDS` | 当前时间、近期状态、进展询问 |
+| `EPISODE_LANE_WORDS` | 历史回忆、上次/之前/说过等触发词 |
+| `RELATION_LANE_STATIC_WORDS` | 家庭、工作、社交、宠物等通用实体称谓 |
+| `SMALL_TALK_WORDS` | 短问候 / 致谢 / 确认短路词 |
+
+Relation Lane 还维护动态触发词集合：gateway 启动时调用 `DEFAULT_RETRIEVAL_PLANNER.bootstrap_entity_triggers(EntityRegistry(...))`，把 Entity Registry 中所有 `canonical_name` 与 `aliases` 合并进 relation 触发词；`EntityRegistry.upsert_entity()` 在 flush 后通过可选 planner 注入调用 `reload_entity_triggers()`，让新实体下一轮对话即可命中。
+
+> **实现增强**：`bootstrap_entity_triggers()` 同时调用 `segmentation.add_entity_terms()`，把实体名注册到 jieba 用户词典，降低私有实体被拆词导致 relation lane 不触发的概率。
 
 ---
 
@@ -290,13 +306,18 @@ Assembler 在最终注入前，必须统一执行以下过滤：
 
 修改默认值只需改 `RetrievalPlan` 字段默认值，无需改 planner 或 assembler 逻辑。
 
-### 7.3 最小置信度过滤线
+### 7.3 置信度双阈值
 
-`MIN_CONFIDENCE = 0.3`：低于此值的记录在 Assembler 过滤阶段丢弃，不计入 lane 条数配额。
+当前实现拆为两级常量：
 
-此值与 confidence spec（artifact-model.md §9.3）中的"不自动注入阈值 0.5"不同——`MIN_CONFIDENCE` 是**绝对过滤线**（低于它的记录连候选都不是），0.5 是**注入优先级线**（低于 0.5 但高于 0.3 的记录不自动注入，但 `memory_search` 仍可返回）。
+| 常量 | 值 | 作用 |
+|------|----|------|
+| `MIN_CONFIDENCE_HARD` | `0.3` | 绝对硬过滤线，任何路径低于此值都丢弃 |
+| `MIN_CONFIDENCE_AUTO_INJECT` | `0.5` | 自动注入门槛，仅 `access_purpose == "context_injection"` 时额外应用 |
 
-> **当前实现状态**：`memory_search` 工具路径使用 `MIN_CONFIDENCE = 0.3` 作为过滤线，与自动注入路径一致。如需让 `memory_search` 返回更低置信度的候选，应在工具层单独传入 `min_confidence` 参数，不修改全局常量。
+`_keep_record()` 只应用硬过滤线，让 `memory_search` / `tool_search` 路径可以返回 `[0.3, 0.5)` 的弱线索；`MemorySectionAssembler.assemble()` 在 context injection 路径上额外应用 0.5 门槛，避免低置信推断自动进入 system prompt。
+
+> **实现差异**：旧常量 `MIN_CONFIDENCE` 已删除；代码中只保留 `MIN_CONFIDENCE_HARD` 和 `MIN_CONFIDENCE_AUTO_INJECT`。
 
 ### 7.4 `pinned` tag 的 budget 豁免
 

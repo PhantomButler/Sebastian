@@ -1,7 +1,7 @@
 ---
-version: "1.0"
-last_updated: 2026-04-19
-status: planned
+version: "1.1"
+last_updated: 2026-04-21
+status: in-progress
 ---
 
 # Memory Artifact（记忆产物）与冲突模型
@@ -95,6 +95,7 @@ registry 至少维护：
 - `resolution_policy`
 - `kind_constraints`
 - `description`
+- `is_builtin` / 提议来源 metadata（实现层字段）
 
 规则：
 
@@ -102,6 +103,57 @@ registry 至少维护：
 - `relation` 默认必须带稳定的关系谓词标识
 - `episode` / `summary` 可为空，因为它们通常不是槽位覆盖模型
 - 如果上游只能产出模糊候选，必须在 Normalize 阶段显式落成 `slot_id` 或标记为“未归槽”
+
+### 5.1 动态 Slot 定义
+
+首期 registry 不再只是代码常量；slot 定义需要持久化，以便 LLM 提议的新 slot 在重启后仍可用。
+
+当前实现使用 `memory_slots` 表（`sebastian/store/models.py::MemorySlotRecord`）：
+
+```python
+class MemorySlotRecord(Base):
+    slot_id: str
+    scope: str
+    subject_kind: str
+    cardinality: str
+    resolution_policy: str
+    kind_constraints: list[str]
+    description: str
+    is_builtin: bool
+    proposed_by: str | None
+    proposed_in_session: str | None
+    created_at: datetime
+    updated_at: datetime
+```
+
+`SlotDefinitionStore` 负责 DB CRUD，`SlotProposalHandler` 负责校验、INSERT、并发冲突处理与进程内 `SlotRegistry` 热更新。
+
+> **实现差异**：设计草案中的表名为 `slot_definitions`，字段为 `source`；代码已采用 `memory_slots.is_builtin` 表达 builtin / LLM proposed 两类来源。
+
+> **实现增强**：9 个 builtin slot 仍保留在 `slots.py` 中，并通过 `seed_builtin_slots()` 幂等写入 DB；空 DB 或测试中构造 `SlotRegistry()` 仍会有内置 fallback。
+
+### 5.2 ProposedSlot
+
+Extractor / Consolidator 可以输出 `ProposedSlot`，但它只是建议，不能直接成为有效 registry 状态：
+
+```python
+class ProposedSlot(TypedDict):
+    slot_id: str
+    scope: Literal["user", "session", "project", "agent"]
+    subject_kind: str
+    cardinality: Literal["single", "multi"]
+    resolution_policy: Literal["supersede", "merge", "append_only", "time_bound"]
+    kind_constraints: list[Literal["fact", "preference", "episode", "summary", "entity", "relation"]]
+    description: str
+```
+
+系统层强制校验：
+
+- `slot_id` 必须匹配三段式 `{scope}.{category}.{attribute}`，纯小写字母 + 下划线，总长不超过 64。
+- `slot_id` 首段必须与 `scope` 一致。
+- `kind_constraints` 不得为空。
+- 禁止 `cardinality=single + resolution_policy=append_only`。
+- `resolution_policy=time_bound` 仅适用于至少包含 `fact` 或 `preference` 的 slot。
 
 ---
 

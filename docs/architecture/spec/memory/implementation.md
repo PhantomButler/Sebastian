@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-04-19
+version: "1.1"
+last_updated: 2026-04-21
 status: in-progress
 ---
 
@@ -138,7 +138,7 @@ Extractor / Consolidator 的理想运行方式是稳定、低随机性、严格 
 
 ---
 
-## 6. ExtractorInput
+## 6. ExtractorInput / ExtractorOutput
 
 ```python
 class ExtractorInput(TypedDict):
@@ -146,6 +146,10 @@ class ExtractorInput(TypedDict):
     subject_context: dict[str, Any]
     conversation_window: list[dict[str, Any]]
     known_slots: list[dict[str, Any]]
+
+class ExtractorOutput(TypedDict):
+    artifacts: list[CandidateArtifact]
+    proposed_slots: list[ProposedSlot]
 ```
 
 建议内容：
@@ -156,6 +160,12 @@ class ExtractorInput(TypedDict):
   - 最近若干条消息或需提取的片段
 - `known_slots`
   - 可供选择的 slot 定义，减少模型自由发挥
+
+当前实现中 `MemoryExtractor.extract()` 返回 `ExtractorOutput`。`known_slots` 在 prompt 构造时按 `kind_constraints` 分组为 `known_slots_by_kind`，让模型先在当前 kind 对应的 slot 集合中复用，再考虑提议新 slot。
+
+`MemoryExtractor.extract_with_slot_retry()` 支持动态 slot 失败反馈：调用方传入 `attempt_register` 回调，回调返回被拒的 `(slot_id, reason)` 列表；如非空，Extractor 追加上一轮 assistant JSON 和一条 user 反馈消息，最多再请求一次 LLM，并要求重新输出完整 JSON。
+
+> **实现差异**：草案要求 `memory_save` 的预检和最终注册都走同一 `SlotProposalHandler.register_or_reuse()`；当前 `memory_save` 预检只调用 `validate_proposed_slot()`，真正写 DB 与热更新 registry 统一在 `process_candidates()` 中完成。这样避免预检阶段写入后又在 pipeline 重复注册。
 
 ---
 
@@ -212,14 +222,14 @@ class ConsolidatorInput(TypedDict):
 
 ---
 
-## 9. ConsolidationResult
+## 9. LLM 输出结果与 ProposedSlot
 
 ```python
 class ConsolidationResult(TypedDict):
     summaries: list[dict[str, Any]]
     proposed_artifacts: list[CandidateArtifact]
     proposed_actions: list[dict[str, Any]]
-    proposed_slots: list[ProposedSlot]          # 新增：LLM 提议的新 slot 定义
+    proposed_slots: list[ProposedSlot]
 ```
 
 Consolidator 的职责是提出建议，而不是最终执行状态迁移。
@@ -229,7 +239,7 @@ Consolidator 的职责是提出建议，而不是最终执行状态迁移。
 - `summaries`：Consolidator 生成的会话摘要，经 `resolve_candidate` 判断后写入 Episode Store
 - `proposed_artifacts`：Consolidator 提议的新候选记忆；最终 ADD / SUPERSEDE / MERGE / DISCARD 由 Resolver 决定，LLM 不直接控制写入结果
 - `proposed_actions`：对数据库中**已存在**记忆的生命周期操作建议，`action` 只允许 `"EXPIRE"`
-- `proposed_slots`：LLM 提议注册的新 slot；Worker 校验格式后自动注册，校验失败时触发一次重试（详见 §9.1）
+- `proposed_slots`：LLM 提议注册的新 slot；Worker / pipeline 校验格式后自动注册，校验失败时触发一次重试或把相关 candidate 降级后交给 validate 处理（详见 §9.1）
 
 `ProposedSlot` schema：
 
@@ -244,18 +254,18 @@ class ProposedSlot(TypedDict):
     description: str            # 人类可读描述
 ```
 
-### 9.1 Slot 动态注册与多轮重试机制
+### 9.1 Slot 动态注册与重试机制
 
 #### 触发条件
 
-LLM 在 `proposed_artifacts` 中提议一个 `fact` 或 `preference` 候选，但其 `slot_id` 未在当前 `SlotRegistry` 中注册时，应同时在 `proposed_slots` 中提议注册该 slot。
+LLM 在 `artifacts` / `proposed_artifacts` 中提议一个 `fact` 或 `preference` 候选，但其 `slot_id` 未在当前 `SlotRegistry` 中注册时，必须同时在 `proposed_slots` 中提议注册该 slot。
 
-Worker 在处理 `ConsolidationResult` 时：
+调用方处理输出时：
 
-1. **先处理 `proposed_slots`**，再处理 `proposed_artifacts`
+1. **先处理 `proposed_slots`**，再处理 artifact candidates
 2. 对每个 `ProposedSlot` 执行格式校验（见下方规则）
-3. 校验通过 → 自动注册到 `SlotRegistry`，写 decision log（`input_source: "slot_proposal"`）
-4. 校验失败 → 收集所有失败的 slot_id 和原因，触发一次重试
+3. 校验通过 → `SlotProposalHandler.register_or_reuse()` 写入 `memory_slots`，并热更新 `SlotRegistry`
+4. 校验失败 → 收集所有失败的 slot_id 和原因，Extractor 路径触发一次完整 JSON 重试；pipeline 路径把对应 candidate 的 `slot_id` 降级为 `None` 后继续统一 validate
 
 #### Slot 命名规范（系统层强制校验）
 
@@ -264,16 +274,22 @@ Worker 在处理 `ConsolidationResult` 时：
 示例：user.profile.name / user.preference.food / project.meta.priority
 
 规则：
-- 全小写，只允许字母、数字、下划线和点
+- 全小写，只允许字母、下划线和点
 - 必须恰好包含 2 个点（三段式）
 - scope 段必须是 "user" | "session" | "project" | "agent" 之一
-- 每段长度 2-40 字符
-- 不允许与已注册 slot_id 完全相同（精确去重）
+- 总长不超过 64 字符
+- `scope` 字段必须与 slot_id 首段一致
 ```
+
+字段组合规则：
+
+- `kind_constraints` 至少 1 项。
+- 禁止 `cardinality=single + resolution_policy=append_only`。
+- `resolution_policy=time_bound` 要求 `kind_constraints` 至少包含 `fact` 或 `preference`。
 
 #### 重试机制
 
-校验失败时，Worker 构造一次补充提示，把失败原因反馈给 LLM：
+校验失败时，Extractor 构造一次补充提示，把失败原因反馈给 LLM：
 
 ```python
 {
@@ -283,13 +299,17 @@ Worker 在处理 `ConsolidationResult` 时：
         {"slot_id": "user.pref.language", "error": "与已注册 slot 'user.preference.language' 完全重复"},
     ],
     "valid_slots_registered": ["user.profile.dietary_preference"],
-    "instruction": "请修正上述 slot_id 后重新提交 proposed_slots，或将相关 artifact 的 slot_id 改为已有 slot。"
+    "instruction": "请重新输出完整 JSON（artifacts + proposed_slots），并同步修正相关 artifact.slot_id。"
 }
 ```
 
-LLM 返回修正后的 `proposed_slots`（不需要重新输出全部 ConsolidationResult）。
+LLM 必须返回完整 `ExtractorOutput`，而不是只返回修正后的 `proposed_slots`。
 
-**最多重试 1 次**。重试后仍校验失败的 slot → 对应 artifact 改为 `DISCARD`，写 decision log（`reason: "slot_proposal_failed_after_retry"`）。
+**最多重试 1 次**。重试后仍校验失败的 slot → pipeline 把对应 artifact 的 `slot_id` 置为 `None` 并交给 `SlotRegistry.validate_candidate()`；`fact` / `preference` 会因此生成 `DISCARD` decision，其他 kind 可继续作为无 slot artifact 处理。
+
+> **实现增强**：slot INSERT 位于 `session.begin_nested()` savepoint 内，`IntegrityError` 只回滚到 slot 层 savepoint，不污染外层候选写入事务；race loser 会重新读取 DB 赢家并注册到内存。
+
+> **实现差异**：并发赢家/失败事件当前主要通过 `logger` 与 `PipelineResult` 暴露，尚未作为独立 `memory_decision_log` 事件类型落库。
 
 `ProposedAction` schema：
 
@@ -410,7 +430,7 @@ Agent 继续执行，本轮无记忆注入。`warning` 级日志包含完整 tra
 
 ### 12.6 `memory_save` 工具错误响应
 
-`memory_save` 是非阻塞工具，只有前置检查（功能开关、DB 可用性）会同步返回 `ok=false`；实际写入在后台执行，失败只记 error log 和 trace。详见 write-pipeline.md §9.4。
+`memory_save` 是同步工具，前置检查、Extractor / pipeline 异常和 15s 超时都会同步返回 `ok=false`；成功时 `ToolResult.output` 是 `MemorySaveResult`，包含保存数量、丢弃数量、新注册 slot 与中文 summary。详见 [write-pipeline.md §9](write-pipeline.md#9-memory_save-工具调用契约)。
 
 ### 12.7 降级行为汇总表
 
@@ -419,7 +439,7 @@ Agent 继续执行，本轮无记忆注入。`warning` 级日志包含完整 tra
 | 功能关闭 | 无 | 不写入、不读取 | trace | N/A |
 | DB 不可用（检索） | 无记忆注入 | 无 | — | 下次请求自动恢复 |
 | DB 不可用（consolidation） | 无 | 不写入 | error log | startup sweep 重试 |
-| Extractor LLM 失败 | 无 | fact/preference 候选丢失 | trace（候选数=0） | consolidation 继续执行 |
+| Extractor LLM 失败 | `memory_save` 可返回“无可保存”结果；consolidation 继续 | fact/preference 候选丢失 | trace（候选数=0） | consolidation 继续执行 |
 | Consolidator LLM 失败 | 无 | **整次沉淀静默丢失** | trace（count=0） + error log | **不重试（已知缺口）** |
 | 检索抛出异常 | 无记忆注入 | 无 | warning log + traceback | 下次请求自动恢复 |
 | Consolidation task 异常 | 无 | 不写入 | error log | startup sweep 重试 |

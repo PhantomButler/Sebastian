@@ -1,7 +1,7 @@
 ---
-version: "1.0"
-last_updated: 2026-04-19
-status: planned
+version: "1.1"
+last_updated: 2026-04-21
+status: in-progress
 ---
 
 # Memory（记忆）存储架构
@@ -20,6 +20,7 @@ status: planned
 - `Episode Store`（经历存储）
 - `Entity Registry`（实体注册表）
 - `Relation Layer`（关系层）
+- `memory_slots`（slot 定义存储）
 - `memory_decision_log`（记忆决策日志）
 
 ---
@@ -140,7 +141,30 @@ Python 侧对应 `Mapped[bool]`，默认 `False`。写入时由 `structured_payl
 
 ---
 
-## 6. Decision Log（决策日志）
+## 6. Slot Definition Store（Slot 定义存储）
+
+`memory_slots` 表保存所有可用 slot 定义，包含 builtin seed 与 LLM proposed 两类来源。它是 `SlotRegistry` 的持久化来源，gateway 启动时先 seed builtin，再 bootstrap 到进程内 registry。
+
+最小字段：
+
+- `slot_id`：主键，三段式 `{scope}.{category}.{attribute}`
+- `scope`
+- `subject_kind`
+- `cardinality`
+- `resolution_policy`
+- `kind_constraints`
+- `description`
+- `is_builtin`
+- `proposed_by`
+- `proposed_in_session`
+- `created_at`
+- `updated_at`
+
+`SlotDefinitionStore` 只负责 CRUD；命名规则、字段组合校验、并发 race 处理由 `SlotProposalHandler` 负责。
+
+---
+
+## 7. Decision Log（决策日志）
 
 `memory_decision_log`（记忆决策日志）从第一阶段就应落数据，即使 UI 暂时不做。
 
@@ -158,7 +182,7 @@ Python 侧对应 `Mapped[bool]`，默认 `False`。写入时由 `structured_payl
 
 ---
 
-## 7. 首期检索能力来源
+## 8. 首期检索能力来源
 
 不使用 embedding 时，首版检索主要依赖：
 
