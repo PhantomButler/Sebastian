@@ -24,7 +24,12 @@ _LOCKS_BY_PATH: weakref.WeakValueDictionary[Path, asyncio.Lock] = weakref.WeakVa
 
 
 class IndexStore:
-    """Read and write the top-level session listing index."""
+    """Read and write the top-level session listing index.
+
+    DEPRECATED: IndexStore is no longer used at runtime.  All session metadata
+    is now persisted via SessionRecordsStore (SQLite).  This class is kept only
+    for potential migration tooling and will be removed in a future release.
+    """
 
     def __init__(self, sessions_dir: Path, session_store: SessionStore | None = None) -> None:
         self._path = sessions_dir / INDEX_FILE

@@ -15,7 +15,13 @@ class TurnEntry:
 
 
 class EpisodicMemory:
-    """Conversation history backed by the file-based SessionStore."""
+    """Conversation history backed by the file-based SessionStore.
+
+    DEPRECATED: EpisodicMemory is no longer used at runtime.  Conversation
+    history is now managed via SessionTimelineStore (SQLite) accessed through
+    SessionStore.  This class is kept only because MemoryStore still references
+    it; both will be removed in a future release.
+    """
 
     def __init__(self, session_store: SessionStore) -> None:
         self._store = session_store

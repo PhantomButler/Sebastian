@@ -52,8 +52,11 @@ class SessionStore:
     """Storage for sessions, messages, tasks, and checkpoints.
 
     When ``db_factory`` is provided, session metadata CRUD is delegated to
-    ``SessionRecordsStore`` (SQLite).  The legacy file-based path remains as
-    fallback for backward compatibility.
+    ``SessionRecordsStore`` (SQLite).  This is the only supported runtime mode.
+
+    The legacy file-based path (``sessions_dir`` without ``db_factory``) is
+    DEPRECATED and will be removed in a future release.  It is retained only
+    for migration tooling.  Do not use file mode in new code.
     """
 
     def __init__(
