@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sebastian.core.types import InvalidTaskTransitionError, Session, Task
 from sebastian.gateway.auth import require_auth
@@ -20,6 +20,11 @@ _background_tasks: set[asyncio.Task[object]] = set()
 
 AuthPayload = dict[str, Any]
 JSONDict = dict[str, Any]
+
+
+class CreateAgentSessionBody(BaseModel):
+    content: str = Field(min_length=1)
+    session_id: str | None = None
 
 
 @router.get("/sessions")
@@ -147,11 +152,6 @@ async def get_session(
         "messages": messages,
         "timeline_items": items,
     }
-
-
-class CreateAgentSessionBody(BaseModel):
-    content: str
-    session_id: str | None = None
 
 
 class SendTurnBody(BaseModel):
