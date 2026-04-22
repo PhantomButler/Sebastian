@@ -206,18 +206,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db_factory=state.db_factory,
     )
 
-    # 孤儿 session 目录提醒（agent 重命名后遗留数据）
-    sessions_dir = settings.sessions_dir
-    if sessions_dir.exists():
-        known = {"sebastian", *state.agent_registry.keys()}
-        orphans = [d.name for d in sessions_dir.iterdir() if d.is_dir() and d.name not in known]
-        if orphans:
-            logger.warning(
-                "Found orphan session dirs (not in registry): %s. "
-                "Likely from a renamed agent. See CHANGELOG for migration.",
-                orphans,
-            )
-
     watchdog_task = start_watchdog(
         session_store=state.session_store,
         event_bus=state.event_bus,

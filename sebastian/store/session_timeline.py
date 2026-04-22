@@ -232,6 +232,8 @@ class SessionTimelineStore:
 
             if block_type in ("tool_use", "tool"):
                 block_content = json.dumps(block.get("input", {}), default=str)
+            elif block_type == "thinking":
+                block_content = block.get("thinking") or ""
             else:
                 block_content = block.get("text") or block.get("content") or ""
 
@@ -326,12 +328,11 @@ class SessionTimelineStore:
                     SessionItemRecord.agent_type == agent_type,
                     SessionItemRecord.archived.is_(False),
                 )
-                .order_by(SessionItemRecord.effective_seq.desc(), SessionItemRecord.seq.desc())
+                .order_by(SessionItemRecord.seq.desc())
                 .limit(limit)
             )
             rows = list(result.scalars())
-        # reverse to get ascending order
-        rows.sort(key=lambda r: (r.effective_seq, r.seq))
+        rows.sort(key=lambda r: r.seq)
         return [_record_to_dict(r) for r in rows]
 
     async def get_context_items_with_thinking(

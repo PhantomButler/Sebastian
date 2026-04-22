@@ -199,8 +199,49 @@ async def test_append_message_preserves_turn_id_from_blocks(store, session_in_db
     assert thinking["turn_id"] == "01JQTEST00000000000000000A"
     assert thinking["provider_call_index"] == 0
     assert thinking["block_index"] == 0
+    assert thinking["content"] == "thought"
     assert text["turn_id"] == "01JQTEST00000000000000000A"
     assert text["block_index"] == 1
+
+
+@pytest.mark.asyncio
+async def test_append_message_thinking_content_replays_to_anthropic(store, session_in_db):
+    """thinking block content should survive DB persistence and Anthropic replay."""
+    blocks = [
+        {
+            "type": "thinking",
+            "thinking": "real thought",
+            "signature": "sig-real",
+            "turn_id": "01JQTEST00000000000000000E",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+        {
+            "type": "text",
+            "text": "answer",
+            "turn_id": "01JQTEST00000000000000000E",
+            "provider_call_index": 0,
+            "block_index": 1,
+        },
+    ]
+    await store.append_message(
+        session_in_db.id,
+        "assistant",
+        "answer",
+        agent_type="sebastian",
+        blocks=blocks,
+    )
+
+    messages = await store.get_context_messages(
+        session_in_db.id,
+        "sebastian",
+        "anthropic",
+        include_thinking=True,
+    )
+    assistant = next(m for m in messages if m["role"] == "assistant")
+    thinking = next(b for b in assistant["content"] if b["type"] == "thinking")
+    assert thinking["thinking"] == "real thought"
+    assert thinking["signature"] == "sig-real"
 
 
 @pytest.mark.asyncio
@@ -432,12 +473,8 @@ async def test_effective_seq_zero_preserved(store, session_in_db):
 
 
 @pytest.mark.asyncio
-async def test_get_recent_items_orders_by_effective_seq(store, session_in_db):
-    """get_recent_timeline_items 含 context_summary 时按 (effective_seq, seq) 排序。
-
-    C2: 当前仅按 seq.desc() 取 top-N 再 sort(seq)，
-    context_summary 的 effective_seq 被忽略，顺序与 get_context_items 不一致。
-    """
+async def test_get_recent_items_selects_window_by_seq_not_effective_seq(store, session_in_db):
+    """get_recent_timeline_items 以真实 seq 选择最近窗口，再按 seq 正序返回。"""
     base_items = [
         {"kind": "user_message", "role": "user", "content": f"msg{i}"}
         for i in range(5)
@@ -452,8 +489,10 @@ async def test_get_recent_items_orders_by_effective_seq(store, session_in_db):
     }
     await store.append_timeline_items(session_in_db.id, "sebastian", [summary])
 
-    recent = await store.get_recent_timeline_items(session_in_db.id, "sebastian", limit=6)
-    effective_seqs = [i["effective_seq"] for i in recent]
-    assert effective_seqs == sorted(effective_seqs), (
-        f"get_recent_items not sorted by effective_seq; got: {effective_seqs}"
+    recent = await store.get_recent_timeline_items(session_in_db.id, "sebastian", limit=3)
+    seqs = [i["seq"] for i in recent]
+    assert seqs == [4, 5, 6], (
+        "recent should select by real seq, including the newly inserted summary; "
+        f"got seqs: {seqs}"
     )
+    assert recent[-1]["kind"] == "context_summary"
