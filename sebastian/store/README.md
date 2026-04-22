@@ -57,7 +57,16 @@ await store.append_message(session_id, agent_type, role, content)
 messages = await store.get_context_messages(session_id, agent_type)
 timeline = await store.get_context_timeline_items(session_id, agent_type)
 sessions = await store.list_sessions(agent_type)
+```
 
+## Timeline 方法选择
+
+- `get_timeline_items(..., include_archived=True)` 是 audit/UI 历史视图，返回真实 `seq ASC` 顺序。
+- `get_context_timeline_items(...)` 是 LLM context 视图，按非归档 item 的逻辑上下文顺序返回。
+
+---
+
+```python
 # EventLog（在 SQLAlchemy session 上下文内使用）
 from sebastian.store.event_log import EventLog
 log = EventLog(db_session)

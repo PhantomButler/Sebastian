@@ -270,7 +270,11 @@ class SessionStore:
         session_id: str,
         agent_type: str = "sebastian",
     ) -> list[dict[str, Any]]:
-        """Return non-archived items for LLM context window. Requires db_factory."""
+        """Return non-archived items ordered for the LLM context window.
+
+        This view sorts by logical context position and excludes archived source
+        items. UI audit history should use get_timeline_items().
+        """
         if self._timeline is None:
             raise RuntimeError("get_context_timeline_items requires db_factory")
         return await self._timeline.get_context_items(session_id, agent_type)
@@ -281,7 +285,11 @@ class SessionStore:
         agent_type: str = "sebastian",
         include_archived: bool = True,
     ) -> list[dict[str, Any]]:
-        """Return all timeline items. Requires db_factory."""
+        """Return audit timeline items ordered by real seq ASC.
+
+        This is the UI/history view. Set include_archived=True for the complete
+        persisted session history, including compressed source items.
+        """
         if self._timeline is None:
             raise RuntimeError("get_timeline_items requires db_factory")
         return await self._timeline.get_items(

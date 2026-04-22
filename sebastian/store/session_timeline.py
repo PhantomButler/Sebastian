@@ -306,10 +306,7 @@ class SessionTimelineStore:
             )
             if not include_archived:
                 q = q.where(SessionItemRecord.archived.is_(False))
-            q = q.order_by(
-                SessionItemRecord.effective_seq.asc(),
-                SessionItemRecord.seq.asc(),
-            )
+            q = q.order_by(SessionItemRecord.seq.asc())
             result = await db.execute(q)
             return [_record_to_dict(r) for r in result.scalars()]
 
