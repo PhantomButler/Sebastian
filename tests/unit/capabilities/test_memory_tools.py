@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 import sebastian.gateway.state as state_module
 from sebastian.store import models  # noqa: F401 – registers ORM models
@@ -20,8 +21,11 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-async def _create_in_memory_factory():
-    """Build an in-memory SQLite async session factory with all tables created."""
+async def _create_in_memory_factory() -> tuple[AsyncEngine, async_sessionmaker]:
+    """Build an in-memory SQLite async session factory with all tables created.
+
+    Returns (engine, factory). Caller must ``await engine.dispose()`` when done.
+    """
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -39,7 +43,7 @@ async def _create_in_memory_factory():
                 "USING fts5(memory_id UNINDEXED, content_segmented, tokenize=unicode61)"
             )
         )
-    return async_sessionmaker(engine, expire_on_commit=False)
+    return engine, async_sessionmaker(engine, expire_on_commit=False)
 
 
 # ---------------------------------------------------------------------------
@@ -54,9 +58,12 @@ async def enabled_memory_state(monkeypatch):
     fake_settings.enabled = True
     monkeypatch.setattr(state_module, "memory_settings", fake_settings, raising=False)
 
-    factory = await _create_in_memory_factory()
+    engine, factory = await _create_in_memory_factory()
     monkeypatch.setattr(state_module, "db_factory", factory, raising=False)
-    return factory
+    yield factory
+    await engine.dispose()
+    # 等 aiosqlite worker 线程退出，避免 PytestUnhandledThreadExceptionWarning
+    await asyncio.sleep(0)
 
 
 @pytest.fixture
