@@ -4,7 +4,18 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sebastian.store.database import Base  # noqa: F401
@@ -256,8 +267,8 @@ class AppSettingsRecord(Base):
 class SessionRecord(Base):
     __tablename__ = "sessions"
 
-    id: Mapped[str] = mapped_column(String, primary_key=False)
-    agent_type: Mapped[str] = mapped_column(String(100), primary_key=False)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    agent_type: Mapped[str] = mapped_column(String(100), primary_key=True)
     title: Mapped[str] = mapped_column(String, default="")
     goal: Mapped[str] = mapped_column(String, default="")
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
@@ -271,7 +282,6 @@ class SessionRecord(Base):
     next_item_seq: Mapped[int] = mapped_column(Integer, default=1)
 
     __table_args__ = (
-        PrimaryKeyConstraint("agent_type", "id"),
         Index("ix_sessions_agent_type", "agent_type"),
         Index("ix_sessions_agent_parent_status", "agent_type", "parent_session_id", "status"),
         Index("ix_sessions_last_activity", "last_activity_at"),
@@ -309,11 +319,7 @@ class SessionItemRecord(Base):
 class SessionTodoRecord(Base):
     __tablename__ = "session_todos"
 
-    session_id: Mapped[str] = mapped_column(String, primary_key=False)
-    agent_type: Mapped[str] = mapped_column(String(100), primary_key=False)
+    session_id: Mapped[str] = mapped_column(String, primary_key=True)
+    agent_type: Mapped[str] = mapped_column(String(100), primary_key=True)
     todos: Mapped[list[Any]] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
-
-    __table_args__ = (
-        PrimaryKeyConstraint("agent_type", "session_id"),
-    )
