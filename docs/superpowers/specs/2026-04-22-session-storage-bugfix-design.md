@@ -278,6 +278,42 @@ else:
 
 ---
 
+## Commit 组 3：遗留清理
+
+不影响功能正确性，但属于未完成的 spec 要求，统一在组 2 之后用一组独立 commit 清理。
+
+### 3.1 get_timeline_items 排序修复
+
+**问题**：`session_timeline.py` 的 `get_items()`（对应 `get_timeline_items`）第 254 行只按 `seq.asc()` 单列排序。上下文压缩后，`context_summary` 的 `effective_seq` 等于被压缩范围起点（如 1），但 `seq` 是实际写入顺序（如 150）。按 `seq` 排序会把 summary 放到最末尾，用户在 App 里无法看出 summary 代表哪段历史。
+
+**修复**：改为 `.order_by(effective_seq.asc(), seq.asc())`，与 `get_context_items` 和 `get_context_items_with_thinking` 保持一致。
+
+### 3.2 include_kinds 参数删除
+
+**问题**：`get_items_since()` 的 `include_kinds: list[str] | None` 参数意图作为白名单，但实现上与前置的 `kind.not_in(_CONTEXT_EXCLUDED_KINDS)` AND 叠加，导致无法通过 `include_kinds` 取回被 excluded 的 kind（如 `thinking`）——参数语义误导。当前代码库无任何调用方传入此参数。
+
+**修复**：删除 `include_kinds` 参数。若未来需要包含 `thinking` 的查询路径，参照 `get_context_messages` 的做法，单独加 `include_thinking: bool = False` 参数，在为 True 时从 `excluded` 集合中移除 `"thinking"`，语义清晰不混淆。
+
+### 3.3 IndexStore 类删除
+
+**问题**：`sebastian/store/index_store.py` 保留完整 `IndexStore` 实现（含 `prune_orphans`），但已无任何运行时调用方。Spec 要求彻底删除 `prune_orphans` 并移除独立 `IndexStore` 概念。
+
+**修复**：
+- 删除 `sebastian/store/index_store.py`
+- `sebastian/store/__init__.py` 移除相关 export
+- 确认无测试仍在 import `IndexStore`（已有的相关测试文件应已在上一轮迁移中清理）
+
+### 3.4 TodoStore 文件回退路径清理
+
+**问题**：`TodoStore.__init__` 保留 `sessions_dir` 参数和文件读写逻辑作为降级路径。运行时 `gateway/app.py` 只传 `db_factory`，文件路径不会被触发，但代码仍然存在。
+
+**修复**：
+- 删除 `TodoStore` 中 `sessions_dir` 参数及所有文件读写分支
+- `__init__` 只接受 `db_factory`，强制 SQLite 路径
+- 更新相关测试
+
+---
+
 ## 测试要求
 
 **Commit 组 1 必须覆盖：**
@@ -291,14 +327,17 @@ else:
 - 同一 provider call 内多个 tool_call 的 `provider_call_index` 相同
 - `cancel_session()` 后 DB 中存在已缓冲的 `assistant_blocks`（不丢失 thinking/tool records）
 - OpenAI 投影：含 tool_calls+text 的 group 产生单条 assistant 消息
-- `get_messages_since` 返回值不含 `system_event`
+- `get_messages_since` 返回值不含 `system_event`（同时 `get_context_items` 也不含，因为修改的是共享常量 `_CONTEXT_EXCLUDED_KINDS`）
 - IntegrityError 触发后重试成功，seq 不重复
+
+**Commit 组 3 必须覆盖：**
+- `get_timeline_items` 返回顺序：压缩场景下 `context_summary` 按 `effective_seq` 排在被压缩范围原位，而非末尾
+- `get_items_since` 无 `include_kinds` 参数（调用方无感知，接口更简洁）
+- `IndexStore` 无法被 import（模块已删除）
+- `TodoStore` 构造不接受 `sessions_dir`，传入时抛 `TypeError`
 
 ---
 
-## 不在本次范围
+## 备注
 
-- `get_timeline_items` 排序（仅 `seq`，spec 要求 `(effective_seq, seq)`）——不影响审计路径，defer
-- `include_kinds` 参数语义混乱——内部参数无调用方，defer
-- `TodoStore` 文件回退路径清理——运行时走 SQLite，defer
-- `IndexStore` 类整体删除——已无运行时调用，defer 到下次清理
+`_verify_schema_invariants()` 在检测到索引缺失时报错让服务无法启动，但**不会自动修复**缺失的索引。对于本地开发工具、无生产数据的场景，这个 trade-off 可接受——至少不会静默运行在错误 schema 上。如果未来需要自动修复，可在 `_apply_idempotent_indexes()` 中补 `CREATE INDEX IF NOT EXISTS` 覆盖 `session_items` 和 `sessions` 的所有显式索引。
