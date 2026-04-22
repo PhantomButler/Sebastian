@@ -9,7 +9,7 @@ import shutil
 import weakref
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import aiofiles
@@ -22,6 +22,9 @@ from sebastian.core.types import (
     TaskPlan,
     TaskStatus,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 # WeakValueDictionary lets unreferenced locks be GC'd, preventing unbounded growth (m2).
 _SESSION_LOCKS_BY_PATH: weakref.WeakValueDictionary[Path, asyncio.Lock] = (
@@ -46,12 +49,30 @@ def _session_dir_by_id(
 
 
 class SessionStore:
-    """File-based storage for sessions, messages, tasks, and checkpoints."""
+    """Storage for sessions, messages, tasks, and checkpoints.
 
-    def __init__(self, sessions_dir: Path) -> None:
-        self._dir = sessions_dir
+    When ``db_factory`` is provided, session metadata CRUD is delegated to
+    ``SessionRecordsStore`` (SQLite).  The legacy file-based path remains as
+    fallback for backward compatibility.
+    """
+
+    def __init__(
+        self,
+        sessions_dir: Path | None = None,
+        db_factory: async_sessionmaker[AsyncSession] | None = None,
+    ) -> None:
+        self._dir = sessions_dir or Path("/tmp/sebastian-sessions-legacy")
+        self._db_factory = db_factory
+        if db_factory is not None:
+            from sebastian.store.session_records import SessionRecordsStore
+
+            self._records: SessionRecordsStore | None = SessionRecordsStore(db_factory)
+        else:
+            self._records = None
 
     async def create_session(self, session: Session) -> Session:
+        if self._records is not None:
+            return await self._records.create(session)
         _session_dir(self._dir, session)
         async with self._session_lock(session.id, session.agent_type):
             await self._write_session_meta(session)
@@ -62,6 +83,8 @@ class SessionStore:
         session_id: str,
         agent_type: str = "sebastian",
     ) -> Session | None:
+        if self._records is not None:
+            return await self._records.get(session_id, agent_type)
         directory = _session_dir_by_id(self._dir, session_id, agent_type)
         meta_path = directory / "meta.json"
         if not meta_path.exists():
@@ -79,11 +102,17 @@ class SessionStore:
         return await self.get_session(session_id, agent_type)
 
     async def update_session(self, session: Session) -> None:
+        if self._records is not None:
+            await self._records.update(session)
+            return
         async with self._session_lock(session.id, session.agent_type):
             await self._write_session_meta(session)
 
     async def update_activity(self, session_id: str, agent_type: str) -> None:
-        """Lightweight update: set last_activity_at=now, transition stalled→active in meta."""
+        """Lightweight update: set last_activity_at=now, transition stalled→active."""
+        if self._records is not None:
+            await self._records.update_activity(session_id, agent_type)
+            return
         async with self._session_lock(session_id, agent_type):
             directory = _session_dir_by_id(self._dir, session_id, agent_type)
             meta_path = directory / "meta.json"
@@ -97,9 +126,74 @@ class SessionStore:
             await self._atomic_write_text(meta_path, json.dumps(data))
 
     async def delete_session(self, session: Session) -> None:
+        if self._records is not None:
+            await self._records.delete(session)
+            return
         directory = _session_dir_by_id(self._dir, session.id, session.agent_type)
         if directory.exists():
             await asyncio.to_thread(shutil.rmtree, directory)
+
+    async def list_sessions(self) -> list[dict[str, Any]]:
+        """Return metadata dicts for all sessions, ordered by last_activity_at desc."""
+        if self._records is not None:
+            return await self._records.list_all()
+        sessions: list[dict[str, Any]] = []
+        if not self._dir.exists():
+            return sessions
+        for agent_dir in self._dir.iterdir():
+            if not agent_dir.is_dir():
+                continue
+            for session_dir in agent_dir.iterdir():
+                meta_path = session_dir / "meta.json"
+                if not meta_path.exists():
+                    continue
+                async with aiofiles.open(meta_path) as f:
+                    data = json.loads(await f.read())
+                sessions.append(data)
+        return sorted(sessions, key=lambda s: s.get("last_activity_at", ""), reverse=True)
+
+    async def list_sessions_by_agent_type(self, agent_type: str) -> list[dict[str, Any]]:
+        """Return metadata dicts for sessions of the given agent_type."""
+        if self._records is not None:
+            return await self._records.list_by_agent_type(agent_type)
+        sessions: list[dict[str, Any]] = []
+        agent_dir = self._dir / agent_type
+        if not agent_dir.exists():
+            return sessions
+        for session_dir in agent_dir.iterdir():
+            meta_path = session_dir / "meta.json"
+            if not meta_path.exists():
+                continue
+            async with aiofiles.open(meta_path) as f:
+                data = json.loads(await f.read())
+            sessions.append(data)
+        return sorted(sessions, key=lambda s: s.get("last_activity_at", ""), reverse=True)
+
+    async def list_active_children(
+        self,
+        agent_type: str,
+        parent_session_id: str,
+    ) -> list[dict[str, Any]]:
+        """Return metadata dicts for active child sessions of the given parent."""
+        if self._records is not None:
+            return await self._records.list_active_children(agent_type, parent_session_id)
+        active_statuses = {"active", "stalled", "waiting", "idle"}
+        sessions: list[dict[str, Any]] = []
+        agent_dir = self._dir / agent_type
+        if not agent_dir.exists():
+            return sessions
+        for session_dir in agent_dir.iterdir():
+            meta_path = session_dir / "meta.json"
+            if not meta_path.exists():
+                continue
+            async with aiofiles.open(meta_path) as f:
+                data = json.loads(await f.read())
+            if (
+                data.get("parent_session_id") == parent_session_id
+                and data.get("status") in active_statuses
+            ):
+                sessions.append(data)
+        return sessions
 
     async def append_message(
         self,
