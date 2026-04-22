@@ -57,7 +57,7 @@ async def list_agent_sessions(
 @router.post("/agents/{agent_type}/sessions")
 async def create_agent_session(
     agent_type: str,
-    body: dict[str, Any],
+    body: CreateAgentSessionBody,
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
     """Create a new conversation with a sub-agent."""
@@ -69,11 +69,28 @@ async def create_agent_session(
     if agent_type not in state.agent_instances:
         raise HTTPException(404, f"Agent type not found: {agent_type}")
 
-    content = body.get("content", "")
+    content = body.content.strip()
     if not content:
         raise HTTPException(400, "content is required")
 
+    if body.session_id is not None:
+        entries = await state.session_store.list_sessions()
+        existing_entry = next((e for e in entries if e["id"] == body.session_id), None)
+        if existing_entry is not None:
+            if existing_entry.get("agent_type") != agent_type:
+                raise HTTPException(409, "session_id already exists with different agent or goal")
+            existing = await state.session_store.get_session(body.session_id, agent_type)
+            if existing is None or existing.goal != content:
+                raise HTTPException(409, "session_id already exists with different agent or goal")
+            # Idempotent: same session_id + same agent + same goal
+            # Return existing without starting a new turn
+            return {
+                "session_id": existing.id,
+                "ts": existing.created_at.isoformat(),
+            }
+
     session = Session(
+        id=body.session_id,
         agent_type=agent_type,
         title=content[:40],
         goal=content,
@@ -128,6 +145,11 @@ async def get_session(
         "messages": messages,
         "timeline_items": items,
     }
+
+
+class CreateAgentSessionBody(BaseModel):
+    content: str
+    session_id: str | None = None
 
 
 class SendTurnBody(BaseModel):

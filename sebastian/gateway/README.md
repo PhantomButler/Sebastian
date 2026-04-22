@@ -74,6 +74,15 @@ from sebastian.gateway.auth import require_auth
 async def foo(_auth: dict = Depends(require_auth)): ...
 ```
 
+### SubAgent Session Client IDs
+
+`POST /agents/{agent_type}/sessions` accepts an optional `session_id` field in the request body:
+
+- **Not provided**: backend generates a new session id (existing behavior).
+- **Provided, session does not exist**: creates the session with that id and starts the initial turn.
+- **Provided, session exists with same `agent_type` and `content`**: idempotent — returns `200` with existing `session_id` and no duplicate initial turn.
+- **Provided, session exists but different agent or content**: returns `409 Conflict`.
+
 ## 注意事项
 
 - `state.py` 中的变量名**不可随意重命名**——全项目通过模块导入直接访问，重命名会导致全局 `NameError`
