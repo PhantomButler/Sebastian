@@ -47,9 +47,10 @@ SSE race：App 生成 session id，先订阅 session stream，再发起 turn。W
 `GET /api/v1/sessions/{session_id}` 不带 `include_archived` 时保持当前上下文视图，
 用于旧调用方兼容。
 
-`SessionStore.get_timeline_items()` 保留方法名，但文档和测试应明确其语义为
-audit timeline：按 `seq ASC` 返回真实写入顺序。`get_context_timeline_items()` 继续按
-`(effective_seq, seq)` 返回 LLM 当前上下文视图。
+本轮必须同步修改后端 store/route contract：`SessionStore.get_timeline_items()` 保留方法名，
+但实现、docstring、README 和测试都要改为 audit timeline 语义：按 `seq ASC` 返回真实
+写入顺序。当前按 `(effective_seq, seq)` 排序的测试需要改写。`get_context_timeline_items()`
+继续按 `(effective_seq, seq)` 返回 LLM 当前上下文视图。
 
 ### Client-Generated Session ID
 
@@ -124,13 +125,20 @@ Mapper 先按 `seq ASC` 排序，再投影到 `Message`：
 
 - `user_message`：独立 `Message(role=USER, text=content)`。
 - assistant-side items 按 `(turn_id, provider_call_index)` 聚合为 assistant message。
+- Hydrated `Message.id` 必须稳定可复算：
+  - user message：`timeline-${sessionId}-${seq}`。
+  - assistant group：`timeline-${sessionId}-${turnId}-${providerCallIndex}`；若缺少
+    `turn_id` 或 `provider_call_index`，退化为 `timeline-${sessionId}-${firstSeq}`。
+  - summary message：`timeline-${sessionId}-summary-${seq}`。
+- Hydrated `Message.createdAt` 使用该 message 组内第一条 timeline item 的 `created_at`。
 - `thinking`：`ContentBlock.ThinkingBlock(done=true, text=content,
   durationMs=payload.duration_ms)`。
 - `assistant_message`：`ContentBlock.TextBlock(done=true, text=content)`。
 - `tool_call + tool_result`：按 `tool_call_id` 合并为一个 `ContentBlock.ToolBlock`。
   - 有 result 且 `ok=true`：`DONE`。
   - 有 result 且 `ok=false` 或 `payload.error`：`FAILED`。
-  - 无 result：`PENDING` 或 `RUNNING`，用于 in-flight 历史恢复。
+  - 无 result：`PENDING`。当前 timeline 不持久化 `tool_running` marker，历史 hydration
+    不推断 `RUNNING`。
   - 找不到 call 的 result 降级为 tool block，避免内容丢失。
 - `context_summary`：独立 assistant message，包含一个 `SummaryBlock`。
 - `system_event`、`raw_block` 默认不显示。
