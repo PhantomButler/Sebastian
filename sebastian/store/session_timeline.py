@@ -4,13 +4,13 @@ import asyncio
 import logging
 import weakref
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Required, TypedDict
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sebastian.store.models import SessionItemRecord, SessionRecord
+from sebastian.store.models import SessionItemRecord
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +49,16 @@ def _get_session_lock(session_id: str, agent_type: str) -> asyncio.Lock:
     return lock
 
 
-class TimelineItemInput(dict[str, Any]):
-    """Dict subclass for timeline item input (supports TypedDict-like usage)."""
+class TimelineItemInput(TypedDict, total=False):
+    kind: Required[str]
+    role: str | None
+    content: str
+    payload: dict[str, Any]
+    archived: bool
+    turn_id: str | None
+    provider_call_index: int | None
+    block_index: int | None
+    effective_seq: int | None
 
 
 def _record_to_dict(record: SessionItemRecord) -> dict[str, Any]:
@@ -75,11 +83,9 @@ def _record_to_dict(record: SessionItemRecord) -> dict[str, Any]:
 class SessionTimelineStore:
     """SQLite-backed timeline item reads and writes for a session.
 
-    Seq allocation uses a per-session asyncio.Lock to serialize concurrent
-    appends within a process.  This is correct for aiosqlite (single-threaded)
-    and is equivalent to SELECT ... FOR UPDATE semantics for in-process concurrency.
-    Each append runs in its own committed transaction; the lock prevents two
-    coroutines from reading the same next_item_seq before either updates it.
+    Seq allocation uses UPDATE...RETURNING in a single atomic statement, so
+    correctness does not depend on asyncio.Lock.  The per-session lock is kept
+    as an in-process contention-reduction optimisation only.
     """
 
     def __init__(self, db_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -109,31 +115,37 @@ class SessionTimelineStore:
         agent_type: str,
         items: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Execute within the per-session lock; no concurrent seq race possible."""
-        now = datetime.now(UTC)
+        """Execute within the per-session lock.
+
+        seq 分配通过 UPDATE...RETURNING 在单语句内原子完成，
+        无需先 SELECT 再 UPDATE，正确性不依赖 asyncio.Lock。
+        """
         n = len(items)
+        now = datetime.now(UTC)
 
         async with self._db() as db:
             async with db.begin():
-                # Read-modify-write next_item_seq; lock already held above.
+                # 原子分配 seq：UPDATE...RETURNING 在单语句内完成。
+                # SQLite 3.35+ 支持 RETURNING；aiosqlite 完全支持。
                 result = await db.execute(
-                    select(SessionRecord).where(
-                        SessionRecord.id == session_id,
-                        SessionRecord.agent_type == agent_type,
-                    )
+                    text(
+                        "UPDATE sessions SET next_item_seq = next_item_seq + :n"
+                        " WHERE id = :sid AND agent_type = :at"
+                        " RETURNING next_item_seq - :n"
+                    ),
+                    {"n": n, "sid": session_id, "at": agent_type},
                 )
-                session_row = result.scalar_one_or_none()
-                if session_row is None:
+                row = result.first()
+                if row is None:
                     raise ValueError(
                         f"Session {session_id!r} (agent={agent_type!r}) not found"
                     )
-
-                start_seq = session_row.next_item_seq
-                session_row.next_item_seq = start_seq + n
+                start_seq: int = row[0]
 
                 inserted: list[dict[str, Any]] = []
                 for i, item in enumerate(items):
                     seq = start_seq + i
+                    eff_seq = item.get("effective_seq") or seq
                     record = SessionItemRecord(
                         id=str(uuid4()),
                         session_id=session_id,
@@ -147,7 +159,7 @@ class SessionTimelineStore:
                         turn_id=item.get("turn_id"),
                         provider_call_index=item.get("provider_call_index"),
                         block_index=item.get("block_index"),
-                        effective_seq=item.get("effective_seq", seq),
+                        effective_seq=eff_seq,
                         created_at=now,
                     )
                     db.add(record)
