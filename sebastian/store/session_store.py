@@ -65,10 +65,13 @@ class SessionStore:
         self._db_factory = db_factory
         if db_factory is not None:
             from sebastian.store.session_records import SessionRecordsStore
+            from sebastian.store.session_timeline import SessionTimelineStore
 
             self._records: SessionRecordsStore | None = SessionRecordsStore(db_factory)
+            self._timeline: SessionTimelineStore | None = SessionTimelineStore(db_factory)
         else:
             self._records = None
+            self._timeline = None
 
     async def create_session(self, session: Session) -> Session:
         if self._records is not None:
@@ -203,6 +206,11 @@ class SessionStore:
         agent_type: str = "sebastian",
         blocks: list[dict[str, Any]] | None = None,
     ) -> None:
+        if self._timeline is not None:
+            await self._timeline.append_message_compat(
+                session_id, role, content, agent_type, blocks
+            )
+            return
         directory = _session_dir_by_id(
             self._dir,
             session_id,
@@ -225,6 +233,8 @@ class SessionStore:
         agent_type: str = "sebastian",
         limit: int = 50,
     ) -> list[dict[str, Any]]:
+        if self._timeline is not None:
+            return await self._timeline.get_recent_items(session_id, agent_type, limit=limit)
         directory = _session_dir_by_id(self._dir, session_id, agent_type)
         path = directory / "messages.jsonl"
         if not path.exists():
@@ -233,6 +243,68 @@ class SessionStore:
             lines = await file.readlines()
         messages = [json.loads(line) for line in lines if line.strip()]
         return messages[-limit:]
+
+    # ------------------------------------------------------------------
+    # Timeline facade methods (SQLite-backed only)
+    # ------------------------------------------------------------------
+
+    async def append_timeline_items(
+        self,
+        session_id: str,
+        agent_type: str,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Append timeline items atomically. Requires db_factory."""
+        if self._timeline is None:
+            raise RuntimeError("append_timeline_items requires db_factory")
+        return await self._timeline.append_items(session_id, agent_type, items)
+
+    async def get_context_timeline_items(
+        self,
+        session_id: str,
+        agent_type: str = "sebastian",
+    ) -> list[dict[str, Any]]:
+        """Return non-archived items for LLM context window. Requires db_factory."""
+        if self._timeline is None:
+            raise RuntimeError("get_context_timeline_items requires db_factory")
+        return await self._timeline.get_context_items(session_id, agent_type)
+
+    async def get_timeline_items(
+        self,
+        session_id: str,
+        agent_type: str = "sebastian",
+        include_archived: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Return all timeline items. Requires db_factory."""
+        if self._timeline is None:
+            raise RuntimeError("get_timeline_items requires db_factory")
+        return await self._timeline.get_items(session_id, agent_type, include_archived=include_archived)
+
+    async def get_recent_timeline_items(
+        self,
+        session_id: str,
+        agent_type: str = "sebastian",
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        """Return most recent non-archived timeline items in ascending seq order. Requires db_factory."""
+        if self._timeline is None:
+            raise RuntimeError("get_recent_timeline_items requires db_factory")
+        return await self._timeline.get_recent_items(session_id, agent_type, limit=limit)
+
+    async def get_messages_since(
+        self,
+        session_id: str,
+        agent_type: str = "sebastian",
+        after_seq: int = 0,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return items with seq > after_seq, excluding thinking/raw_block. Requires db_factory."""
+        if self._timeline is None:
+            raise RuntimeError("get_messages_since requires db_factory")
+        items = await self._timeline.get_items_since(session_id, agent_type, after_seq)
+        if limit is not None:
+            items = items[:limit]
+        return items
 
     async def create_task(
         self,
