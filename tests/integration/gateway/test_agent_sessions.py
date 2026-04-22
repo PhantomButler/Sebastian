@@ -91,6 +91,32 @@ def _capture_background_task(scheduled_coroutines: list[object]):
     return inner
 
 
+def test_create_agent_session_without_session_id_auto_generates_id(client) -> None:
+    """POST without session_id uses auto-generated id (old behavior preserved)."""
+    import sebastian.gateway.state as state
+
+    token = _login(client)
+    agent_type = next(iter(state.agent_instances.keys()))
+
+    scheduled_coroutines: list[object] = []
+
+    with patch(
+        "sebastian.gateway.routes.sessions.asyncio.create_task",
+        side_effect=_capture_background_task(scheduled_coroutines),
+    ):
+        response = client.post(
+            f"/api/v1/agents/{agent_type}/sessions",
+            json={"content": "Hello agent"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["session_id"]
+    assert body["session_id"] != "None"  # must not be the string "None"
+    assert len(scheduled_coroutines) == 1
+
+
 def test_create_agent_session_accepts_client_session_id(client) -> None:
     """POST /agents/{type}/sessions with session_id uses client-provided id."""
     import sebastian.gateway.state as state

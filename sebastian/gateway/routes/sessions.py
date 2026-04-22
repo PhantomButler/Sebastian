@@ -89,13 +89,15 @@ async def create_agent_session(
                 "ts": existing.created_at.isoformat(),
             }
 
-    session = Session(
-        id=body.session_id,
-        agent_type=agent_type,
-        title=content[:40],
-        goal=content,
-        depth=2,
-    )
+    session_kwargs: dict[str, Any] = {
+        "agent_type": agent_type,
+        "title": content[:40],
+        "goal": content,
+        "depth": 2,
+    }
+    if body.session_id is not None:
+        session_kwargs["id"] = body.session_id
+    session = Session(**session_kwargs)
     await state.session_store.create_session(session)
 
     agent = state.agent_instances[agent_type]
