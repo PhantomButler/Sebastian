@@ -13,9 +13,15 @@ Session storage 迁移到 SQLite 后，后端开始返回 canonical
 session 时只能恢复 user/assistant 纯文本，无法完整还原 thinking、tool call/result
 和后续 context summary 节点。
 
-本设计将 Android Chat 历史恢复切到完整 timeline，同时收口新建 session 的实时
-SSE race：App 生成 session id，先订阅 session stream，再发起 turn。WebSocket 不纳入
-本轮。
+本设计将 Android Chat 的 REST 历史恢复（hydration）切到完整 timeline。这里的
+hydration 指 App 从后端读取已持久化的 `timeline_items`，并重建为 UI 直接使用的
+`Message + ContentBlock`。同时，本设计收口新建 session 的实时 SSE race：App 生成
+session id，先订阅 session stream，再发起 turn。WebSocket 不纳入本轮。
+
+## 术语
+
+- **REST 历史恢复（hydration）**：App 通过 REST 读取已持久化的 timeline，并重建为
+  UI 领域模型 `Message + ContentBlock` 的过程。
 
 ## 目标
 
@@ -140,13 +146,14 @@ Mapper 先按 `seq ASC` 排序，再投影到 `Message`：
 
 - `user_message`：独立 `Message(role=USER, text=content)`。
 - assistant-side items 按 `(turn_id, provider_call_index)` 聚合为 assistant message。
-- Hydrated `Message.id` 必须稳定可复算：
+- REST 历史恢复后的 `Message.id` 必须稳定可复算：
   - user message：`timeline-${sessionId}-${seq}`。
   - assistant group：`timeline-${sessionId}-${turnId}-${providerCallIndex}`；若缺少
     `turn_id` 或 `provider_call_index`，退化为 `timeline-${sessionId}-${firstSeq}`。
   - summary message：`timeline-${sessionId}-summary-${seq}`。
-- Hydrated `Message.createdAt` 使用该 message 组内第一条 timeline item 的 `created_at`。
-- Hydrated `ContentBlock.blockId` 也必须稳定可复算：
+- REST 历史恢复后的 `Message.createdAt` 使用该 message 组内第一条 timeline item 的
+  `created_at`。
+- 从 timeline 重建出的 `ContentBlock.blockId` 也必须稳定可复算：
   - thinking/text/tool_call 有 `turn_id + provider_call_index + block_index` 时：
     `timeline-${sessionId}-${turnId}-${providerCallIndex}-${blockIndex}`。
   - tool block 优先使用 tool_call item 的 block id；只有孤立 tool_result 时使用
@@ -159,7 +166,7 @@ Mapper 先按 `seq ASC` 排序，再投影到 `Message`：
 - `tool_call + tool_result`：按 `tool_call_id` 合并为一个 `ContentBlock.ToolBlock`。
   - 有 result 且 `ok=true`：`DONE`。
   - 有 result 且 `ok=false` 或 `payload.error`：`FAILED`。
-  - 无 result：`PENDING`。当前 timeline 不持久化 `tool_running` marker，历史 hydration
+  - 无 result：`PENDING`。当前 timeline 不持久化 `tool_running` marker，REST 历史恢复
     不推断 `RUNNING`。
   - 找不到 call 的 result 降级为 tool block，避免内容丢失。
 - `context_summary`：独立 assistant message，包含一个 `SummaryBlock`。
@@ -168,7 +175,7 @@ Mapper 先按 `seq ASC` 排序，再投影到 `Message`：
 archived 与 non-archived item 使用同样 UI，不增加淡化或标签。`context_summary` 本身
 就是压缩分界。
 
-## 实时与 Hydration 流程
+## 实时与 REST 历史恢复流程
 
 ### SSE Replay 边界
 
@@ -240,7 +247,7 @@ sealed interface ChatUiEffect {
 
 ## UI 展示
 
-历史 hydration 后的 `Message.blocks` 与实时 SSE 完成后的形态一致，继续使用现有
+REST 历史恢复后的 `Message.blocks` 与实时 SSE 完成后的形态一致，继续使用现有
 `MessageBubble` / `AssistantMessageBlocks`。
 
 新增 `SummaryCard`：
