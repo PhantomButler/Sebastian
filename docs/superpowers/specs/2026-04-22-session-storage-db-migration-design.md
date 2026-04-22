@@ -77,15 +77,25 @@ status: planned
 - `updated_at DATETIME`
 - `task_count INTEGER`
 - `active_task_count INTEGER`
+- `next_item_seq INTEGER DEFAULT 1`：下一条 timeline item 的 session 内 seq。
 
 约束和索引：
 
-- `UNIQUE(agent_type, id)`
+- `PRIMARY KEY(agent_type, id)`。`id` 在当前生成策略下通常全局唯一，但 DB 约束以 `(agent_type, id)` 为准，匹配所有查询路径。
 - index: `agent_type`
 - index: `status`
 - index: `parent_session_id`
 - index: `last_activity_at`
 - index: `(agent_type, parent_session_id, status)`
+
+外键定位：
+
+- `session_items(agent_type, session_id)` 指向 `sessions(agent_type, id)`。
+- `session_todos(agent_type, session_id)` 指向 `sessions(agent_type, id)`。
+- `tasks(agent_type, session_id)` 逻辑上指向 `sessions(agent_type, id)`。
+- `checkpoints(agent_type, session_id)` 逻辑上指向 `sessions(agent_type, id)`。
+
+SQLite 对复合外键支持有限且现有历史表需要幂等迁移；实现可先不强制所有历史表外键，但所有查询和写入必须按 `(agent_type, session_id)` 定位。
 
 ### `session_items`
 
@@ -203,11 +213,21 @@ status: planned
 现有 `SessionConsolidationRecord` 只表示某个 `(session_id, agent_type)` 已完成一次性 consolidation。为后续增量记忆预留 cursor：
 
 - `last_consolidated_seq INTEGER NULL`
+- `last_seen_item_seq INTEGER NULL`
+- `last_consolidated_source_seq INTEGER NULL`
 - `consolidation_mode TEXT DEFAULT 'full_session'`
 
-Phase 1 的 completed-session consolidation 仍可一次性处理全量上下文，并将 `last_consolidated_seq` 写为当时最大参与 seq。后续增量 worker 使用 `get_messages_since(after_seq=last_consolidated_seq)` 消费新增 item。
+Phase 1 的 completed-session consolidation 仍可一次性处理全量上下文，并将 cursor 写为当时最大参与范围：
 
-`context_summary` 首期纳入 `get_messages_since()`，因为它代表压缩后仍在上下文窗口里的语义摘要。
+- `last_seen_item_seq`：已经扫描到的真实 item seq。
+- `last_consolidated_source_seq`：已经沉淀过的语义来源范围最大 seq。
+
+后续增量 worker 使用 `get_messages_since(after_seq=last_seen_item_seq)` 消费新增 item，但遇到 `context_summary` 时必须检查 `source_seq_end`：
+
+- `source_seq_end <= last_consolidated_source_seq`：summary 只是已沉淀旧内容的压缩摘要，不再作为新事实沉淀。
+- `source_seq_end > last_consolidated_source_seq`：summary 覆盖了新语义范围，可以进入增量处理，并更新 `last_consolidated_source_seq`。
+
+这避免压缩后把已经 consolidation 过的旧内容摘要再次沉淀。
 
 ## Schema 迁移策略
 
@@ -222,6 +242,8 @@ Phase 1 的 completed-session consolidation 仍可一次性处理全量上下文
   - `checkpoints.session_id TEXT DEFAULT ''`
   - `checkpoints.agent_type TEXT DEFAULT 'sebastian'`
   - `session_consolidations.last_consolidated_seq INTEGER`
+  - `session_consolidations.last_seen_item_seq INTEGER`
+  - `session_consolidations.last_consolidated_source_seq INTEGER`
   - `session_consolidations.consolidation_mode TEXT DEFAULT 'full_session'`
 - 新表由 `Base.metadata.create_all` 创建。
 - 现有测试/开发 DB 中若已有 task/checkpoint 行，新增字段用 nullable/default 保证迁移不失败；后续新写入必须提供真实 `agent_type/session_id`。
@@ -298,6 +320,23 @@ SQLite 迁移后不再保留独立 `IndexStore` 存储概念。
   - `type="tool"`、`tool_use`、`tool_result` -> 拆为 `tool_call` / `tool_result`
   - 无法识别的 block -> `kind="raw_block"`，原始内容进入 `payload`
 
+### `seq` 分配
+
+`seq` 不能通过每次 `SELECT max(seq) + 1` 分配，否则并发 turn/resume/tool 写入可能读到同一个最大值。
+
+Phase 1 使用 `sessions.next_item_seq` 作为单 session 计数器：
+
+1. `append_timeline_items()` 开启 DB transaction。
+2. 读取并锁定目标 session 的 `next_item_seq`。SQLite 下实现应使用同一事务内的原子 `UPDATE ... RETURNING`，或在无法依赖 `RETURNING` 时使用 per-session async lock + transaction。
+3. 对 N 条待写 item 分配 `[next_item_seq, next_item_seq + N - 1]`。
+4. 将 `sessions.next_item_seq` 更新为 `next_item_seq + N`。
+5. 插入所有 `session_items`。
+6. transaction commit。
+
+约束 `UNIQUE(agent_type, session_id, seq)` 仍保留，用于捕获实现 bug。若发生 `IntegrityError`，实现应 rollback 并重试有限次数，而不是静默丢消息。
+
+测试必须覆盖同一 session 并发 append 后 seq 不重复且无空洞。
+
 ### BaseAgent 写入策略
 
 不在流式热路径中对每个 delta 同步写 DB。
@@ -340,9 +379,16 @@ Phase 1 采用 turn 内缓冲 + 边界批量 flush：
 
 - `get_context_timeline_items()` 读取 `archived=false` 的当前上下文 timeline。
 - `user_message`、`assistant_message`、`tool_call`、`tool_result`、`context_summary` 参与上下文。
-- `thinking` 默认不参与普通上下文。
+- `thinking` 存储为一等 timeline item，但默认不参与 `get_context_messages()`。
 - `system_event` 是否进入上下文由具体调用点决定；默认不进入 provider messages。
 - `raw_block` 不进入默认上下文。
+
+Thinking 投影规则：
+
+- 默认 agent 上下文不包含 historical thinking，避免把模型内部推理长期喂回模型。
+- Anthropic provider 如未来要求 signed thinking continuation，可通过显式参数 `include_thinking=True` 或专门 replay/debug formatter 投影 thinking block。
+- Phase 1 必须测试两种路径：默认 `get_context_messages(..., include_thinking=False)` 排除 thinking；Anthropic explicit thinking 投影保留 `payload.signature`。
+- OpenAI compatible reasoning content / think tags 不进入默认 context，只保留在 timeline/UI/debug 视图。
 
 投影排序规则：
 
@@ -355,7 +401,7 @@ Provider 投影必须用测试覆盖这些样例：
 
 - Anthropic：`assistant_message + tool_call + tool_result + assistant_message` 重建为合法 block/user-tool-result 序列。
 - OpenAI：同一 `provider_call_index` 的多个 `tool_call` 必须出现在同一 assistant message 的 `tool_calls` 中；对应 `tool_result` 必须带相同 `tool_call_id`。
-- `thinking.signature` 必须保留在 Anthropic thinking block 中。
+- 显式 `include_thinking=True` 时，`thinking.signature` 必须保留在 Anthropic thinking block 中。
 
 ## Timeline 读取视图
 
@@ -478,11 +524,53 @@ Phase 1 应将其从核心路径移除：
 
 Phase 1 后端 API 可以保留兼容响应，但必须明确来源：
 
-- `GET /sessions/{session_id}`：返回 `session`、`messages` 兼容投影、`timeline_items` 当前上下文 timeline。`messages` 由 `get_context_messages()` 或普通 message 投影生成，不再来自 JSONL。
+- `GET /sessions/{session_id}`：返回 `session`、`messages` 兼容投影、`timeline_items` 当前上下文 timeline。
 - `GET /sessions/{session_id}/recent`：若存在，返回 `timeline_items = get_recent_timeline_items(limit=25)`，可附带普通 message 摘要。
 - `inspect_session`：优先展示 timeline items，必要时附带 provider context 投影。
 - `completion_notifier`：使用 `get_recent_timeline_items()` 查找最近 assistant/user 可读内容，不读取 archived 原文。
 - `debug`/`stream`/`turns` routes：不直接读取文件；需要历史时通过 `SessionStore` timeline/context 方法。
+
+`messages` 兼容投影 schema：
+
+```json
+{
+  "role": "user|assistant|system|tool",
+  "content": "...",
+  "created_at": "2026-04-22T00:00:00Z",
+  "seq": 12
+}
+```
+
+兼容 `messages` 只用于 UI/旧调用方展示，不是 provider-specific context message；它不包含 Anthropic block list 或 OpenAI `tool_calls`。
+
+`timeline_items` canonical schema：
+
+```json
+{
+  "id": "...uuid...",
+  "session_id": "...",
+  "agent_type": "sebastian",
+  "seq": 12,
+  "effective_seq": 12,
+  "turn_id": "...",
+  "provider_call_index": 0,
+  "block_index": 3,
+  "kind": "tool_result",
+  "role": "tool",
+  "content": "...",
+  "payload": {},
+  "archived": false,
+  "created_at": "2026-04-22T00:00:00Z"
+}
+```
+
+Route view rules:
+
+- `GET /sessions/{session_id}` 默认 `timeline_items = get_context_timeline_items()`，即未归档当前上下文，按 `(effective_seq, seq)` 排序。
+- 如需完整审计，新增或扩展查询参数 `include_archived=true`，调用 `get_timeline_items(include_archived=True)`。
+- `/recent` 默认 `limit=25`，只返回未归档 item，按 `seq DESC LIMIT 25` 查询后正序返回。
+- `thinking` 在 timeline 中返回；兼容 `messages` 默认不返回 thinking。
+- `context_summary` 在 timeline 中返回；兼容 `messages` 中可作为 `role="system"` 或专门摘要展示项，但不得伪装成用户原文。
 
 现有 `BaseAgent` 的 `get_turns(limit=20)` 是技术债。Phase 1 移除固定截断，由 `get_context_messages()` 返回全量未归档上下文。上下文长度控制交给后续压缩功能。
 
@@ -513,13 +601,16 @@ Phase 1 后端 API 可以保留兼容响应，但必须明确来源：
 - `get_timeline_items(include_archived=True)` 包含完整历史。
 - `get_recent_timeline_items(limit=25)` 只看未归档最新窗口。
 - `get_messages_since(after_seq)` 包含 user/assistant/tool/summary，不含 thinking。
+- `context_summary` 增量查询按 `source_seq_end` 与 `last_consolidated_source_seq` 去重。
 - `get_context_messages(provider_format="anthropic")` 的 tool_use/tool_result 投影。
 - `get_context_messages(provider_format="openai")` 的 assistant tool_calls + role tool 投影。
+- 默认 context 投影排除 thinking；显式 Anthropic thinking 投影保留 signature。
 - `context_summary` 按 `effective_seq` 出现在被压缩范围原位置。
 - Task / Checkpoint DB 读写。
 - task count / active task count 刷新。
 - SQLite-backed todo 读写。
-- `session_consolidations.last_consolidated_seq` 写入或迁移存在性。
+- `sessions.next_item_seq` 并发 append 分配无重复 seq。
+- `session_consolidations.last_seen_item_seq` / `last_consolidated_source_seq` 写入或迁移存在性。
 - BaseAgent 不再固定 `limit=20`。
 - Stalled watchdog 通过 `SessionStore` 查询和更新 activity。
 - spawn/resume/delegate 子代理流程不再依赖 `IndexStore`。
@@ -540,6 +631,7 @@ ruff check sebastian/ tests/
 - 删除 `IndexStore` 和旧 `EpisodicMemory` 会牵动较多调用点，但这是清理旧存储模型的一部分，不应推迟。
 - Provider context 投影是高风险点。Anthropic/OpenAI 的 tool call/result 顺序和 ID 对应必须用测试锁住。
 - `context_summary` 插入时的 `seq` 是真实写入顺序，`effective_seq` 是上下文排序顺序。所有上下文视图必须使用 `effective_seq`，审计视图可使用真实 `seq`。
+- `sessions.next_item_seq` 是 seq 分配的事实源；任何绕过它直接写 `session_items` 的路径都会破坏顺序，必须禁止。
 - `SessionStore` 门面应保持小而稳定，SQL 细节分散到 records/timeline/context/tasks helper 中，避免形成新的巨型文件。
 
 ## 验收标准
