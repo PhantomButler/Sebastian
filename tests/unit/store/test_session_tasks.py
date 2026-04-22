@@ -102,3 +102,15 @@ async def test_append_and_get_checkpoints(store, session_in_db):
     assert len(checkpoints) == 1
     assert checkpoints[0].step == 1
     assert checkpoints[0].data == {"progress": 50}
+
+
+@pytest.mark.asyncio
+async def test_update_status_nonexistent_task_raises(store, session_in_db):
+    """update_task_status 传入不存在的 task_id 应抛出 ValueError。
+
+    D2: 当前实现静默 return，CLAUDE.md 要求对可能失败的操作抛出具体异常。
+    """
+    with pytest.raises(ValueError, match="Task not found"):
+        await store.update_task_status(
+            session_in_db.id, "nonexistent_task_id", TaskStatus.COMPLETED, "sebastian"
+        )

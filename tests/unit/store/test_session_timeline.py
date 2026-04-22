@@ -293,3 +293,95 @@ async def test_get_timeline_items_orders_by_effective_seq_then_seq(store, sessio
         f"context_summary (effective_seq=3) should appear before seq=4 item; "
         f"got order: {[(item['kind'], item['seq']) for item in all_items]}"
     )
+
+
+@pytest.mark.asyncio
+async def test_get_context_with_thinking_excludes_system_event(store, session_in_db):
+    """get_context_messages include_thinking=True 不应将 system_event 混入投影。
+
+    A2: get_context_items_with_thinking 的 excluded 集合遗漏了 system_event，
+    导致 system_event 打断同一 turn 内 thinking + assistant_message 的分组，
+    产生两条 assistant 消息而非一条。
+    """
+    items = [
+        {"kind": "user_message", "role": "user", "content": "hi",
+         "turn_id": "t1", "provider_call_index": 0, "block_index": 0},
+        {"kind": "thinking", "role": "assistant", "content": "thoughts",
+         "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
+         "payload": {"signature": "sig1"}},
+        # system_event 不属于 LLM 上下文，不应出现在任何 context 视图
+        {"kind": "system_event", "role": "system", "content": "internal marker"},
+        {"kind": "assistant_message", "role": "assistant", "content": "reply",
+         "turn_id": "t1", "provider_call_index": 0, "block_index": 2},
+    ]
+    await store.append_timeline_items(session_in_db.id, "sebastian", items)
+
+    msgs = await store.get_context_messages(
+        session_in_db.id, "sebastian", "anthropic", include_thinking=True
+    )
+
+    # system_event 内容不应出现在任何 message 中
+    assert "internal marker" not in str(msgs), "system_event leaked into context messages"
+
+    # thinking 和 assistant_message 同属 t1/pci=0，应合并在同一 assistant 消息里
+    asst_msgs = [m for m in msgs if m.get("role") == "assistant"]
+    assert len(asst_msgs) == 1, (
+        f"system_event broke assistant grouping; expected 1 assistant msg, got {len(asst_msgs)}: {asst_msgs}"
+    )
+    content = asst_msgs[0].get("content", [])
+    assert isinstance(content, list), "Assistant content should be a block list"
+    block_types = [b.get("type") for b in content]
+    assert "thinking" in block_types, f"thinking block missing: {block_types}"
+    assert "text" in block_types, f"text block missing: {block_types}"
+
+
+@pytest.mark.asyncio
+async def test_effective_seq_zero_preserved(store, session_in_db):
+    """effective_seq=0 写入后应保留 0，不被 `or seq` 替换。
+
+    C1: `eff_seq = item.get('effective_seq') or seq` 当 effective_seq=0 时
+    erroneously 回退到 seq；应改为 is None 判断。
+    """
+    items = [
+        {
+            "kind": "context_summary", "role": None, "content": "summary",
+            "effective_seq": 0,
+            "payload": {"source_seq_start": 0, "source_seq_end": 0},
+        }
+    ]
+    await store.append_timeline_items(session_in_db.id, "sebastian", items)
+
+    all_items = await store.get_timeline_items(session_in_db.id, "sebastian")
+    summary = next(i for i in all_items if i["kind"] == "context_summary")
+    assert summary["effective_seq"] == 0, (
+        f"effective_seq should be 0, got {summary['effective_seq']} "
+        f"(likely overridden by `or seq` falsy check)"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_recent_items_orders_by_effective_seq(store, session_in_db):
+    """get_recent_timeline_items 含 context_summary 时按 (effective_seq, seq) 排序。
+
+    C2: 当前仅按 seq.desc() 取 top-N 再 sort(seq)，
+    context_summary 的 effective_seq 被忽略，顺序与 get_context_items 不一致。
+    """
+    base_items = [
+        {"kind": "user_message", "role": "user", "content": f"msg{i}"}
+        for i in range(5)
+    ]
+    await store.append_timeline_items(session_in_db.id, "sebastian", base_items)
+
+    # context_summary: seq=6, effective_seq=2（逻辑上属于 seq=2 位置）
+    summary = {
+        "kind": "context_summary", "role": None, "content": "summary",
+        "effective_seq": 2,
+        "payload": {"source_seq_start": 1, "source_seq_end": 2},
+    }
+    await store.append_timeline_items(session_in_db.id, "sebastian", [summary])
+
+    recent = await store.get_recent_timeline_items(session_in_db.id, "sebastian", limit=6)
+    effective_seqs = [i["effective_seq"] for i in recent]
+    assert effective_seqs == sorted(effective_seqs), (
+        f"get_recent_items not sorted by effective_seq; got: {effective_seqs}"
+    )

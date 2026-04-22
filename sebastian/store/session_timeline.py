@@ -150,7 +150,8 @@ class SessionTimelineStore:
                         inserted: list[dict[str, Any]] = []
                         for i, item in enumerate(items):
                             seq = start_seq + i
-                            eff_seq = item.get("effective_seq") or seq
+                            raw_eff = item.get("effective_seq")
+                            eff_seq = seq if raw_eff is None else raw_eff
                             record = SessionItemRecord(
                                 id=str(uuid4()),
                                 session_id=session_id,
@@ -300,12 +301,12 @@ class SessionTimelineStore:
                     SessionItemRecord.agent_type == agent_type,
                     SessionItemRecord.archived.is_(False),
                 )
-                .order_by(SessionItemRecord.seq.desc())
+                .order_by(SessionItemRecord.effective_seq.desc(), SessionItemRecord.seq.desc())
                 .limit(limit)
             )
             rows = list(result.scalars())
         # reverse to get ascending order
-        rows.sort(key=lambda r: r.seq)
+        rows.sort(key=lambda r: (r.effective_seq, r.seq))
         return [_record_to_dict(r) for r in rows]
 
     async def get_context_items_with_thinking(
@@ -317,7 +318,7 @@ class SessionTimelineStore:
 
         raw_block is still excluded.
         """
-        excluded = frozenset({"raw_block"})
+        excluded = _CONTEXT_EXCLUDED_KINDS - {"thinking"}
         async with self._db() as db:
             result = await db.execute(
                 select(SessionItemRecord)

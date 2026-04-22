@@ -44,7 +44,9 @@ class SessionRecordsStore:
             )
             record = result.scalar_one_or_none()
             if record is None:
-                return
+                raise ValueError(
+                    f"Session not found: session_id={session.id}, agent_type={session.agent_type}"
+                )
             _apply_session_to_record(session, record)
             await db.commit()
 

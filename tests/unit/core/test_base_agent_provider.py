@@ -234,3 +234,135 @@ async def test_cancel_session_flushes_pending_blocks() -> None:
     )
     assert thinking_block["provider_call_index"] == 0
     assert thinking_block["block_index"] == 0
+
+
+@pytest.mark.asyncio
+async def test_tool_call_block_uses_canonical_field_names() -> None:
+    """ToolCallReady → blocks 中的 tool 记录使用 tool_call_id/tool_name/input(dict)。
+
+    A1: 写入端字段名必须与 session_context.py 读取端一致。
+    """
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.store.session_store import SessionStore
+
+    provider = MockLLMProvider(
+        [
+            ToolCallBlockStart(block_id="b0_0", tool_id="toolu_42", name="search"),
+            ToolCallReady(block_id="b0_0", tool_id="toolu_42", name="search", inputs={"q": "test"}),
+            ProviderCallEnd(stop_reason="tool_use"),
+        ],
+        [
+            TextBlockStart(block_id="b1_0"),
+            TextDelta(block_id="b1_0", delta="done"),
+            TextBlockStop(block_id="b1_0", text="done"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ],
+    )
+
+    class TestAgent(BaseAgent):
+        name = "test"
+        system_prompt = "You are test."
+
+    session_store = MagicMock(spec=SessionStore)
+    session_store.get_session_for_agent_type = AsyncMock(return_value=MagicMock())
+    session_store.update_activity = AsyncMock()
+    session_store.get_messages = AsyncMock(return_value=[])
+    session_store.append_message = AsyncMock()
+
+    gate = MagicMock()
+    tr = MagicMock()
+    tr.ok = True
+    tr.output = "search_result"
+    tr.display = "search_result"
+    tr.empty_hint = None
+    tr.error = None
+    gate.call = AsyncMock(return_value=tr)
+    gate.get_tool_specs = MagicMock(return_value=[])
+    gate.get_skill_specs = MagicMock(return_value=[])
+
+    agent = TestAgent(gate=gate, session_store=session_store, provider=provider)
+    await agent.run("hi", session_id="sess_a1_fields")
+
+    calls = session_store.append_message.call_args_list
+    assistant_calls = [c for c in calls if c.args[1] == "assistant"]
+    blocks = assistant_calls[-1].kwargs.get("blocks") or []
+    tool_blocks = [b for b in blocks if b.get("type") == "tool"]
+    assert len(tool_blocks) == 1, f"Expected 1 tool block, got: {tool_blocks}"
+    tb = tool_blocks[0]
+
+    # 字段名必须是 tool_call_id（不是 tool_id）
+    assert "tool_call_id" in tb, f"Expected 'tool_call_id', got keys: {list(tb.keys())}"
+    assert "tool_id" not in tb, f"Unexpected 'tool_id' key; should be 'tool_call_id'"
+    assert tb["tool_call_id"] == "toolu_42"
+
+    # 字段名必须是 tool_name（不是 name）
+    assert "tool_name" in tb, f"Expected 'tool_name', got keys: {list(tb.keys())}"
+    assert "name" not in tb, f"Unexpected 'name' key; should be 'tool_name'"
+    assert tb["tool_name"] == "search"
+
+    # input 必须是 dict，不是 JSON 字符串
+    assert isinstance(tb["input"], dict), (
+        f"input should be dict, got {type(tb['input'])}: {tb['input']!r}"
+    )
+    assert tb["input"] == {"q": "test"}
+
+
+@pytest.mark.asyncio
+async def test_turn_done_flushes_tool_result_block() -> None:
+    """TurnDone flush 的 blocks 中必须包含 type=tool_result 记录。
+
+    B1: spec 要求 tool_result 作为独立 item 入库，供会话恢复时重建 LLM 上下文。
+    """
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.store.session_store import SessionStore
+
+    provider = MockLLMProvider(
+        [
+            ToolCallBlockStart(block_id="b0_0", tool_id="toolu_99", name="calc"),
+            ToolCallReady(block_id="b0_0", tool_id="toolu_99", name="calc", inputs={"x": 1}),
+            ProviderCallEnd(stop_reason="tool_use"),
+        ],
+        [
+            TextBlockStart(block_id="b1_0"),
+            TextDelta(block_id="b1_0", delta="42"),
+            TextBlockStop(block_id="b1_0", text="42"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ],
+    )
+
+    class TestAgent(BaseAgent):
+        name = "test"
+        system_prompt = "You are test."
+
+    session_store = MagicMock(spec=SessionStore)
+    session_store.get_session_for_agent_type = AsyncMock(return_value=MagicMock())
+    session_store.update_activity = AsyncMock()
+    session_store.get_messages = AsyncMock(return_value=[])
+    session_store.append_message = AsyncMock()
+
+    gate = MagicMock()
+    tr = MagicMock()
+    tr.ok = True
+    tr.output = "42"
+    tr.display = "Result: 42"
+    tr.empty_hint = None
+    tr.error = None
+    gate.call = AsyncMock(return_value=tr)
+    gate.get_tool_specs = MagicMock(return_value=[])
+    gate.get_skill_specs = MagicMock(return_value=[])
+
+    agent = TestAgent(gate=gate, session_store=session_store, provider=provider)
+    await agent.run("calc 1", session_id="sess_b1_result")
+
+    calls = session_store.append_message.call_args_list
+    assistant_calls = [c for c in calls if c.args[1] == "assistant"]
+    blocks = assistant_calls[-1].kwargs.get("blocks") or []
+
+    # B1: 必须存在 type=tool_result 的 block
+    result_blocks = [b for b in blocks if b.get("type") == "tool_result"]
+    assert len(result_blocks) >= 1, (
+        f"Expected ≥1 tool_result block, got block types: {[b.get('type') for b in blocks]}"
+    )
+    rb = result_blocks[0]
+    assert rb.get("tool_call_id") == "toolu_99", f"tool_call_id mismatch: {rb}"
+    assert rb.get("model_content") == "42", f"model_content should be '42': {rb}"

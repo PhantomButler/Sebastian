@@ -160,3 +160,16 @@ async def test_update_activity_transitions_stalled_to_active(sqlite_session_fact
 
     loaded = await store.get_session(session.id, "sebastian")
     assert loaded.status == SessionStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_update_nonexistent_session_raises(sqlite_session_factory):
+    """update_session 传入不存在的 session 应抛出 ValueError。
+
+    D1: 当前实现静默 return，CLAUDE.md 要求对可能失败的操作抛出具体异常。
+    """
+    store = _make_session_store(sqlite_session_factory)
+    ghost = Session(agent_type="sebastian", title="Ghost")
+    # 未 create，直接 update
+    with pytest.raises(ValueError, match="Session not found"):
+        await store.update_session(ghost)

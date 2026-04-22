@@ -84,7 +84,10 @@ class SessionTaskStore:
             )
             record = result.scalar_one_or_none()
             if record is None:
-                return
+                raise ValueError(
+                    f"Task not found: task_id={task_id},"
+                    f" session_id={session_id}, agent_type={agent_type}"
+                )
             record.status = status.value
             record.updated_at = datetime.now(UTC)
             if status in _TERMINAL_STATUSES:

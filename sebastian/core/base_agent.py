@@ -4,7 +4,6 @@ import asyncio
 import dataclasses
 import functools
 import inspect
-import json
 import logging
 import time
 from abc import ABC
@@ -581,9 +580,9 @@ class BaseAgent(ABC):
                     )
                     record: dict[str, Any] = {
                         "type": "tool",
-                        "tool_id": event.tool_id,
-                        "name": event.name,
-                        "input": json.dumps(event.inputs, default=str),
+                        "tool_call_id": event.tool_id,
+                        "tool_name": event.name,
+                        "input": event.inputs,
                         "status": "failed",
                         "turn_id": turn_id,
                         "provider_call_index": current_pci,
@@ -657,6 +656,24 @@ class BaseAgent(ABC):
                                     "error": result.error,
                                 },
                             )
+                        model_content = result.output or result.error or ""
+                        display_content = (
+                            _format_tool_display(result) if result.ok else (result.error or "")
+                        )
+                        tool_result_block: dict[str, Any] = {
+                            "type": "tool_result",
+                            "tool_call_id": event.tool_id,
+                            "tool_name": event.name,
+                            "model_content": model_content,
+                            "display": display_content,
+                            "ok": result.ok,
+                            "turn_id": turn_id,
+                            "provider_call_index": current_pci,
+                            "block_index": block_index,
+                        }
+                        block_index += 1
+                        assistant_blocks.append(tool_result_block)
+                        self._pending_blocks[session_id] = assistant_blocks
                         send_value = StreamToolResult(
                             tool_id=event.tool_id,
                             name=event.name,
