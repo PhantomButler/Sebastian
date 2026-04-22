@@ -21,6 +21,11 @@
 - `MemoryConsolidationScheduler.drain()` 公开 API 用于测试与优雅关停
 
 ### Changed
+- Session history、任务、检查点和 per-session todos 现在使用 SQLite 作为主存储，通过 `SessionStore` timeline 视图访问
+- `BaseAgent` 改用 `SessionStore.get_context_messages()` 获取对话上下文，`append_message()` 写入消息，移除旧的 `EpisodicMemory` 主链路
+- Gateway `GET /sessions/{id}` 现在同时返回 `timeline_items`（规范 timeline 格式）和 `messages`（向后兼容投影）
+- `IndexStore` 从运行时移除（标记为 deprecated），session 列表和活跃子 session 查询改用 `SessionStore`
+- Memory consolidation 现在持久化 `last_seen_item_seq` 和 `last_consolidated_source_seq` 游标字段
 - `MemoryDecisionType` 枚举值统一为大写（ADD/SUPERSEDE/MERGE/EXPIRE/DISCARD）
 - `MemorySummary.scope` 改为 `MemoryScope` 枚举
 - `RelationCandidateRecord` 补齐 `valid_from` / `valid_until` / `updated_at` 字段
