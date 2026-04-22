@@ -18,9 +18,12 @@ if TYPE_CHECKING:
     from sebastian.llm.provider import LLMProvider
     from sebastian.llm.registry import LLMProviderRegistry
 
+from ulid import ULID
+
 from sebastian.config import settings
 from sebastian.core.agent_loop import AgentLoop
 from sebastian.core.stream_events import (
+    ProviderCallStart,
     TextBlockStart,
     TextBlockStop,
     TextDelta,
@@ -128,6 +131,7 @@ class BaseAgent(ABC):
         # session_id → asyncio.TimerHandle for pending-cancel TTL cleanup
         self._pending_cancel_timers: dict[str, asyncio.TimerHandle] = {}
         self._partial_buffer: dict[str, str] = {}
+        self._pending_blocks: dict[str, list[dict[str, Any]]] = {}
 
         # instance-level overrides class-level defaults
         if allowed_tools is not None:
@@ -436,14 +440,16 @@ class BaseAgent(ABC):
             if was_cancelled:
                 assert cancel_intent is not None
                 self._completed_cancel_intents[session_id] = cancel_intent
+                pending_blocks = self._pending_blocks.pop(session_id, [])
                 partial = self._partial_buffer.pop(session_id, "")
-                if partial:
+                if partial or pending_blocks:
                     try:
                         await self._session_store.append_message(
                             session_id,
                             "assistant",
                             (f"{partial}\n\n[用户中断]" if cancel_intent == "cancel" else partial),
                             agent_type=agent_context,
+                            blocks=pending_blocks if pending_blocks else None,
                         )
                     except Exception:
                         logger.warning("Failed to flush partial text on cancel", exc_info=True)
@@ -466,6 +472,7 @@ class BaseAgent(ABC):
                 await self._publish(session_id, EventType.TURN_RESPONSE, {})
             else:
                 self._partial_buffer.pop(session_id, None)
+                self._pending_blocks.pop(session_id, None)
 
     async def _stream_inner(
         self,
@@ -477,6 +484,9 @@ class BaseAgent(ABC):
     ) -> str:
         full_text = ""
         assistant_blocks: list[dict[str, Any]] = []
+        turn_id = str(ULID())
+        current_pci: int = 0
+        block_index: int = 0
         todo_section = await self._session_todos_section(session_id, agent_context)
         last_user_msg = messages[-1].get("content", "") if messages else ""
         memory_section = await self._memory_section(
@@ -502,6 +512,11 @@ class BaseAgent(ABC):
                     return full_text
                 send_value = None
 
+                if isinstance(event, ProviderCallStart):
+                    current_pci = event.index
+                    block_index = 0
+                    continue
+
                 if isinstance(event, TextDelta):
                     full_text += event.delta
                     self._partial_buffer[session_id] = full_text
@@ -526,15 +541,28 @@ class BaseAgent(ABC):
                     block: dict[str, Any] = {
                         "type": "thinking",
                         "thinking": event.thinking,
+                        "turn_id": turn_id,
+                        "provider_call_index": current_pci,
+                        "block_index": block_index,
                     }
                     if event.signature is not None:
                         block["signature"] = event.signature
                     if event.duration_ms is not None:
                         block["duration_ms"] = event.duration_ms
                     assistant_blocks.append(block)
+                    block_index += 1
+                    self._pending_blocks[session_id] = assistant_blocks
 
                 if isinstance(event, TextBlockStop):
-                    assistant_blocks.append({"type": "text", "text": event.text})
+                    assistant_blocks.append({
+                        "type": "text",
+                        "text": event.text,
+                        "turn_id": turn_id,
+                        "provider_call_index": current_pci,
+                        "block_index": block_index,
+                    })
+                    block_index += 1
+                    self._pending_blocks[session_id] = assistant_blocks
 
                 if isinstance(event, ToolCallReady):
                     await self._publish(
@@ -557,8 +585,13 @@ class BaseAgent(ABC):
                         "name": event.name,
                         "input": json.dumps(event.inputs, default=str),
                         "status": "failed",
+                        "turn_id": turn_id,
+                        "provider_call_index": current_pci,
+                        "block_index": block_index,
                     }
                     assistant_blocks.append(record)
+                    block_index += 1
+                    self._pending_blocks[session_id] = assistant_blocks
                     await self._update_activity(session_id, agent_context)
                     try:
                         context = ToolCallContext(
@@ -635,6 +668,7 @@ class BaseAgent(ABC):
                     continue
 
                 if isinstance(event, TurnDone):
+                    self._pending_blocks.pop(session_id, None)
                     await self._session_store.append_message(
                         session_id,
                         "assistant",
@@ -656,14 +690,18 @@ class BaseAgent(ABC):
             # When cancelled via cancel_session(), the finally block in run_streaming
             # handles episodic flush. Only save here for external cancellations.
             if session_id not in self._cancel_requested:
-                if full_text:
-                    await self._session_store.append_message(
-                        session_id,
-                        "assistant",
-                        full_text,
-                        agent_type=agent_context,
-                        blocks=assistant_blocks if assistant_blocks else None,
-                    )
+                self._pending_blocks.pop(session_id, None)
+                if full_text or assistant_blocks:
+                    try:
+                        await self._session_store.append_message(
+                            session_id,
+                            "assistant",
+                            full_text,
+                            agent_type=agent_context,
+                            blocks=assistant_blocks if assistant_blocks else None,
+                        )
+                    except Exception:
+                        logger.warning("Failed to flush blocks on external cancel", exc_info=True)
                 await self._publish(
                     session_id,
                     EventType.TURN_INTERRUPTED,

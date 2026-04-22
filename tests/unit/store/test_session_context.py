@@ -221,3 +221,38 @@ async def test_legacy_messages_role_content_only(store, session_in_db):
     # 不含 tool_calls 字段
     for msg in legacy:
         assert "tool_calls" not in msg
+
+
+def test_openai_mixed_tool_and_text_single_assistant_message():
+    """同一 turn 含 tool_calls 和文本时，OpenAI 投影只产生一条 assistant 消息。"""
+    from sebastian.store.session_context import build_context_messages
+
+    items = [
+        {
+            "kind": "assistant_message", "role": "assistant",
+            "content": "I'll use the tool.",
+            "turn_id": "t1", "provider_call_index": 0, "block_index": 0,
+            "seq": 1, "effective_seq": 1, "archived": False,
+            "payload": {},
+        },
+        {
+            "kind": "tool_call", "role": "assistant",
+            "content": '{"q": "weather"}',
+            "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
+            "seq": 2, "effective_seq": 2, "archived": False,
+            "payload": {
+                "tool_call_id": "tc1",
+                "tool_name": "search",
+                "input": {"q": "weather"},
+            },
+        },
+    ]
+    messages = build_context_messages(items, provider_format="openai")
+
+    assistant_msgs = [m for m in messages if m.get("role") == "assistant"]
+    assert len(assistant_msgs) == 1, (
+        f"Expected 1 assistant message, got {len(assistant_msgs)}: {assistant_msgs}"
+    )
+    msg = assistant_msgs[0]
+    assert msg.get("tool_calls"), "Should have tool_calls"
+    assert msg.get("content") == "I'll use the tool.", "Text should be in content field"

@@ -299,9 +299,15 @@ def _build_openai(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         ),
                     },
                 })
+            # Merge text into content of the same assistant message
+            # (OpenAI allows content + tool_calls in a single message)
+            text_content = (
+                " ".join(i.get("content", "") for i in text_items if i.get("content")).strip()
+                or None
+            )
             messages.append({
                 "role": "assistant",
-                "content": None,
+                "content": text_content,
                 "tool_calls": tool_calls,
             })
         elif text_items:
@@ -316,13 +322,6 @@ def _build_openai(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "tool_call_id": payload.get("tool_call_id", ""),
                 "content": payload.get("model_content", item.get("content", "")),
             })
-
-        # Emit any plain text from an assistant_message in a mixed group
-        # (after tool_calls were already emitted above)
-        if tool_calls_items and text_items:
-            content = " ".join(i.get("content", "") for i in text_items if i.get("content"))
-            if content:
-                messages.append({"role": "assistant", "content": content})
 
     return messages
 

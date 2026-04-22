@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import weakref
 from datetime import UTC, datetime
@@ -8,6 +9,7 @@ from typing import Any, Required, TypedDict
 from uuid import uuid4
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sebastian.store.models import SessionItemRecord
@@ -15,7 +17,7 @@ from sebastian.store.models import SessionItemRecord
 logger = logging.getLogger(__name__)
 
 # kind 值不进入"上下文窗口"投影的黑名单
-_CONTEXT_EXCLUDED_KINDS = frozenset({"thinking", "raw_block"})
+_CONTEXT_EXCLUDED_KINDS = frozenset({"thinking", "raw_block", "system_event"})
 
 # role → kind 转换规则（无 blocks 时）
 _ROLE_TO_KIND: dict[str, str] = {
@@ -119,53 +121,68 @@ class SessionTimelineStore:
 
         seq 分配通过 UPDATE...RETURNING 在单语句内原子完成，
         无需先 SELECT 再 UPDATE，正确性不依赖 asyncio.Lock。
+        遇到 IntegrityError（SQLite WAL 边缘情况）最多重试 3 次。
         """
         n = len(items)
         now = datetime.now(UTC)
 
-        async with self._db() as db:
-            async with db.begin():
-                # 原子分配 seq：UPDATE...RETURNING 在单语句内完成。
-                # SQLite 3.35+ 支持 RETURNING；aiosqlite 完全支持。
-                result = await db.execute(
-                    text(
-                        "UPDATE sessions SET next_item_seq = next_item_seq + :n"
-                        " WHERE id = :sid AND agent_type = :at"
-                        " RETURNING next_item_seq - :n"
-                    ),
-                    {"n": n, "sid": session_id, "at": agent_type},
+        for attempt in range(3):
+            try:
+                async with self._db() as db:
+                    async with db.begin():
+                        # 原子分配 seq：UPDATE...RETURNING 在单语句内完成。
+                        # SQLite 3.35+ 支持 RETURNING；aiosqlite 完全支持。
+                        result = await db.execute(
+                            text(
+                                "UPDATE sessions SET next_item_seq = next_item_seq + :n"
+                                " WHERE id = :sid AND agent_type = :at"
+                                " RETURNING next_item_seq - :n"
+                            ),
+                            {"n": n, "sid": session_id, "at": agent_type},
+                        )
+                        row = result.first()
+                        if row is None:
+                            raise ValueError(
+                                f"Session {session_id!r} (agent={agent_type!r}) not found"
+                            )
+                        start_seq: int = row[0]
+
+                        inserted: list[dict[str, Any]] = []
+                        for i, item in enumerate(items):
+                            seq = start_seq + i
+                            eff_seq = item.get("effective_seq") or seq
+                            record = SessionItemRecord(
+                                id=str(uuid4()),
+                                session_id=session_id,
+                                agent_type=agent_type,
+                                seq=seq,
+                                kind=item.get("kind", "raw_block"),
+                                role=item.get("role"),
+                                content=item.get("content", ""),
+                                payload=item.get("payload", {}),
+                                archived=item.get("archived", False),
+                                turn_id=item.get("turn_id"),
+                                provider_call_index=item.get("provider_call_index"),
+                                block_index=item.get("block_index"),
+                                effective_seq=eff_seq,
+                                created_at=now,
+                            )
+                            db.add(record)
+                            inserted.append(_record_to_dict(record))
+                return inserted
+            except IntegrityError:
+                if attempt == 2:
+                    logger.error(
+                        "seq IntegrityError after 3 attempts for session %s, giving up",
+                        session_id,
+                    )
+                    raise
+                logger.warning(
+                    "seq conflict on attempt %d for session %s, retrying",
+                    attempt + 1,
+                    session_id,
                 )
-                row = result.first()
-                if row is None:
-                    raise ValueError(
-                        f"Session {session_id!r} (agent={agent_type!r}) not found"
-                    )
-                start_seq: int = row[0]
-
-                inserted: list[dict[str, Any]] = []
-                for i, item in enumerate(items):
-                    seq = start_seq + i
-                    eff_seq = item.get("effective_seq") or seq
-                    record = SessionItemRecord(
-                        id=str(uuid4()),
-                        session_id=session_id,
-                        agent_type=agent_type,
-                        seq=seq,
-                        kind=item.get("kind", "raw_block"),
-                        role=item.get("role"),
-                        content=item.get("content", ""),
-                        payload=item.get("payload", {}),
-                        archived=item.get("archived", False),
-                        turn_id=item.get("turn_id"),
-                        provider_call_index=item.get("provider_call_index"),
-                        block_index=item.get("block_index"),
-                        effective_seq=eff_seq,
-                        created_at=now,
-                    )
-                    db.add(record)
-                    inserted.append(_record_to_dict(record))
-
-        return inserted
+        raise RuntimeError("unreachable")
 
     def _message_to_items(
         self,
@@ -183,13 +200,23 @@ class SessionTimelineStore:
         for idx, block in enumerate(blocks):
             block_type = block.get("type", "")
             kind = _BLOCK_TYPE_TO_KIND.get(block_type, "raw_block")
-            block_content = block.get("text") or block.get("content") or ""
+
+            if block_type in ("tool_use", "tool"):
+                block_content = json.dumps(block.get("input", {}), default=str)
+            else:
+                block_content = block.get("text") or block.get("content") or ""
+
             result.append({
                 "kind": kind,
                 "role": role,
                 "content": block_content,
-                "block_index": idx,
-                "payload": {k: v for k, v in block.items() if k not in ("text", "content")},
+                "turn_id": block.get("turn_id"),
+                "provider_call_index": block.get("provider_call_index"),
+                "block_index": block.get("block_index", idx),
+                "payload": {
+                    k: v for k, v in block.items()
+                    if k not in ("text", "content", "turn_id", "provider_call_index", "block_index")
+                },
             })
         return result
 

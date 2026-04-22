@@ -8,6 +8,7 @@ import pytest
 from sebastian.core.stream_events import (
     LLMStreamEvent,
     ProviderCallEnd,
+    ProviderCallStart,
     TextBlockStart,
     TextBlockStop,
     TextDelta,
@@ -84,6 +85,7 @@ async def test_agent_loop_streams_thinking_and_text_then_turn_done() -> None:
     )
 
     assert events == [
+        ProviderCallStart(index=0),
         ThinkingBlockStart(block_id="b0_0"),
         ThinkingDelta(block_id="b0_0", delta="Need to inspect."),
         ThinkingBlockStop(block_id="b0_0", thinking="Need to inspect."),
@@ -112,6 +114,7 @@ async def test_agent_loop_ends_after_single_no_tool_turn() -> None:
     loop = AgentLoop(provider, CapabilityRegistry())
     gen = loop.stream(system_prompt="sys", messages=[{"role": "user", "content": "Hi"}])
 
+    assert await gen.asend(None) == ProviderCallStart(index=0)
     assert await gen.asend(None) == TextBlockStart(block_id="b0_0")
     assert await gen.asend(None) == TextDelta(block_id="b0_0", delta="Done.")
     assert await gen.asend(None) == TextBlockStop(block_id="b0_0", text="Done.")
@@ -166,6 +169,7 @@ async def test_agent_loop_accepts_injected_tool_result_and_continues() -> None:
         messages=[{"role": "user", "content": "What's the weather?"}],
     )
 
+    assert await gen.asend(None) == ProviderCallStart(index=0)
     assert await gen.asend(None) == TextBlockStart(block_id="b0_0")
     assert await gen.asend(None) == TextDelta(block_id="b0_0", delta="Checking...")
     assert await gen.asend(None) == TextBlockStop(block_id="b0_0", text="Checking...")
@@ -179,7 +183,8 @@ async def test_agent_loop_accepts_injected_tool_result_and_continues() -> None:
     injected = ToolResult(
         tool_id="toolu_1", name="weather_lookup", ok=True, output="Sunny", error=None
     )
-    assert await gen.asend(injected) == TextBlockStart(block_id="b1_0")
+    assert await gen.asend(injected) == ProviderCallStart(index=1)
+    assert await gen.asend(None) == TextBlockStart(block_id="b1_0")
     assert await gen.asend(None) == TextDelta(block_id="b1_0", delta="It is sunny.")
     assert await gen.asend(None) == TextBlockStop(block_id="b1_0", text="It is sunny.")
     assert await gen.asend(None) == TurnDone(full_text="Checking...It is sunny.")
@@ -214,6 +219,7 @@ async def test_agent_loop_rejects_missing_tool_result_injection() -> None:
     loop = AgentLoop(provider, MagicMock(get_all_tool_specs=MagicMock(return_value=[])))
     gen = loop.stream(system_prompt="sys", messages=[{"role": "user", "content": "weather"}])
 
+    assert await gen.asend(None) == ProviderCallStart(index=0)
     assert await gen.asend(None) == ToolCallBlockStart(
         block_id="b0_0", tool_id="toolu_1", name="weather_lookup"
     )
@@ -247,6 +253,7 @@ async def test_agent_loop_rejects_mismatched_tool_result_injection() -> None:
     loop = AgentLoop(provider, MagicMock(get_all_tool_specs=MagicMock(return_value=[])))
     gen = loop.stream(system_prompt="sys", messages=[{"role": "user", "content": "weather"}])
 
+    assert await gen.asend(None) == ProviderCallStart(index=0)
     assert await gen.asend(None) == ToolCallBlockStart(
         block_id="b0_0", tool_id="toolu_1", name="weather_lookup"
     )
@@ -288,6 +295,7 @@ async def test_agent_loop_formats_failed_tool_result_for_next_turn() -> None:
     loop = AgentLoop(provider, MagicMock(get_all_tool_specs=MagicMock(return_value=[])))
     gen = loop.stream(system_prompt="sys", messages=[{"role": "user", "content": "weather"}])
 
+    assert await gen.asend(None) == ProviderCallStart(index=0)
     assert await gen.asend(None) == ToolCallBlockStart(
         block_id="b0_0", tool_id="toolu_1", name="weather_lookup"
     )
@@ -298,7 +306,8 @@ async def test_agent_loop_formats_failed_tool_result_for_next_turn() -> None:
         ToolResult(
             tool_id="toolu_1", name="weather_lookup", ok=False, output=None, error="network down"
         )
-    ) == TextBlockStart(block_id="b1_0")
+    ) == ProviderCallStart(index=1)
+    assert await gen.asend(None) == TextBlockStart(block_id="b1_0")
     assert await gen.asend(None) == TextDelta(block_id="b1_0", delta="Fallback.")
     assert await gen.asend(None) == TextBlockStop(block_id="b1_0", text="Fallback.")
     assert await gen.asend(None) == TurnDone(full_text="Fallback.")
@@ -461,3 +470,29 @@ async def test_agent_loop_none_allowed_tools_means_unrestricted() -> None:
     await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
 
     registry.get_callable_specs.assert_called_once_with(allowed_tools=None, allowed_skills=None)
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_yields_provider_call_start() -> None:
+    """AgentLoop 每次 provider call 前 yield ProviderCallStart(index=N)。"""
+    from sebastian.capabilities.registry import CapabilityRegistry
+    from sebastian.core.agent_loop import AgentLoop
+    from sebastian.core.stream_events import ProviderCallStart
+
+    provider = MockLLMProvider(
+        [
+            TextBlockStart(block_id="b0_0"),
+            TextDelta(block_id="b0_0", delta="Hello!"),
+            TextBlockStop(block_id="b0_0", text="Hello!"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ]
+    )
+
+    loop = AgentLoop(provider, CapabilityRegistry())
+    events = await _collect(
+        loop.stream(system_prompt="sys", messages=[{"role": "user", "content": "hi"}])
+    )
+
+    pcs = [e for e in events if isinstance(e, ProviderCallStart)]
+    assert len(pcs) >= 1
+    assert pcs[0].index == 0
