@@ -242,8 +242,8 @@ class MemoryDecisionLogRecord(Base):
 class SessionConsolidationRecord(Base):
     __tablename__ = "session_consolidations"
 
-    session_id: Mapped[str] = mapped_column(String, primary_key=True)
     agent_type: Mapped[str] = mapped_column(String, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, primary_key=True)
     consolidated_at: Mapped[datetime] = mapped_column(DateTime)
     worker_version: Mapped[str] = mapped_column(String, default="phase_c_v1")
     last_consolidated_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -267,8 +267,8 @@ class AppSettingsRecord(Base):
 class SessionRecord(Base):
     __tablename__ = "sessions"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True)
     agent_type: Mapped[str] = mapped_column(String(100), primary_key=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
     title: Mapped[str] = mapped_column(String, default="")
     goal: Mapped[str] = mapped_column(String, default="")
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
@@ -327,7 +327,7 @@ class SessionItemRecord(Base):
 class SessionTodoRecord(Base):
     __tablename__ = "session_todos"
 
-    session_id: Mapped[str] = mapped_column(String, primary_key=True)
     agent_type: Mapped[str] = mapped_column(String(100), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, primary_key=True)
     todos: Mapped[list[Any]] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))

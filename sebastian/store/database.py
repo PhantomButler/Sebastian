@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.engine import Engine as SyncEngine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -62,6 +63,7 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _apply_idempotent_migrations(conn)
+        await _verify_schema_invariants(conn)   # raises RuntimeError if schema is wrong
     logger.info("Database initialized")
 
 
@@ -109,6 +111,11 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
             await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
             logger.info("Applied migration: %s.%s", table, column)
 
+    # PK 列顺序修复（幂等，仅在 PK 首列错误时重建）
+    await _rebuild_pk_if_needed(conn, "sessions", wrong_first_col="id")
+    await _rebuild_pk_if_needed(conn, "session_consolidations", wrong_first_col="session_id")
+    await _rebuild_pk_if_needed(conn, "session_todos", wrong_first_col="session_id")
+
     await _apply_idempotent_indexes(conn)
     await _drop_obsolete_columns(conn)
     await _normalize_confidence_types(conn)
@@ -152,3 +159,87 @@ async def _drop_obsolete_columns(conn: Any) -> None:
     if result.first():
         await conn.exec_driver_sql("ALTER TABLE agent_llm_bindings DROP COLUMN thinking_adaptive")
         logger.info("Dropped obsolete column: agent_llm_bindings.thinking_adaptive")
+
+
+async def _rebuild_pk_if_needed(
+    conn: Any,
+    table: str,
+    wrong_first_col: str,
+) -> None:
+    """若 table 的复合 PRIMARY KEY 第一列是 wrong_first_col，重建表修正顺序。
+
+    通过 rename + create_all + INSERT SELECT + drop 完成；幂等。
+    """
+    row = await conn.execute(
+        text(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table}'")
+    )
+    sql = (row.scalar() or "").lower()
+    if not sql:
+        return
+    m = re.search(r'primary key\s*\(\s*"?(\w+)"?', sql)
+    if not (m and m.group(1) == wrong_first_col):
+        return
+
+    logger.info("Rebuilding %s to fix PRIMARY KEY column order", table)
+    tmp = f"__{table}_pk_rebuild_tmp"
+    await conn.exec_driver_sql(f"ALTER TABLE {table} RENAME TO {tmp}")
+    await conn.run_sync(
+        lambda sync_conn: Base.metadata.tables[table].create(sync_conn)
+    )
+    pragma = await conn.exec_driver_sql(f"PRAGMA table_info({tmp})")
+    cols_info = pragma.fetchall()
+    cols = ", ".join(row[1] for row in cols_info)  # row[1] is column name
+    await conn.exec_driver_sql(f"INSERT INTO {table} ({cols}) SELECT {cols} FROM {tmp}")
+    await conn.exec_driver_sql(f"DROP TABLE {tmp}")
+    logger.info("Rebuilt %s with correct PRIMARY KEY", table)
+
+
+async def _verify_schema_invariants(conn: Any) -> None:
+    """启动时验证关键 schema 约束，违反时抛出 RuntimeError。"""
+    pk_checks = [
+        ("sessions", r'primary key\s*\(\s*"?(\w+)"?', "agent_type"),
+        ("session_consolidations", r'primary key\s*\(\s*"?(\w+)"?', "agent_type"),
+        ("session_todos", r'primary key\s*\(\s*"?(\w+)"?', "agent_type"),
+    ]
+    for table, pattern, expected_first_col in pk_checks:
+        row = await conn.execute(
+            text(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table}'")
+        )
+        sql = (row.scalar() or "").lower()
+        if not sql:
+            continue  # 表不存在，create_all 负责建立
+        m = re.search(pattern, sql)
+        if not m or m.group(1) != expected_first_col:
+            actual = m.group(1) if m else "unknown"
+            raise RuntimeError(
+                f"Schema invariant violated: {table} PRIMARY KEY first column "
+                f"should be '{expected_first_col}', got '{actual}'. "
+                f"Delete the database and restart to rebuild with correct schema."
+            )
+
+    # session_items UNIQUE 约束检查（按约束名）
+    row = await conn.execute(
+        text(
+            "SELECT sql FROM sqlite_master"
+            " WHERE type='table' AND name='session_items'"
+        )
+    )
+    si_sql = (row.scalar() or "").lower()
+    if si_sql and "uq_session_items_seq" not in si_sql:
+        raise RuntimeError(
+            "Schema invariant violated: session_items missing UNIQUE constraint uq_session_items_seq. "
+            "Delete the database and restart."
+        )
+
+    # ix_session_items_ctx 索引检查
+    row = await conn.execute(
+        text(
+            "SELECT 1 FROM sqlite_master"
+            " WHERE type='index' AND name='ix_session_items_ctx'"
+        )
+    )
+    if si_sql and not row.first():
+        raise RuntimeError(
+            "Schema invariant violated: missing index ix_session_items_ctx on session_items. "
+            "Delete the database and restart."
+        )
