@@ -34,7 +34,7 @@ async def inspect_session(
     if session is None:
         return ToolResult(ok=False, error=f"Session {session_id} 数据不存在")
 
-    messages = await state.session_store.get_messages(
+    items = await state.session_store.get_recent_timeline_items(
         session_id,
         agent_type,
         limit=recent_n,
@@ -47,11 +47,12 @@ async def inspect_session(
         f"Agent: {agent_type}",
         f"最后活动: {session.last_activity_at}",
         "",
-        f"最近 {len(messages)} 条消息：",
+        f"最近 {len(items)} 条 timeline 记录：",
     ]
-    for msg in messages:
-        role = msg.get("role", "?")
-        content = msg.get("content", "")[:200]
-        lines.append(f"  [{role}] {content}")
+    for item in items:
+        kind = item.get("kind", "?")
+        role = item.get("role", "?")
+        content = item.get("content", "")[:200]
+        lines.append(f"  [{kind}/{role}] {content}")
 
     return ToolResult(ok=True, output="\n".join(lines))

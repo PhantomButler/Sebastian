@@ -89,11 +89,10 @@ async def test_resume_waiting_session_appends_instruction_and_restarts() -> None
 
     assert result.ok is True
     assert session.status == SessionStatus.ACTIVE
-    state.session_store.append_message.assert_awaited_once_with(
+    state.session_store.append_timeline_items.assert_awaited_once_with(
         session.id,
-        role="user",
-        content="继续推进修复",
-        agent_type="code",
+        "code",
+        [{"kind": "user_message", "role": "user", "content": "继续推进修复"}],
     )
     state.session_store.update_session.assert_awaited_once_with(session)
     state.event_bus.publish.assert_awaited_once()
@@ -122,7 +121,7 @@ async def test_resume_waiting_session_without_instruction_skips_append() -> None
         result = await resume_agent(agent_type="code", session_id=session.id, instruction="")
 
     assert result.ok is True
-    state.session_store.append_message.assert_not_awaited()
+    state.session_store.append_timeline_items.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -142,7 +141,7 @@ async def test_resume_idle_session_without_instruction_does_not_append_message()
 
     assert result.ok is True
     assert session.status == SessionStatus.ACTIVE
-    state.session_store.append_message.assert_not_awaited()
+    state.session_store.append_timeline_items.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -165,11 +164,10 @@ async def test_resume_idle_session_with_instruction_appends_message() -> None:
         )
 
     assert result.ok is True
-    state.session_store.append_message.assert_awaited_once_with(
+    state.session_store.append_timeline_items.assert_awaited_once_with(
         session.id,
-        role="user",
-        content="继续执行任务",
-        agent_type="code",
+        "code",
+        [{"kind": "user_message", "role": "user", "content": "继续执行任务"}],
     )
 
 
@@ -354,19 +352,22 @@ async def test_resume_waits_until_stop_finishes_writing_pause_message() -> None:
     pause_append_started = asyncio.Event()
     release_pause_append = asyncio.Event()
 
-    async def _append_message(
+    append_calls: list[tuple[str, list[dict]]] = []
+
+    async def _append_timeline_items(
         _session_id: str,
-        *,
-        role: str,
-        content: str,
-        agent_type: str,
-    ) -> None:
-        if role == "system":
+        _agent_type: str,
+        items: list[dict],
+    ) -> list[dict]:
+        first_item = items[0] if items else {}
+        if first_item.get("kind") == "system_event":
             pause_append_started.set()
             await release_pause_append.wait()
+        append_calls.append((_agent_type, items))
+        return items
 
     state.session_store.update_session = AsyncMock(side_effect=_update_session)
-    state.session_store.append_message = AsyncMock(side_effect=_append_message)
+    state.session_store.append_timeline_items = AsyncMock(side_effect=_append_timeline_items)
     state.agent_instances[session.agent_type].cancel_session = AsyncMock(return_value=True)
 
     schedule_mock = AsyncMock()
@@ -398,8 +399,8 @@ async def test_resume_waits_until_stop_finishes_writing_pause_message() -> None:
     assert stop_result.ok is True
     assert resume_result.ok is True
     assert schedule_mock.await_count == 1
-    assert state.session_store.append_message.await_count == 2
-    first_call = state.session_store.append_message.await_args_list[0]
-    second_call = state.session_store.append_message.await_args_list[1]
-    assert first_call.kwargs["role"] == "system"
-    assert second_call.kwargs["role"] == "user"
+    assert len(append_calls) == 2
+    first_items = append_calls[0][1]
+    second_items = append_calls[1][1]
+    assert first_items[0]["kind"] == "system_event"
+    assert second_items[0]["kind"] == "user_message"

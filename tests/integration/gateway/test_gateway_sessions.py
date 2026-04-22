@@ -81,10 +81,34 @@ def _store_task(task, agent_type: str, agent_id: str = "") -> None:
 
 
 def _capture_background_task(scheduled_coroutines: list[object]):
-    def inner(coroutine):
-        scheduled_coroutines.append(coroutine)
-        coroutine.close()
-        return MagicMock()
+    import sys as _sys
+    import asyncio as _asyncio
+    import inspect as _inspect
+
+    _real_create_task = _asyncio.create_task
+    _ROUTE_MARKERS = ("gateway/routes/sessions.py", "gateway/routes/turns.py")
+    _MOCK_MARKER = "unittest/mock.py"
+
+    def _direct_caller_is_route() -> bool:
+        """Find the first non-mock frame in the call stack and check if it's a route handler."""
+        frame = _sys._getframe(2)  # skip inner() itself + mock._execute_mock_call
+        while frame is not None:
+            filename = frame.f_code.co_filename or ""
+            if _MOCK_MARKER not in filename:
+                # This is the first non-mock frame — the actual caller of create_task
+                return any(m in filename for m in _ROUTE_MARKERS)
+            frame = frame.f_back
+        return False
+
+    def inner(coroutine, **kwargs):
+        # Only intercept coroutines created directly from gateway route handlers
+        # (i.e. agent run_streaming session turns).  Pass through everything else
+        # (e.g. SQLAlchemy's internal asyncio.create_task calls on session close).
+        if _inspect.iscoroutine(coroutine) and _direct_caller_is_route():
+            scheduled_coroutines.append(coroutine)
+            coroutine.close()
+            return MagicMock()
+        return _real_create_task(coroutine, **kwargs)
 
     return inner
 
@@ -211,7 +235,10 @@ def test_send_turn_to_subagent_session_schedules_background_task(client):
 
         stored_session = asyncio.run(state.session_store.get_session(session.id, "code"))
         assert stored_session is not None
-        assert stored_session.updated_at >= original_updated_at
+        # Strip tzinfo for comparison: SQLite returns naive datetimes, Session uses UTC-aware.
+        stored_naive = stored_session.updated_at.replace(tzinfo=None)
+        original_naive = original_updated_at.replace(tzinfo=None)
+        assert stored_naive >= original_naive
     finally:
         state.agent_instances.clear()
         state.agent_instances.update(original_instances)

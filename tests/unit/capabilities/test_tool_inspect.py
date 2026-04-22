@@ -24,10 +24,10 @@ async def test_inspect_session_returns_messages():
             goal="写单元测试",
         )
     )
-    mock_state.session_store.get_messages = AsyncMock(
+    mock_state.session_store.get_recent_timeline_items = AsyncMock(
         return_value=[
-            {"role": "user", "content": "请写单元测试", "ts": "2026-04-06T10:00:00"},
-            {"role": "assistant", "content": "好的，我来写", "ts": "2026-04-06T10:00:05"},
+            {"kind": "user_message", "role": "user", "content": "请写单元测试", "seq": 1, "created_at": "2026-04-06T10:00:00"},
+            {"kind": "assistant_message", "role": "assistant", "content": "好的，我来写", "seq": 2, "created_at": "2026-04-06T10:00:05"},
         ]
     )
 

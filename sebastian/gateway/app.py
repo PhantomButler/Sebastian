@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with db_factory() as _bootstrap_session:
         await bootstrap_slot_registry(_bootstrap_session, DEFAULT_SLOT_REGISTRY)
 
-    session_store = SessionStore(settings.sessions_dir)
+    session_store = SessionStore(settings.sessions_dir, db_factory=db_factory)
     todo_store = TodoStore(db_factory=db_factory)
 
     from sebastian.llm.registry import LLMProviderRegistry

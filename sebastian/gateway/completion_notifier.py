@@ -127,10 +127,12 @@ class CompletionNotifier:
         )
 
     async def _get_last_assistant_message(self, session_id: str, agent_type: str) -> str:
-        messages = await self._session_store.get_messages(session_id, agent_type, limit=10)
-        for msg in reversed(messages):
-            if msg.get("role") == "assistant" and msg.get("content"):
-                content: str = msg["content"]
+        items = await self._session_store.get_recent_timeline_items(
+            session_id, agent_type, limit=10
+        )
+        for item in reversed(items):
+            if item.get("kind") == "assistant_message" and item.get("content"):
+                content: str = item["content"]
                 if len(content) > _MAX_REPORT_CHARS:
                     content = content[:_MAX_REPORT_CHARS] + "…（已截断）"
                 return content

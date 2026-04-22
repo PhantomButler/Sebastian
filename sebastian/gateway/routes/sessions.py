@@ -104,17 +104,30 @@ async def create_agent_session(
 @router.get("/sessions/{session_id}")
 async def get_session(
     session_id: str,
+    include_archived: bool = Query(default=False),
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
     import sebastian.gateway.state as state
+    from sebastian.store.session_context import build_legacy_messages
 
     session = await _resolve_session(state, session_id)
-    messages = await state.session_store.get_messages(
-        session_id,
-        session.agent_type,
-        limit=50,
-    )
-    return {"session": session.model_dump(mode="json"), "messages": messages}
+    if include_archived:
+        items = await state.session_store.get_timeline_items(
+            session_id,
+            session.agent_type,
+            include_archived=True,
+        )
+    else:
+        items = await state.session_store.get_context_timeline_items(
+            session_id,
+            session.agent_type,
+        )
+    messages = build_legacy_messages(items)
+    return {
+        "session": session.model_dump(mode="json"),
+        "messages": messages,
+        "timeline_items": items,
+    }
 
 
 class SendTurnBody(BaseModel):
@@ -390,18 +403,20 @@ async def cancel_session_post(
 @router.get("/sessions/{session_id}/recent")
 async def get_session_recent(
     session_id: str,
-    limit: int = 5,
+    limit: int = 25,
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
-    """HTTP version of inspect_session — returns recent messages + status."""
+    """HTTP version of inspect_session — returns recent timeline items + status."""
     import sebastian.gateway.state as state
+    from sebastian.store.session_context import build_legacy_messages
 
     session = await _resolve_session(state, session_id)
-    messages = await state.session_store.get_messages(
+    items = await state.session_store.get_recent_timeline_items(
         session_id,
         session.agent_type,
         limit=limit,
     )
+    messages = build_legacy_messages(items)
     return {
         "session_id": session.id,
         "status": session.status,
@@ -409,4 +424,5 @@ async def get_session_recent(
         "goal": session.goal,
         "last_activity_at": session.last_activity_at.isoformat(),
         "messages": messages,
+        "timeline_items": items,
     }

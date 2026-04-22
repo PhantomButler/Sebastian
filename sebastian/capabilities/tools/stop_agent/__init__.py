@@ -133,11 +133,10 @@ async def stop_agent(
         await state.session_store.update_session(session)
 
         content = f"[上级暂停] reason: {reason}" if reason else "[上级暂停]"
-        await state.session_store.append_message(
+        await state.session_store.append_timeline_items(
             session_id,
-            role="system",
-            content=content,
-            agent_type=actual_agent_type,
+            actual_agent_type,
+            [{"kind": "system_event", "role": "system", "content": content}],
         )
 
         if state.event_bus is not None:

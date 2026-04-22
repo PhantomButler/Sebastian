@@ -130,11 +130,10 @@ async def resume_agent(
             )
 
         if instruction:
-            await state.session_store.append_message(
+            await state.session_store.append_timeline_items(
                 session_id,
-                role="user",
-                content=instruction,
-                agent_type=actual_agent_type,
+                actual_agent_type,
+                [{"kind": "user_message", "role": "user", "content": instruction}],
             )
 
         session.status = SessionStatus.ACTIVE
