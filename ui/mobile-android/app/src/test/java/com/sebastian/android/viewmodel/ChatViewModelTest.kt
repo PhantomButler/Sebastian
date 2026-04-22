@@ -950,6 +950,44 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `toggleSummaryBlock flips expanded state`() = vmTest {
+        activateSession("s1")
+
+        whenever(chatRepository.getMessages(any())).thenReturn(
+            Result.success(listOf(
+                com.sebastian.android.data.model.Message(
+                    id = "msg-1",
+                    sessionId = "s1",
+                    role = com.sebastian.android.data.model.MessageRole.ASSISTANT,
+                    blocks = listOf(
+                        com.sebastian.android.data.model.ContentBlock.SummaryBlock(
+                            blockId = "summary-1",
+                            text = "Earlier content was compressed.",
+                            expanded = false,
+                        )
+                    ),
+                )
+            ))
+        )
+
+        viewModel.switchSession("s1")
+        dispatcher.scheduler.advanceTimeBy(300)
+
+        val before = viewModel.uiState.value.messages
+            .find { it.id == "msg-1" }
+            ?.blocks?.single() as? com.sebastian.android.data.model.ContentBlock.SummaryBlock
+        assertFalse("SummaryBlock must start collapsed", before?.expanded ?: true)
+
+        viewModel.toggleSummaryBlock("msg-1", "summary-1")
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        val after = viewModel.uiState.value.messages
+            .find { it.id == "msg-1" }
+            ?.blocks?.single() as? com.sebastian.android.data.model.ContentBlock.SummaryBlock
+        assertTrue("SummaryBlock must be expanded after toggle", after?.expanded ?: false)
+    }
+
+    @Test
     fun `connectionFailed while PENDING resets composerState to IDLE_EMPTY`() = vmTest {
         // Cancel old ViewModel so we can install a throwing SSE flow
         viewModel.viewModelScope.cancel()

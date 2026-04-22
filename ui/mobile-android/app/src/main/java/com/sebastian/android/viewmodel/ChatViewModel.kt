@@ -666,6 +666,12 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun toggleSummaryBlock(msgId: String, blockId: String) {
+        updateBlockById(msgId, blockId) { block ->
+            if (block is ContentBlock.SummaryBlock) block.copy(expanded = !block.expanded) else block
+        }
+    }
+
     fun clearError() = _uiState.update { it.copy(error = null) }
 
     // ── Pending timeout helpers ──────────────────────────────────────────────

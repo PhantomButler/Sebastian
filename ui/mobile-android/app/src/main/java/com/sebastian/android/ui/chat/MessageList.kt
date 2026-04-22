@@ -68,6 +68,7 @@ fun MessageList(
     flushTick: Long,
     onToggleThinking: (String, String) -> Unit,
     onToggleTool: (String, String) -> Unit,
+    onToggleSummary: (String, String) -> Unit,
     glassState: GlassState,
     contentPadding: PaddingValues = PaddingValues(),
     fabBottomOffset: Dp = 16.dp,
@@ -138,6 +139,7 @@ fun MessageList(
                     message = message,
                     onToggleThinking = onToggleThinking,
                     onToggleTool = onToggleTool,
+                    onToggleSummary = onToggleSummary,
                     modifier = Modifier.padding(vertical = 4.dp),
                 )
             }
