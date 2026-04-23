@@ -37,6 +37,7 @@ status: in-progress
 | [agent-pill-animation.md](agent-pill-animation.md) | AgentPill 灵动岛式动画（OrbsAnimation 光团漂移 + HudAnimation Jarvis HUD + BreathingHalo 彩虹环）、80ms 防抖、AgentPillMode 状态映射 |
 | [toast-center.md](toast-center.md) | ToastCenter 公共组件：时间窗口节流 + 同时刻单例显示，替代散落的 `Toast.makeText` 样板 |
 | [pending-state.md](pending-state.md) | Chat PENDING 状态与即时停止：SENDING→PENDING 统一、后端 `_pending_cancel_intents` 竞态兜底、15s 超时、AgentPill BREATHING |
+| [timeline-hydration.md](timeline-hydration.md) | REST timeline 历史恢复（hydration）、SSE replay 边界、client-generated session id、TimelineMapper、SummaryCard、ChatUiEffect |
 
 ---
 

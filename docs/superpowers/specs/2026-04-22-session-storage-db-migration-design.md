@@ -2,6 +2,8 @@
 version: "1.0"
 last_updated: 2026-04-22
 status: planned
+integrated_to: store/session-storage.md
+integrated_at: 2026-04-23
 ---
 
 # Session Storage SQLite Migration Design
