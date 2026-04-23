@@ -630,13 +630,15 @@ class BaseAgent(ABC):
                     self._pending_blocks[session_id] = assistant_blocks
 
                 if isinstance(event, TextBlockStop):
-                    assistant_blocks.append({
-                        "type": "text",
-                        "text": event.text,
-                        "turn_id": turn_id,
-                        "provider_call_index": current_pci,
-                        "block_index": block_index,
-                    })
+                    assistant_blocks.append(
+                        {
+                            "type": "text",
+                            "text": event.text,
+                            "turn_id": turn_id,
+                            "provider_call_index": current_pci,
+                            "block_index": block_index,
+                        }
+                    )
                     block_index += 1
                     self._pending_blocks[session_id] = assistant_blocks
 

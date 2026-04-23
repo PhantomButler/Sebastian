@@ -271,9 +271,7 @@ async def _schedule_session_turn(
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     task.add_done_callback(_log_background_turn_failure)
-    task.add_done_callback(
-        _make_turn_done_callback(session, state.session_store, state.event_bus)
-    )
+    task.add_done_callback(_make_turn_done_callback(session, state.session_store, state.event_bus))
 
 
 @router.delete("/sessions/{session_id}")

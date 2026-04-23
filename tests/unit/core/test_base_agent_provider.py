@@ -217,9 +217,7 @@ async def test_cancel_session_flushes_pending_blocks() -> None:
     flushed_call = assistant_calls[-1]
     blocks = flushed_call.kwargs.get("blocks") or []
     thinking_blocks = [b for b in blocks if b["type"] == "thinking"]
-    assert len(thinking_blocks) >= 1, (
-        f"Expected thinking block in flushed blocks, got: {blocks}"
-    )
+    assert len(thinking_blocks) >= 1, f"Expected thinking block in flushed blocks, got: {blocks}"
 
     # Verify thinking block has correct turn_id, provider_call_index, and block_index
     thinking_block = thinking_blocks[0]
@@ -431,8 +429,7 @@ async def test_tool_result_model_content_uses_llm_facing_string() -> None:
     await agent.run("inspect", session_id="sess_model_content")
 
     assistant_calls = [
-        c for c in session_store.append_message.call_args_list
-        if c.args[1] == "assistant"
+        c for c in session_store.append_message.call_args_list if c.args[1] == "assistant"
     ]
     blocks = assistant_calls[-1].kwargs.get("blocks") or []
     result_blocks = [b for b in blocks if b.get("type") == "tool_result"]
@@ -482,8 +479,7 @@ async def test_tool_dispatch_exception_persists_failed_tool_result() -> None:
     await agent.run("boom", session_id="sess_tool_failure")
 
     assistant_calls = [
-        c for c in session_store.append_message.call_args_list
-        if c.args[1] == "assistant"
+        c for c in session_store.append_message.call_args_list if c.args[1] == "assistant"
     ]
     blocks = assistant_calls[-1].kwargs.get("blocks") or []
     tool_call = next(b for b in blocks if b.get("type") == "tool")
@@ -569,8 +565,7 @@ async def test_cancel_during_tool_call_flushes_cancelled_tool_result() -> None:
         tool_release.set()
 
     assistant_calls = [
-        c for c in session_store.append_message.call_args_list
-        if c.args[1] == "assistant"
+        c for c in session_store.append_message.call_args_list if c.args[1] == "assistant"
     ]
     blocks = assistant_calls[-1].kwargs.get("blocks") or []
     tool_call = next(b for b in blocks if b.get("type") == "tool")

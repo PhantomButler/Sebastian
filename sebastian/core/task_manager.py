@@ -143,4 +143,3 @@ class TaskManager:
         if error is not None:
             data["error"] = error
         await self._bus.publish(Event(type=event_type, data=data))
-

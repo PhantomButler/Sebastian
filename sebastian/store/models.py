@@ -313,13 +313,21 @@ class SessionItemRecord(Base):
         Index("ix_session_items_ctx", "agent_type", "session_id", "archived", "seq"),
         Index(
             "ix_session_items_eff",
-            "agent_type", "session_id", "archived", "effective_seq", "seq",
+            "agent_type",
+            "session_id",
+            "archived",
+            "effective_seq",
+            "seq",
         ),
         Index("ix_session_items_created", "agent_type", "session_id", "created_at"),
         Index("ix_session_items_kind", "agent_type", "session_id", "kind", "seq"),
         Index(
             "ix_session_items_turn",
-            "agent_type", "session_id", "turn_id", "provider_call_index", "block_index",
+            "agent_type",
+            "session_id",
+            "turn_id",
+            "provider_call_index",
+            "block_index",
         ),
     )
 

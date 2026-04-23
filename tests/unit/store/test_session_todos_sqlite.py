@@ -11,6 +11,7 @@ from sebastian.store.todo_store import TodoStore
 async def sqlite_session_factory():
     import sebastian.store.models  # noqa: F401
     from sebastian.store.database import Base, _apply_idempotent_migrations
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -37,9 +37,7 @@ _BLOCK_TYPE_TO_KIND: dict[str, str] = {
 
 # Per-session asyncio locks for seq allocation serialization.
 # WeakValueDictionary lets unreferenced locks be GC'd.
-_SESSION_SEQ_LOCKS: weakref.WeakValueDictionary[str, asyncio.Lock] = (
-    weakref.WeakValueDictionary()
-)
+_SESSION_SEQ_LOCKS: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
 
 
 def _get_session_lock(session_id: str, agent_type: str) -> asyncio.Lock:
@@ -53,28 +51,19 @@ def _get_session_lock(session_id: str, agent_type: str) -> asyncio.Lock:
 
 def _normalize_block_payload(block: dict[str, Any]) -> dict[str, Any]:
     payload = {
-        k: v for k, v in block.items()
+        k: v
+        for k, v in block.items()
         if k not in ("text", "content", "turn_id", "provider_call_index", "block_index")
     }
     block_type = block.get("type", "")
     if block_type in ("tool_use", "tool"):
         payload["tool_call_id"] = (
-            block.get("tool_call_id")
-            or block.get("id")
-            or block.get("tool_id")
-            or ""
+            block.get("tool_call_id") or block.get("id") or block.get("tool_id") or ""
         )
-        payload["tool_name"] = (
-            block.get("tool_name")
-            or block.get("name")
-            or ""
-        )
+        payload["tool_name"] = block.get("tool_name") or block.get("name") or ""
     elif block_type == "tool_result":
         payload["tool_call_id"] = (
-            block.get("tool_call_id")
-            or block.get("tool_use_id")
-            or block.get("tool_id")
-            or ""
+            block.get("tool_call_id") or block.get("tool_use_id") or block.get("tool_id") or ""
         )
     return payload
 
@@ -237,15 +226,17 @@ class SessionTimelineStore:
             else:
                 block_content = block.get("text") or block.get("content") or ""
 
-            result.append({
-                "kind": kind,
-                "role": role,
-                "content": block_content,
-                "turn_id": block.get("turn_id"),
-                "provider_call_index": block.get("provider_call_index"),
-                "block_index": block.get("block_index", idx),
-                "payload": _normalize_block_payload(block),
-            })
+            result.append(
+                {
+                    "kind": kind,
+                    "role": role,
+                    "content": block_content,
+                    "turn_id": block.get("turn_id"),
+                    "provider_call_index": block.get("provider_call_index"),
+                    "block_index": block.get("block_index", idx),
+                    "payload": _normalize_block_payload(block),
+                }
+            )
         return result
 
     async def append_message_compat(

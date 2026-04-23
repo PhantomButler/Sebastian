@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 async def fresh_engine():
     import sebastian.store.models  # noqa: F401
     from sebastian.store.database import Base
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -41,8 +42,7 @@ async def test_session_consolidations_pk_column_order(fresh_engine):
     async with fresh_engine.begin() as conn:
         row = await conn.execute(
             text(
-                "SELECT sql FROM sqlite_master"
-                " WHERE type='table' AND name='session_consolidations'"
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='session_consolidations'"
             )
         )
         sql = (row.scalar() or "").lower()
@@ -119,6 +119,7 @@ async def test_verify_schema_invariants_passes_on_correct_schema():
 async def test_verify_schema_invariants_detects_wrong_sessions_pk():
     """sessions 表 PK 顺序错误时 _verify_schema_invariants 抛出 RuntimeError。"""
     from sebastian.store.database import _verify_schema_invariants
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         # 手动建出 PK 顺序错误的 sessions 表
@@ -218,9 +219,7 @@ async def test_rebuild_pk_with_existing_indexes_preserves_data():
             "  PRIMARY KEY (id, agent_type)"
             ")"
         )
-        await conn.exec_driver_sql(
-            "CREATE INDEX ix_sessions_agent_type ON sessions (agent_type)"
-        )
+        await conn.exec_driver_sql("CREATE INDEX ix_sessions_agent_type ON sessions (agent_type)")
         await conn.exec_driver_sql(
             "CREATE INDEX ix_sessions_agent_parent_status"
             " ON sessions (agent_type, parent_session_id, status)"

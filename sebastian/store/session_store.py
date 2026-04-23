@@ -333,6 +333,7 @@ class SessionStore:
         else:
             items = await self._timeline.get_context_items(session_id, agent_type)
         from sebastian.store.session_context import build_context_messages
+
         return build_context_messages(items, provider_format, include_thinking=include_thinking)
 
     async def get_messages_since(

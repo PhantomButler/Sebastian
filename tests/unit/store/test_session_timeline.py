@@ -13,6 +13,7 @@ from sebastian.store.session_store import SessionStore
 async def sqlite_session_factory():
     import sebastian.store.models  # noqa: F401
     from sebastian.store.database import Base, _apply_idempotent_migrations
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -92,15 +93,21 @@ async def test_get_context_timeline_items_excludes_archived(store, session_in_db
     items = [
         {"kind": "user_message", "role": "user", "content": "msg1", "archived": False},
         {"kind": "user_message", "role": "user", "content": "msg2", "archived": True},
-        {"kind": "context_summary", "role": None, "content": "summary", "archived": False,
-         "effective_seq": 1, "payload": {"source_seq_start": 1, "source_seq_end": 2}},
+        {
+            "kind": "context_summary",
+            "role": None,
+            "content": "summary",
+            "archived": False,
+            "effective_seq": 1,
+            "payload": {"source_seq_start": 1, "source_seq_end": 2},
+        },
     ]
     await store.append_timeline_items(session_in_db.id, "sebastian", items)
 
     ctx = await store.get_context_timeline_items(session_in_db.id, "sebastian")
     kinds = [i["kind"] for i in ctx]
-    assert "user_message" in kinds      # 未归档原文
-    assert "context_summary" in kinds   # summary 包含
+    assert "user_message" in kinds  # 未归档原文
+    assert "context_summary" in kinds  # summary 包含
     # 归档的 msg2 不出现在 content 中（或通过 archived 字段确认）
     archived_items = [i for i in ctx if i.get("archived")]
     assert len(archived_items) == 0
@@ -155,9 +162,11 @@ async def test_get_messages_since(store, session_in_db):
 @pytest.mark.asyncio
 async def test_concurrent_append_no_duplicate_seq(store, session_in_db):
     """并发 append 后 seq 不重复且无空洞。"""
+
     async def append_one(content: str) -> None:
         await store.append_timeline_items(
-            session_in_db.id, "sebastian",
+            session_in_db.id,
+            "sebastian",
             [{"kind": "user_message", "role": "user", "content": content}],
         )
 
@@ -189,8 +198,11 @@ async def test_append_message_preserves_turn_id_from_blocks(store, session_in_db
         },
     ]
     await store.append_message(
-        session_in_db.id, "assistant", "reply",
-        agent_type="sebastian", blocks=blocks,
+        session_in_db.id,
+        "assistant",
+        "reply",
+        agent_type="sebastian",
+        blocks=blocks,
     )
     items = await store.get_timeline_items(session_in_db.id, "sebastian")
     thinking = next(i for i in items if i["kind"] == "thinking")
@@ -259,12 +271,16 @@ async def test_append_message_tool_use_block_content_is_json_input(store, sessio
         }
     ]
     await store.append_message(
-        session_in_db.id, "assistant", "",
-        agent_type="sebastian", blocks=blocks,
+        session_in_db.id,
+        "assistant",
+        "",
+        agent_type="sebastian",
+        blocks=blocks,
     )
     items = await store.get_timeline_items(session_in_db.id, "sebastian")
     tool_call = next(i for i in items if i["kind"] == "tool_call")
     import json
+
     assert tool_call["content"] == json.dumps({"key": "value"})
 
 
@@ -421,15 +437,33 @@ async def test_get_context_with_thinking_excludes_system_event(store, session_in
     产生两条 assistant 消息而非一条。
     """
     items = [
-        {"kind": "user_message", "role": "user", "content": "hi",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 0},
-        {"kind": "thinking", "role": "assistant", "content": "thoughts",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
-         "payload": {"signature": "sig1"}},
+        {
+            "kind": "user_message",
+            "role": "user",
+            "content": "hi",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+        {
+            "kind": "thinking",
+            "role": "assistant",
+            "content": "thoughts",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 1,
+            "payload": {"signature": "sig1"},
+        },
         # system_event 不属于 LLM 上下文，不应出现在任何 context 视图
         {"kind": "system_event", "role": "system", "content": "internal marker"},
-        {"kind": "assistant_message", "role": "assistant", "content": "reply",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 2},
+        {
+            "kind": "assistant_message",
+            "role": "assistant",
+            "content": "reply",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 2,
+        },
     ]
     await store.append_timeline_items(session_in_db.id, "sebastian", items)
 
@@ -462,7 +496,9 @@ async def test_effective_seq_zero_preserved(store, session_in_db):
     """
     items = [
         {
-            "kind": "context_summary", "role": None, "content": "summary",
+            "kind": "context_summary",
+            "role": None,
+            "content": "summary",
             "effective_seq": 0,
             "payload": {"source_seq_start": 0, "source_seq_end": 0},
         }
@@ -480,15 +516,14 @@ async def test_effective_seq_zero_preserved(store, session_in_db):
 @pytest.mark.asyncio
 async def test_get_recent_items_selects_window_by_seq_not_effective_seq(store, session_in_db):
     """get_recent_timeline_items 以真实 seq 选择最近窗口，再按 seq 正序返回。"""
-    base_items = [
-        {"kind": "user_message", "role": "user", "content": f"msg{i}"}
-        for i in range(5)
-    ]
+    base_items = [{"kind": "user_message", "role": "user", "content": f"msg{i}"} for i in range(5)]
     await store.append_timeline_items(session_in_db.id, "sebastian", base_items)
 
     # context_summary: seq=6, effective_seq=2（逻辑上属于 seq=2 位置）
     summary = {
-        "kind": "context_summary", "role": None, "content": "summary",
+        "kind": "context_summary",
+        "role": None,
+        "content": "summary",
         "effective_seq": 2,
         "payload": {"source_seq_start": 1, "source_seq_end": 2},
     }
@@ -497,7 +532,6 @@ async def test_get_recent_items_selects_window_by_seq_not_effective_seq(store, s
     recent = await store.get_recent_timeline_items(session_in_db.id, "sebastian", limit=3)
     seqs = [i["seq"] for i in recent]
     assert seqs == [4, 5, 6], (
-        "recent should select by real seq, including the newly inserted summary; "
-        f"got seqs: {seqs}"
+        f"recent should select by real seq, including the newly inserted summary; got seqs: {seqs}"
     )
     assert recent[-1]["kind"] == "context_summary"

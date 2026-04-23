@@ -16,6 +16,7 @@ from typing import Any
 # Public entry point
 # ---------------------------------------------------------------------------
 
+
 def build_context_messages(
     items: list[dict[str, Any]],
     provider_format: str,
@@ -49,26 +50,32 @@ def build_legacy_messages(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for item in items:
         kind = item.get("kind", "")
         if kind == "user_message":
-            result.append({
-                "role": "user",
-                "content": item.get("content", ""),
-                "seq": item.get("seq"),
-                "created_at": item.get("created_at"),
-            })
+            result.append(
+                {
+                    "role": "user",
+                    "content": item.get("content", ""),
+                    "seq": item.get("seq"),
+                    "created_at": item.get("created_at"),
+                }
+            )
         elif kind == "assistant_message":
-            result.append({
-                "role": "assistant",
-                "content": item.get("content", ""),
-                "seq": item.get("seq"),
-                "created_at": item.get("created_at"),
-            })
+            result.append(
+                {
+                    "role": "assistant",
+                    "content": item.get("content", ""),
+                    "seq": item.get("seq"),
+                    "created_at": item.get("created_at"),
+                }
+            )
         elif kind == "context_summary":
-            result.append({
-                "role": "system",
-                "content": item.get("content", ""),
-                "seq": item.get("seq"),
-                "created_at": item.get("created_at"),
-            })
+            result.append(
+                {
+                    "role": "system",
+                    "content": item.get("content", ""),
+                    "seq": item.get("seq"),
+                    "created_at": item.get("created_at"),
+                }
+            )
         # tool_call, tool_result, thinking, raw_block, system_event 不进入 legacy messages
     return result
 
@@ -76,6 +83,7 @@ def build_legacy_messages(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Anthropic projection
 # ---------------------------------------------------------------------------
+
 
 def _build_anthropic(
     items: list[dict[str, Any]],
@@ -131,11 +139,13 @@ def _build_anthropic(
         if all(item["kind"] == "tool_result" for item in group):
             for item in group:
                 payload = item.get("payload") or {}
-                _pending_tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": payload.get("tool_call_id", ""),
-                    "content": payload.get("model_content", item.get("content", "")),
-                })
+                _pending_tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": payload.get("tool_call_id", ""),
+                        "content": payload.get("model_content", item.get("content", "")),
+                    }
+                )
             continue
 
         # --- assistant-side group (assistant_message, tool_call, thinking) -----
@@ -168,7 +178,7 @@ def _build_anthropic_assistant_blocks(
     """Build Anthropic content block list from assistant-side timeline items."""
     blocks: list[dict[str, Any]] = []
     # Sort by block_index within the group so ordering is deterministic
-    sorted_items = sorted(items, key=lambda i: (i.get("block_index") or 0))
+    sorted_items = sorted(items, key=lambda i: i.get("block_index") or 0)
 
     for item in sorted_items:
         kind = item["kind"]
@@ -176,20 +186,24 @@ def _build_anthropic_assistant_blocks(
 
         if kind == "thinking":
             if include_thinking:
-                blocks.append({
-                    "type": "thinking",
-                    "thinking": item.get("content", ""),
-                    "signature": payload.get("signature", ""),
-                })
+                blocks.append(
+                    {
+                        "type": "thinking",
+                        "thinking": item.get("content", ""),
+                        "signature": payload.get("signature", ""),
+                    }
+                )
 
         elif kind == "tool_call":
             input_data = payload.get("input", {})
-            blocks.append({
-                "type": "tool_use",
-                "id": payload.get("tool_call_id", ""),
-                "name": payload.get("tool_name", ""),
-                "input": input_data if isinstance(input_data, dict) else {},
-            })
+            blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": payload.get("tool_call_id", ""),
+                    "name": payload.get("tool_name", ""),
+                    "input": input_data if isinstance(input_data, dict) else {},
+                }
+            )
 
         elif kind == "assistant_message":
             content = item.get("content", "")
@@ -235,6 +249,7 @@ def _flush_tool_results_into_user(
 # OpenAI projection
 # ---------------------------------------------------------------------------
 
+
 def _build_openai(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build OpenAI-format messages from timeline items.
 
@@ -273,11 +288,13 @@ def _build_openai(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if all(item["kind"] == "tool_result" for item in group):
             for item in group:
                 payload = item.get("payload") or {}
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": payload.get("tool_call_id", ""),
-                    "content": payload.get("model_content", item.get("content", "")),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": payload.get("tool_call_id", ""),
+                        "content": payload.get("model_content", item.get("content", "")),
+                    }
+                )
             continue
 
         # --- assistant-side group -------------------------------------------
@@ -288,32 +305,36 @@ def _build_openai(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # Emit assistant message(s)
         if tool_calls_items:
             tool_calls = []
-            for item in sorted(tool_calls_items, key=lambda i: (i.get("block_index") or 0)):
+            for item in sorted(tool_calls_items, key=lambda i: i.get("block_index") or 0):
                 payload = item.get("payload") or {}
                 input_data = payload.get("input", {})
-                tool_calls.append({
-                    "id": payload.get("tool_call_id", ""),
-                    "type": "function",
-                    "function": {
-                        "name": payload.get("tool_name", ""),
-                        "arguments": (
-                            json.dumps(input_data)
-                            if isinstance(input_data, dict)
-                            else str(input_data)
-                        ),
-                    },
-                })
+                tool_calls.append(
+                    {
+                        "id": payload.get("tool_call_id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": payload.get("tool_name", ""),
+                            "arguments": (
+                                json.dumps(input_data)
+                                if isinstance(input_data, dict)
+                                else str(input_data)
+                            ),
+                        },
+                    }
+                )
             # Merge text into content of the same assistant message
             # (OpenAI allows content + tool_calls in a single message)
             text_content = (
                 " ".join(i.get("content", "") for i in text_items if i.get("content")).strip()
                 or None
             )
-            messages.append({
-                "role": "assistant",
-                "content": text_content,
-                "tool_calls": tool_calls,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": text_content,
+                    "tool_calls": tool_calls,
+                }
+            )
         elif text_items:
             content = " ".join(i.get("content", "") for i in text_items if i.get("content"))
             messages.append({"role": "assistant", "content": content})
@@ -321,11 +342,13 @@ def _build_openai(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # Emit tool results that appear in this group
         for item in tool_result_items:
             payload = item.get("payload") or {}
-            messages.append({
-                "role": "tool",
-                "tool_call_id": payload.get("tool_call_id", ""),
-                "content": payload.get("model_content", item.get("content", "")),
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": payload.get("tool_call_id", ""),
+                    "content": payload.get("model_content", item.get("content", "")),
+                }
+            )
 
     return messages
 
@@ -333,6 +356,7 @@ def _build_openai(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Grouping helper
 # ---------------------------------------------------------------------------
+
 
 def _group_by_call(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     """Group timeline items for projection.

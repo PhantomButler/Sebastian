@@ -444,9 +444,7 @@ async def test_run_streaming_sqlite_mode_uses_get_context_messages(mem_factory) 
     # Ensure get_session_for_agent_type returns a session with required attrs
     fake_worker_session = MagicMock()
     fake_worker_session.agent_type = "test"
-    agent._session_store.get_session_for_agent_type = AsyncMock(
-        return_value=fake_worker_session
-    )
+    agent._session_store.get_session_for_agent_type = AsyncMock(return_value=fake_worker_session)
 
     fake_settings = MagicMock()
     fake_settings.enabled = False
@@ -456,9 +454,7 @@ async def test_run_streaming_sqlite_mode_uses_get_context_messages(mem_factory) 
 
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
         with patch.object(gw_state, "todo_store", empty_todo_store, create=True):
-            await agent.run_streaming(
-                session_id="s-sqlite", user_message="hello"
-            )
+            await agent.run_streaming(session_id="s-sqlite", user_message="hello")
 
     agent._session_store.get_context_messages.assert_called_once()
     call_args = agent._session_store.get_context_messages.call_args

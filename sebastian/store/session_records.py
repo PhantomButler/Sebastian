@@ -125,9 +125,7 @@ def _to_record(session: Session) -> SessionRecord:
         title=session.title,
         goal=session.goal,
         status=(
-            session.status.value
-            if isinstance(session.status, SessionStatus)
-            else session.status
+            session.status.value if isinstance(session.status, SessionStatus) else session.status
         ),
         depth=session.depth,
         parent_session_id=session.parent_session_id,
@@ -144,9 +142,7 @@ def _apply_session_to_record(session: Session, record: SessionRecord) -> None:
     record.title = session.title
     record.goal = session.goal
     record.status = (
-        session.status.value
-        if isinstance(session.status, SessionStatus)
-        else session.status
+        session.status.value if isinstance(session.status, SessionStatus) else session.status
     )
     record.depth = session.depth
     record.parent_session_id = session.parent_session_id

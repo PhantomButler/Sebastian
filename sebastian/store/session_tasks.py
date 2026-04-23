@@ -162,9 +162,7 @@ async def _refresh_task_counts(
     )
     tasks = list(result.scalars())
     total = len(tasks)
-    active = sum(
-        1 for t in tasks if TaskStatus(t.status) not in _TERMINAL_STATUSES
-    )
+    active = sum(1 for t in tasks if TaskStatus(t.status) not in _TERMINAL_STATUSES)
 
     session_result = await db.execute(
         select(SessionRecord).where(

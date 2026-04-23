@@ -63,7 +63,7 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _apply_idempotent_migrations(conn)
-        await _verify_schema_invariants(conn)   # raises RuntimeError if schema is wrong
+        await _verify_schema_invariants(conn)  # raises RuntimeError if schema is wrong
     logger.info("Database initialized")
 
 
@@ -194,9 +194,7 @@ async def _rebuild_pk_if_needed(
     await conn.exec_driver_sql(f"ALTER TABLE {table} RENAME TO {tmp}")
     for index_name in index_names:
         await conn.exec_driver_sql(f'DROP INDEX IF EXISTS "{index_name}"')
-    await conn.run_sync(
-        lambda sync_conn: Base.metadata.tables[table].create(sync_conn)
-    )
+    await conn.run_sync(lambda sync_conn: Base.metadata.tables[table].create(sync_conn))
     pragma = await conn.exec_driver_sql(f"PRAGMA table_info({tmp})")
     cols_info = pragma.fetchall()
     old_cols = {row[1] for row in cols_info}  # row[1] is column name
@@ -235,10 +233,7 @@ async def _verify_schema_invariants(conn: Any) -> None:
 
     # session_items UNIQUE 约束检查（按约束名）
     row = await conn.execute(
-        text(
-            "SELECT sql FROM sqlite_master"
-            " WHERE type='table' AND name='session_items'"
-        )
+        text("SELECT sql FROM sqlite_master WHERE type='table' AND name='session_items'")
     )
     si_sql = (row.scalar() or "").lower()
     if si_sql and "uq_session_items_seq" not in si_sql:
@@ -250,10 +245,7 @@ async def _verify_schema_invariants(conn: Any) -> None:
 
     # ix_session_items_ctx 索引检查
     row = await conn.execute(
-        text(
-            "SELECT 1 FROM sqlite_master"
-            " WHERE type='index' AND name='ix_session_items_ctx'"
-        )
+        text("SELECT 1 FROM sqlite_master WHERE type='index' AND name='ix_session_items_ctx'")
     )
     if si_sql and not row.first():
         raise RuntimeError(

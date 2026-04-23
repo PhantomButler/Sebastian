@@ -11,6 +11,7 @@ from sebastian.store.session_store import SessionStore
 async def sqlite_session_factory():
     import sebastian.store.models  # noqa: F401
     from sebastian.store.database import Base, _apply_idempotent_migrations
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -36,16 +37,35 @@ async def session_in_db(store):
 
 # ── 默认上下文不含 thinking ──────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_default_context_excludes_thinking(store, session_in_db):
     items = [
-        {"kind": "user_message", "role": "user", "content": "hello",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 0},
-        {"kind": "thinking", "role": "assistant", "content": "hmm",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
-         "payload": {"signature": "sig1"}},
-        {"kind": "assistant_message", "role": "assistant", "content": "hi",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 2},
+        {
+            "kind": "user_message",
+            "role": "user",
+            "content": "hello",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+        {
+            "kind": "thinking",
+            "role": "assistant",
+            "content": "hmm",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 1,
+            "payload": {"signature": "sig1"},
+        },
+        {
+            "kind": "assistant_message",
+            "role": "assistant",
+            "content": "hi",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 2,
+        },
     ]
     await store.append_timeline_items(session_in_db.id, "sebastian", items)
 
@@ -60,22 +80,49 @@ async def test_default_context_excludes_thinking(store, session_in_db):
 
 # ── Anthropic 投影 ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_anthropic_tool_call_projection(store, session_in_db):
     """tool_call + tool_result 投影为合法 Anthropic block 序列。"""
     items = [
-        {"kind": "user_message", "role": "user", "content": "use tool",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 0},
-        {"kind": "tool_call", "role": "assistant", "content": "",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
-         "payload": {"tool_call_id": "tc1", "tool_name": "my_tool", "input": {"x": 1}}},
-        {"kind": "tool_result", "role": "tool", "content": "",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 2,
-         "payload": {
-             "tool_call_id": "tc1", "model_content": "result_text", "display": "Result: result_text"
-         }},
-        {"kind": "assistant_message", "role": "assistant", "content": "done",
-         "turn_id": "t1", "provider_call_index": 1, "block_index": 0},
+        {
+            "kind": "user_message",
+            "role": "user",
+            "content": "use tool",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+        {
+            "kind": "tool_call",
+            "role": "assistant",
+            "content": "",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 1,
+            "payload": {"tool_call_id": "tc1", "tool_name": "my_tool", "input": {"x": 1}},
+        },
+        {
+            "kind": "tool_result",
+            "role": "tool",
+            "content": "",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 2,
+            "payload": {
+                "tool_call_id": "tc1",
+                "model_content": "result_text",
+                "display": "Result: result_text",
+            },
+        },
+        {
+            "kind": "assistant_message",
+            "role": "assistant",
+            "content": "done",
+            "turn_id": "t1",
+            "provider_call_index": 1,
+            "block_index": 0,
+        },
     ]
     await store.append_timeline_items(session_in_db.id, "sebastian", items)
 
@@ -96,7 +143,8 @@ async def test_anthropic_tool_call_projection(store, session_in_db):
 
     # user message with tool_result block
     user_with_result = next(
-        m for m in msgs
+        m
+        for m in msgs
         if m["role"] == "user"
         and isinstance(m.get("content"), list)
         and any(b.get("type") == "tool_result" for b in m["content"])
@@ -108,20 +156,45 @@ async def test_anthropic_tool_call_projection(store, session_in_db):
 
 # ── OpenAI 投影 ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_openai_tool_call_projection(store, session_in_db):
     """OpenAI 格式：assistant tool_calls + role=tool messages。"""
     items = [
-        {"kind": "user_message", "role": "user", "content": "use tool",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 0},
-        {"kind": "tool_call", "role": "assistant", "content": "",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
-         "payload": {"tool_call_id": "tc1", "tool_name": "my_tool", "input": {"x": 1}}},
-        {"kind": "tool_result", "role": "tool", "content": "",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 2,
-         "payload": {"tool_call_id": "tc1", "model_content": "result_text"}},
-        {"kind": "assistant_message", "role": "assistant", "content": "done",
-         "turn_id": "t1", "provider_call_index": 1, "block_index": 0},
+        {
+            "kind": "user_message",
+            "role": "user",
+            "content": "use tool",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+        {
+            "kind": "tool_call",
+            "role": "assistant",
+            "content": "",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 1,
+            "payload": {"tool_call_id": "tc1", "tool_name": "my_tool", "input": {"x": 1}},
+        },
+        {
+            "kind": "tool_result",
+            "role": "tool",
+            "content": "",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 2,
+            "payload": {"tool_call_id": "tc1", "model_content": "result_text"},
+        },
+        {
+            "kind": "assistant_message",
+            "role": "assistant",
+            "content": "done",
+            "turn_id": "t1",
+            "provider_call_index": 1,
+            "block_index": 0,
+        },
     ]
     await store.append_timeline_items(session_in_db.id, "sebastian", items)
 
@@ -140,16 +213,35 @@ async def test_openai_tool_call_projection(store, session_in_db):
 
 # ── include_thinking=True 保留 Anthropic signature ─────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_anthropic_include_thinking_preserves_signature(store, session_in_db):
     items = [
-        {"kind": "user_message", "role": "user", "content": "think",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 0},
-        {"kind": "thinking", "role": "assistant", "content": "deep thoughts",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
-         "payload": {"signature": "sig_abc"}},
-        {"kind": "assistant_message", "role": "assistant", "content": "answer",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 2},
+        {
+            "kind": "user_message",
+            "role": "user",
+            "content": "think",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+        {
+            "kind": "thinking",
+            "role": "assistant",
+            "content": "deep thoughts",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 1,
+            "payload": {"signature": "sig_abc"},
+        },
+        {
+            "kind": "assistant_message",
+            "role": "assistant",
+            "content": "answer",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 2,
+        },
     ]
     await store.append_timeline_items(session_in_db.id, "sebastian", items)
 
@@ -166,6 +258,7 @@ async def test_anthropic_include_thinking_preserves_signature(store, session_in_
 
 # ── context_summary 按 effective_seq 出现在正确位置 ──────────────────────
 
+
 @pytest.mark.asyncio
 async def test_context_summary_effective_seq_ordering(store, session_in_db):
     """context_summary.effective_seq < 后续原文 seq，summary 应排在前面。"""
@@ -173,9 +266,14 @@ async def test_context_summary_effective_seq_ordering(store, session_in_db):
         # 已归档的旧消息（archived=True，不出现在 context）
         {"kind": "user_message", "role": "user", "content": "old1", "archived": True},
         # context_summary: effective_seq = 1（指向被压缩范围起点）
-        {"kind": "context_summary", "role": None, "content": "Summary of old",
-         "archived": False, "effective_seq": 1,
-         "payload": {"source_seq_start": 1, "source_seq_end": 2}},
+        {
+            "kind": "context_summary",
+            "role": None,
+            "content": "Summary of old",
+            "archived": False,
+            "effective_seq": 1,
+            "payload": {"source_seq_start": 1, "source_seq_end": 2},
+        },
         # 新的未归档消息，seq=3，effective_seq=3
         {"kind": "user_message", "role": "user", "content": "new1", "archived": False},
     ]
@@ -189,19 +287,38 @@ async def test_context_summary_effective_seq_ordering(store, session_in_db):
 
 # ── legacy messages 投影 ─────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_legacy_messages_role_content_only(store, session_in_db):
     """build_legacy_messages：只有 role/content，不含 provider-specific blocks。"""
     from sebastian.store.session_context import build_legacy_messages
 
     items_input = [
-        {"kind": "user_message", "role": "user", "content": "hello",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 0},
-        {"kind": "tool_call", "role": "assistant", "content": "",
-         "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
-         "payload": {"tool_call_id": "tc1", "tool_name": "my_tool", "input": {}}},
-        {"kind": "assistant_message", "role": "assistant", "content": "hi",
-         "turn_id": "t1", "provider_call_index": 1, "block_index": 0},
+        {
+            "kind": "user_message",
+            "role": "user",
+            "content": "hello",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+        {
+            "kind": "tool_call",
+            "role": "assistant",
+            "content": "",
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 1,
+            "payload": {"tool_call_id": "tc1", "tool_name": "my_tool", "input": {}},
+        },
+        {
+            "kind": "assistant_message",
+            "role": "assistant",
+            "content": "hi",
+            "turn_id": "t1",
+            "provider_call_index": 1,
+            "block_index": 0,
+        },
     ]
     await store.append_timeline_items(session_in_db.id, "sebastian", items_input)
     all_items = await store.get_context_timeline_items(session_in_db.id, "sebastian")
@@ -229,17 +346,27 @@ def test_openai_mixed_tool_and_text_single_assistant_message():
 
     items = [
         {
-            "kind": "assistant_message", "role": "assistant",
+            "kind": "assistant_message",
+            "role": "assistant",
             "content": "I'll use the tool.",
-            "turn_id": "t1", "provider_call_index": 0, "block_index": 0,
-            "seq": 1, "effective_seq": 1, "archived": False,
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 0,
+            "seq": 1,
+            "effective_seq": 1,
+            "archived": False,
             "payload": {},
         },
         {
-            "kind": "tool_call", "role": "assistant",
+            "kind": "tool_call",
+            "role": "assistant",
             "content": '{"q": "weather"}',
-            "turn_id": "t1", "provider_call_index": 0, "block_index": 1,
-            "seq": 2, "effective_seq": 2, "archived": False,
+            "turn_id": "t1",
+            "provider_call_index": 0,
+            "block_index": 1,
+            "seq": 2,
+            "effective_seq": 2,
+            "archived": False,
             "payload": {
                 "tool_call_id": "tc1",
                 "tool_name": "search",
