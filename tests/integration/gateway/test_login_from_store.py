@@ -23,8 +23,14 @@ def _seed_and_get_app(tmp_path: Path, password: str):
         await OwnerStore(get_session_factory()).create_owner(
             name="Eric", password_hash=hash_password(password)
         )
+        from sebastian.store.database import get_engine
+
+        await get_engine().dispose()
+        await asyncio.sleep(0)
 
     asyncio.run(_seed())
+    db_module._engine = None
+    db_module._session_factory = None
     (tmp_path / "secret.key").write_text("integration-secret")
 
     from sebastian.gateway.app import create_app

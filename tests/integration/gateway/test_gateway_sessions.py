@@ -49,8 +49,14 @@ def client(tmp_path):
                         name="test-owner",
                         password_hash=password_hash,
                     )
+                    from sebastian.store.database import get_engine
+
+                    await get_engine().dispose()
+                    await asyncio.sleep(0)
 
                 asyncio.run(_seed())
+                db_module._engine = None
+                db_module._session_factory = None
                 (tmp_path / "secret.key").write_text("test-secret-key")
 
                 from starlette.testclient import TestClient

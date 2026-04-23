@@ -261,6 +261,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await completion_notifier.aclose()
     if state.consolidation_scheduler is not None:
         await state.consolidation_scheduler.aclose()
+    from sebastian.store.database import get_engine
+
+    await get_engine().dispose()
     logger.info("Sebastian gateway shutdown")
 
 
