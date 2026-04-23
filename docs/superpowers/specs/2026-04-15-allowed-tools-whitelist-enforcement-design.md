@@ -1,3 +1,8 @@
+---
+integrated_to: agents/permission.md
+integrated_at: 2026-04-23
+---
+
 # allowed_tools 白名单强制生效 — 设计文档
 
 **日期**：2026-04-15

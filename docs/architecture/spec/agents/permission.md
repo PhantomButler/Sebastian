@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_updated: 2026-04-15
+version: "1.2"
+last_updated: 2026-04-23
 status: implemented
 ---
 
@@ -375,6 +375,31 @@ else:
 2. 新增子代理时需要知道哪些协议工具是必须的，隐式知识变成显式负担
 
 分离之后，manifest 只表达一件事：这个 Agent 能用哪些执行能力。
+
+### Sebastian vs Subagent 协议工具对比
+
+Sebastian 不经过 `_loader.py`，在 `sebas.py` 手工维护 `allowed_tools`：
+
+```python
+# sebastian/orchestrator/sebas.py
+allowed_tools = [
+    "delegate_to_agent", "check_sub_agents", "inspect_session",
+    "resume_agent", "stop_agent",
+    "todo_write", "memory_save", "memory_search",
+    "Read", "Write", "Edit", "Bash", "Glob", "Grep",
+]
+```
+
+各层级协议工具分配：
+
+| 能力 | Sebastian (depth=1) | 组长 (depth=2) | 组员 (depth=3) |
+|---|---|---|---|
+| 向下派活 | `delegate_to_agent` | `spawn_sub_agent` | — |
+| 回复下属 | `resume_agent` | `resume_agent` | — |
+| 暂停下属 | `stop_agent` | `stop_agent` | — |
+| 问上级 | — (无上级) | `ask_parent` | `ask_parent` |
+| 查下属进度 | `check_sub_agents` | `check_sub_agents` | — |
+| 查 session | `inspect_session` | `inspect_session` | `inspect_session` |
 
 ---
 

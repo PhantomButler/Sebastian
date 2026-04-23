@@ -1,3 +1,8 @@
+---
+integrated_to: mobile/theme-design.md
+integrated_at: 2026-04-23
+---
+
 # Android 主题颜色补全 & SebastianSwitch 设计文档
 
 **日期**：2026-04-15  

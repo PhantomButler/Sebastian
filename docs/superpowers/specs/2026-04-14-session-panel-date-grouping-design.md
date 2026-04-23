@@ -1,3 +1,8 @@
+---
+integrated_to: mobile/session-panel.md
+integrated_at: 2026-04-23
+---
+
 # Session 侧栏按日期分组 + 折叠设计
 
 - 日期：2026-04-14
