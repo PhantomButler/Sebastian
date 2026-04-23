@@ -10,14 +10,16 @@
 
 ```
 routes/
-├── __init__.py        # 空文件，包标识
-├── agents.py          # Agent 状态查询与 LLM 绑定管理（GET /agents, PUT/DELETE /agents/{type}/llm-binding, GET /health）
-├── approvals.py       # 高危操作审批流（列出/批准/拒绝 pending approval）
-├── debug.py           # 运行时调试接口（查询/动态修改日志级别）
-├── llm_providers.py   # LLM Provider 配置管理（CRUD）
-├── sessions.py        # 会话与 Task 生命周期管理（创建/查询/暂停/取消）
-├── stream.py          # SSE 事件流推送（全局流 + 单会话流）
-└── turns.py           # 主对话入口（登录、发送消息触发 Sebastian 对话轮次）
+├── __init__.py              # 空文件，包标识
+├── agents.py                # Agent 状态查询与 LLM 绑定管理（GET /agents, PUT/DELETE /agents/{type}/llm-binding, GET /health）
+├── approvals.py             # 高危操作审批流（列出/批准/拒绝 pending approval）
+├── debug.py                 # 运行时调试接口（查询/动态修改日志级别）
+├── llm_providers.py         # LLM Provider 配置管理（CRUD）
+├── memory_components.py     # 记忆组件 LLM 绑定管理（GET/PUT/DELETE /memory/components）
+├── memory_settings.py       # 记忆功能运行时开关（GET/PUT /memory/settings）
+├── sessions.py              # 会话与 Task 生命周期管理（创建/查询/暂停/取消）
+├── stream.py                # SSE 事件流推送（全局流 + 单会话流）
+└── turns.py                 # 主对话入口（登录、发送消息触发 Sebastian 对话轮次）
 ```
 
 ## 修改导航
@@ -33,6 +35,12 @@ routes/
 | `POST /approvals/{id}/deny` — 拒绝操作 | [approvals.py](approvals.py) |
 | `GET /debug/logging` — 查询日志状态 | [debug.py](debug.py) |
 | `PATCH /debug/logging` — 动态开关 LLM stream / SSE 日志 | [debug.py](debug.py) |
+| `GET /memory/components` — 列出所有记忆组件及其 LLM 绑定 | [memory_components.py](memory_components.py) |
+| `GET /memory/components/{type}/llm-binding` — 查询指定记忆组件的 LLM 绑定 | [memory_components.py](memory_components.py) |
+| `PUT /memory/components/{type}/llm-binding` — 为记忆组件绑定 LLM Provider | [memory_components.py](memory_components.py) |
+| `DELETE /memory/components/{type}/llm-binding` — 清除记忆组件的 LLM 绑定 | [memory_components.py](memory_components.py) |
+| `GET /memory/settings` — 获取记忆功能运行时设置（含 enabled 开关） | [memory_settings.py](memory_settings.py) |
+| `PUT /memory/settings` — 更新记忆功能运行时设置 | [memory_settings.py](memory_settings.py) |
 | `GET /llm-providers` — 列出所有 LLM Provider（含 `thinking_capability`） | [llm_providers.py](llm_providers.py) |
 | `POST /llm-providers` — 新增 LLM Provider（支持 `thinking_capability`） | [llm_providers.py](llm_providers.py) |
 | `PUT /llm-providers/{id}` — 更新 LLM Provider（`exclude_unset` 语义：省略字段保留原值，显式 `null` 清空） | [llm_providers.py](llm_providers.py) |

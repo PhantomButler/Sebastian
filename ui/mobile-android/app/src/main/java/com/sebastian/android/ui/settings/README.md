@@ -15,6 +15,7 @@ settings/
 ├── AgentBindingsPage.kt          # Agent LLM 绑定主列表（点击进入次级编辑页）
 ├── AgentBindingEditorPage.kt     # 单个 Agent 绑定编辑（Provider + Thinking Effort）
 ├── AppearancePage.kt             # 外观设置页（深色/浅色模式等开关）
+├── MemorySettingsPage.kt         # 记忆功能页（启用/关闭开关）
 ├── DebugLoggingPage.kt           # 高级：Debug 日志页（日志级别开关）
 └── components/
     ├── EffortSlider.kt           # 思考档位滑杆（按 ThinkingCapability 渲染不同步骤集）
@@ -58,12 +59,9 @@ Agent LLM 绑定主列表页，由 `AgentBindingsViewModel` 驱动（仅 `load()
 
 外观设置，含深色/浅色模式切换等开关，由 `SettingsViewModel` 驱动。
 
-### Memory 设置
+### `MemorySettingsPage`
 
-Settings 中展示 Memory 区块，包含默认开启的 Switch，标签为 `Memory enabled`。
-
-- 用户切换时调用 `PUT /api/v1/memory/settings`，请求体为 `{"enabled": boolean}`。
-- 关闭文案：`关闭后不会读取、写入或沉淀记忆；已有记忆不会删除。`
+独立记忆功能设置页，由 `MemorySettingsViewModel` 驱动。提供「启用记忆功能」开关（`SebastianSwitch`），切换时调用 `PUT /api/v1/memory/settings`。关闭时的提示文案：`开启后 Sebastian 会记住你的偏好、习惯和重要信息，跨会话持续生效。`。
 
 ### `DebugLoggingPage`
 
@@ -82,6 +80,7 @@ Settings 中展示 Memory 区块，包含默认开启的 Switch，标签为 `Mem
 | 改 Provider 选择对话框 | `components/ProviderPickerDialog.kt` |
 | 改思考档位滑杆（步骤集 / 外观） | `components/EffortSlider.kt` |
 | 改外观设置开关 | `AppearancePage.kt` + `viewmodel/SettingsViewModel.kt` |
+| 改记忆功能开关 | `MemorySettingsPage.kt` + `viewmodel/MemorySettingsViewModel.kt` |
 | 改 Debug 日志开关 | `DebugLoggingPage.kt` + `viewmodel/SettingsViewModel.kt` |
 
 ---

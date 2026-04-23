@@ -1,0 +1,186 @@
+---
+version: "1.0"
+last_updated: 2026-04-23
+status: implemented
+---
+
+# Session 侧栏：按日期分组与折叠
+
+*← [Mobile 索引](INDEX.md) · [Spec 根索引](../INDEX.md)*
+
+---
+
+## 背景
+
+原 `SessionPanel` 历史会话区为扁平列表，每条 `SessionItem` 下带一行 `YYYY-MM-DD` 日期，会话多时冗余且难以定位。改为按时间桶分组显示，近期平铺，远期按年 → 月两级折叠。
+
+---
+
+## 层级结构
+
+```
+今天                    [展开]
+昨天                    [展开]
+7天内                   [展开]
+30天内                  [展开]
+▾ 2026年                [当年默认展开]
+   ▸ 2026年4月           [月份默认全折叠]
+   ▸ 2026年3月
+▸ 2025年                [往年默认折叠]
+   (展开后)
+   ▸ 2025年12月          [月份默认全折叠]
+```
+
+近期 4 个平铺桶覆盖 30 天内所有会话；年/月树为历史考古入口，月份默认折叠。
+
+---
+
+## 数据建模
+
+文件：`ui/chat/SessionGrouping.kt`（纯逻辑，便于单测）。
+
+### 类型
+
+```kotlin
+sealed class SessionBucket {
+    abstract val key: String
+    abstract val label: String
+    abstract val sessions: List<Session>
+
+    data class Recent(...) : SessionBucket()   // today / yesterday / within7 / within30
+    data class Month(val year: Int, val month: Int, ...) : SessionBucket()
+    data class Year(val year: Int, val months: List<Month>) : SessionBucket()
+}
+
+data class GroupedSessions(
+    val recent: List<SessionBucket.Recent>,
+    val years: List<SessionBucket.Year>,
+)
+```
+
+### 分桶函数
+
+```kotlin
+fun groupSessions(sessions: List<Session>, now: LocalDate = LocalDate.now()): GroupedSessions
+```
+
+规则：
+
+1. 取 `session.lastActivityAt` 前 10 位 `YYYY-MM-DD` 转 `LocalDate`。
+2. 按优先级归桶，一个 session 只进一个桶：today → yesterday → within7 → within30 → 按年月。
+3. `lastActivityAt` 为 null 或解析失败 → 兜底归 `today`。
+4. 组内按 `lastActivityAt` desc 排序；月份 desc；年份 desc。
+5. Recent 桶按固定顺序输出（today / yesterday / within7 / within30），空桶不输出。
+
+### 默认折叠状态
+
+```kotlin
+fun defaultExpanded(grouped: GroupedSessions, now: LocalDate): Map<String, Boolean>
+```
+
+- 所有 Recent = `true`
+- 当年 Year = `true`，往年 = `false`
+- 所有 Month = `false`
+
+> **实现增强**：`parseLocalDate()` 使用三级回退（OffsetDateTime → LocalDateTime → YYYY-MM-DD 子串），处理后端返回的 UTC 时间戳与时区偏移。
+
+---
+
+## UI 结构
+
+### 组件
+
+保持 `SessionPanel` 对外签名不变，内部新增：
+
+- **`GroupHeader(label, expanded, level, onToggle)`** — 统一可折叠组头，chevron 图标（`KeyboardArrowDown` / `KeyboardArrowRight`），`level=0` 为顶层（Recent/Year），`level=1` 为月份，左内缩 16.dp。
+- **`SessionItem`** — 去掉日期行，只保留 title + 删除按钮 + active 背景色。
+
+### 折叠状态
+
+```kotlin
+val grouped = remember(sessions) { groupSessions(sessions) }
+val defaults = remember(grouped) { defaultExpanded(grouped, LocalDate.now()) }
+val expanded = rememberSaveable(grouped, saver = ...) { mutableStateMapOf<String, Boolean>().apply { putAll(defaults) } }
+```
+
+`rememberSaveable` 保证侧栏关闭再打开状态保留；进程重启时 Compose saver 失效，回到默认。
+
+> **实现增强**：`LaunchedEffect(defaults)` 合并新默认键值时不覆盖用户手动切换的已有状态。
+
+### Active 自动展开
+
+```kotlin
+LaunchedEffect(activeSessionId, grouped) {
+    grouped.years.forEach { year ->
+        year.months.forEach { month ->
+            if (month.sessions.any { it.id == activeSessionId }) {
+                expanded[year.key] = true
+                expanded[month.key] = true
+            }
+        }
+    }
+}
+```
+
+一次性副作用：仅在切换 active session 时触发，不覆盖用户手动折叠。
+
+### LazyColumn 渲染
+
+```
+LazyColumn {
+  for bucket in grouped.recent:
+    item(key="h-${bucket.key}") { GroupHeader(...) }
+    if expanded: items(bucket.sessions) { SessionItem(...) }
+
+  for year in grouped.years:
+    item(key="h-${year.key}") { GroupHeader(...) }
+    if expanded:
+      for month in year.months:
+        item(key="h-${month.key}") { GroupHeader(..., level=1) }
+        if expanded: items(month.sessions) { SessionItem(...) }
+}
+```
+
+### 视觉细节
+
+- `GroupHeader`：`labelSmall` + `FontWeight.Medium`，`onSurfaceVariant`，整行 clickable。不显示计数。
+- `SessionItem`：删除日期行后行高自然降低，更紧凑。
+
+---
+
+## 测试
+
+`app/src/test/.../SessionGroupingTest.kt`（14 个单测）：
+
+- 今天 / 昨天 / within7 / within30 边界
+- 跨年分组
+- null / 空 / 格式错误时间戳兜底到 today
+- 组内 desc 排序、月份 desc、年份 desc
+- Recent 固定顺序
+- 空列表 → 空 GroupedSessions
+- `defaultExpanded` 各场景
+- UTC 偏移与时区边界（UTC+8 示例）
+- 未来时间戳归 today
+
+---
+
+## 文件清单
+
+### 新增
+
+- `ui/mobile-android/app/src/main/java/.../ui/chat/SessionGrouping.kt`
+- `ui/mobile-android/app/src/test/java/.../ui/chat/SessionGroupingTest.kt`
+
+### 修改
+
+- `ui/mobile-android/app/src/main/java/.../ui/chat/SessionPanel.kt`
+  - LazyColumn 改为分组渲染
+  - 新增 `GroupHeader` 私有 composable
+  - `SessionItem` 去掉日期行
+  - 新增 `rememberSaveable` 折叠 map 与 `LaunchedEffect` active 展开逻辑
+
+对外签名不变，零破坏性改动。
+
+---
+
+*← [Mobile 索引](INDEX.md) · [Spec 根索引](../INDEX.md)*

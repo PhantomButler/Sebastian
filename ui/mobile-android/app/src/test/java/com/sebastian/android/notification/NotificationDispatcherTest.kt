@@ -2,6 +2,7 @@ package com.sebastian.android.notification
 
 import com.sebastian.android.data.model.StreamEvent
 import com.sebastian.android.data.remote.GlobalSseDispatcher
+import com.sebastian.android.data.remote.SseEnvelope
 import com.sebastian.android.data.repository.ChatRepository
 import com.sebastian.android.data.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,7 +28,7 @@ class NotificationDispatcherTest {
     }
 
     private fun buildSse(
-        upstream: MutableSharedFlow<StreamEvent>,
+        upstream: MutableSharedFlow<SseEnvelope>,
         dispatcher: kotlinx.coroutines.CoroutineDispatcher,
     ): GlobalSseDispatcher {
         val chatRepo = mock<ChatRepository>()
@@ -40,7 +41,7 @@ class NotificationDispatcherTest {
     @Test
     fun `foreground suppresses approval notification`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val upstream = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
+        val upstream = MutableSharedFlow<SseEnvelope>(extraBufferCapacity = 64)
         val sse = buildSse(upstream, dispatcher)
         val sink = mock<NotificationSink>()
         val scope = TestScope(dispatcher)
@@ -56,13 +57,16 @@ class NotificationDispatcherTest {
         testScheduler.advanceUntilIdle()
 
         upstream.emit(
-            StreamEvent.ApprovalRequested(
-                sessionId = "s1",
-                approvalId = "a1",
-                agentType = "sebastian",
-                toolName = "shell",
-                toolInputJson = "{}",
-                reason = "run",
+            SseEnvelope(
+                eventId = null,
+                event = StreamEvent.ApprovalRequested(
+                    sessionId = "s1",
+                    approvalId = "a1",
+                    agentType = "sebastian",
+                    toolName = "shell",
+                    toolInputJson = "{}",
+                    reason = "run",
+                ),
             )
         )
         testScheduler.advanceUntilIdle()
@@ -75,7 +79,7 @@ class NotificationDispatcherTest {
     @Test
     fun `background approval emits heads up notification`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val upstream = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
+        val upstream = MutableSharedFlow<SseEnvelope>(extraBufferCapacity = 64)
         val sse = buildSse(upstream, dispatcher)
         val sink = mock<NotificationSink>()
         val scope = TestScope(dispatcher)
@@ -91,13 +95,16 @@ class NotificationDispatcherTest {
         testScheduler.advanceUntilIdle()
 
         upstream.emit(
-            StreamEvent.ApprovalRequested(
-                sessionId = "s1",
-                approvalId = "a1",
-                agentType = "sebastian",
-                toolName = "shell",
-                toolInputJson = "{}",
-                reason = "run",
+            SseEnvelope(
+                eventId = null,
+                event = StreamEvent.ApprovalRequested(
+                    sessionId = "s1",
+                    approvalId = "a1",
+                    agentType = "sebastian",
+                    toolName = "shell",
+                    toolInputJson = "{}",
+                    reason = "run",
+                ),
             )
         )
         testScheduler.advanceUntilIdle()
@@ -113,7 +120,7 @@ class NotificationDispatcherTest {
     @Test
     fun `session completed uses agentType-prefixed title`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val upstream = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
+        val upstream = MutableSharedFlow<SseEnvelope>(extraBufferCapacity = 64)
         val sse = buildSse(upstream, dispatcher)
         val sink = mock<NotificationSink>()
         val scope = TestScope(dispatcher)
@@ -129,10 +136,13 @@ class NotificationDispatcherTest {
         testScheduler.advanceUntilIdle()
 
         upstream.emit(
-            StreamEvent.SessionCompleted(
-                sessionId = "s1",
-                agentType = "sebastian",
-                goal = "clean up logs",
+            SseEnvelope(
+                eventId = null,
+                event = StreamEvent.SessionCompleted(
+                    sessionId = "s1",
+                    agentType = "sebastian",
+                    goal = "clean up logs",
+                ),
             )
         )
         testScheduler.advanceUntilIdle()
@@ -148,7 +158,7 @@ class NotificationDispatcherTest {
     @Test
     fun `approval granted cancels prior notification`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val upstream = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
+        val upstream = MutableSharedFlow<SseEnvelope>(extraBufferCapacity = 64)
         val sse = buildSse(upstream, dispatcher)
         val sink = mock<NotificationSink>()
         val scope = TestScope(dispatcher)
@@ -163,7 +173,7 @@ class NotificationDispatcherTest {
         sut.start(scope)
         testScheduler.advanceUntilIdle()
 
-        upstream.emit(StreamEvent.ApprovalGranted("a1"))
+        upstream.emit(SseEnvelope(eventId = null, event = StreamEvent.ApprovalGranted("a1")))
         testScheduler.advanceUntilIdle()
 
         verify(sink).cancel(eq("a1".hashCode()))

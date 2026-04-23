@@ -12,6 +12,7 @@ viewmodel/
 ├── AgentBindingEditorViewModel.kt  # 单个 Agent 绑定编辑（Provider + Thinking，防抖保存）
 ├── ChatViewModel.kt                # 主对话状态机（SSE 订阅、消息渲染）
 ├── GlobalApprovalViewModel.kt      # 全局审批队列（跨 session 的审批事件处理）
+├── MemorySettingsViewModel.kt      # 记忆功能开关设置（toggle enabled，失败时回滚）
 ├── ProviderFormViewModel.kt        # Provider 新增/编辑表单状态
 ├── SessionViewModel.kt             # Session 列表与新建
 ├── SettingsViewModel.kt            # 设置页状态（serverUrl、当前 provider）
@@ -58,6 +59,12 @@ Agent LLM 绑定主列表页的 ViewModel，仅负责数据加载：
 4. **三态连接错误**：`isServerNotConfigured` / `isOffline` / `connectionFailed`，优先级从高到低
 5. **全局审批**：审批事件由 `GlobalApprovalViewModel` 统一处理，不再由 `ChatViewModel` 管理
 
+**Timeline Hydration 相关行为**：
+
+- **客户端先行 Session ID**：新 Session 创建时由 App 生成 `UUID` 作为 `session_id`，SSE 先以该 ID 订阅，首条 turn POST 时携带同一 `session_id`，防止流事件在 REST 返回前丢失
+- **`lastDeliveredSseEventIds`**：`Map<sessionId, String>` 短期回放游标，记录每个 session 最后收到的 SSE `event id`；切换 session 或断线重连时作为 `Last-Event-ID` 头传给服务端，服务端可补发漏掉的事件；REST timeline 仍是持久化权威来源
+- **`ChatUiEffect`**：`sealed class`（`RestoreComposerText` / `ShowToast`），通过 `SharedFlow` 发一次性 UI 副作用；`RestoreComposerText` 在发送失败时将用户已输入的文本回填到 Composer，`ShowToast` 用于错误提示
+
 > 滚动跟随语义由 UI 层（`MessageList`）自行维护（`atBottom` / `isUserDragging` / `userAway` 三层模型），
 > ViewModel 不再持有 `ScrollFollowState` 字段或相关回调。
 
@@ -96,6 +103,14 @@ Agent LLM 绑定主列表页的 ViewModel，仅负责数据加载：
 - 加载某 agent 的 session 列表（`AgentRepository.getAgentSessions(agentId)`）
 - 新建 agent session（懒创建：`createAgentSession(agentType)`）
 
+### `MemorySettingsViewModel`
+
+记忆功能开关页 ViewModel（`@HiltViewModel`），负责：
+
+- 初始化时调用 `SettingsRepository.getMemorySettings()` 加载当前开关状态
+- `toggle(enabled)`：乐观更新本地 `enabled`，异步调用 `SettingsRepository.setMemoryEnabled()`；失败时回滚到调用前的值并 emit 错误提示
+- 暴露 `MemorySettingsUiState`（`enabled` / `isLoading` / `error` / `errorSerial`），`errorSerial` 递增用于触发一次性 Snackbar
+
 ### `ProviderFormViewModel`
 
 - 管理 Provider 表单状态（name / type / api_key / base_url / model / thinking_capability）
@@ -120,9 +135,12 @@ ViewModel (sendMessage / switchSession / ...)
 |---------|--------|
 | 改主对话消息处理逻辑 | `ChatViewModel.handleEvent()` |
 | 改 SSE 重连/断线逻辑 | `ChatViewModel.startSseCollection()` / `observeNetwork()` |
+| 改 SSE 回放游标逻辑 | `ChatViewModel`（`lastDeliveredSseEventIds` 字段） |
+| 改发送失败回滚/提示 | `ChatViewModel`（`ChatUiEffect.RestoreComposerText` / `ShowToast`） |
 | 改全局审批处理 | `GlobalApprovalViewModel.grantApproval()` / `denyApproval()` |
 | 改 Agent LLM 绑定主列表加载 | `AgentBindingsViewModel.load()` |
 | 改单个 Agent 绑定编辑（Provider + Thinking） | `AgentBindingEditorViewModel.selectProvider()` / `setEffort()` |
+| 改记忆开关设置 | `MemorySettingsViewModel.toggle()` |
 | 改滚动跟随逻辑 | `ui/chat/MessageList.kt`（UI 层，ViewModel 不参与） |
 | 改 session 列表加载 | `SessionViewModel` |
 | 改设置页状态（serverUrl / provider） | `SettingsViewModel` |

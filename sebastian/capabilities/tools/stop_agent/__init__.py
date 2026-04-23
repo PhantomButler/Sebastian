@@ -45,7 +45,7 @@ async def stop_agent(
 
     state = _get_state()
     async with get_session_lock(session_id):
-        all_sessions = await state.index_store.list_all()
+        all_sessions = await state.session_store.list_sessions()
         index_entry = next((s for s in all_sessions if s.get("id") == session_id), None)
         if index_entry is None:
             return ToolResult(
@@ -131,14 +131,12 @@ async def stop_agent(
         session.status = SessionStatus.IDLE
         session.last_activity_at = datetime.now(UTC)
         await state.session_store.update_session(session)
-        await state.index_store.upsert(session)
 
         content = f"[上级暂停] reason: {reason}" if reason else "[上级暂停]"
-        await state.session_store.append_message(
+        await state.session_store.append_timeline_items(
             session_id,
-            role="system",
-            content=content,
-            agent_type=actual_agent_type,
+            actual_agent_type,
+            [{"kind": "system_event", "role": "system", "content": content}],
         )
 
         if state.event_bus is not None:

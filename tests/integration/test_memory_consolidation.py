@@ -35,6 +35,9 @@ from sebastian.store.models import (
 
 
 class FakeSessionStore:
+    async def get_context_timeline_items(self, session_id: str, agent_type: str) -> list[dict]:
+        raise RuntimeError("no timeline API in test stub")
+
     async def get_messages(self, session_id: str, agent_type: str = "sebastian") -> list[dict]:
         return [
             {"role": "user", "content": "帮我记住这个"},

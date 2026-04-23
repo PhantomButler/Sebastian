@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_updated: 2026-04-21
+version: "1.2"
+last_updated: 2026-04-23
 status: in-progress
 ---
 
@@ -69,6 +69,92 @@ Extractor / Consolidator 的理想运行方式是稳定、低随机性、严格 
 - 依靠固定 task、固定 schema、固定枚举和 schema validation 控制输出稳定性。
 - 只有当真实效果显示默认参数导致不可接受的结构化输出波动时，再讨论是否扩展 provider 抽象。
 
+### 3.1 Memory Component LLM Binding 路由
+
+记忆组件（Extractor / Consolidator）的 LLM Provider 绑定通过**独立路由** `/memory/components` 管理，不复用 `/agents` 路由，不修改 `agents.py` 的 agent_type 校验逻辑。存储层仍复用 `AgentLLMBindingRecord` 表（不加新表），`agent_type` 字段的值即 `component_type`。
+
+#### 白名单与元数据
+
+```python
+# sebastian/memory/provider_bindings.py
+MEMORY_COMPONENT_TYPES: frozenset[str] = frozenset({
+    MEMORY_EXTRACTOR_BINDING,
+    MEMORY_CONSOLIDATOR_BINDING,
+})
+
+MEMORY_COMPONENT_META: dict[str, dict[str, str]] = {
+    MEMORY_EXTRACTOR_BINDING: {
+        "display_name": "记忆提取器",
+        "description": "从会话片段中提取候选 memory artifact",
+    },
+    MEMORY_CONSOLIDATOR_BINDING: {
+        "display_name": "记忆沉淀器",
+        "description": "会话结束后归纳 session summary 和推断偏好",
+    },
+}
+```
+
+路由层通过 `MEMORY_COMPONENT_TYPES` 校验 `component_type` 参数，通过 `MEMORY_COMPONENT_META` 获取 display name 和 description，不写死在路由文件中。
+
+#### REST API
+
+路由前缀：`/api/v1/memory/components`（注册在 `gateway/app.py` 中）。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/memory/components` | 列出所有 memory 组件及其当前绑定 |
+| `GET` | `/memory/components/{component_type}/llm-binding` | 获取单个组件的绑定（无绑定时返回 `provider_id: null`） |
+| `PUT` | `/memory/components/{component_type}/llm-binding` | 设置绑定（`provider_id: null` 清除，provider 不存在返回 400） |
+| `DELETE` | `/memory/components/{component_type}/llm-binding` | 清除绑定（204 No Content） |
+
+GET `/memory/components` 响应示例：
+
+```json
+{
+  "components": [
+    {
+      "component_type": "memory_extractor",
+      "display_name": "记忆提取器",
+      "description": "从会话片段中提取候选 memory artifact",
+      "binding": {
+        "provider_id": "abc123",
+        "thinking_effort": null
+      }
+    },
+    {
+      "component_type": "memory_consolidator",
+      "display_name": "记忆沉淀器",
+      "description": "会话结束后归纳 session summary 和推断偏好",
+      "binding": null
+    }
+  ]
+}
+```
+
+PUT 行为与 `/agents/{agent_type}/llm-binding` 一致：
+- provider 的 `thinking_capability` 为 `"none"` 或 `"always_on"` → 强制清空 `thinking_effort`
+- provider 切换时 `thinking_effort` 重置为 `null`
+
+> **实现差异**：`LLMProviderRegistry.get_provider()` 的参数名为 `agent_type`（非 `binding_key`），返回类型为 `ResolvedProvider` dataclass（包含 `provider`、`model`、`thinking_effort`、`capability`），而非原始 `LLMProvider`。
+
+#### Android 集成
+
+在 `AgentBindingsPage` 中插入第二个 section "Memory Components"（位于 Orchestrator 之后、Sub-Agents 之前）：
+
+- `MemoryComponentRow` 外观与 `AgentRow` 一致，icon 使用 `Icons.Outlined.Psychology`
+- 点击行复用现有 `AgentBindingEditorPage`，通过 `isMemoryComponent: Boolean` 标志切换调用端点
+- `AgentBindingsViewModel.load()` 并发请求 `GET /agents` + `GET /memory/components` + `GET /llm-providers`
+- `AgentBindingEditorViewModel` 根据 `isMemoryComponent` 选择 `/agents/` 或 `/memory/components/` 端点
+
+数据层：
+- DTO：`MemoryComponentDto`（component_type / display_name / description / binding）
+- Domain model：`MemoryComponentInfo`（与 `AgentInfo` 平行，不复用同一 data class）
+- API：`ApiService` 新增 `listMemoryComponents()` 等 4 个方法
+
+#### 存储说明
+
+两个 memory component 的绑定存储在 `AgentLLMBindingRecord` 表中，`agent_type` 字段值分别为 `"memory_extractor"` 和 `"memory_consolidator"`，与 agent binding 行共存于同一表。Memory component 路由通过 `MEMORY_COMPONENT_TYPES` 白名单管理自己的键空间，agent 路由通过 `agent_registry` 管理自己的键空间，两者互不干扰。
+
 ---
 
 ## 4. 两类模型职责
@@ -87,6 +173,23 @@ Extractor / Consolidator 的理想运行方式是稳定、低随机性、严格 
 - 稳
 - 结构化输出一致
 - 中文与中英混合语料理解可靠
+
+#### 置信度评分规则
+
+Extractor system prompt（`sebastian/memory/prompts.py`）包含「置信度评分指南」，约束模型对 `confidence` 字段的评分行为：
+
+| 分值区间 | 适用场景 |
+|----------|---------|
+| 0.9 – 1.0 | 用户明确陈述的事实（"我喜欢X"、"我叫X"、"我在X工作"） |
+| 0.7 – 0.9 | 对话中直接体现但非明确声明（"每次都选X"、重复提及同一偏好） |
+| 0.5 – 0.7 | 从行为或上下文推断的偏好，有一定根据但非直述 |
+| 0.3 – 0.5 | 模糊线索或单次偶然提及，可信度较低 |
+| < 0.3    | 高度不确定的推断，几乎只有间接证据（建议直接不提取） |
+
+附加约束：
+- `source` 为 `explicit` 时，confidence 不应低于 0.8
+- `source` 为 `inferred` 时，confidence 上限建议不超过 0.75
+- 若不确定是否值得提取，优先提高 confidence 阈值要求而非强行提取低质量记忆
 
 ### 4.2 Memory Consolidator（记忆沉淀器）
 
@@ -443,6 +546,94 @@ Agent 继续执行，本轮无记忆注入。`warning` 级日志包含完整 tra
 | Consolidator LLM 失败 | 无 | **整次沉淀静默丢失** | trace（count=0） + error log | **不重试（已知缺口）** |
 | 检索抛出异常 | 无记忆注入 | 无 | warning log + traceback | 下次请求自动恢复 |
 | Consolidation task 异常 | 无 | 不写入 | error log | startup sweep 重试 |
+
+---
+
+## 13. 记忆功能设置持久化
+
+### 13.1 `app_settings` KV 表
+
+通用全局配置存储，不限于记忆功能。
+
+```python
+# sebastian/store/models.py
+class AppSettingsRecord(Base):
+    __tablename__ = "app_settings"
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+```
+
+已知常量（定义在 `store/app_settings_store.py`）：
+
+```python
+APP_SETTING_MEMORY_ENABLED = "memory_enabled"
+```
+
+### 13.2 `AppSettingsStore`
+
+封装 KV 读写（`sebastian/store/app_settings_store.py`）：
+
+```python
+class AppSettingsStore:
+    def __init__(self, session: AsyncSession) -> None: ...
+
+    async def get(self, key: str, default: str | None = None) -> str | None:
+        """查询指定 key，不存在返回 default。"""
+
+    async def set(self, key: str, value: str) -> None:
+        """Upsert：存在则更新 value + updated_at，不存在则插入。"""
+```
+
+### 13.3 Gateway 启动加载
+
+`gateway/app.py` lifespan startup 中从 DB 加载记忆设置，覆盖环境变量默认值：
+
+```python
+async with db_factory() as session:
+    app_settings_store = AppSettingsStore(session)
+    mem_val = await app_settings_store.get(APP_SETTING_MEMORY_ENABLED)
+    if mem_val is not None:
+        mem_enabled = mem_val.lower() == "true"
+    else:
+        mem_enabled = settings.sebastian_memory_enabled  # 环境变量 fallback
+state.memory_settings = MemoryRuntimeSettings(enabled=mem_enabled)
+```
+
+**优先级**：DB 有值 → 用 DB 值；DB 无值 → fallback 到环境变量 `SEBASTIAN_MEMORY_ENABLED`。
+
+### 13.4 `PUT /api/v1/memory/settings` 持久化
+
+`gateway/routes/memory_settings.py` 的 PUT 端点在更新内存状态的同时写入 DB：
+
+```python
+@router.put("/memory/settings", response_model=MemoryRuntimeSettings)
+async def put_memory_settings(body: MemoryRuntimeSettings, ...) -> MemoryRuntimeSettings:
+    async with state.db_factory() as session:
+        store = AppSettingsStore(session)
+        await store.set(APP_SETTING_MEMORY_ENABLED, str(body.enabled).lower())
+        await session.commit()
+    state.memory_settings = body
+    return state.memory_settings
+```
+
+功能开关为运行时热切换；关闭后不影响已有数据，重新开启后下一轮会话正常触发沉淀。
+
+### 13.5 Android 记忆设置页面
+
+- **路由**：`Route.SettingsMemory`（`Route.kt` 中注册）
+- **页面**：`MemorySettingsPage`（`ui/settings/`），使用 `SebastianSwitch` 组件
+- **ViewModel**：`MemorySettingsViewModel`，乐观更新 → PUT → 失败回滚 + Snackbar 错误提示
+- **DTO**：`MemorySettingsDto(enabled: Boolean)`
+- **入口**：`SettingsScreen` 第一个分组 Card 中，`Agent LLM Bindings` 行下方，icon `Icons.Outlined.Psychology`，标题"记忆功能"，副标题"长期记忆开关"
+
+### 13.6 数据库 Migration
+
+项目使用 `Base.metadata.create_all` 自动建表，新增 `AppSettingsRecord` model 后在 `create_all` 前 import 即可，无需 Alembic migration。
 
 ---
 

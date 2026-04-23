@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sebastian.protocol.events.bus import EventBus
-    from sebastian.store.index_store import IndexStore
     from sebastian.store.session_store import SessionStore
 
 from sebastian.core.types import SessionStatus
@@ -19,14 +18,13 @@ SCAN_INTERVAL_SECONDS = 60
 
 
 async def _check_stalled_sessions(
-    index_store: IndexStore,
     session_store: SessionStore,
     event_bus: EventBus | None,
     agent_registry: dict[str, Any],
 ) -> list[str]:
     """Scan active sessions and mark stalled ones. Returns list of stalled session IDs."""
     now = datetime.now(UTC)
-    all_sessions = await index_store.list_all()
+    all_sessions = await session_store.list_sessions()
     stalled_ids: list[str] = []
 
     for entry in all_sessions:
@@ -57,7 +55,6 @@ async def _check_stalled_sessions(
             session.status = SessionStatus.STALLED
             session.updated_at = now
             await session_store.update_session(session)
-            await index_store.upsert(session)
 
             if event_bus is not None:
                 await event_bus.publish(
@@ -81,7 +78,6 @@ async def _check_stalled_sessions(
 
 
 async def _watchdog_loop(
-    index_store: IndexStore,
     session_store: SessionStore,
     event_bus: EventBus | None,
     agent_registry: dict[str, Any],
@@ -89,7 +85,7 @@ async def _watchdog_loop(
     """Background loop that periodically checks for stalled sessions."""
     while True:
         try:
-            await _check_stalled_sessions(index_store, session_store, event_bus, agent_registry)
+            await _check_stalled_sessions(session_store, event_bus, agent_registry)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -98,13 +94,12 @@ async def _watchdog_loop(
 
 
 def start_watchdog(
-    index_store: IndexStore,
     session_store: SessionStore,
     event_bus: EventBus | None,
     agent_registry: dict[str, Any],
 ) -> asyncio.Task[None]:
     """Start the stalled-detection watchdog as a background task."""
     return asyncio.create_task(
-        _watchdog_loop(index_store, session_store, event_bus, agent_registry),
+        _watchdog_loop(session_store, event_bus, agent_registry),
         name="stalled_watchdog",
     )

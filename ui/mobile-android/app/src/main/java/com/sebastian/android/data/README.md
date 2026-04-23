@@ -16,10 +16,12 @@ data/
 │   ├── AgentInfo.kt                # Sub-Agent 信息模型（含 boundProviderId）
 │   ├── ApprovalSnapshot.kt         # 待审批条目快照（GET /approvals 响应领域模型）
 │   ├── ContentBlock.kt             # 消息内容块（TextBlock / ThinkingBlock / ToolBlock）
+│   ├── MemoryComponentInfo.kt      # 记忆组件信息模型（componentType / displayName / boundProviderId / thinkingEffort）
 │   ├── Message.kt                  # 消息模型（含 blocks 列表）
 │   ├── Provider.kt                 # LLM Provider 模型
 │   ├── Session.kt                  # Session 模型
-│   └── StreamEvent.kt              # SSE 事件模型（sealed class）
+│   ├── StreamEvent.kt              # SSE 事件模型（sealed class）
+│   └── ThinkingEffort.kt           # ThinkingEffort 枚举序列化扩展（toApiString / toThinkingEffort / displayLabel）
 ├── remote/
 │   ├── ApiService.kt               # Retrofit 接口声明（REST 端点）
 │   ├── GlobalSseDispatcher.kt      # 全局 SSE 单例（事件广播 + 连接状态）
@@ -28,10 +30,14 @@ data/
 │       ├── AgentBindingDto.kt      # Agent LLM 绑定 DTO（SetBindingRequest / AgentBindingDto）
 │       ├── AgentDto.kt             # Agent 列表 DTO（AgentListResponse / AgentDto）
 │       ├── LogStateDto.kt          # 日志状态 DTO（LogStateDto / LogConfigPatchDto）
+│       ├── MemoryComponentDto.kt   # 记忆组件 DTO（MemoryComponentDto / MemoryComponentsResponse，含 toDomain()）
+│       ├── MemorySettingsDto.kt    # 记忆设置 DTO（MemorySettingsDto，含 enabled 字段）
 │       ├── MessageDto.kt           # 消息 DTO + 映射函数
 │       ├── ProviderDto.kt          # Provider DTO
 │       ├── SessionDto.kt           # Session DTO
 │       ├── SseFrameDto.kt          # SSE 帧解析（JSON → StreamEvent）
+│       ├── TimelineItemDto.kt      # timeline 行 DTO（镜像后端 session timeline，seq / role / block_type 等字段）
+│       ├── TimelineMapper.kt       # TimelineItemDto 列表 → List<Message> 转换，context_summary → SummaryBlock
 │       └── TurnDto.kt              # Turn 请求/响应 DTO
 ├── sync/
 │   └── AppStateReconciler.kt       # App 前台恢复时的状态对账（审批队列 REST 同步）
@@ -60,10 +66,13 @@ data/
 
 领域模型（UI 层直接使用，不含网络字段）。
 
-- **`ContentBlock`**：sealed class，三种子类型：
+- **`ContentBlock`**：sealed class，四种子类型：
   - `TextBlock`：文本块，含原始 `text: String`，由 `MarkdownView` 负责渲染
   - `ThinkingBlock`：思考块，支持展开/折叠（`expanded`）
   - `ToolBlock`：工具调用块，含 `status: ToolStatus`（PENDING / RUNNING / DONE / FAILED）
+  - `SummaryBlock`：上下文压缩摘要块，对应 timeline 中的 `context_summary` 行，渲染为折叠卡片"Compressed summary"
+- **`MemoryComponentInfo`**：记忆组件领域模型，含 `componentType`、`displayName`、`description`、`boundProviderId`、`thinkingEffort`；由 `MemoryComponentDto.toDomain()` 生成
+- **`ThinkingEffort`**：枚举序列化扩展函数集合：`String?.toThinkingEffort()` 解析 API 字符串，`toApiString()` 序列化为 API 字符串（OFF → null），`displayLabel()` 返回 UI 可展示的非空标签
 - **`StreamEvent`**：sealed class，映射 SSE 帧的所有事件类型（TurnReceived / TextDelta / ToolRunning / ApprovalRequested 等）
 - **`Message`**：包含 `blocks: List<ContentBlock>`，支持多块混合内容
 - **`ApprovalSnapshot`**：REST 快照用的待审批条目（字段与 `GlobalApproval` 对齐，独立存放以避免 repository 反向依赖 viewmodel 包）
@@ -78,7 +87,10 @@ data/
   - `sessionStream(baseUrl, sessionId, lastEventId)`：单 session 事件流
   - `globalStream(baseUrl, lastEventId)`：全局事件流
   - 内置指数退避重连（1s / 2s / 4s，最多 3 次），Last-Event-ID 跨连接持久化
-- **`dto/`**：DTO + 解析逻辑，`SseFrameDto.kt` 中的 `SseFrameParser.parse()` 将 JSON 字符串解析为 `StreamEvent`；`AgentDto.kt` 含 `AgentListResponse`；`AgentBindingDto.kt` 含 `SetBindingRequest` / `AgentBindingDto`；`LogStateDto.kt` 含 `LogStateDto` / `LogConfigPatchDto`
+- **`dto/`**：DTO + 解析逻辑，`SseFrameDto.kt` 中的 `SseFrameParser.parse()` 将 JSON 字符串解析为 `StreamEvent`；`AgentDto.kt` 含 `AgentListResponse`；`AgentBindingDto.kt` 含 `SetBindingRequest` / `AgentBindingDto`；`LogStateDto.kt` 含 `LogStateDto` / `LogConfigPatchDto`；`MemoryComponentDto.kt` 含 `MemoryComponentDto` / `MemoryComponentsResponse`，`toDomain()` 将 DTO 转换为领域模型；`MemorySettingsDto.kt` 含 `MemorySettingsDto`（enabled 字段），用于 GET/PUT `/memory/settings`
+- **`TimelineItemDto`**：镜像后端 session timeline 行（`seq`、`role`、`block_type`、`content`、`tool_name` 等字段），通过 `GET /api/v1/sessions/{id}?include_archived=true` 响应中的 `timeline_items` 数组返回
+- **`TimelineMapper`**：唯一将 `TimelineItemDto` 列表转换为 `List<Message>` 的入口；`context_summary` 块映射为 `ContentBlock.SummaryBlock`，archived 原始行正常渲染，不做隐藏或置灰
+- **`SseEnvelope`**：`data class SseEnvelope(val eventId: String?, val event: StreamEvent)`，在 `SseClient` 内部将 SSE `id:` 字段与解析后的事件一起传递，供 `ChatViewModel` 追踪 `lastDeliveredSseEventIds` 回放游标
 
 ### `repository/`
 
@@ -105,11 +117,15 @@ App 状态对账层。
 | 修改本地 Token 存储 | `local/SecureTokenStore.kt` |
 | 修改设置持久化字段 | `local/SettingsDataStore.kt` + `repository/SettingsRepositoryImpl.kt` |
 | 新增消息内容块类型 | `model/ContentBlock.kt` + `model/StreamEvent.kt` + `remote/dto/SseFrameDto.kt` |
+| 修改 timeline 解析逻辑 | `remote/dto/TimelineItemDto.kt` + `remote/dto/TimelineMapper.kt` |
+| 修改 SSE 事件 ID 传递 | `remote/SseClient.kt`（`SseEnvelope` 包装层） |
 | 修改 Repository 接口 | 对应 `repository/XxxRepository.kt` + `XxxRepositoryImpl.kt` + `di/RepositoryModule.kt` |
 | 修改审批对账逻辑 | `sync/AppStateReconciler.kt` |
 | 修改全局 SSE 广播 | `remote/GlobalSseDispatcher.kt` |
 | 修改 Agent 绑定 DTO | `remote/dto/AgentBindingDto.kt` + `remote/ApiService.kt` |
 | 修改日志状态 API | `remote/dto/LogStateDto.kt` + `remote/ApiService.kt` |
+| 修改记忆组件 LLM 绑定 DTO | `remote/dto/MemoryComponentDto.kt` + `remote/ApiService.kt` |
+| 修改记忆开关设置 DTO | `remote/dto/MemorySettingsDto.kt` + `remote/ApiService.kt` |
 
 ---
 

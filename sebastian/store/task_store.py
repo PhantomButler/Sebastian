@@ -10,7 +10,14 @@ from sebastian.store.models import CheckpointRecord, TaskRecord
 
 
 class TaskStore:
-    """Persistent storage for tasks and their checkpoints."""
+    """Persistent storage for tasks and their checkpoints.
+
+    .. deprecated::
+        Use :class:`sebastian.store.session_tasks.SessionTaskStore` instead.
+        This class is not wired into any runtime path and exists only for
+        backward compatibility with tests that were written before Task 5.
+        It does NOT update session task counts; ``SessionTaskStore`` does.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session

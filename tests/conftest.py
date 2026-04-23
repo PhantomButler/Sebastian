@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
 from pathlib import Path
 
@@ -26,6 +27,9 @@ async def db_session():
     async with factory() as session:
         yield session
     await engine.dispose()
+    # aiosqlite 的 worker 线程在 dispose 后可能还有最后一次回调未发送；
+    # 让事件循环多转一圈，确保线程干净退出，避免 PytestUnhandledThreadExceptionWarning。
+    await asyncio.sleep(0)
 
 
 @pytest.fixture(autouse=True)

@@ -27,21 +27,22 @@ AgentLoop 流式引擎与 SSE 事件协议。涵盖：
 
 ### [llm-provider.md](llm-provider.md) — LLM Provider 管理与 Thinking 控制
 
-LLM 多 Provider 抽象层 + Thinking Effort 全链路设计。涵盖：
+LLM 多 Provider 抽象层 + Agent Binding + Thinking Effort 全链路设计。涵盖：
 
 - LLMProvider 抽象接口（单次调用职责、stream() 签名）
 - Anthropic 适配（SDK 事件 → LLMStreamEvent 映射）
 - OpenAI 兼容适配（thinking_format 三模式：None / reasoning_content / think_tags）
 - LLMProviderRecord 数据模型（api_key Fernet 加密、thinking_capability 字段）
-- LLMProviderRegistry（provider 匹配优先级、缓存与热重载）
-- AgentLoop / BaseAgent 集成（provider 依赖注入）
-- Thinking Effort 控制：thinking_capability 五档能力模型、effort 翻译表、API 透传链路、多轮 thinking signature 修复
-- 前端 ThinkButton / EffortPicker 设计
-- Gateway CRUD 路由
+- AgentLLMBindingRecord 数据模型（agent_type PK、provider_id FK、thinking_effort）
+- LLMProviderRegistry（binding 表优先查询、ResolvedProvider 返回值、thinking 钳制）
+- AgentLoop / BaseAgent 集成（provider 依赖注入、per-turn live 生效）
+- Thinking Effort 控制：thinking_capability 五档能力模型、effort 翻译表、从 binding 表读取注入、多轮 thinking signature 修复
+- 前端 Thinking 迁移（移除 Composer ThinkButton → Agent Binding EditorPage 持久化配置）
+- Gateway CRUD 路由（Provider + Agent Binding）
 
 | 版本 | 状态 | 最后更新 |
 |------|------|---------|
-| 1.0 | implemented | 2026-04-10 |
+| 2.0 | implemented | 2026-04-23 |
 
 ---
 

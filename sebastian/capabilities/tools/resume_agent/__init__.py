@@ -46,7 +46,6 @@ async def _schedule_session(*, state: ModuleType, agent: Any, session: Session) 
             session=session,
             goal=session.goal,
             session_store=state.session_store,
-            index_store=state.index_store,
             event_bus=state.event_bus,
         )
     )
@@ -69,7 +68,7 @@ async def resume_agent(
 
     state = _get_state()
     async with get_session_lock(session_id):
-        all_sessions = await state.index_store.list_all()
+        all_sessions = await state.session_store.list_sessions()
         index_entry = next((s for s in all_sessions if s.get("id") == session_id), None)
         if index_entry is None:
             return ToolResult(
@@ -130,17 +129,19 @@ async def resume_agent(
                 ),
             )
 
+        timeline_items: list[dict[str, str]] = [
+            {"kind": "system_event", "role": "system", "content": f"Agent {session_id} resumed"}
+        ]
         if instruction:
-            await state.session_store.append_message(
-                session_id,
-                role="user",
-                content=instruction,
-                agent_type=actual_agent_type,
-            )
+            timeline_items.append({"kind": "user_message", "role": "user", "content": instruction})
+        await state.session_store.append_timeline_items(
+            session_id,
+            actual_agent_type,
+            timeline_items,
+        )
 
         session.status = SessionStatus.ACTIVE
         await state.session_store.update_session(session)
-        await state.index_store.upsert(session)
 
         if state.event_bus is not None:
             await state.event_bus.publish(

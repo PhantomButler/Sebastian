@@ -16,8 +16,7 @@ async def test_spawn_sub_agent_success():
     mock_state.agent_instances = {"code": mock_agent}
     mock_state.agent_registry = {"code": MagicMock(max_children=5)}
     mock_state.session_store = AsyncMock()
-    mock_state.index_store = AsyncMock()
-    mock_state.index_store.list_active_children = AsyncMock(return_value=[])
+    mock_state.session_store.list_active_children = AsyncMock(return_value=[])
     mock_state.event_bus = MagicMock()
 
     ctx = ToolCallContext(
@@ -51,8 +50,8 @@ async def test_spawn_sub_agent_over_limit():
 
     mock_state = MagicMock()
     mock_state.agent_registry = {"code": MagicMock(max_children=2)}
-    mock_state.index_store = AsyncMock()
-    mock_state.index_store.list_active_children = AsyncMock(
+    mock_state.session_store = AsyncMock()
+    mock_state.session_store.list_active_children = AsyncMock(
         return_value=[{"id": "c1"}, {"id": "c2"}]
     )
 

@@ -27,10 +27,9 @@ async def test_completed_event_carries_parent_session_id_and_goal():
     agent = AsyncMock()
     agent.run_streaming = AsyncMock(return_value="done")
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
 
-    await run_agent_session(agent, session, "目标任务", session_store, index_store, event_bus)
+    await run_agent_session(agent, session, "目标任务", session_store, event_bus)
 
     event_bus.publish.assert_called_once()
     published = event_bus.publish.call_args[0][0]
@@ -45,10 +44,9 @@ async def test_failed_event_carries_parent_session_id():
     agent = AsyncMock()
     agent.run_streaming = AsyncMock(side_effect=RuntimeError("crash"))
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
 
-    await run_agent_session(agent, session, "目标任务", session_store, index_store, event_bus)
+    await run_agent_session(agent, session, "目标任务", session_store, event_bus)
 
     published = event_bus.publish.call_args[0][0]
     assert published.type == EventType.SESSION_FAILED
@@ -67,10 +65,9 @@ async def test_waiting_status_not_overwritten_by_completed():
 
     agent.run_streaming = AsyncMock(side_effect=_set_waiting)
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
 
-    await run_agent_session(agent, session, "目标任务", session_store, index_store, event_bus)
+    await run_agent_session(agent, session, "目标任务", session_store, event_bus)
 
     assert session.status == SessionStatus.WAITING
     # WAITING 状态不发布任何事件（ask_parent 工具自己发 SESSION_WAITING）

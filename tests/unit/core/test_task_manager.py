@@ -9,20 +9,18 @@ from sebastian.core.task_manager import TaskManager
 from sebastian.core.types import InvalidTaskTransitionError, Session, Task, TaskStatus
 from sebastian.protocol.events.bus import EventBus
 from sebastian.protocol.events.types import Event, EventType
-from sebastian.store.index_store import IndexStore
 from sebastian.store.session_store import SessionStore
 
 
 @pytest.fixture
 def manager_context(
     tmp_path: Path,
-) -> tuple[TaskManager, SessionStore, EventBus, IndexStore]:
+) -> tuple[TaskManager, SessionStore, EventBus]:
     sessions_dir = tmp_path / "sessions"
     sessions_dir.mkdir()
     store = SessionStore(sessions_dir)
     bus = EventBus()
-    index_store = IndexStore(sessions_dir)
-    return TaskManager(store, bus, index_store=index_store), store, bus, index_store
+    return TaskManager(store, bus), store, bus
 
 
 async def _await_background_task(manager: TaskManager, task_id: str) -> None:
@@ -32,9 +30,9 @@ async def _await_background_task(manager: TaskManager, task_id: str) -> None:
 
 @pytest.mark.asyncio
 async def test_transition_rejects_created_to_running(
-    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    manager_context: tuple[TaskManager, SessionStore, EventBus],
 ) -> None:
-    manager, store, _, _ = manager_context
+    manager, store, _ = manager_context
     session = Session(agent_type="sebastian", title="test")
     await store.create_session(session)
     task = Task(session_id=session.id, goal="test transition", assigned_agent="sebastian")
@@ -46,9 +44,9 @@ async def test_transition_rejects_created_to_running(
 
 @pytest.mark.asyncio
 async def test_transition_rejects_completed_to_running(
-    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    manager_context: tuple[TaskManager, SessionStore, EventBus],
 ) -> None:
-    manager, store, _, _ = manager_context
+    manager, store, _ = manager_context
     session = Session(agent_type="sebastian", title="test")
     await store.create_session(session)
     task = Task(
@@ -65,9 +63,9 @@ async def test_transition_rejects_completed_to_running(
 
 @pytest.mark.asyncio
 async def test_transition_persists_and_publishes_events_in_order(
-    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    manager_context: tuple[TaskManager, SessionStore, EventBus],
 ) -> None:
-    manager, store, bus, index_store = manager_context
+    manager, store, bus = manager_context
     session = Session(agent_type="sebastian", title="test")
     await store.create_session(session)
 
@@ -97,13 +95,6 @@ async def test_transition_persists_and_publishes_events_in_order(
     assert loaded.completed_at is not None
     assert loaded.updated_at >= planning_updated_at
 
-    index_entries = await index_store.list_all()
-    assert len(index_entries) == 1
-    assert index_entries[0]["id"] == session.id
-    assert index_entries[0]["agent_type"] == "sebastian"
-    assert index_entries[0]["task_count"] == 1
-    assert index_entries[0]["active_task_count"] == 0
-
     assert [event.type for event in received] == [
         EventType.TASK_PLANNING_STARTED,
         EventType.TASK_STARTED,
@@ -117,9 +108,9 @@ async def test_transition_persists_and_publishes_events_in_order(
 
 @pytest.mark.asyncio
 async def test_submit_runs_to_completion(
-    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    manager_context: tuple[TaskManager, SessionStore, EventBus],
 ) -> None:
-    manager, store, bus, index_store = manager_context
+    manager, store, bus = manager_context
     session = Session(agent_type="stock", title="worker session")
     await store.create_session(session)
 
@@ -145,10 +136,6 @@ async def test_submit_runs_to_completion(
     assert loaded.completed_at is not None
     assert seen_statuses == [TaskStatus.RUNNING]
 
-    index_entries = await index_store.list_by_agent_type("stock")
-    assert len(index_entries) == 1
-    assert index_entries[0]["id"] == session.id
-
     assert [event.type for event in received] == [
         EventType.TASK_CREATED,
         EventType.TASK_PLANNING_STARTED,
@@ -160,9 +147,9 @@ async def test_submit_runs_to_completion(
 
 @pytest.mark.asyncio
 async def test_cancel_returns_false_before_task_reaches_running(
-    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    manager_context: tuple[TaskManager, SessionStore, EventBus],
 ) -> None:
-    manager, store, _, _ = manager_context
+    manager, store, _ = manager_context
     session = Session(agent_type="sebastian", title="test")
     await store.create_session(session)
 
@@ -202,9 +189,9 @@ async def test_cancel_returns_false_before_task_reaches_running(
 
 @pytest.mark.asyncio
 async def test_submit_cancels_running_task_with_legal_transition(
-    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    manager_context: tuple[TaskManager, SessionStore, EventBus],
 ) -> None:
-    manager, store, bus, _ = manager_context
+    manager, store, bus = manager_context
     session = Session(agent_type="sebastian", title="test")
     await store.create_session(session)
 
@@ -243,10 +230,11 @@ async def test_submit_cancels_running_task_with_legal_transition(
 
 @pytest.mark.asyncio
 async def test_task_manager_uses_agent_type_directly(
-    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    manager_context: tuple[TaskManager, SessionStore, EventBus],
 ) -> None:
     """assigned_agent 直接作为 agent_type，不剥离数字后缀。"""
-    manager, store, _, _ = manager_context
+    manager, store, _ = manager_context
+
     session = Session(agent_type="agent_v2", title="test")
     await store.create_session(session)
 
@@ -257,8 +245,6 @@ async def test_task_manager_uses_agent_type_directly(
     await manager.submit(task, fn)
     await _await_background_task(manager, task.id)
 
-    # With the bug (_resolve_agent_path using rpartition), "agent_v2" → "agent_v"
-    # After fix, "agent_v2" must be stored as-is
     loaded = await store.get_task(session.id, task.id, "agent_v2")
     assert loaded is not None, "Task should be stored under agent_type 'agent_v2', not 'agent_v'"
     assert loaded.status == TaskStatus.COMPLETED
@@ -266,10 +252,10 @@ async def test_task_manager_uses_agent_type_directly(
 
 @pytest.mark.asyncio
 async def test_transition_rolls_back_local_state_when_persist_fails(
-    manager_context: tuple[TaskManager, SessionStore, EventBus, IndexStore],
+    manager_context: tuple[TaskManager, SessionStore, EventBus],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    manager, store, _, _ = manager_context
+    manager, store, _ = manager_context
     session = Session(agent_type="sebastian", title="test")
     await store.create_session(session)
     task = Task(session_id=session.id, goal="rollback task", assigned_agent="sebastian")

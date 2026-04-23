@@ -19,10 +19,9 @@ async def test_turn_done_callback_sets_failed_on_exception() -> None:
     session.status = SessionStatus.ACTIVE
 
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
 
-    cb = _make_turn_done_callback(session, session_store, index_store, event_bus)
+    cb = _make_turn_done_callback(session, session_store, event_bus)
 
     async def fail_task() -> None:
         raise RuntimeError("oops")
@@ -39,7 +38,6 @@ async def test_turn_done_callback_sets_failed_on_exception() -> None:
     # Let the background persist task run
     await asyncio.sleep(0.01)
     session_store.update_session.assert_awaited_once()
-    index_store.upsert.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -53,9 +51,8 @@ async def test_turn_done_callback_sets_cancelled_on_cancel() -> None:
     session.status = SessionStatus.ACTIVE
 
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
-    cb = _make_turn_done_callback(session, session_store, index_store, event_bus)
+    cb = _make_turn_done_callback(session, session_store, event_bus)
 
     async def cancellable() -> None:
         await asyncio.sleep(100)
@@ -72,7 +69,6 @@ async def test_turn_done_callback_sets_cancelled_on_cancel() -> None:
 
     await asyncio.sleep(0.01)
     session_store.update_session.assert_awaited_once()
-    index_store.upsert.assert_awaited_once()
     event_bus.publish.assert_awaited_once()
 
 
@@ -87,7 +83,7 @@ async def test_turn_done_callback_noop_on_success() -> None:
     session.status = SessionStatus.ACTIVE
 
     session_store = AsyncMock()
-    cb = _make_turn_done_callback(session, session_store, AsyncMock(), AsyncMock())
+    cb = _make_turn_done_callback(session, session_store, AsyncMock())
 
     async def ok_task() -> str:
         return "done"

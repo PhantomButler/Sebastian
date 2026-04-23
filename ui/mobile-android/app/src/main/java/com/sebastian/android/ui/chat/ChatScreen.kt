@@ -159,6 +159,7 @@ fun ChatScreen(
                     flushTick = chatState.flushTick,
                     onToggleThinking = chatViewModel::toggleThinkingBlock,
                     onToggleTool = chatViewModel::toggleToolBlock,
+                    onToggleSummary = chatViewModel::toggleSummaryBlock,
                     glassState = glassState,
                     contentPadding = PaddingValues(top = 88.dp, bottom = 112.dp),
                     fabBottomOffset = 128.dp,

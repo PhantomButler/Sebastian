@@ -28,7 +28,6 @@ async def test_run_agent_session_calls_run_streaming_without_thinking_effort() -
         session=session,
         goal="hello",
         session_store=AsyncMock(),
-        index_store=AsyncMock(),
         event_bus=None,
     )
 

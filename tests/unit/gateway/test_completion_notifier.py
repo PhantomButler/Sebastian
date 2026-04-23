@@ -13,9 +13,8 @@ from sebastian.protocol.events.types import Event, EventType
 def _make_notifier(parent_agent=None, last_message="任务已完成，所有文件已修改"):
     bus = EventBus()
     session_store = AsyncMock()
-    index_store = AsyncMock()
 
-    index_store.list_all = AsyncMock(
+    session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "seb-123",
@@ -27,10 +26,22 @@ def _make_notifier(parent_agent=None, last_message="任务已完成，所有文�
         ]
     )
 
-    session_store.get_messages = AsyncMock(
+    session_store.get_recent_timeline_items = AsyncMock(
         return_value=[
-            {"role": "user", "content": "重构 auth", "ts": "2026-01-01T00:00:00"},
-            {"role": "assistant", "content": last_message, "ts": "2026-01-01T00:01:00"},
+            {
+                "kind": "user_message",
+                "role": "user",
+                "content": "重构 auth",
+                "seq": 1,
+                "created_at": "2026-01-01T00:00:00",
+            },
+            {
+                "kind": "assistant_message",
+                "role": "assistant",
+                "content": last_message,
+                "seq": 2,
+                "created_at": "2026-01-01T00:01:00",
+            },
         ]
     )
 
@@ -43,7 +54,6 @@ def _make_notifier(parent_agent=None, last_message="任务已完成，所有文�
     notifier = CompletionNotifier(
         event_bus=bus,
         session_store=session_store,
-        index_store=index_store,
         sebastian=sebastian,
         agent_instances={},
         agent_registry={},

@@ -9,6 +9,7 @@ from sebastian.core.protocols import ToolSpecProvider
 from sebastian.core.stream_events import (
     LLMStreamEvent,
     ProviderCallEnd,
+    ProviderCallStart,
     TextBlockStop,
     TextDelta,
     ThinkingBlockStop,
@@ -110,6 +111,7 @@ class AgentLoop:
         is_openai = self._provider.message_format == "openai"
 
         for iteration in range(MAX_ITERATIONS):
+            yield ProviderCallStart(index=iteration)
             # Anthropic: list of content blocks; OpenAI: list of tool_calls entries
             assistant_blocks: list[dict[str, Any]] = []
             tool_calls_openai: list[dict[str, Any]] = []

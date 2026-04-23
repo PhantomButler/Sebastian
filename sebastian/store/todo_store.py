@@ -1,39 +1,31 @@
-# mypy: disable-error-code=import-untyped
-
 from __future__ import annotations
 
-import json
-import os
-from datetime import UTC, datetime
-from pathlib import Path
-
-import aiofiles
+from typing import TYPE_CHECKING
 
 from sebastian.core.types import TodoItem
 
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 
 class TodoStore:
-    """JSON-file storage for per-session todo lists.
+    """per-session todo 存储（SQLite-backed）。"""
 
-    Stores a single `todos.json` under each session directory, next to the
-    existing `tasks/` subdirectory. Coverage-write semantics: every write
-    replaces the file atomically.
-    """
+    def __init__(
+        self,
+        db_factory: async_sessionmaker[AsyncSession],
+    ) -> None:
+        from sebastian.store.session_todos import SessionTodoStore
 
-    def __init__(self, sessions_dir: Path) -> None:
-        self._dir = sessions_dir
+        self._db_todo = SessionTodoStore(db_factory)
 
-    def _todos_path(self, agent_type: str, session_id: str) -> Path:
-        return self._dir / agent_type / session_id / "todos.json"
+    async def read_updated_at(self, agent_type: str, session_id: str) -> str | None:
+        """返回该 session todos 的最后写入时间（ISO 8601 字符串），无记录时返回 None。"""
+        dt = await self._db_todo.read_updated_at(agent_type, session_id)
+        return dt.isoformat() if dt is not None else None
 
     async def read(self, agent_type: str, session_id: str) -> list[TodoItem]:
-        path = self._todos_path(agent_type, session_id)
-        if not path.exists():
-            return []
-        async with aiofiles.open(path) as f:
-            raw = await f.read()
-        data = json.loads(raw)
-        return [TodoItem(**item) for item in data.get("todos", [])]
+        return await self._db_todo.read(agent_type, session_id)
 
     async def write(
         self,
@@ -41,16 +33,4 @@ class TodoStore:
         session_id: str,
         todos: list[TodoItem],
     ) -> None:
-        path = self._todos_path(agent_type, session_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        payload = {
-            "todos": [item.model_dump(mode="json", by_alias=True) for item in todos],
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-        serialized = json.dumps(payload, ensure_ascii=False, indent=2)
-
-        tmp_path = path.with_suffix(".json.tmp")
-        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
-            await f.write(serialized)
-        os.replace(tmp_path, path)
+        await self._db_todo.write(agent_type, session_id, todos)

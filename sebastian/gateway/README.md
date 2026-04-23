@@ -8,6 +8,9 @@
 管理全局运行时单例（`agent_instances`、`agent_registry`、SessionStore、EventBus、SSEManager 等），在 `lifespan` 中按严格顺序完成初始化与清理。
 处理 JWT 认证，路由请求至对应业务处理器。
 
+Session 列表和子 session 查询均通过 `SessionStore`（SQLite backed）完成；`IndexStore` 已从运行时移除。
+`GET /sessions/{id}` 同时返回 `timeline_items`（规范 timeline 格式）和 `messages`（向后兼容投影）。
+
 ## 目录结构
 
 ```
@@ -39,6 +42,7 @@ gateway/
 | 注册 Sub-Agent 实例与配置 | [app.py](app.py) 的 `_initialize_agent_instances()` |
 | 创建 Sub-Agent session（懒启动） | `POST /api/v1/agents/{type}/sessions`（routes/sessions.py） |
 | 查看 session 最近消息与状态 | `GET /api/v1/sessions/{id}/recent`（routes/sessions.py） |
+| 获取 session 完整历史（含 timeline_items 和 messages 向后兼容） | `GET /api/v1/sessions/{id}`（routes/sessions.py） |
 | 首次启动初始化向导（owner 账号、secret key） | [setup/setup_routes.py](setup/setup_routes.py) |
 
 ## 子模块
@@ -51,23 +55,33 @@ gateway/
 ```python
 # 访问全局运行时状态（仅在路由处理函数内调用）
 import sebastian.gateway.state as state
-state.session_store.get_session(session_id)
+state.session_store.get_session(session_id)      # SessionStore（SQLite backed）
+state.session_store.list_sessions(agent_type)    # 替代旧 IndexStore.list_by_agent_type
 state.event_bus.publish(event)
 state.sebastian                        # 主管家 Sebastian 实例
 state.agent_instances["forge"]         # Sub-Agent 实例
 state.agent_registry["forge"]          # Sub-Agent 配置元数据
 state.conversation.request_approval(...)
-state.todo_store                       # TodoStore 实例
 state.db_factory                       # SQLAlchemy async session factory
 state.llm_registry                     # LLMProviderRegistry 实例
 state.memory_extractor                 # MemoryExtractor 实例（memory_save 后台任务使用；None 表示未初始化）
 state.get_owner_store()                # OwnerStore（需要 DB session）
+# 注：state.todo_store 和 state.index_store 已从运行时移除
 
 # 认证依赖
 from sebastian.gateway.auth import require_auth
 @router.get("/foo")
 async def foo(_auth: dict = Depends(require_auth)): ...
 ```
+
+### SubAgent Session Client IDs
+
+`POST /agents/{agent_type}/sessions` accepts an optional `session_id` field in the request body:
+
+- **Not provided**: backend generates a new session id (existing behavior).
+- **Provided, session does not exist**: creates the session with that id and starts the initial turn.
+- **Provided, session exists with same `agent_type` and `content`**: idempotent — returns `200` with existing `session_id` and no duplicate initial turn.
+- **Provided, session exists but different agent or content**: returns `409 Conflict`.
 
 ## 注意事项
 

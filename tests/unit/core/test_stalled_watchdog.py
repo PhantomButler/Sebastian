@@ -11,8 +11,8 @@ async def test_marks_stalled_session():
     now = datetime.now(UTC)
     old = (now - timedelta(minutes=10)).isoformat()
 
-    index_store = AsyncMock()
-    index_store.list_all = AsyncMock(
+    session_store = AsyncMock()
+    session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "s1",
@@ -23,7 +23,6 @@ async def test_marks_stalled_session():
             },
         ]
     )
-    session_store = AsyncMock()
     session_store.get_session = AsyncMock(
         return_value=MagicMock(
             id="s1",
@@ -35,7 +34,7 @@ async def test_marks_stalled_session():
     event_bus = AsyncMock()
     registry = {"code": MagicMock(stalled_threshold_minutes=5)}
 
-    stalled = await _check_stalled_sessions(index_store, session_store, event_bus, registry)
+    stalled = await _check_stalled_sessions(session_store, event_bus, registry)
     assert len(stalled) == 1
     assert stalled[0] == "s1"
     session_store.update_session.assert_awaited_once()
@@ -50,8 +49,8 @@ async def test_completed_session_not_marked() -> None:
     now = datetime.now(UTC)
     old = (now - timedelta(minutes=10)).isoformat()
 
-    index_store = AsyncMock()
-    index_store.list_all = AsyncMock(
+    session_store = AsyncMock()
+    session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "s1",
@@ -62,11 +61,10 @@ async def test_completed_session_not_marked() -> None:
             },
         ]
     )
-    session_store = AsyncMock()
     event_bus = AsyncMock()
     registry = {"code": MagicMock(stalled_threshold_minutes=5)}
 
-    stalled = await _check_stalled_sessions(index_store, session_store, event_bus, registry)
+    stalled = await _check_stalled_sessions(session_store, event_bus, registry)
     assert stalled == []
     session_store.get_session.assert_not_awaited()
     event_bus.publish.assert_not_awaited()
@@ -78,8 +76,8 @@ async def test_threshold_boundary_below_not_stalled() -> None:
     now = datetime.now(UTC)
     recent = (now - timedelta(minutes=4, seconds=59)).isoformat()
 
-    index_store = AsyncMock()
-    index_store.list_all = AsyncMock(
+    session_store = AsyncMock()
+    session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "s1",
@@ -90,11 +88,10 @@ async def test_threshold_boundary_below_not_stalled() -> None:
             },
         ]
     )
-    session_store = AsyncMock()
     event_bus = AsyncMock()
     registry = {"code": MagicMock(stalled_threshold_minutes=5)}
 
-    stalled = await _check_stalled_sessions(index_store, session_store, event_bus, registry)
+    stalled = await _check_stalled_sessions(session_store, event_bus, registry)
     assert stalled == []
     event_bus.publish.assert_not_awaited()
 
@@ -105,8 +102,8 @@ async def test_threshold_boundary_above_stalled() -> None:
     now = datetime.now(UTC)
     old = (now - timedelta(minutes=5, seconds=1)).isoformat()
 
-    index_store = AsyncMock()
-    index_store.list_all = AsyncMock(
+    session_store = AsyncMock()
+    session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "s2",
@@ -117,7 +114,6 @@ async def test_threshold_boundary_above_stalled() -> None:
             },
         ]
     )
-    session_store = AsyncMock()
     session_store.get_session = AsyncMock(
         return_value=MagicMock(
             id="s2",
@@ -129,18 +125,17 @@ async def test_threshold_boundary_above_stalled() -> None:
     event_bus = AsyncMock()
     registry = {"code": MagicMock(stalled_threshold_minutes=5)}
 
-    stalled = await _check_stalled_sessions(index_store, session_store, event_bus, registry)
+    stalled = await _check_stalled_sessions(session_store, event_bus, registry)
     assert stalled == ["s2"]
     session_store.update_session.assert_awaited_once()
-    index_store.upsert.assert_awaited_once()
     event_bus.publish.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_empty_last_activity_at_skipped() -> None:
     """last_activity_at 为空字符串时跳过，不报错。"""
-    index_store = AsyncMock()
-    index_store.list_all = AsyncMock(
+    session_store = AsyncMock()
+    session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "s1",
@@ -151,11 +146,10 @@ async def test_empty_last_activity_at_skipped() -> None:
             },
         ]
     )
-    session_store = AsyncMock()
     event_bus = AsyncMock()
     registry = {"code": MagicMock(stalled_threshold_minutes=5)}
 
-    stalled = await _check_stalled_sessions(index_store, session_store, event_bus, registry)
+    stalled = await _check_stalled_sessions(session_store, event_bus, registry)
     assert stalled == []
     session_store.get_session.assert_not_awaited()
     event_bus.publish.assert_not_awaited()
@@ -163,12 +157,12 @@ async def test_empty_last_activity_at_skipped() -> None:
 
 @pytest.mark.asyncio
 async def test_get_session_none_skipped() -> None:
-    """session_store.get_session 返回 None 时跳过，不调 index_store.upsert。"""
+    """session_store.get_session 返回 None 时跳过，不调 update_session。"""
     now = datetime.now(UTC)
     old = (now - timedelta(minutes=10)).isoformat()
 
-    index_store = AsyncMock()
-    index_store.list_all = AsyncMock(
+    session_store = AsyncMock()
+    session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "s1",
@@ -179,12 +173,11 @@ async def test_get_session_none_skipped() -> None:
             },
         ]
     )
-    session_store = AsyncMock()
     session_store.get_session = AsyncMock(return_value=None)
     event_bus = AsyncMock()
     registry = {"code": MagicMock(stalled_threshold_minutes=5)}
 
-    stalled = await _check_stalled_sessions(index_store, session_store, event_bus, registry)
+    stalled = await _check_stalled_sessions(session_store, event_bus, registry)
     assert stalled == []
-    index_store.upsert.assert_not_awaited()
+    session_store.update_session.assert_not_awaited()
     event_bus.publish.assert_not_awaited()

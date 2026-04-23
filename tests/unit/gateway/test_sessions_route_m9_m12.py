@@ -57,7 +57,6 @@ async def test_schedule_session_turn_sub_agent_no_agent_name() -> None:
     fake_state = types.ModuleType("sebastian.gateway.state")
     fake_state.agent_instances = {"code": mock_agent}  # type: ignore[attr-defined]
     fake_state.session_store = AsyncMock()  # type: ignore[attr-defined]
-    fake_state.index_store = AsyncMock()  # type: ignore[attr-defined]
     fake_state.event_bus = AsyncMock()  # type: ignore[attr-defined]
     fake_state.sebastian = MagicMock()  # type: ignore[attr-defined]
 

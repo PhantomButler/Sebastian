@@ -26,7 +26,6 @@ async def test_delegate_to_agent_creates_session_and_dispatches():
         "forge": MagicMock(max_children=5),
     }
     mock_state.session_store = AsyncMock()
-    mock_state.index_store = AsyncMock()
     mock_state.event_bus = MagicMock()
 
     with (
@@ -45,7 +44,6 @@ async def test_delegate_to_agent_creates_session_and_dispatches():
     assert result.ok is True
     assert "Forge" in result.output
     mock_state.session_store.create_session.assert_awaited_once()
-    mock_state.index_store.upsert.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -85,7 +83,6 @@ async def test_delegate_creates_background_task() -> None:
         "forge": MagicMock(max_children=5),
     }
     mock_state.session_store = AsyncMock()
-    mock_state.index_store = AsyncMock()
     mock_state.event_bus = MagicMock()
 
     mock_task = MagicMock(spec=asyncio.Task)
@@ -118,7 +115,6 @@ async def test_delegate_sets_parent_session_id_and_depth() -> None:
     mock_agent = MagicMock()
     mock_state.agent_instances = {"forge": mock_agent}
     mock_state.session_store = AsyncMock()
-    mock_state.index_store = AsyncMock()
     mock_state.event_bus = MagicMock()
 
     with (

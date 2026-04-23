@@ -32,7 +32,7 @@ async def check_sub_agents() -> ToolResult:
         )
 
     state = _get_state()
-    all_sessions = await state.index_store.list_all()
+    all_sessions = await state.session_store.list_sessions()
 
     if ctx.depth == 1:
         # Sebastian: show only depth=2 sessions spawned in this conversation session

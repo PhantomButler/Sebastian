@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import subprocess
 
 from sebastian.capabilities.tools._path_utils import resolve_path
 from sebastian.config import settings
@@ -57,16 +58,17 @@ def _build_grep_cmd(
 
 
 async def _run_cmd(cmd: list[str]) -> tuple[str, str, int | None]:
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+    # Use asyncio.to_thread + subprocess.run to avoid asyncio subprocess transport
+    # and PidfdChildWatcher on Linux, which can cause event loop teardown hangs in tests.
+    result = await asyncio.to_thread(
+        subprocess.run,
+        cmd,
+        capture_output=True,
     )
-    stdout_bytes, stderr_bytes = await proc.communicate()
     return (
-        stdout_bytes.decode(errors="replace"),
-        stderr_bytes.decode(errors="replace"),
-        proc.returncode,
+        result.stdout.decode(errors="replace"),
+        result.stderr.decode(errors="replace"),
+        result.returncode,
     )
 
 

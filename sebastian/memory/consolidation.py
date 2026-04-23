@@ -36,6 +36,7 @@ from sebastian.memory.types import (
 )
 from sebastian.memory.write_router import persist_decision
 from sebastian.protocol.events.types import Event, EventType
+from sebastian.store.session_context import build_legacy_messages
 
 if TYPE_CHECKING:
     from sebastian.llm.registry import LLMProviderRegistry, ResolvedProvider
@@ -192,10 +193,31 @@ class SessionConsolidationWorker:
             return
         trace("consolidation.start", session_id=session_id, agent_type=agent_type)
 
-        # 2. Fetch session messages
-        messages: list[dict[str, Any]] = await self._session_store.get_messages(
-            session_id, agent_type
-        )
+        # 2. Fetch session messages (prefer timeline items for cursor tracking)
+        last_seen_item_seq: int | None = None
+        last_consolidated_source_seq: int | None = None
+        messages: list[dict[str, Any]] = []
+        try:
+            context_items = await self._session_store.get_context_timeline_items(
+                session_id, agent_type
+            )
+            messages = build_legacy_messages(context_items)
+            # Compute cursors from raw timeline items
+            seqs = [item["seq"] for item in context_items if item.get("seq") is not None]
+            last_seen_item_seq = max(seqs) if seqs else None
+            for item in context_items:
+                if item.get("kind") == "context_summary":
+                    payload = item.get("payload") or {}
+                    source_seq_end = payload.get("source_seq_end")
+                    if source_seq_end is not None:
+                        if (
+                            last_consolidated_source_seq is None
+                            or source_seq_end > last_consolidated_source_seq
+                        ):
+                            last_consolidated_source_seq = source_seq_end
+        except RuntimeError:
+            # Fallback: session_store has no timeline (legacy or test stub without db_factory)
+            messages = await self._session_store.get_messages(session_id, agent_type)
 
         # 3. Open one atomic transaction that wraps context-gathering,
         #    consolidation and persistence. The marker insert at the end
@@ -499,6 +521,9 @@ class SessionConsolidationWorker:
                 agent_type=agent_type,
                 consolidated_at=datetime.now(UTC),
                 worker_version=self._RULE_VERSION,
+                last_seen_item_seq=last_seen_item_seq,
+                last_consolidated_source_seq=last_consolidated_source_seq,
+                consolidation_mode="full_session",
             )
             session.add(marker)
             try:
@@ -593,12 +618,12 @@ async def sweep_unconsolidated(
     *,
     db_factory: async_sessionmaker[AsyncSession],
     worker: SessionConsolidationWorker,
-    index_store: Any,
+    session_store: Any,
     memory_settings_fn: Callable[[], bool],
 ) -> None:
     """Catch up sessions that completed while the gateway was down.
 
-    Queries the session index for ``status == "completed"`` entries, removes
+    Queries SessionStore for ``status == "completed"`` entries, removes
     those already marked by :class:`SessionConsolidationRecord`, and invokes
     :meth:`SessionConsolidationWorker.consolidate_session` for the rest. A
     single failing session is logged and skipped — it must not abort the sweep.
@@ -608,7 +633,7 @@ async def sweep_unconsolidated(
 
     from sebastian.store.models import SessionConsolidationRecord
 
-    entries = await index_store.list_all()
+    entries = await session_store.list_sessions()
     completed = [
         e
         for e in entries

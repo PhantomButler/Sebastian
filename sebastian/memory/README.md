@@ -7,8 +7,8 @@
 提供 Agent 记忆系统的基础设施：
 
 - **工作记忆**：`WorkingMemory`，进程内、任务作用域的临时状态。
-- **会话历史兼容层**：`EpisodicMemory`，基于 `SessionStore` 读写当前 session 的消息历史，用于兼容现有对话上下文链路；它不是新的 Episode Store。
-- **统一入口**：`MemoryStore`，当前聚合 working + session history compatibility layer。
+- **会话历史兼容层**：`EpisodicMemory`，已 **DEPRECATED**——运行时不再使用；`BaseAgent` 现直接调用 `SessionStore.get_context_messages()` / `append_message()` 访问 SQLite timeline，无需经过此层。
+- **统一入口**：`MemoryStore`，当前聚合 working memory；会话历史已由 `SessionStore` 直接承担。
 - **Phase A 长期记忆基础设施**：记忆 artifact 类型、slot 注册表、FTS 分词辅助、决策日志写入器。
 - **Phase B 画像与经历检索**：`ProfileMemoryStore`（profile 写入 / 查询，含 `valid_from/valid_until/status/subject_id` 四项 current truth 过滤）、`EpisodeMemoryStore`（经历 FTS 检索，含 summary-first 两阶段检索）、`retrieval.py`（检索 pipeline，含 Episode Lane query-aware summary-first 策略）、`resolver.py`（冲突解决）。检索结果在每次 LLM turn 前通过 `BaseAgent._memory_section()` 注入 system prompt；`memory_search` 工具输出 `citation_type`（`current_truth` / `historical_summary` / `historical_evidence`），并按 active lane 数量把用户请求的 `limit` 提升为 `effective_limit`，避免已激活通道被全局截断饿死。
 - **Phase C LLM 沉淀**：`extraction.py`（`MemoryExtractor`，从会话片段提取候选 artifact；`ExtractorInput.task` 已对齐 spec，值为 `"extract_memory_artifacts"`）、`consolidation.py`（`MemoryConsolidator` + `SessionConsolidationWorker` + `MemoryConsolidationScheduler`）、`provider_bindings.py`（LLM binding 常量）。会话结束后由调度器触发后台沉淀，LLM 结果经 Normalize / Resolve 后方可写入，永不直接修改记忆状态。`memory_decision_log` 新增 `input_source` 字段，记录写入来源（`memory_save_tool` / `session_consolidation`）。
@@ -26,7 +26,6 @@ memory/
 ├── decision_log.py          # MemoryDecisionLogger：把 ResolveDecision 写入 memory_decision_log
 ├── entity_registry.py       # EntityRegistry：实体 CRUD（entities 表）
 ├── episode_store.py         # EpisodeMemoryStore：经历写入、FTS 检索；ensure_episode_fts 建表
-├── episodic_memory.py       # EpisodicMemory：会话历史兼容层，底层依赖 SessionStore，不是新 Episode Store
 ├── errors.py                # 记忆系统异常体系（InvalidCandidateError / InvalidSlotProposalError 等）
 ├── feedback.py              # MemorySaveResult + render_memory_save_summary()：memory_save 结果摘要渲染
 ├── profile_store.py         # ProfileMemoryStore：画像 CRUD、search_active、supersede
@@ -59,7 +58,7 @@ memory/
 | [segmentation.py](segmentation.py) | 提供基于 `jieba.cut_for_search()` 的 FTS5 中文分词辅助：`segment_for_fts()`、`terms_for_query()`、`add_entity_terms()` |
 | [decision_log.py](decision_log.py) | 提供 `MemoryDecisionLogger.append()`，把 `ResolveDecision` 写入 `MemoryDecisionLogRecord` |
 
-> Phase B 已完成注入：每次 LLM turn 前，`BaseAgent._memory_section()` 通过 `retrieve_memory_section()` 拉取画像和经历记录，拼入 system prompt。不要把 [episodic_memory.py](episodic_memory.py) 当作新的 Episode Store 扩展；它只负责现有 session 消息历史兼容。
+> Phase B 已完成注入：每次 LLM turn 前，`BaseAgent._memory_section()` 通过 `retrieve_memory_section()` 拉取画像和经历记录，拼入 system prompt。Session 消息历史统一由 `SessionStore` timeline 管理。
 
 ## Phase C LLM 沉淀组件
 
@@ -98,6 +97,8 @@ memory/
 
 ### SessionConsolidationWorker（`consolidation.py`）
 
+- **输入来源**：使用 `SessionStore.get_context_timeline_items()` 获取待沉淀消息，再通过 `build_legacy_messages()` 投影为旧格式供 Consolidator 消费
+- **游标持久化**：`last_seen_item_seq` 和 `last_consolidated_source_seq` 两个游标字段现在持久化到 DB，避免重启后重复处理
 - **幂等性**：通过 `SessionConsolidationRecord(session_id, agent_type)` DB 标记保证同一 session 只执行一次
 - **原子性**：存在检查 + 全部写入 + 标记插入在**一个事务**内完成；`IntegrityError` → 事务回滚 → 直接返回（防重复执行）
 - 执行前检查 `memory_settings_fn()` 返回的 `memory_enabled` 标志，未启用则跳过
@@ -165,7 +166,7 @@ LLM 在对话中可提议新的记忆 slot，提议经校验后写入 `memory_sl
 | 如果要修改… | 看这里 |
 |------------|--------|
 | 任务临时状态的存取（set/get/clear） | [working_memory.py](working_memory.py) |
-| 现有 session 对话历史的写入与读取（add_turn/get_turns） | [episodic_memory.py](episodic_memory.py) |
+| session 对话历史的写入与读取（append_message / get_context_messages） | `SessionStore`（见 [store/README.md](../store/README.md)） |
 | 统一记忆入口（同时访问 working + 会话历史兼容层） | [store.py](store.py) |
 | 记忆 artifact、slot、决策等数据结构 | [types.py](types.py) |
 | slot 定义、内置 slot、候选 artifact slot 校验 | [slots.py](slots.py) |

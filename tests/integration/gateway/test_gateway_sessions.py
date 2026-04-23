@@ -49,8 +49,14 @@ def client(tmp_path):
                         name="test-owner",
                         password_hash=password_hash,
                     )
+                    from sebastian.store.database import get_engine
+
+                    await get_engine().dispose()
+                    await asyncio.sleep(0)
 
                 asyncio.run(_seed())
+                db_module._engine = None
+                db_module._session_factory = None
                 (tmp_path / "secret.key").write_text("test-secret-key")
 
                 from starlette.testclient import TestClient
@@ -72,7 +78,6 @@ def _store_session(session) -> None:
     import sebastian.gateway.state as state
 
     asyncio.run(state.session_store.create_session(session))
-    asyncio.run(state.index_store.upsert(session))
 
 
 def _store_task(task, agent_type: str, agent_id: str = "") -> None:
@@ -82,10 +87,34 @@ def _store_task(task, agent_type: str, agent_id: str = "") -> None:
 
 
 def _capture_background_task(scheduled_coroutines: list[object]):
-    def inner(coroutine):
-        scheduled_coroutines.append(coroutine)
-        coroutine.close()
-        return MagicMock()
+    import asyncio as _asyncio
+    import inspect as _inspect
+    import sys as _sys
+
+    _real_create_task = _asyncio.create_task
+    _ROUTE_MARKERS = ("gateway/routes/sessions.py", "gateway/routes/turns.py")
+    _MOCK_MARKER = "unittest/mock.py"
+
+    def _direct_caller_is_route() -> bool:
+        """Find the first non-mock frame in the call stack and check if it's a route handler."""
+        frame = _sys._getframe(2)  # skip inner() itself + mock._execute_mock_call
+        while frame is not None:
+            filename = frame.f_code.co_filename or ""
+            if _MOCK_MARKER not in filename:
+                # This is the first non-mock frame — the actual caller of create_task
+                return any(m in filename for m in _ROUTE_MARKERS)
+            frame = frame.f_back
+        return False
+
+    def inner(coroutine, **kwargs):
+        # Only intercept coroutines created directly from gateway route handlers
+        # (i.e. agent run_streaming session turns).  Pass through everything else
+        # (e.g. SQLAlchemy's internal asyncio.create_task calls on session close).
+        if _inspect.iscoroutine(coroutine) and _direct_caller_is_route():
+            scheduled_coroutines.append(coroutine)
+            coroutine.close()
+            return MagicMock()
+        return _real_create_task(coroutine, **kwargs)
 
     return inner
 
@@ -117,7 +146,6 @@ def test_get_session_returns_meta_and_messages(client):
         title="Hello world",
     )
     assert state.session_store is not None
-    assert state.index_store is not None
 
     asyncio.run(state.session_store.create_session(session))
     asyncio.run(
@@ -128,7 +156,6 @@ def test_get_session_returns_meta_and_messages(client):
             agent_type="sebastian",
         )
     )
-    asyncio.run(state.index_store.upsert(session))
 
     response = http_client.get(
         f"/api/v1/sessions/{session.id}",
@@ -214,7 +241,10 @@ def test_send_turn_to_subagent_session_schedules_background_task(client):
 
         stored_session = asyncio.run(state.session_store.get_session(session.id, "code"))
         assert stored_session is not None
-        assert stored_session.updated_at >= original_updated_at
+        # Strip tzinfo for comparison: SQLite returns naive datetimes, Session uses UTC-aware.
+        stored_naive = stored_session.updated_at.replace(tzinfo=None)
+        original_naive = original_updated_at.replace(tzinfo=None)
+        assert stored_naive >= original_naive
     finally:
         state.agent_instances.clear()
         state.agent_instances.update(original_instances)
@@ -361,7 +391,6 @@ def test_post_cancel_idle_session_returns_200(client) -> None:
 
     session = Session(id="idle-cancel", agent_type="sebastian", title="t")
     asyncio.run(state.session_store.create_session(session))
-    asyncio.run(state.index_store.upsert(session))
 
     resp = http_client.post(
         "/api/v1/sessions/idle-cancel/cancel",

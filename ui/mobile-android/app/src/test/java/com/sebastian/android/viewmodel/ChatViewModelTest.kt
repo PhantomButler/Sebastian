@@ -7,6 +7,7 @@ import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.StreamEvent
+import com.sebastian.android.data.remote.SseEnvelope
 import com.sebastian.android.data.repository.ChatRepository
 import com.sebastian.android.data.repository.SessionRepository
 import com.sebastian.android.data.repository.SettingsRepository
@@ -34,11 +35,14 @@ import kotlinx.coroutines.test.setMain
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.doSuspendableAnswer
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import com.sebastian.android.viewmodel.ChatUiEffect
+import java.util.UUID
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
@@ -49,7 +53,7 @@ class ChatViewModelTest {
     private lateinit var networkMonitor: NetworkMonitor
     private lateinit var viewModel: ChatViewModel
     private val dispatcher = StandardTestDispatcher()
-    private val sseFlow = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
+    private val sseFlow = MutableSharedFlow<SseEnvelope>(extraBufferCapacity = 64)
     private val serverUrlFlow = MutableStateFlow("http://test.local:8823")
     private val onlineFlow = MutableStateFlow(true)
 
@@ -100,6 +104,11 @@ class ChatViewModelTest {
         dispatcher.scheduler.advanceTimeBy(200)
     }
 
+    /** Convenience wrapper: emit a StreamEvent into sseFlow wrapped in SseEnvelope. */
+    private suspend fun emitEvent(event: StreamEvent) {
+        sseFlow.emit(SseEnvelope(eventId = null, event = event))
+    }
+
     @Test
     fun `initial state is IDLE_EMPTY`() = vmTest {
         viewModel.uiState.test {
@@ -115,8 +124,8 @@ class ChatViewModelTest {
         viewModel.uiState.test {
             awaitItem() // post-session state
 
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0_0"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             val state = awaitItem()
@@ -134,10 +143,10 @@ class ChatViewModelTest {
         activateSession()
         viewModel.uiState.test {
             awaitItem()
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
-            sseFlow.emit(StreamEvent.TextDelta("s1", "b0_0", "好的"))
-            sseFlow.emit(StreamEvent.TextDelta("s1", "b0_0", "，我来帮你"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TextDelta("s1", "b0_0", "好的"))
+            emitEvent(StreamEvent.TextDelta("s1", "b0_0", "，我来帮你"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             var found = false
@@ -159,10 +168,10 @@ class ChatViewModelTest {
         activateSession()
         viewModel.uiState.test {
             awaitItem()
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
-            sseFlow.emit(StreamEvent.TextDelta("s1", "b0_0", "完成"))
-            sseFlow.emit(StreamEvent.TextBlockStop("s1", "b0_0"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TextDelta("s1", "b0_0", "完成"))
+            emitEvent(StreamEvent.TextBlockStop("s1", "b0_0"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             var found = false
@@ -184,8 +193,8 @@ class ChatViewModelTest {
         activateSession()
         viewModel.uiState.test {
             awaitItem()
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.ThinkingBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.ThinkingBlockStart("s1", "b0_0"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             val state = awaitItem()
@@ -201,8 +210,8 @@ class ChatViewModelTest {
         activateSession()
         viewModel.uiState.test {
             awaitItem()
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0_0"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             val state = awaitItem()
@@ -216,10 +225,10 @@ class ChatViewModelTest {
         activateSession()
         viewModel.uiState.test {
             awaitItem()
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
-            sseFlow.emit(StreamEvent.TextBlockStop("s1", "b0_0"))
-            sseFlow.emit(StreamEvent.TurnResponse("s1", "完成"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TextBlockStop("s1", "b0_0"))
+            emitEvent(StreamEvent.TurnResponse("s1", "完成"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             var found = false
@@ -257,7 +266,7 @@ class ChatViewModelTest {
         // Anonymous fake: Mockito cannot reliably return Kotlin Result (inline class)
         val failingRepo = object : ChatRepository {
             override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?) = sseFlow
-            override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<StreamEvent>()
+            override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<SseEnvelope>()
             override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
             override suspend fun sendTurn(sessionId: String?, content: String) =
                 Result.failure<String>(RuntimeException("网络错误"))
@@ -332,8 +341,8 @@ class ChatViewModelTest {
             awaitItem() // post-activation state
 
             // Pre-populate a message via SSE
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0_0"))
             dispatcher.scheduler.advanceTimeBy(200)
             awaitItem() // streaming state
 
@@ -362,19 +371,19 @@ class ChatViewModelTest {
         activateSession()
 
         // Turn 1：tool block blockId=b0_1
-        sseFlow.emit(StreamEvent.TurnReceived("s1"))
-        sseFlow.emit(StreamEvent.ToolBlockStart("s1", "b0_1", "t1", "Bash"))
-        sseFlow.emit(StreamEvent.ToolBlockStop("s1", "b0_1", "t1", "Bash", """{"command":"ls"}"""))
-        sseFlow.emit(StreamEvent.ToolExecuted("s1", "t1", "Bash", "ok"))
-        sseFlow.emit(StreamEvent.TurnResponse("s1", ""))
+        emitEvent(StreamEvent.TurnReceived("s1"))
+        emitEvent(StreamEvent.ToolBlockStart("s1", "b0_1", "t1", "Bash"))
+        emitEvent(StreamEvent.ToolBlockStop("s1", "b0_1", "t1", "Bash", """{"command":"ls"}"""))
+        emitEvent(StreamEvent.ToolExecuted("s1", "t1", "Bash", "ok"))
+        emitEvent(StreamEvent.TurnResponse("s1", ""))
         dispatcher.scheduler.advanceTimeBy(200)
 
         // Turn 2：同样的 blockId=b0_1（后端 iteration 重置）
-        sseFlow.emit(StreamEvent.TurnReceived("s1"))
-        sseFlow.emit(StreamEvent.ToolBlockStart("s1", "b0_1", "t2", "Bash"))
-        sseFlow.emit(StreamEvent.ToolBlockStop("s1", "b0_1", "t2", "Bash", """{"command":"pwd"}"""))
-        sseFlow.emit(StreamEvent.ToolExecuted("s1", "t2", "Bash", "ok"))
-        sseFlow.emit(StreamEvent.TurnResponse("s1", ""))
+        emitEvent(StreamEvent.TurnReceived("s1"))
+        emitEvent(StreamEvent.ToolBlockStart("s1", "b0_1", "t2", "Bash"))
+        emitEvent(StreamEvent.ToolBlockStop("s1", "b0_1", "t2", "Bash", """{"command":"pwd"}"""))
+        emitEvent(StreamEvent.ToolExecuted("s1", "t2", "Bash", "ok"))
+        emitEvent(StreamEvent.TurnResponse("s1", ""))
         dispatcher.scheduler.advanceTimeBy(200)
 
         val assistants = viewModel.uiState.value.messages.filter { it.role == MessageRole.ASSISTANT }
@@ -417,8 +426,8 @@ class ChatViewModelTest {
         activateSession()
         viewModel.uiState.test {
             awaitItem()  // post-activation state
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0_0"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             // 等状态变 STREAMING
@@ -483,9 +492,9 @@ class ChatViewModelTest {
         viewModel.uiState.test {
             awaitItem() // post-session state
 
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0_0"))
-            sseFlow.emit(StreamEvent.TextDelta("s1", "b0_0", "hello"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0_0"))
+            emitEvent(StreamEvent.TextDelta("s1", "b0_0", "hello"))
             dispatcher.scheduler.advanceTimeBy(200)
             // Consume intermediate states until we see STREAMING
             var seenStreaming = false
@@ -494,7 +503,7 @@ class ChatViewModelTest {
                 if (state.composerState == ComposerState.STREAMING) seenStreaming = true
             }
 
-            sseFlow.emit(StreamEvent.TurnCancelled("s1", "hello"))
+            emitEvent(StreamEvent.TurnCancelled("s1", "hello"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             var found = false
@@ -517,7 +526,7 @@ class ChatViewModelTest {
                 ?.joinToString("") { it.text }
                 ?: ""
 
-            sseFlow.emit(StreamEvent.TextDelta("s1", "b0", " extra"))
+            emitEvent(StreamEvent.TextDelta("s1", "b0", " extra"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             // No new state item should carry " extra" — any emitted item must not
@@ -571,11 +580,11 @@ class ChatViewModelTest {
         viewModel.uiState.test {
             awaitItem() // current PENDING state
 
-            sseFlow.emit(StreamEvent.TurnReceived("s1"))
+            emitEvent(StreamEvent.TurnReceived("s1"))
             dispatcher.scheduler.advanceTimeBy(50)
             expectNoEvents() // TurnReceived should NOT change state
 
-            sseFlow.emit(StreamEvent.TextBlockStart("s1", "b0"))
+            emitEvent(StreamEvent.TextBlockStart("s1", "b0"))
             dispatcher.scheduler.advanceTimeBy(200)
 
             val state = awaitItem()
@@ -601,7 +610,8 @@ class ChatViewModelTest {
 
             val pending = awaitItem()
             assertEquals(ComposerState.PENDING, pending.composerState)
-            assertNull(pending.activeSessionId)
+            // Provisional session: activeSessionId is now the client-generated UUID (not null)
+            assertFalse("provisional session id must be set", pending.activeSessionId == null)
 
             viewModel.cancelTurn()
             dispatcher.scheduler.advanceTimeBy(50)
@@ -651,7 +661,7 @@ class ChatViewModelTest {
         dispatcher.scheduler.advanceTimeBy(500) // REST finishes
 
         // SSE event arrives — must cancel the timeout
-        sseFlow.emit(StreamEvent.TurnReceived("s1"))
+        emitEvent(StreamEvent.TurnReceived("s1"))
         dispatcher.scheduler.advanceTimeBy(20_000) // well past 15s
 
         assertTrue("No toast when SSE event cancels timeout", toasts.isEmpty())
@@ -755,20 +765,299 @@ class ChatViewModelTest {
         }
     }
 
+    // ── Task 7: provisional session + SSE cursor ──────────────────────────────
+
+    @Test
+    fun `new main session generates client id before sse and sendTurn`() = vmTest {
+        val capturedStreamIds = mutableListOf<String?>()
+        // Install a fixed client session id so we can verify SSE + sendTurn use the same one
+        val fixedClientId = "client-uuid-test-123"
+        viewModel.sessionIdProvider = { fixedClientId }
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenAnswer { inv ->
+            capturedStreamIds.add(inv.getArgument(1))
+            sseFlow
+        }
+        // sendTurn mock must return success with the fixedClientId (already set up in @Before as "s1",
+        // but we override to return the client id so the provisional flow doesn't restart SSE)
+        whenever(chatRepository.sendTurn(anyOrNull(), any())).thenReturn(Result.success(fixedClientId))
+
+        viewModel.sendMessage("hello")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        assertTrue("SSE must be started with a client session id", capturedStreamIds.isNotEmpty())
+        val sseId = capturedStreamIds.last()
+        assertEquals("SSE must use the client session id", fixedClientId, sseId)
+
+        // activeSessionId is set to the client id (not null, not "pending")
+        assertEquals("activeSessionId must be the client id", fixedClientId, viewModel.uiState.value.activeSessionId)
+
+        // Verify sendTurn was called with the same client id
+        runBlocking { verify(chatRepository).sendTurn(fixedClientId, "hello") }
+    }
+
+    @Test
+    fun `new main session failure removes user bubble and clears active session`() = vmTest {
+        whenever(chatRepository.sendTurn(anyOrNull(), any())).thenReturn(
+            Result.failure(RuntimeException("net error"))
+        )
+
+        viewModel.uiState.test {
+            awaitItem() // initial
+
+            viewModel.sendMessage("hello")
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            var foundRollback = false
+            while (!foundRollback) {
+                val state = awaitItem()
+                if (state.composerState == ComposerState.IDLE_EMPTY && state.activeSessionId == null) {
+                    foundRollback = true
+                    assertTrue("User bubble must be removed", state.messages.none { it.role == MessageRole.USER })
+                }
+            }
+            assertTrue(foundRollback)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `new main session failure emits uiEffects for rollback`() = vmTest {
+        whenever(chatRepository.sendTurn(anyOrNull(), any())).thenReturn(
+            Result.failure(RuntimeException("net error"))
+        )
+
+        val effects = mutableListOf<ChatUiEffect>()
+        val job = launch { viewModel.uiEffects.collect { effects.add(it) } }
+
+        viewModel.sendMessage("hello")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        assertTrue("Must emit RestoreComposerText", effects.any { it is ChatUiEffect.RestoreComposerText && (it as ChatUiEffect.RestoreComposerText).text == "hello" })
+        assertTrue("Must emit ShowToast", effects.any { it is ChatUiEffect.ShowToast })
+
+        job.cancel()
+    }
+
+    @Test
+    fun `reconnect uses last delivered sse event id as cursor`() = vmTest {
+        val capturedLastEventIds = mutableListOf<String?>()
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenAnswer { inv ->
+            capturedLastEventIds.add(inv.getArgument(2))
+            sseFlow
+        }
+
+        activateSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Emit an envelope with eventId "7"
+        sseFlow.emit(SseEnvelope(eventId = "7", event = StreamEvent.Unknown))
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // Trigger reconnect by switching and switching back
+        viewModel.switchSession("other")
+        dispatcher.scheduler.advanceTimeBy(100)
+        viewModel.switchSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        val lastCallForS1 = capturedLastEventIds.lastOrNull()
+        assertEquals("Reconnect must use saved cursor", "7", lastCallForS1)
+    }
+
+    @Test
+    fun `existing session with no prior events reconnects with null cursor`() = vmTest {
+        val capturedLastEventIds = mutableListOf<String?>()
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenAnswer { inv ->
+            capturedLastEventIds.add(inv.getArgument(2))
+            sseFlow
+        }
+
+        activateSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // No events received — cursor should be null for reconnect
+        val firstCallCursor = capturedLastEventIds.firstOrNull()
+        assertNull("Existing session first connect should use null cursor", firstCallCursor)
+    }
+
+    @Test
+    fun `sendMessage to existing session with SSE inactive reconnects with stored cursor`() = vmTest {
+        val capturedLastEventIds = mutableListOf<String?>()
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenAnswer { inv ->
+            capturedLastEventIds.add(inv.getArgument(2))
+            sseFlow
+        }
+
+        activateSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Emit an event with eventId "42" so cursor is stored
+        sseFlow.emit(SseEnvelope(eventId = "42", event = StreamEvent.Unknown))
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // Stop SSE
+        viewModel.onAppStop()
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // sendMessage on existing session "s1" — sendTurn returns "s1" (same id)
+        viewModel.sendMessage("test")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        val lastCursor = capturedLastEventIds.lastOrNull()
+        assertEquals("SSE reconnect after sendMessage must use stored cursor", "42", lastCursor)
+    }
+
+    @Test
+    fun `sendAgentMessage to existing session with SSE inactive reconnects with stored cursor`() = vmTest {
+        val capturedLastEventIds = mutableListOf<String?>()
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenAnswer { inv ->
+            capturedLastEventIds.add(inv.getArgument(2))
+            sseFlow
+        }
+        runBlocking {
+            whenever(chatRepository.sendSessionTurn(any(), any())).thenReturn(Result.success(Unit))
+        }
+
+        activateSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Emit an event with eventId "42" so cursor is stored
+        sseFlow.emit(SseEnvelope(eventId = "42", event = StreamEvent.Unknown))
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // Stop SSE
+        viewModel.onAppStop()
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // sendAgentMessage on existing session "s1"
+        viewModel.sendAgentMessage("research", "test")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        val lastCursor = capturedLastEventIds.lastOrNull()
+        assertEquals("SSE reconnect after sendAgentMessage must use stored cursor", "42", lastCursor)
+    }
+
+    // ── Task 8: provisional session for SubAgent ─────────────────────────────
+
+    @Test
+    fun `new agent session generates client id before sse and createAgentSession`() = vmTest {
+        val capturedStreamIds = mutableListOf<String?>()
+        val capturedCreateSessionIds = mutableListOf<String?>()
+
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenAnswer { inv ->
+            capturedStreamIds.add(inv.getArgument(1))
+            sseFlow
+        }
+        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull())).thenReturn(
+            Result.success(com.sebastian.android.data.model.Session(id = "agent-s1", title = "Test", agentType = "research"))
+        )
+
+        viewModel.sendAgentMessage("research", "find sources")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // SSE started with non-null client session id
+        assertTrue(capturedStreamIds.isNotEmpty())
+        val sseId = capturedStreamIds.last()
+        assertFalse("SSE session id must not be null", sseId == null)
+
+        // createAgentSession received the same id
+        runBlocking { verify(sessionRepository).createAgentSession(eq("research"), anyOrNull(), anyOrNull()) }
+    }
+
+    @Test
+    fun `new agent session failure removes user bubble and clears active session`() = vmTest {
+        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull())).thenReturn(
+            Result.failure(RuntimeException("server error"))
+        )
+
+        viewModel.uiState.test {
+            awaitItem() // initial
+
+            viewModel.sendAgentMessage("research", "hello")
+            dispatcher.scheduler.advanceTimeBy(200)
+
+            var foundRollback = false
+            while (!foundRollback) {
+                val state = awaitItem()
+                if (state.composerState == ComposerState.IDLE_EMPTY && state.activeSessionId == null) {
+                    foundRollback = true
+                    assertTrue("User bubble must be removed on failure", state.messages.none { it.role == MessageRole.USER })
+                }
+            }
+            assertTrue(foundRollback)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `new agent session failure emits uiEffects for rollback`() = vmTest {
+        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull())).thenReturn(
+            Result.failure(RuntimeException("server error"))
+        )
+
+        val effects = mutableListOf<ChatUiEffect>()
+        val job = launch { viewModel.uiEffects.collect { effects.add(it) } }
+
+        viewModel.sendAgentMessage("research", "find sources")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        assertTrue("Must emit RestoreComposerText", effects.any { it is ChatUiEffect.RestoreComposerText })
+        assertTrue("Must emit ShowToast", effects.any { it is ChatUiEffect.ShowToast })
+
+        job.cancel()
+    }
+
+    @Test
+    fun `toggleSummaryBlock flips expanded state`() = vmTest {
+        activateSession("s1")
+
+        whenever(chatRepository.getMessages(any())).thenReturn(
+            Result.success(listOf(
+                com.sebastian.android.data.model.Message(
+                    id = "msg-1",
+                    sessionId = "s1",
+                    role = com.sebastian.android.data.model.MessageRole.ASSISTANT,
+                    blocks = listOf(
+                        com.sebastian.android.data.model.ContentBlock.SummaryBlock(
+                            blockId = "summary-1",
+                            text = "Earlier content was compressed.",
+                            expanded = false,
+                        )
+                    ),
+                )
+            ))
+        )
+
+        viewModel.switchSession("s1")
+        dispatcher.scheduler.advanceTimeBy(300)
+
+        val before = viewModel.uiState.value.messages
+            .find { it.id == "msg-1" }
+            ?.blocks?.single() as? com.sebastian.android.data.model.ContentBlock.SummaryBlock
+        assertFalse("SummaryBlock must start collapsed", before?.expanded ?: true)
+
+        viewModel.toggleSummaryBlock("msg-1", "summary-1")
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        val after = viewModel.uiState.value.messages
+            .find { it.id == "msg-1" }
+            ?.blocks?.single() as? com.sebastian.android.data.model.ContentBlock.SummaryBlock
+        assertTrue("SummaryBlock must be expanded after toggle", after?.expanded ?: false)
+    }
+
     @Test
     fun `connectionFailed while PENDING resets composerState to IDLE_EMPTY`() = vmTest {
         // Cancel old ViewModel so we can install a throwing SSE flow
         viewModel.viewModelScope.cancel()
 
         // A shared flow whose collect throws immediately, simulating a connection failure
-        val throwingFlow = kotlinx.coroutines.flow.flow<StreamEvent> {
+        val throwingFlow = kotlinx.coroutines.flow.flow<SseEnvelope> {
             throw RuntimeException("SSE connection lost")
         }
 
         val failingRepo = object : ChatRepository {
             override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?) =
                 throwingFlow
-            override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<StreamEvent>()
+            override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<SseEnvelope>()
             override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
             override suspend fun sendTurn(sessionId: String?, content: String) =
                 Result.success("s1")

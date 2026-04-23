@@ -58,7 +58,7 @@ async def spawn_sub_agent(
         return ToolResult(ok=False, error=f"未知的 Agent 类型: {agent_type}")
 
     async with _get_spawn_lock(agent_type):
-        active = await state.index_store.list_active_children(agent_type, parent_session_id)
+        active = await state.session_store.list_active_children(agent_type, parent_session_id)
         if len(active) >= config.max_children:
             return ToolResult(
                 ok=False,
@@ -73,7 +73,6 @@ async def spawn_sub_agent(
             parent_session_id=parent_session_id,
         )
         await state.session_store.create_session(session)
-        await state.index_store.upsert(session)
 
     if agent_type not in state.agent_instances:
         return ToolResult(ok=False, error=f"Agent {agent_type} 尚未初始化")
@@ -88,7 +87,6 @@ async def spawn_sub_agent(
             session=session,
             goal=full_goal,
             session_store=state.session_store,
-            index_store=state.index_store,
             event_bus=state.event_bus,
         )
     )

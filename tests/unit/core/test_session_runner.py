@@ -13,7 +13,6 @@ async def test_run_agent_session_success():
     agent.run_streaming = AsyncMock(return_value="done")
     session = Session(id="s1", agent_type="code", title="test", depth=2)
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
 
     await run_agent_session(
@@ -21,7 +20,6 @@ async def test_run_agent_session_success():
         session=session,
         goal="write tests",
         session_store=session_store,
-        index_store=index_store,
         event_bus=event_bus,
     )
 
@@ -29,7 +27,6 @@ async def test_run_agent_session_success():
     session_store.update_session.assert_awaited_once()
     updated = session_store.update_session.call_args[0][0]
     assert updated.status == SessionStatus.COMPLETED
-    index_store.upsert.assert_awaited_once()
     event_bus.publish.assert_awaited_once()
     published_event = event_bus.publish.call_args[0][0]
     assert published_event.type == EventType.SESSION_COMPLETED
@@ -44,7 +41,6 @@ async def test_run_agent_session_cancelled():
     agent.run_streaming = AsyncMock(side_effect=asyncio.CancelledError())
     session = Session(id="s4", agent_type="code", title="test", depth=2)
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
 
     with pytest.raises(asyncio.CancelledError):
@@ -53,14 +49,12 @@ async def test_run_agent_session_cancelled():
             session=session,
             goal="cancellable task",
             session_store=session_store,
-            index_store=index_store,
             event_bus=event_bus,
         )
 
     session_store.update_session.assert_awaited_once()
     updated = session_store.update_session.call_args[0][0]
     assert updated.status == SessionStatus.CANCELLED
-    index_store.upsert.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -74,7 +68,6 @@ async def test_run_agent_session_stop_intent_yields_to_stop_agent_without_persis
     agent.consume_cancel_intent = MagicMock(return_value="stop")
     session = Session(id="s5", agent_type="code", title="test", depth=2)
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
 
     await run_agent_session(
@@ -82,13 +75,11 @@ async def test_run_agent_session_stop_intent_yields_to_stop_agent_without_persis
         session=session,
         goal="pausable task",
         session_store=session_store,
-        index_store=index_store,
         event_bus=event_bus,
     )
 
     # stop 分支：session_runner 不触碰存储，也不发事件
     session_store.update_session.assert_not_awaited()
-    index_store.upsert.assert_not_awaited()
     event_bus.publish.assert_not_called()
     # status 不被 session_runner 改写（保留 stop_agent 发起时的状态）
     assert session.status != SessionStatus.IDLE
@@ -101,7 +92,6 @@ async def test_run_agent_session_failure():
     agent.run_streaming = AsyncMock(side_effect=RuntimeError("boom"))
     session = Session(id="s2", agent_type="code", title="test", depth=2)
     session_store = AsyncMock()
-    index_store = AsyncMock()
     event_bus = AsyncMock()
 
     await run_agent_session(
@@ -109,14 +99,12 @@ async def test_run_agent_session_failure():
         session=session,
         goal="bad task",
         session_store=session_store,
-        index_store=index_store,
         event_bus=event_bus,
     )
 
     session_store.update_session.assert_awaited_once()
     updated = session_store.update_session.call_args[0][0]
     assert updated.status == SessionStatus.FAILED
-    index_store.upsert.assert_awaited_once()
     event_bus.publish.assert_awaited_once()
     published_event = event_bus.publish.call_args[0][0]
     assert published_event.type == EventType.SESSION_FAILED
@@ -129,18 +117,15 @@ async def test_run_agent_session_no_event_bus():
     agent.run_streaming = AsyncMock(return_value="done")
     session = Session(id="s3", agent_type="code", title="test", depth=2)
     session_store = AsyncMock()
-    index_store = AsyncMock()
 
     await run_agent_session(
         agent=agent,
         session=session,
         goal="no bus task",
         session_store=session_store,
-        index_store=index_store,
         event_bus=None,
     )
 
     session_store.update_session.assert_awaited_once()
     updated = session_store.update_session.call_args[0][0]
     assert updated.status == SessionStatus.COMPLETED
-    index_store.upsert.assert_awaited_once()

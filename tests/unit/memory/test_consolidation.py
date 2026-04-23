@@ -500,6 +500,11 @@ class TestMemoryConsolidatorConsolidate:
             factory = async_sessionmaker(engine, expire_on_commit=False)
 
             class _FakeSessionStore:
+                async def get_context_timeline_items(
+                    self, session_id: str, agent_type: str
+                ) -> list[dict[str, Any]]:
+                    raise RuntimeError("no timeline API in test stub")
+
                 async def get_messages(
                     self, session_id: str, agent_type: str = "sebastian"
                 ) -> list[dict[str, Any]]:
@@ -573,6 +578,11 @@ class TestMemoryConsolidatorConsolidate:
             factory = async_sessionmaker(engine, expire_on_commit=False)
 
             class _FakeSessionStore:
+                async def get_context_timeline_items(
+                    self, session_id: str, agent_type: str
+                ) -> list[dict[str, Any]]:
+                    raise RuntimeError("no timeline API in test stub")
+
                 async def get_messages(
                     self, session_id: str, agent_type: str = "sebastian"
                 ) -> list[dict[str, Any]]:

@@ -31,8 +31,8 @@ async def test_check_sub_agents_includes_goal_and_activity() -> None:
     from sebastian.permissions.types import ToolCallContext
 
     mock_state = MagicMock()
-    mock_state.index_store = AsyncMock()
-    mock_state.index_store.list_all = AsyncMock(
+    mock_state.session_store = AsyncMock()
+    mock_state.session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "child1",

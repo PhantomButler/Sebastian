@@ -29,10 +29,9 @@ def _make_session(
 
 def _make_mock_state(session: Session) -> tuple[MagicMock, AsyncMock]:
     state = MagicMock()
-    state.index_store = AsyncMock()
     state.session_store = AsyncMock()
     state.event_bus = AsyncMock()
-    state.index_store.list_all = AsyncMock(
+    state.session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": session.id,
@@ -93,12 +92,10 @@ async def test_stop_active_session_transitions_to_idle_and_emits_side_effects() 
     mock_agent.cancel_session.assert_awaited_once_with(session.id, intent="stop")
     assert session.status == SessionStatus.IDLE
     state.session_store.update_session.assert_awaited_once_with(session)
-    state.index_store.upsert.assert_awaited_once_with(session)
-    state.session_store.append_message.assert_awaited_once_with(
+    state.session_store.append_timeline_items.assert_awaited_once_with(
         session.id,
-        role="system",
-        content="[上级暂停] reason: 用户改主意",
-        agent_type="code",
+        "code",
+        [{"kind": "system_event", "role": "system", "content": "[上级暂停] reason: 用户改主意"}],
     )
     state.event_bus.publish.assert_awaited_once()
     published_event = state.event_bus.publish.await_args.args[0]
@@ -127,11 +124,10 @@ async def test_stop_stalled_session_transitions_to_idle() -> None:
     assert result.ok is True
     assert session.status == SessionStatus.IDLE
     mock_agent.cancel_session.assert_awaited_once_with(session.id, intent="stop")
-    state.session_store.append_message.assert_awaited_once_with(
+    state.session_store.append_timeline_items.assert_awaited_once_with(
         session.id,
-        role="system",
-        content="[上级暂停]",
-        agent_type="code",
+        "code",
+        [{"kind": "system_event", "role": "system", "content": "[上级暂停]"}],
     )
 
 
@@ -153,7 +149,7 @@ async def test_stop_idle_session_is_idempotent() -> None:
     assert "IDLE" in result.output
     mock_agent.cancel_session.assert_not_awaited()
     state.session_store.update_session.assert_not_awaited()
-    state.session_store.append_message.assert_not_awaited()
+    state.session_store.append_timeline_items.assert_not_awaited()
     state.event_bus.publish.assert_not_awaited()
 
 
@@ -188,8 +184,8 @@ async def test_stop_unknown_session_returns_error() -> None:
     from sebastian.capabilities.tools.stop_agent import stop_agent
 
     state = MagicMock()
-    state.index_store = AsyncMock()
-    state.index_store.list_all = AsyncMock(return_value=[])
+    state.session_store = AsyncMock()
+    state.session_store.list_sessions = AsyncMock(return_value=[])
 
     with (
         patch.object(stop_mod, "get_tool_context", return_value=_sebastian_ctx()),
@@ -340,6 +336,5 @@ async def test_stop_returns_error_when_cancel_session_reports_no_active_stream()
     assert result.ok is False
     assert "inspect_session" in result.error
     state.session_store.update_session.assert_not_awaited()
-    state.index_store.upsert.assert_not_awaited()
-    state.session_store.append_message.assert_not_awaited()
+    state.session_store.append_timeline_items.assert_not_awaited()
     state.event_bus.publish.assert_not_awaited()

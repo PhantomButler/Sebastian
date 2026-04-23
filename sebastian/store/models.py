@@ -4,7 +4,18 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sebastian.store.database import Base  # noqa: F401
@@ -38,6 +49,7 @@ class TaskRecord(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     session_id: Mapped[str] = mapped_column(String, index=True)
+    agent_type: Mapped[str] = mapped_column(String(100), default="sebastian", index=True)
     goal: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String(20), index=True)
     assigned_agent: Mapped[str] = mapped_column(String(100))
@@ -54,6 +66,8 @@ class CheckpointRecord(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     task_id: Mapped[str] = mapped_column(String, index=True)
+    session_id: Mapped[str] = mapped_column(String, default="", index=True)
+    agent_type: Mapped[str] = mapped_column(String(100), default="sebastian", index=True)
     step: Mapped[int] = mapped_column(Integer)
     data: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
@@ -228,10 +242,14 @@ class MemoryDecisionLogRecord(Base):
 class SessionConsolidationRecord(Base):
     __tablename__ = "session_consolidations"
 
-    session_id: Mapped[str] = mapped_column(String, primary_key=True)
     agent_type: Mapped[str] = mapped_column(String, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, primary_key=True)
     consolidated_at: Mapped[datetime] = mapped_column(DateTime)
     worker_version: Mapped[str] = mapped_column(String, default="phase_c_v1")
+    last_consolidated_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_seen_item_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_consolidated_source_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    consolidation_mode: Mapped[str] = mapped_column(String(50), default="full_session")
 
 
 class AppSettingsRecord(Base):
@@ -244,3 +262,80 @@ class AppSettingsRecord(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
+
+
+class SessionRecord(Base):
+    __tablename__ = "sessions"
+
+    agent_type: Mapped[str] = mapped_column(String(100), primary_key=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    title: Mapped[str] = mapped_column(String, default="")
+    goal: Mapped[str] = mapped_column(String, default="")
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    depth: Mapped[int] = mapped_column(Integer, default=0)
+    parent_session_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    last_activity_at: Mapped[datetime] = mapped_column(
+        DateTime, index=True, default=lambda: datetime.now(UTC)
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    task_count: Mapped[int] = mapped_column(Integer, default=0)
+    active_task_count: Mapped[int] = mapped_column(Integer, default=0)
+    next_item_seq: Mapped[int] = mapped_column(Integer, default=1)
+
+    __table_args__ = (
+        Index("ix_sessions_agent_type", "agent_type"),
+        Index("ix_sessions_agent_parent_status", "agent_type", "parent_session_id", "status"),
+        Index("ix_sessions_last_activity", "last_activity_at"),
+    )
+
+
+class SessionItemRecord(Base):
+    __tablename__ = "session_items"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    session_id: Mapped[str] = mapped_column(String, nullable=False)
+    agent_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    turn_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    provider_call_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    block_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    effective_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("agent_type", "session_id", "seq", name="uq_session_items_seq"),
+        Index("ix_session_items_ctx", "agent_type", "session_id", "archived", "seq"),
+        Index(
+            "ix_session_items_eff",
+            "agent_type",
+            "session_id",
+            "archived",
+            "effective_seq",
+            "seq",
+        ),
+        Index("ix_session_items_created", "agent_type", "session_id", "created_at"),
+        Index("ix_session_items_kind", "agent_type", "session_id", "kind", "seq"),
+        Index(
+            "ix_session_items_turn",
+            "agent_type",
+            "session_id",
+            "turn_id",
+            "provider_call_index",
+            "block_index",
+        ),
+    )
+
+
+class SessionTodoRecord(Base):
+    __tablename__ = "session_todos"
+
+    agent_type: Mapped[str] = mapped_column(String(100), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, primary_key=True)
+    todos: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))

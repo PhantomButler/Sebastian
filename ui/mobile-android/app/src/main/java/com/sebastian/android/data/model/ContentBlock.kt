@@ -7,6 +7,7 @@ sealed class ContentBlock {
         is TextBlock     -> done
         is ThinkingBlock -> done
         is ToolBlock     -> status == ToolStatus.DONE || status == ToolStatus.FAILED
+        is SummaryBlock  -> true
     }
 
     data class TextBlock(
@@ -32,6 +33,14 @@ sealed class ContentBlock {
         val resultSummary: String? = null,
         val error: String? = null,
         val expanded: Boolean = false,
+    ) : ContentBlock()
+
+    data class SummaryBlock(
+        override val blockId: String,
+        val text: String,
+        val expanded: Boolean = false,
+        val sourceSeqStart: Long? = null,
+        val sourceSeqEnd: Long? = null,
     ) : ContentBlock()
 }
 

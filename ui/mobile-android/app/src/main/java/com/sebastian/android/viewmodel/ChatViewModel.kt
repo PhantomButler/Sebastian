@@ -34,6 +34,11 @@ import javax.inject.Inject
 enum class ComposerState { IDLE_EMPTY, IDLE_READY, PENDING, STREAMING, CANCELLING }
 enum class AgentAnimState { IDLE, PENDING, THINKING, STREAMING, WORKING }
 
+sealed interface ChatUiEffect {
+    data class RestoreComposerText(val text: String) : ChatUiEffect
+    data class ShowToast(val message: String) : ChatUiEffect
+}
+
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val composerState: ComposerState = ComposerState.IDLE_EMPTY,
@@ -60,6 +65,13 @@ class ChatViewModel @Inject constructor(
 
     private val _toastEvents = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val toastEvents: SharedFlow<String> = _toastEvents.asSharedFlow()
+
+    private val _uiEffects = MutableSharedFlow<ChatUiEffect>(extraBufferCapacity = 4)
+    val uiEffects: SharedFlow<ChatUiEffect> = _uiEffects.asSharedFlow()
+
+    private val lastDeliveredSseEventIds = ConcurrentHashMap<String, String>()
+    internal var sessionIdProvider: () -> String = { UUID.randomUUID().toString() }
+    @Volatile private var isProvisionalSession = false
 
     private val pendingDeltas = ConcurrentHashMap<String, StringBuilder>()
 
@@ -129,12 +141,10 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * @param replayFromStart 为 true 时发送 Last-Event-ID: 0，请求服务端回放缓冲事件。
-     *   用于刚发送 turn 后立即建连的场景，避免 REST→SSE 窗口期内丢失事件。
-     */
-    private fun startSseCollection(replayFromStart: Boolean = false) {
-        val sessionId = _uiState.value.activeSessionId ?: return
+    private fun startSseCollection(
+        sessionId: String = requireNotNull(_uiState.value.activeSessionId),
+        lastEventId: String? = lastDeliveredSseEventIds[sessionId],
+    ) {
         sseJob?.cancel()
         sseJob = viewModelScope.launch(dispatcher) {
             val baseUrl = settingsRepository.serverUrl.first()
@@ -143,11 +153,12 @@ class ChatViewModel @Inject constructor(
                 return@launch
             }
             _uiState.update { it.copy(isServerNotConfigured = false, connectionFailed = false) }
-            val lastEventId = if (replayFromStart) "0" else null
             try {
-                chatRepository.sessionStream(baseUrl, sessionId, lastEventId).collect { event ->
-                    handleEvent(event)
-                }
+                chatRepository.sessionStream(baseUrl, sessionId, lastEventId)
+                    .collect { envelope ->
+                        handleEvent(envelope.event)
+                        envelope.eventId?.let { lastDeliveredSseEventIds[sessionId] = it }
+                    }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -155,8 +166,6 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(
                             connectionFailed = true,
-                            // If we lost the connection mid-turn, reset the composer so the
-                            // button doesn't stay spinning with no way to dismiss.
                             composerState = if (state.composerState == ComposerState.PENDING ||
                                 state.composerState == ComposerState.STREAMING
                             ) ComposerState.IDLE_EMPTY else state.composerState,
@@ -308,90 +317,192 @@ class ChatViewModel @Inject constructor(
     fun sendMessage(text: String) {
         if (text.isBlank()) return
         val currentSessionId = _uiState.value.activeSessionId
-        val userMsg = Message(
-            id = UUID.randomUUID().toString(),
-            sessionId = currentSessionId ?: "pending",
-            role = MessageRole.USER,
-            text = text,
-        )
-        _uiState.update { state ->
-            state.copy(
-                messages = state.messages + userMsg,
-                composerState = ComposerState.PENDING,
-                agentAnimState = AgentAnimState.PENDING,
+
+        if (currentSessionId == null) {
+            val clientSessionId = sessionIdProvider()
+            val userMsgId = UUID.randomUUID().toString()
+            val userMsg = Message(
+                id = userMsgId,
+                sessionId = clientSessionId,
+                role = MessageRole.USER,
+                text = text,
             )
-        }
-        startPendingTimeout()
-        sendTurnJob = viewModelScope.launch(dispatcher) {
-            chatRepository.sendTurn(currentSessionId, text)
-                .onSuccess { returnedSessionId ->
-                    sendTurnJob = null
-                    // REST returned — leave PENDING; SSE block events will drive the transition.
-                    if (currentSessionId == null || currentSessionId != returnedSessionId) {
-                        // New session created by backend — switch to it
-                        _uiState.update { it.copy(activeSessionId = returnedSessionId) }
-                        // replayFromStart=true: REST 到 SSE 建连之间的事件需要回放
-                        startSseCollection(replayFromStart = true)
-                        // Refresh session list so the sidebar picks up the new session
+            isProvisionalSession = true
+            _uiState.update { state ->
+                state.copy(
+                    messages = state.messages + userMsg,
+                    activeSessionId = clientSessionId,
+                    composerState = ComposerState.PENDING,
+                    agentAnimState = AgentAnimState.PENDING,
+                )
+            }
+            startPendingTimeout()
+            startSseCollection(sessionId = clientSessionId, lastEventId = "0")
+            sendTurnJob = viewModelScope.launch(dispatcher) {
+                chatRepository.sendTurn(clientSessionId, text)
+                    .onSuccess { _ ->
+                        sendTurnJob = null
+                        isProvisionalSession = false
                         sessionRepository.loadSessions()
-                    } else {
-                        // Existing session — SSE should already be running.
-                        // If it died silently, restart with replay to catch in-flight events.
-                        if (sseJob?.isActive != true) {
-                            startSseCollection(replayFromStart = true)
+                    }
+                    .onFailure { e ->
+                        sendTurnJob = null
+                        isProvisionalSession = false
+                        sseJob?.cancel()
+                        sseJob = null
+                        _uiState.update { state ->
+                            state.copy(
+                                messages = state.messages.filter { it.id != userMsgId },
+                                activeSessionId = null,
+                                composerState = ComposerState.IDLE_EMPTY,
+                                agentAnimState = AgentAnimState.IDLE,
+                                error = e.message,
+                            )
+                        }
+                        viewModelScope.launch {
+                            _uiEffects.emit(ChatUiEffect.RestoreComposerText(text))
+                            _uiEffects.emit(ChatUiEffect.ShowToast("发送失败，请重试"))
                         }
                     }
-                }
-                .onFailure { e ->
-                    sendTurnJob = null
-                    _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
-                }
+            }
+        } else {
+            val userMsgId = UUID.randomUUID().toString()
+            val userMsg = Message(
+                id = userMsgId,
+                sessionId = currentSessionId,
+                role = MessageRole.USER,
+                text = text,
+            )
+            _uiState.update { state ->
+                state.copy(
+                    messages = state.messages + userMsg,
+                    composerState = ComposerState.PENDING,
+                    agentAnimState = AgentAnimState.PENDING,
+                )
+            }
+            startPendingTimeout()
+            sendTurnJob = viewModelScope.launch(dispatcher) {
+                chatRepository.sendTurn(currentSessionId, text)
+                    .onSuccess { returnedSessionId ->
+                        sendTurnJob = null
+                        if (currentSessionId != returnedSessionId) {
+                            _uiState.update { it.copy(activeSessionId = returnedSessionId) }
+                            startSseCollection(lastEventId = "0")
+                            sessionRepository.loadSessions()
+                        } else {
+                            if (sseJob?.isActive != true) startSseCollection(
+                                lastEventId = lastDeliveredSseEventIds[currentSessionId],
+                            )
+                        }
+                    }
+                    .onFailure { e ->
+                        sendTurnJob = null
+                        _uiState.update { state ->
+                            state.copy(
+                                messages = state.messages.filter { it.id != userMsgId },
+                                composerState = ComposerState.IDLE_READY,
+                                error = e.message,
+                            )
+                        }
+                        viewModelScope.launch {
+                            _uiEffects.emit(ChatUiEffect.RestoreComposerText(text))
+                            _uiEffects.emit(ChatUiEffect.ShowToast("发送失败，请重试"))
+                        }
+                    }
+            }
         }
     }
 
     fun sendAgentMessage(agentId: String, text: String) {
         if (text.isBlank()) return
         val currentSessionId = _uiState.value.activeSessionId
-        val userMsg = Message(
-            id = UUID.randomUUID().toString(),
-            sessionId = currentSessionId ?: "pending",
-            role = MessageRole.USER,
-            text = text,
-        )
-        _uiState.update { state ->
-            state.copy(
-                messages = state.messages + userMsg,
-                composerState = ComposerState.PENDING,
-                agentAnimState = AgentAnimState.PENDING,
+
+        if (currentSessionId == null) {
+            val clientSessionId = sessionIdProvider()
+            val userMsgId = UUID.randomUUID().toString()
+            val userMsg = Message(
+                id = userMsgId,
+                sessionId = clientSessionId,
+                role = MessageRole.USER,
+                text = text,
             )
-        }
-        startPendingTimeout()
-        sendTurnJob = viewModelScope.launch(dispatcher) {
-            if (currentSessionId == null) {
-                // New agent session: create + start SSE
-                sessionRepository.createAgentSession(agentId, text)
-                    .onSuccess { session ->
+            isProvisionalSession = true
+            _uiState.update { state ->
+                state.copy(
+                    messages = state.messages + userMsg,
+                    activeSessionId = clientSessionId,
+                    composerState = ComposerState.PENDING,
+                    agentAnimState = AgentAnimState.PENDING,
+                )
+            }
+            startPendingTimeout()
+            startSseCollection(sessionId = clientSessionId, lastEventId = "0")
+            sendTurnJob = viewModelScope.launch(dispatcher) {
+                sessionRepository.createAgentSession(agentId, text, sessionId = clientSessionId)
+                    .onSuccess { _ ->
                         sendTurnJob = null
-                        _uiState.update { it.copy(activeSessionId = session.id, composerState = ComposerState.IDLE_EMPTY) }
-                        startSseCollection(replayFromStart = true)
+                        isProvisionalSession = false
                         sessionRepository.loadAgentSessions(agentId)
                     }
                     .onFailure { e ->
                         sendTurnJob = null
-                        _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
+                        isProvisionalSession = false
+                        sseJob?.cancel()
+                        sseJob = null
+                        _uiState.update { state ->
+                            state.copy(
+                                messages = state.messages.filter { it.id != userMsgId },
+                                activeSessionId = null,
+                                composerState = ComposerState.IDLE_EMPTY,
+                                agentAnimState = AgentAnimState.IDLE,
+                                error = e.message,
+                            )
+                        }
+                        viewModelScope.launch {
+                            _uiEffects.emit(ChatUiEffect.RestoreComposerText(text))
+                            _uiEffects.emit(ChatUiEffect.ShowToast("发送失败，请重试"))
+                        }
                     }
-            } else {
-                // Existing session: send turn — leave PENDING; SSE block events drive the transition.
+            }
+        } else {
+            val userMsgId = UUID.randomUUID().toString()
+            val userMsg = Message(
+                id = userMsgId,
+                sessionId = currentSessionId,
+                role = MessageRole.USER,
+                text = text,
+            )
+            _uiState.update { state ->
+                state.copy(
+                    messages = state.messages + userMsg,
+                    composerState = ComposerState.PENDING,
+                    agentAnimState = AgentAnimState.PENDING,
+                )
+            }
+            startPendingTimeout()
+            sendTurnJob = viewModelScope.launch(dispatcher) {
                 chatRepository.sendSessionTurn(currentSessionId, text)
                     .onSuccess {
                         sendTurnJob = null
                         if (sseJob?.isActive != true) {
-                            startSseCollection(replayFromStart = true)
+                            startSseCollection(
+                                lastEventId = lastDeliveredSseEventIds[currentSessionId],
+                            )
                         }
                     }
                     .onFailure { e ->
                         sendTurnJob = null
-                        _uiState.update { it.copy(composerState = ComposerState.IDLE_READY, error = e.message) }
+                        _uiState.update { state ->
+                            state.copy(
+                                messages = state.messages.filter { it.id != userMsgId },
+                                composerState = ComposerState.IDLE_READY,
+                                error = e.message,
+                            )
+                        }
+                        viewModelScope.launch {
+                            _uiEffects.emit(ChatUiEffect.RestoreComposerText(text))
+                            _uiEffects.emit(ChatUiEffect.ShowToast("发送失败，请重试"))
+                        }
                     }
             }
         }
@@ -417,13 +528,17 @@ class ChatViewModel @Inject constructor(
     fun cancelTurn() {
         cancelPendingTimeout()
         val sessionId = _uiState.value.activeSessionId
-        if (sessionId == null) {
-            // Still in PENDING before REST returned — cancel the local job,
+        if (sessionId == null || isProvisionalSession) {
+            // Still pre-REST (no session) or provisional session — cancel the local job,
             // keep user bubble for editing/retry.
             sendTurnJob?.cancel()
             sendTurnJob = null
+            sseJob?.cancel()
+            sseJob = null
+            isProvisionalSession = false
             _uiState.update {
                 it.copy(
+                    activeSessionId = null,
                     composerState = ComposerState.IDLE_READY,
                     agentAnimState = AgentAnimState.IDLE,
                 )
@@ -456,16 +571,11 @@ class ChatViewModel @Inject constructor(
             )
         }
         viewModelScope.launch(dispatcher) {
-            val needsReplay = chatRepository.getMessages(sessionId)
+            chatRepository.getMessages(sessionId)
                 .onSuccess { history ->
                     _uiState.update { it.copy(messages = history) }
                 }
-                .map { history ->
-                    // 最后一条消息是 user → turn 进行中，需要回放以补回流式事件
-                    history.isEmpty() || history.lastOrNull()?.role == MessageRole.USER
-                }
-                .getOrDefault(true) // hydration 失败时保守回放
-            startSseCollection(replayFromStart = needsReplay)
+            startSseCollection(sessionId = sessionId)
         }
     }
 
@@ -488,6 +598,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun retryConnection() {
+        if (_uiState.value.activeSessionId == null) return
         _uiState.update { it.copy(connectionFailed = false) }
         startSseCollection()
     }
@@ -509,8 +620,7 @@ class ChatViewModel @Inject constructor(
 
         if (state.composerState == ComposerState.PENDING) {
             val sessionId = state.activeSessionId ?: run {
-                // No session yet (REST hasn't returned) — restart SSE if needed
-                startSseCollection(replayFromStart = false)
+                // Provisional session still open — SSE is already running
                 return
             }
             viewModelScope.launch(dispatcher) {
@@ -529,10 +639,10 @@ class ChatViewModel @Inject constructor(
                                 )
                             }
                         }
-                        startSseCollection(replayFromStart = false)
+                        startSseCollection()
                     }
                     .onFailure {
-                        startSseCollection(replayFromStart = false)
+                        startSseCollection()
                     }
             }
             return
@@ -561,6 +671,12 @@ class ChatViewModel @Inject constructor(
     fun toggleToolBlock(msgId: String, blockId: String) {
         updateBlockById(msgId, blockId) { block ->
             if (block is ContentBlock.ToolBlock) block.copy(expanded = !block.expanded) else block
+        }
+    }
+
+    fun toggleSummaryBlock(msgId: String, blockId: String) {
+        updateBlockById(msgId, blockId) { block ->
+            if (block is ContentBlock.SummaryBlock) block.copy(expanded = !block.expanded) else block
         }
     }
 

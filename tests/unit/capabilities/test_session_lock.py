@@ -65,7 +65,6 @@ async def test_session_runner_releases_lock_on_terminal_status(tmp_path) -> None
         session=session,
         goal="g",
         session_store=AsyncMock(),
-        index_store=AsyncMock(),
         event_bus=None,
     )
 
@@ -91,7 +90,6 @@ async def test_session_runner_keeps_lock_on_stop(tmp_path) -> None:
         session=session,
         goal="g",
         session_store=AsyncMock(),
-        index_store=AsyncMock(),
         event_bus=None,
     )
 

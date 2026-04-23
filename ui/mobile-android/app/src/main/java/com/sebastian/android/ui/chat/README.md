@@ -66,6 +66,9 @@ UI 映射：FAB 显示 = `userAway`（绑意图而非事实 —— 流式中 `at
 | `TextBlock` | `MarkdownView` |
 | `ThinkingBlock` | `ThinkingCard` |
 | `ToolBlock` | `ToolCallCard` |
+| `SummaryBlock` | `SummaryCard`（折叠卡片，标题"Compressed summary"） |
+
+`SummaryCard` 是对话上下文被压缩的视觉标记，表示其之前的内容已被归档压缩；被归档的原始块仍正常显示，不做置灰或隐藏。
 
 ### `ThinkingCard`
 
@@ -129,6 +132,7 @@ Session 按时间分桶的纯函数逻辑，不含 UI。提供：
 | 改手机单栏手势滑动逻辑 | `SlidingThreePaneLayout.kt` |
 | 改消息列表滚动行为 | `MessageList.kt` |
 | 改消息渲染分发逻辑 | `StreamingMessage.kt` |
+| 改上下文压缩摘要卡片 | `StreamingMessage.kt`（`SummaryCard` 组件） |
 | 改思考块展开/折叠 | `ThinkingCard.kt` |
 | 改工具调用块样式/状态 | `ToolCallCard.kt` |
 | 改工具调用展开区内二次折叠行为 | `CollapsibleContent.kt` |

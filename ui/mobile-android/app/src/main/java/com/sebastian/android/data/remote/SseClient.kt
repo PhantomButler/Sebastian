@@ -19,6 +19,16 @@ import okhttp3.sse.EventSources
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Wraps a [StreamEvent] with the SSE event id delivered by the server.
+ * [eventId] is null when the server omits the `id:` field for that frame.
+ * Callers can track the last non-null [eventId] as a replay cursor.
+ */
+data class SseEnvelope(
+    val eventId: String?,
+    val event: StreamEvent,
+)
+
 @Singleton
 class SseClient @Inject constructor(
     @SseOkHttp private val okHttpClient: OkHttpClient,
@@ -26,13 +36,13 @@ class SseClient @Inject constructor(
     /**
      * Subscribes to a single-session event stream with automatic reconnection.
      */
-    fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String? = null): Flow<StreamEvent> =
+    fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String? = null): Flow<SseEnvelope> =
         resilientSseFlow("$baseUrl/api/v1/sessions/$sessionId/stream", lastEventId)
 
     /**
      * Subscribes to the global event stream with automatic reconnection.
      */
-    fun globalStream(baseUrl: String, lastEventId: String? = null): Flow<StreamEvent> =
+    fun globalStream(baseUrl: String, lastEventId: String? = null): Flow<SseEnvelope> =
         resilientSseFlow("$baseUrl/api/v1/stream", lastEventId)
 
     /**
@@ -69,8 +79,9 @@ class SseClient @Inject constructor(
      * Resilient SSE flow: reconnects on failure with exponential backoff (1s, 2s, 4s, max 3 retries).
      * Tracks Last-Event-ID across reconnects so the server can resume from the last delivered event.
      * A clean server close (onClosed) terminates the flow without retry.
+     * Each emitted [SseEnvelope] carries the raw SSE event id so callers can track the replay cursor.
      */
-    private fun resilientSseFlow(url: String, initialLastEventId: String?): Flow<StreamEvent> = flow {
+    private fun resilientSseFlow(url: String, initialLastEventId: String?): Flow<SseEnvelope> = flow {
         var lastEventId = initialLastEventId
         var attempt = 0
         val delaysMs = longArrayOf(1_000L, 2_000L, 4_000L)
@@ -78,8 +89,8 @@ class SseClient @Inject constructor(
         while (true) {
             try {
                 sseFlowOnce(url, lastEventId).collect { (id, event) ->
+                    emit(SseEnvelope(eventId = id, event = event))
                     if (id != null) lastEventId = id
-                    emit(event)
                     attempt = 0 // reset backoff counter on successful event
                 }
                 // Flow completed cleanly — server closed connection, no retry

@@ -16,7 +16,6 @@ from sebastian.memory.consolidation import (
 )
 from sebastian.memory.extraction import ExtractorOutput
 from sebastian.memory.types import MemoryScope
-from sebastian.store.index_store import IndexStore
 from sebastian.store.models import (
     Base,
     EpisodeMemoryRecord,
@@ -92,13 +91,11 @@ def sessions_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 async def stores(sessions_dir: Path):
     session_store = SessionStore(sessions_dir)
-    index_store = IndexStore(sessions_dir, session_store=session_store)
-    return session_store, index_store
+    return (session_store,)
 
 
 async def _make_completed_session(
     session_store: SessionStore,
-    index_store: IndexStore,
     *,
     session_id: str = "sess-sweep-1",
     agent_type: str = "sebastian",
@@ -110,7 +107,6 @@ async def _make_completed_session(
         status=SessionStatus.COMPLETED,
     )
     await session_store.create_session(session)
-    await index_store.upsert(session)
     return session
 
 
@@ -131,14 +127,14 @@ def _make_worker(db_factory, session_store, consolidator=None, extractor=None):
 
 @pytest.mark.asyncio
 async def test_sweep_consolidates_orphaned_completed_session(db_factory, stores):
-    session_store, index_store = stores
-    session = await _make_completed_session(session_store, index_store)
+    (session_store,) = stores
+    session = await _make_completed_session(session_store)
     worker = _make_worker(db_factory, session_store)
 
     await sweep_unconsolidated(
         db_factory=db_factory,
         worker=worker,
-        index_store=index_store,
+        session_store=session_store,
         memory_settings_fn=lambda: True,
     )
 
@@ -158,14 +154,14 @@ async def test_sweep_consolidates_orphaned_completed_session(db_factory, stores)
 
 @pytest.mark.asyncio
 async def test_sweep_short_circuits_when_memory_disabled(db_factory, stores):
-    session_store, index_store = stores
-    session = await _make_completed_session(session_store, index_store)
+    (session_store,) = stores
+    session = await _make_completed_session(session_store)
     worker = _make_worker(db_factory, session_store)
 
     await sweep_unconsolidated(
         db_factory=db_factory,
         worker=worker,
-        index_store=index_store,
+        session_store=session_store,
         memory_settings_fn=lambda: False,
     )
 
@@ -179,8 +175,8 @@ async def test_sweep_short_circuits_when_memory_disabled(db_factory, stores):
 
 @pytest.mark.asyncio
 async def test_sweep_skips_sessions_with_existing_marker(db_factory, stores):
-    session_store, index_store = stores
-    session = await _make_completed_session(session_store, index_store)
+    (session_store,) = stores
+    session = await _make_completed_session(session_store)
 
     calls: list[tuple[str, str]] = []
 
@@ -204,7 +200,7 @@ async def test_sweep_skips_sessions_with_existing_marker(db_factory, stores):
     await sweep_unconsolidated(
         db_factory=db_factory,
         worker=SpyWorker(),  # type: ignore[arg-type]
-        index_store=index_store,
+        session_store=session_store,
         memory_settings_fn=lambda: True,
     )
 
@@ -213,7 +209,7 @@ async def test_sweep_skips_sessions_with_existing_marker(db_factory, stores):
 
 @pytest.mark.asyncio
 async def test_sweep_ignores_non_completed_sessions(db_factory, stores):
-    session_store, index_store = stores
+    (session_store,) = stores
     active = Session(
         id="sess-active",
         agent_type="sebastian",
@@ -221,7 +217,6 @@ async def test_sweep_ignores_non_completed_sessions(db_factory, stores):
         status=SessionStatus.ACTIVE,
     )
     await session_store.create_session(active)
-    await index_store.upsert(active)
 
     calls: list[tuple[str, str]] = []
 
@@ -232,7 +227,7 @@ async def test_sweep_ignores_non_completed_sessions(db_factory, stores):
     await sweep_unconsolidated(
         db_factory=db_factory,
         worker=SpyWorker(),  # type: ignore[arg-type]
-        index_store=index_store,
+        session_store=session_store,
         memory_settings_fn=lambda: True,
     )
 

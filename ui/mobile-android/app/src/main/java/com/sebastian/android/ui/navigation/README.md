@@ -24,6 +24,7 @@ navigation/
 | `SettingsProvidersNew` | `ProviderFormPage(null)` |
 | `SettingsProvidersEdit(providerId)` | `ProviderFormPage(id)` |
 | `SettingsAgentBindings` | `AgentBindingsPage` |
+| `SettingsMemory` | `MemorySettingsPage` |
 | `SettingsAppearance` | `AppearancePage` |
 | `SettingsDebugLogging` | `DebugLoggingPage` |
 

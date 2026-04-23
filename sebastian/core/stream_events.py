@@ -66,6 +66,11 @@ class ToolResult:
 
 
 @dataclass
+class ProviderCallStart:
+    index: int  # agent_loop 的 iteration 值，从 0 开始
+
+
+@dataclass
 class ProviderCallEnd:
     stop_reason: str  # "end_turn" | "tool_use" | "max_tokens" | "stop_sequence"
 
@@ -85,6 +90,7 @@ LLMStreamEvent = (
     | ToolCallBlockStart
     | ToolCallReady
     | ToolResult
+    | ProviderCallStart
     | ProviderCallEnd
     | TurnDone
 )

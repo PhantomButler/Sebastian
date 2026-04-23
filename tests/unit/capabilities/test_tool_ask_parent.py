@@ -12,7 +12,6 @@ from sebastian.protocol.events.types import EventType
 
 def _make_mock_state(session_status=SessionStatus.ACTIVE):
     state = MagicMock()
-    state.index_store = AsyncMock()
     state.session_store = AsyncMock()
     state.event_bus = AsyncMock()
 
@@ -48,7 +47,6 @@ async def test_ask_parent_sets_waiting_status():
     assert result.ok is True
     assert mock_session.status == SessionStatus.WAITING
     state.session_store.update_session.assert_awaited_once()
-    state.index_store.upsert.assert_awaited_once()
 
 
 @pytest.mark.asyncio

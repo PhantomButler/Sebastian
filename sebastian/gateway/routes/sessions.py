@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sebastian.core.types import InvalidTaskTransitionError, Session, Task
 from sebastian.gateway.auth import require_auth
@@ -22,6 +22,11 @@ AuthPayload = dict[str, Any]
 JSONDict = dict[str, Any]
 
 
+class CreateAgentSessionBody(BaseModel):
+    content: str = Field(min_length=1)
+    session_id: str | None = None
+
+
 @router.get("/sessions")
 async def list_sessions(
     agent_type: str | None = Query(default=None),
@@ -32,7 +37,7 @@ async def list_sessions(
 ) -> JSONDict:
     import sebastian.gateway.state as state
 
-    sessions = await state.index_store.list_all()
+    sessions = await state.session_store.list_sessions()
     sessions = [s for s in sessions if s.get("depth", 1) == 1]
     if agent_type is not None:
         sessions = [s for s in sessions if s.get("agent_type") == agent_type]
@@ -50,14 +55,14 @@ async def list_agent_sessions(
 ) -> JSONDict:
     import sebastian.gateway.state as state
 
-    sessions = await state.index_store.list_by_agent_type(agent_type)
+    sessions = await state.session_store.list_sessions_by_agent_type(agent_type)
     return {"agent_type": agent_type, "sessions": sessions}
 
 
 @router.post("/agents/{agent_type}/sessions")
 async def create_agent_session(
     agent_type: str,
-    body: dict[str, Any],
+    body: CreateAgentSessionBody,
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
     """Create a new conversation with a sub-agent."""
@@ -69,18 +74,36 @@ async def create_agent_session(
     if agent_type not in state.agent_instances:
         raise HTTPException(404, f"Agent type not found: {agent_type}")
 
-    content = body.get("content", "")
+    content = body.content.strip()
     if not content:
         raise HTTPException(400, "content is required")
 
-    session = Session(
-        agent_type=agent_type,
-        title=content[:40],
-        goal=content,
-        depth=2,
-    )
+    if body.session_id is not None:
+        entries = await state.session_store.list_sessions()
+        existing_entry = next((e for e in entries if e["id"] == body.session_id), None)
+        if existing_entry is not None:
+            if existing_entry.get("agent_type") != agent_type:
+                raise HTTPException(409, "session_id already exists with different agent or goal")
+            existing = await state.session_store.get_session(body.session_id, agent_type)
+            if existing is None or existing.goal != content:
+                raise HTTPException(409, "session_id already exists with different agent or goal")
+            # Idempotent: same session_id + same agent + same goal
+            # Return existing without starting a new turn
+            return {
+                "session_id": existing.id,
+                "ts": existing.created_at.isoformat(),
+            }
+
+    session_kwargs: dict[str, Any] = {
+        "agent_type": agent_type,
+        "title": content[:40],
+        "goal": content,
+        "depth": 2,
+    }
+    if body.session_id is not None:
+        session_kwargs["id"] = body.session_id
+    session = Session(**session_kwargs)
     await state.session_store.create_session(session)
-    await state.index_store.upsert(session)
 
     agent = state.agent_instances[agent_type]
 
@@ -92,7 +115,6 @@ async def create_agent_session(
             session=session,
             goal=content,
             session_store=state.session_store,
-            index_store=state.index_store,
             event_bus=state.event_bus,
         )
     )
@@ -106,17 +128,30 @@ async def create_agent_session(
 @router.get("/sessions/{session_id}")
 async def get_session(
     session_id: str,
+    include_archived: bool = Query(default=False),
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
     import sebastian.gateway.state as state
+    from sebastian.store.session_context import build_legacy_messages
 
     session = await _resolve_session(state, session_id)
-    messages = await state.session_store.get_messages(
-        session_id,
-        session.agent_type,
-        limit=50,
-    )
-    return {"session": session.model_dump(mode="json"), "messages": messages}
+    if include_archived:
+        items = await state.session_store.get_timeline_items(
+            session_id,
+            session.agent_type,
+            include_archived=True,
+        )
+    else:
+        items = await state.session_store.get_context_timeline_items(
+            session_id,
+            session.agent_type,
+        )
+    messages = build_legacy_messages(items)
+    return {
+        "session": session.model_dump(mode="json"),
+        "messages": messages,
+        "timeline_items": items,
+    }
 
 
 class SendTurnBody(BaseModel):
@@ -134,14 +169,12 @@ def _log_background_turn_failure(task: asyncio.Task[object]) -> None:
 async def _persist_session_status(
     session: Session,
     session_store: Any,
-    index_store: Any,
     event_bus: Any,
 ) -> None:
     from sebastian.protocol.events.types import Event, EventType
 
     session.updated_at = datetime.now(UTC)
     await session_store.update_session(session)
-    await index_store.upsert(session)
     if event_bus is not None:
         from sebastian.core.types import SessionStatus
 
@@ -166,7 +199,6 @@ async def _persist_session_status(
 def _make_turn_done_callback(
     session: Session,
     session_store: Any,
-    index_store: Any,
     event_bus: Any,
 ) -> Callable[[asyncio.Task[object]], None]:
     from sebastian.core.types import SessionStatus
@@ -179,7 +211,7 @@ def _make_turn_done_callback(
         else:
             return
         persist_task = asyncio.create_task(
-            _persist_session_status(session, session_store, index_store, event_bus)
+            _persist_session_status(session, session_store, event_bus)
         )
         _background_tasks.add(persist_task)
         persist_task.add_done_callback(_background_tasks.discard)
@@ -189,7 +221,7 @@ def _make_turn_done_callback(
 
 
 async def _resolve_session(state: Any, session_id: str) -> Session:
-    entries = await state.index_store.list_all()
+    entries = await state.session_store.list_sessions()
     entry = next((e for e in entries if e["id"] == session_id), None)
     if entry is None:
         raise HTTPException(404, "Session not found")
@@ -203,7 +235,6 @@ async def _touch_session(state: Any, session: Session) -> datetime:
     now = datetime.now(UTC)
     session.updated_at = now
     await state.session_store.update_session(session)
-    await state.index_store.upsert(session)
     return now
 
 
@@ -240,9 +271,7 @@ async def _schedule_session_turn(
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     task.add_done_callback(_log_background_turn_failure)
-    task.add_done_callback(
-        _make_turn_done_callback(session, state.session_store, state.index_store, state.event_bus)
-    )
+    task.add_done_callback(_make_turn_done_callback(session, state.session_store, state.event_bus))
 
 
 @router.delete("/sessions/{session_id}")
@@ -254,7 +283,6 @@ async def delete_session(
 
     session = await _resolve_session(state, session_id)
     await state.session_store.delete_session(session)
-    await state.index_store.remove(session_id)
     return {"session_id": session_id, "deleted": True}
 
 
@@ -298,20 +326,11 @@ async def list_session_todos(
     session_id: str,
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
-    import json as _json
-
     import sebastian.gateway.state as state
 
     session = await _resolve_session(state, session_id)
     todos = await state.todo_store.read(session.agent_type, session_id)
-
-    path = state.todo_store._todos_path(session.agent_type, session_id)
-    updated_at: str | None = None
-    if path.exists():
-        try:
-            updated_at = _json.loads(path.read_text(encoding="utf-8")).get("updated_at")
-        except (OSError, ValueError):
-            updated_at = None
+    updated_at = await state.todo_store.read_updated_at(session.agent_type, session_id)
 
     return {
         "todos": [t.model_dump(mode="json", by_alias=True) for t in todos],
@@ -406,23 +425,28 @@ async def cancel_session_post(
 @router.get("/sessions/{session_id}/recent")
 async def get_session_recent(
     session_id: str,
-    limit: int = 5,
+    limit: int = 25,
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
-    """HTTP version of inspect_session — returns recent messages + status."""
+    """HTTP version of inspect_session — returns recent timeline items + status."""
     import sebastian.gateway.state as state
+    from sebastian.store.session_context import build_legacy_messages
 
     session = await _resolve_session(state, session_id)
-    messages = await state.session_store.get_messages(
+    items = await state.session_store.get_recent_timeline_items(
         session_id,
         session.agent_type,
         limit=limit,
     )
+    messages = build_legacy_messages(items)
     return {
         "session_id": session.id,
-        "status": session.status,
+        "status": session.status.value,
         "title": session.title,
         "goal": session.goal,
-        "last_activity_at": session.last_activity_at.isoformat(),
+        "last_activity_at": (
+            session.last_activity_at.isoformat() if session.last_activity_at else None
+        ),
         "messages": messages,
+        "timeline_items": items,
     }

@@ -59,7 +59,6 @@ async def delegate_to_agent(
         parent_session_id=ctx.session_id,
     )
     await state.session_store.create_session(session)
-    await state.index_store.upsert(session)
 
     agent = state.agent_instances[agent_type]
     full_goal = f"{goal}\n\n背景信息：{context}" if context else goal
@@ -72,7 +71,6 @@ async def delegate_to_agent(
             session=session,
             goal=full_goal,
             session_store=state.session_store,
-            index_store=state.index_store,
             event_bus=state.event_bus,
         )
     )

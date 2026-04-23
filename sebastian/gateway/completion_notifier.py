@@ -9,7 +9,6 @@ if TYPE_CHECKING:
     from sebastian.core.base_agent import BaseAgent
     from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import EventBus
-    from sebastian.store.index_store import IndexStore
     from sebastian.store.session_store import SessionStore
 
 from sebastian.protocol.events.types import Event, EventType
@@ -26,13 +25,11 @@ class CompletionNotifier:
         self,
         event_bus: EventBus,
         session_store: SessionStore,
-        index_store: IndexStore,
         sebastian: Sebastian,
         agent_instances: dict[str, BaseAgent],
         agent_registry: dict[str, AgentConfig],
     ) -> None:
         self._session_store = session_store
-        self._index_store = index_store
         self._sebastian = sebastian
         self._agent_instances = agent_instances
         self._agent_registry = agent_registry
@@ -91,7 +88,7 @@ class CompletionNotifier:
             )
 
     async def _find_parent_agent(self, parent_session_id: str) -> BaseAgent | None:
-        all_sessions = await self._index_store.list_all()
+        all_sessions = await self._session_store.list_sessions()
         parent_entry = next((s for s in all_sessions if s.get("id") == parent_session_id), None)
         if parent_entry is None:
             return None
@@ -130,10 +127,12 @@ class CompletionNotifier:
         )
 
     async def _get_last_assistant_message(self, session_id: str, agent_type: str) -> str:
-        messages = await self._session_store.get_messages(session_id, agent_type, limit=10)
-        for msg in reversed(messages):
-            if msg.get("role") == "assistant" and msg.get("content"):
-                content: str = msg["content"]
+        items = await self._session_store.get_recent_timeline_items(
+            session_id, agent_type, limit=10
+        )
+        for item in reversed(items):
+            if item.get("kind") == "assistant_message" and item.get("content"):
+                content: str = item["content"]
                 if len(content) > _MAX_REPORT_CHARS:
                     content = content[:_MAX_REPORT_CHARS] + "…（已截断）"
                 return content

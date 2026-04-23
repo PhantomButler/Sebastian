@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from sebastian.orchestrator.conversation import ConversationManager
     from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import EventBus
-    from sebastian.store.index_store import IndexStore
     from sebastian.store.owner_store import OwnerStore
     from sebastian.store.session_store import SessionStore
     from sebastian.store.todo_store import TodoStore
@@ -32,7 +31,6 @@ event_bus: EventBus
 conversation: ConversationManager
 session_store: SessionStore
 todo_store: TodoStore
-index_store: IndexStore
 db_factory: async_sessionmaker[AsyncSession]
 llm_registry: LLMProviderRegistry = None  # type: ignore[assignment]
 memory_settings: MemoryRuntimeSettings

@@ -15,7 +15,6 @@ from sebastian.core.stream_events import (
     ThinkingBlockStop,
     ThinkingDelta,
 )
-from sebastian.memory.episodic_memory import EpisodicMemory
 from sebastian.store.session_store import SessionStore
 from tests.unit.core.test_agent_loop import MockLLMProvider
 
@@ -43,17 +42,15 @@ async def test_thinking_block_stop_includes_duration_ms() -> None:
 
     session_store = MagicMock(spec=SessionStore)
     session_store.get_session_for_agent_type = AsyncMock(return_value=MagicMock())
-
-    episodic_mock = MagicMock(spec=EpisodicMemory)
-    episodic_mock.get_turns = AsyncMock(return_value=[])
-    episodic_mock.add_turn = AsyncMock()
+    session_store.update_activity = AsyncMock()
+    session_store.get_messages = AsyncMock(return_value=[])
+    session_store.append_message = AsyncMock()
 
     agent = TestAgent(
         gate=MagicMock(),
         session_store=session_store,
         provider=provider,
     )
-    agent._episodic = episodic_mock
 
     async def capture_publish(session_id, event_type, payload):
         published.append({"type": event_type, "data": payload})

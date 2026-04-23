@@ -44,8 +44,14 @@ def client(tmp_path):
                     name="test-owner",
                     password_hash=password_hash,
                 )
+                from sebastian.store.database import get_engine
+
+                await get_engine().dispose()
+                await asyncio.sleep(0)
 
             asyncio.run(_seed())
+            db_module._engine = None
+            db_module._session_factory = None
             (tmp_path / "secret.key").write_text("test-secret-key")
 
             from starlette.testclient import TestClient
@@ -71,7 +77,6 @@ def test_get_todos_empty_for_new_session(client):
 
     session = Session(agent_type="sebastian", title="t")
     asyncio.run(state.session_store.create_session(session))
-    asyncio.run(state.index_store.upsert(session))
 
     response = client.get(
         f"/api/v1/sessions/{session.id}/todos",
@@ -91,7 +96,6 @@ def test_get_todos_returns_written(client):
 
     session = Session(agent_type="sebastian", title="t")
     asyncio.run(state.session_store.create_session(session))
-    asyncio.run(state.index_store.upsert(session))
 
     asyncio.run(
         state.todo_store.write(

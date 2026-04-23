@@ -54,7 +54,7 @@ async def list_agents(_auth: AuthPayload = Depends(require_auth)) -> JSONDict:
         if agent_type == ORCHESTRATOR_AGENT_TYPE:
             continue  # 已置顶，跳过重复
 
-        sessions = await state.index_store.list_by_agent_type(agent_type)
+        sessions = await state.session_store.list_sessions_by_agent_type(agent_type)
         active_count = sum(1 for s in sessions if s.get("status") == "active")
         binding = binding_map.get(agent_type)
 

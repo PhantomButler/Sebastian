@@ -161,6 +161,15 @@ uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8823 --reload
 ./gradlew test
 ```
 
+## 聊天历史水合（Timeline Hydration）
+
+聊天历史通过 `GET /api/v1/sessions/{id}?include_archived=true` 加载，后端返回 `timeline_items`（按 `seq ASC` 排列）。
+
+- App 以 `timeline_items` 为权威来源；若后端不返回该字段，则回退到旧的 `messages` 字段（兼容旧服务端）
+- `TimelineMapper`（`data/remote/dto/`）是唯一将 timeline 行转换为 `Message + ContentBlock` 的入口
+- `context_summary` 类型映射为 `ContentBlock.SummaryBlock`，在消息列表中以折叠卡片"Compressed summary"展示
+- 新 Session 使用客户端生成的 ID（`UUID`）：App 先开 SSE，再以同一 `session_id` POST 首条 turn，确保流事件不丢失
+
 ## SSE 连接机制
 
 App 有两条 SSE 连接：

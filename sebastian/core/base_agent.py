@@ -4,7 +4,6 @@ import asyncio
 import dataclasses
 import functools
 import inspect
-import json
 import logging
 import time
 from abc import ABC
@@ -17,11 +16,13 @@ if TYPE_CHECKING:
 
     from sebastian.llm.provider import LLMProvider
     from sebastian.llm.registry import LLMProviderRegistry
-    from sebastian.store.index_store import IndexStore
+
+from ulid import ULID
 
 from sebastian.config import settings
-from sebastian.core.agent_loop import AgentLoop
+from sebastian.core.agent_loop import AgentLoop, _tool_result_content
 from sebastian.core.stream_events import (
+    ProviderCallStart,
     TextBlockStart,
     TextBlockStop,
     TextDelta,
@@ -37,7 +38,6 @@ from sebastian.core.stream_events import (
 )
 from sebastian.core.types import ToolResult
 from sebastian.memory.depth_guard import is_memory_eligible
-from sebastian.memory.episodic_memory import EpisodicMemory
 from sebastian.memory.working_memory import WorkingMemory
 from sebastian.permissions.gate import PolicyGate
 from sebastian.permissions.types import ToolCallContext
@@ -75,6 +75,78 @@ def _format_tool_display(result: ToolResult) -> str:
     return text
 
 
+def _append_tool_result_block(
+    blocks: list[dict[str, Any]],
+    *,
+    tool_id: str,
+    tool_name: str,
+    result: StreamToolResult,
+    display: str,
+    turn_id: str | None,
+    provider_call_index: int | None,
+    block_index: int,
+) -> None:
+    block: dict[str, Any] = {
+        "type": "tool_result",
+        "tool_call_id": tool_id,
+        "tool_name": tool_name,
+        "model_content": _tool_result_content(result),
+        "display": display,
+        "ok": result.ok,
+        "turn_id": turn_id,
+        "provider_call_index": provider_call_index,
+        "block_index": block_index,
+    }
+    if result.error is not None:
+        block["error"] = result.error
+    blocks.append(block)
+
+
+def _ensure_tool_results_for_pending_calls(
+    blocks: list[dict[str, Any]],
+    *,
+    reason: str,
+) -> None:
+    """Add synthetic failed tool_result blocks for persisted tool_calls without results."""
+    result_ids = {
+        block.get("tool_call_id")
+        for block in blocks
+        if block.get("type") == "tool_result" and block.get("tool_call_id")
+    }
+    block_indexes = [
+        block_index
+        for block in blocks
+        if isinstance((block_index := block.get("block_index")), int)
+    ]
+    next_block_index = max(block_indexes, default=-1) + 1
+    for block in list(blocks):
+        if block.get("type") != "tool":
+            continue
+        tool_id = block.get("tool_call_id")
+        if not tool_id or tool_id in result_ids:
+            continue
+        tool_name = block.get("tool_name", "")
+        result = StreamToolResult(
+            tool_id=tool_id,
+            name=tool_name,
+            ok=False,
+            output=None,
+            error=reason,
+        )
+        _append_tool_result_block(
+            blocks,
+            tool_id=tool_id,
+            tool_name=tool_name,
+            result=result,
+            display=reason,
+            turn_id=block.get("turn_id"),
+            provider_call_index=block.get("provider_call_index"),
+            block_index=next_block_index,
+        )
+        next_block_index += 1
+        result_ids.add(tool_id)
+
+
 BASE_PERSONA = (
     "You are Sebastian, a personal AI butler for {owner_name}. "
     "You are helpful, precise, and action-oriented. "
@@ -108,7 +180,6 @@ class BaseAgent(ABC):
         model: str | None = None,
         allowed_tools: list[str] | None = None,
         allowed_skills: list[str] | None = None,
-        index_store: IndexStore | None = None,
         llm_registry: LLMProviderRegistry | None = None,
         db_factory: async_sessionmaker[AsyncSession] | None = None,
     ) -> None:
@@ -118,9 +189,7 @@ class BaseAgent(ABC):
         self._current_depth: dict[str, int] = {}  # session_id → depth
         self._session_store = session_store
         self._event_bus = event_bus
-        self._index_store = index_store
         self._llm_registry = llm_registry
-        self._episodic = EpisodicMemory(session_store)
         self.working_memory = WorkingMemory()
         self._active_streams: dict[str, asyncio.Task[str]] = {}  # session_id → task
         # session_id → intent: "cancel" ends as cancelled; "stop" keeps context for resume.
@@ -133,6 +202,7 @@ class BaseAgent(ABC):
         # session_id → asyncio.TimerHandle for pending-cancel TTL cleanup
         self._pending_cancel_timers: dict[str, asyncio.TimerHandle] = {}
         self._partial_buffer: dict[str, str] = {}
+        self._pending_blocks: dict[str, list[dict[str, Any]]] = {}
 
         # instance-level overrides class-level defaults
         if allowed_tools is not None:
@@ -386,18 +456,29 @@ class BaseAgent(ABC):
                 "message": user_message[:200],
             },
         )
-        await self._update_activity(session_id)
-        turns = await self._episodic.get_turns(session_id, agent=agent_context, limit=20)
-        messages: list[dict[str, str]] = [
-            {"role": turn.role, "content": turn.content} for turn in turns
-        ]
+        await self._update_activity(session_id, agent_context)
+
+        # _llm_registry resolution above guarantees _provider is set in production;
+        # "anthropic" is the fallback for test-only agents with no provider injected.
+        provider_format = "anthropic"
+        if self._loop._provider is not None:
+            provider_format = self._loop._provider.message_format
+
+        if self._db_factory is not None:
+            messages = await self._session_store.get_context_messages(
+                session_id, agent_context, provider_format
+            )
+        else:
+            raw = await self._session_store.get_messages(session_id, agent_context, limit=50)
+            messages = [{"role": m["role"], "content": m["content"]} for m in raw]
+
         messages.append({"role": "user", "content": user_message})
 
-        await self._episodic.add_turn(
+        await self._session_store.append_message(
             session_id,
             "user",
             user_message,
-            agent=agent_context,
+            agent_type=agent_context,
         )
 
         current_stream = asyncio.create_task(
@@ -430,14 +511,21 @@ class BaseAgent(ABC):
             if was_cancelled:
                 assert cancel_intent is not None
                 self._completed_cancel_intents[session_id] = cancel_intent
+                pending_blocks = self._pending_blocks.pop(session_id, [])
                 partial = self._partial_buffer.pop(session_id, "")
-                if partial:
+                if partial or pending_blocks:
                     try:
-                        await self._episodic.add_turn(
+                        if pending_blocks:
+                            _ensure_tool_results_for_pending_calls(
+                                pending_blocks,
+                                reason="Tool execution cancelled before result was available.",
+                            )
+                        await self._session_store.append_message(
                             session_id,
                             "assistant",
                             (f"{partial}\n\n[用户中断]" if cancel_intent == "cancel" else partial),
-                            agent=agent_context,
+                            agent_type=agent_context,
+                            blocks=pending_blocks if pending_blocks else None,
                         )
                     except Exception:
                         logger.warning("Failed to flush partial text on cancel", exc_info=True)
@@ -460,6 +548,7 @@ class BaseAgent(ABC):
                 await self._publish(session_id, EventType.TURN_RESPONSE, {})
             else:
                 self._partial_buffer.pop(session_id, None)
+                self._pending_blocks.pop(session_id, None)
 
     async def _stream_inner(
         self,
@@ -471,6 +560,9 @@ class BaseAgent(ABC):
     ) -> str:
         full_text = ""
         assistant_blocks: list[dict[str, Any]] = []
+        turn_id = str(ULID())
+        current_pci: int = 0
+        block_index: int = 0
         todo_section = await self._session_todos_section(session_id, agent_context)
         last_user_msg = messages[-1].get("content", "") if messages else ""
         memory_section = await self._memory_section(
@@ -496,6 +588,11 @@ class BaseAgent(ABC):
                     return full_text
                 send_value = None
 
+                if isinstance(event, ProviderCallStart):
+                    current_pci = event.index
+                    block_index = 0
+                    continue
+
                 if isinstance(event, TextDelta):
                     full_text += event.delta
                     self._partial_buffer[session_id] = full_text
@@ -520,15 +617,30 @@ class BaseAgent(ABC):
                     block: dict[str, Any] = {
                         "type": "thinking",
                         "thinking": event.thinking,
+                        "turn_id": turn_id,
+                        "provider_call_index": current_pci,
+                        "block_index": block_index,
                     }
                     if event.signature is not None:
                         block["signature"] = event.signature
                     if event.duration_ms is not None:
                         block["duration_ms"] = event.duration_ms
                     assistant_blocks.append(block)
+                    block_index += 1
+                    self._pending_blocks[session_id] = assistant_blocks
 
                 if isinstance(event, TextBlockStop):
-                    assistant_blocks.append({"type": "text", "text": event.text})
+                    assistant_blocks.append(
+                        {
+                            "type": "text",
+                            "text": event.text,
+                            "turn_id": turn_id,
+                            "provider_call_index": current_pci,
+                            "block_index": block_index,
+                        }
+                    )
+                    block_index += 1
+                    self._pending_blocks[session_id] = assistant_blocks
 
                 if isinstance(event, ToolCallReady):
                     await self._publish(
@@ -547,13 +659,18 @@ class BaseAgent(ABC):
                     )
                     record: dict[str, Any] = {
                         "type": "tool",
-                        "tool_id": event.tool_id,
-                        "name": event.name,
-                        "input": json.dumps(event.inputs, default=str),
+                        "tool_call_id": event.tool_id,
+                        "tool_name": event.name,
+                        "input": event.inputs,
                         "status": "failed",
+                        "turn_id": turn_id,
+                        "provider_call_index": current_pci,
+                        "block_index": block_index,
                     }
                     assistant_blocks.append(record)
-                    await self._update_activity(session_id)
+                    block_index += 1
+                    self._pending_blocks[session_id] = assistant_blocks
+                    await self._update_activity(session_id, agent_context)
                     try:
                         context = ToolCallContext(
                             task_goal=self._current_task_goals.get(session_id, ""),
@@ -577,6 +694,25 @@ class BaseAgent(ABC):
                         logger.exception("Tool %s dispatch failed", event.name)
                         error = str(exc)
                         record["result"] = error
+                        stream_result = StreamToolResult(
+                            tool_id=event.tool_id,
+                            name=event.name,
+                            ok=False,
+                            output=None,
+                            error=error,
+                        )
+                        _append_tool_result_block(
+                            assistant_blocks,
+                            tool_id=event.tool_id,
+                            tool_name=event.name,
+                            result=stream_result,
+                            display=error,
+                            turn_id=turn_id,
+                            provider_call_index=current_pci,
+                            block_index=block_index,
+                        )
+                        block_index += 1
+                        self._pending_blocks[session_id] = assistant_blocks
                         await self._publish(
                             session_id,
                             EventType.TOOL_FAILED,
@@ -586,13 +722,7 @@ class BaseAgent(ABC):
                                 "error": error,
                             },
                         )
-                        send_value = StreamToolResult(
-                            tool_id=event.tool_id,
-                            name=event.name,
-                            ok=False,
-                            output=None,
-                            error=error,
-                        )
+                        send_value = stream_result
                     else:
                         if result.ok:
                             display = _format_tool_display(result)
@@ -618,7 +748,7 @@ class BaseAgent(ABC):
                                     "error": result.error,
                                 },
                             )
-                        send_value = StreamToolResult(
+                        stream_result = StreamToolResult(
                             tool_id=event.tool_id,
                             name=event.name,
                             ok=result.ok,
@@ -626,14 +756,31 @@ class BaseAgent(ABC):
                             error=result.error,
                             empty_hint=result.empty_hint,
                         )
+                        display_content = (
+                            _format_tool_display(result) if result.ok else (result.error or "")
+                        )
+                        _append_tool_result_block(
+                            assistant_blocks,
+                            tool_id=event.tool_id,
+                            tool_name=event.name,
+                            result=stream_result,
+                            display=display_content,
+                            turn_id=turn_id,
+                            provider_call_index=current_pci,
+                            block_index=block_index,
+                        )
+                        block_index += 1
+                        self._pending_blocks[session_id] = assistant_blocks
+                        send_value = stream_result
                     continue
 
                 if isinstance(event, TurnDone):
-                    await self._episodic.add_turn(
+                    self._pending_blocks.pop(session_id, None)
+                    await self._session_store.append_message(
                         session_id,
                         "assistant",
                         event.full_text,
-                        agent=agent_context,
+                        agent_type=agent_context,
                         blocks=assistant_blocks if assistant_blocks else None,
                     )
                     await self._publish(
@@ -644,20 +791,28 @@ class BaseAgent(ABC):
                             "interrupted": False,
                         },
                     )
-                    await self._update_activity(session_id)
+                    await self._update_activity(session_id, agent_context)
                     return event.full_text
         except asyncio.CancelledError:
             # When cancelled via cancel_session(), the finally block in run_streaming
             # handles episodic flush. Only save here for external cancellations.
             if session_id not in self._cancel_requested:
-                if full_text:
-                    await self._episodic.add_turn(
-                        session_id,
-                        "assistant",
-                        full_text,
-                        agent=agent_context,
-                        blocks=assistant_blocks if assistant_blocks else None,
-                    )
+                self._pending_blocks.pop(session_id, None)
+                if full_text or assistant_blocks:
+                    try:
+                        _ensure_tool_results_for_pending_calls(
+                            assistant_blocks,
+                            reason="Tool execution cancelled before result was available.",
+                        )
+                        await self._session_store.append_message(
+                            session_id,
+                            "assistant",
+                            full_text,
+                            agent_type=agent_context,
+                            blocks=assistant_blocks if assistant_blocks else None,
+                        )
+                    except Exception:
+                        logger.warning("Failed to flush blocks on external cancel", exc_info=True)
                 await self._publish(
                     session_id,
                     EventType.TURN_INTERRUPTED,
@@ -667,10 +822,9 @@ class BaseAgent(ABC):
                 )
             raise
 
-    async def _update_activity(self, session_id: str) -> None:
-        """Update last_activity_at in index for stalled detection."""
-        if self._index_store is not None:
-            await self._index_store.update_activity(session_id)
+    async def _update_activity(self, session_id: str, agent_type: str) -> None:
+        """Update last_activity_at for stalled detection."""
+        await self._session_store.update_activity(session_id, agent_type)
 
     async def _publish(
         self,

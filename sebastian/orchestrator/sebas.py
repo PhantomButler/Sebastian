@@ -19,7 +19,6 @@ from sebastian.core.types import Session, Task
 from sebastian.orchestrator.conversation import ConversationManager
 from sebastian.permissions.gate import PolicyGate
 from sebastian.protocol.events.bus import EventBus
-from sebastian.store.index_store import IndexStore
 from sebastian.store.session_store import SessionStore
 
 if TYPE_CHECKING:
@@ -111,7 +110,6 @@ class Sebastian(BaseAgent):
         self,
         gate: PolicyGate,
         session_store: SessionStore,
-        index_store: IndexStore,
         task_manager: TaskManager,
         conversation: ConversationManager,
         event_bus: EventBus,
@@ -120,7 +118,6 @@ class Sebastian(BaseAgent):
     ) -> None:
         self._agent_registry: dict[str, AgentConfig] = agent_registry or {}
         super().__init__(gate, session_store, event_bus=event_bus, llm_registry=llm_registry)
-        self._index = index_store
         self._task_manager = task_manager
         self._conversation = conversation
         # Rebuild with agent_registry so _agents_section is included
@@ -169,6 +166,16 @@ class Sebastian(BaseAgent):
             session = await self._session_store.get_session(session_id, "sebastian")
             if session:
                 return session
+            # session 不存在 → 用 client-provided id 创建，确保 SSE 订阅能收到事件
+            new_session = Session(
+                id=session_id,
+                agent_type="sebastian",
+                title=first_message[:40] or "新对话",
+                goal=first_message,
+                depth=1,
+            )
+            await self._session_store.create_session(new_session)
+            return new_session
 
         session = Session(
             agent_type="sebastian",
@@ -177,8 +184,6 @@ class Sebastian(BaseAgent):
             depth=1,
         )
         await self._session_store.create_session(session)
-
-        await self._index.upsert(session)
 
         return session
 

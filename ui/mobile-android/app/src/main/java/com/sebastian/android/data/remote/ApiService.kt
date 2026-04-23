@@ -27,7 +27,10 @@ interface ApiService {
     suspend fun getSessions(): SessionListResponse
 
     @GET("api/v1/sessions/{sessionId}")
-    suspend fun getSession(@Path("sessionId") sessionId: String): SessionDetailResponse
+    suspend fun getSession(
+        @Path("sessionId") sessionId: String,
+        @Query("include_archived") includeArchived: Boolean = true,
+    ): SessionDetailResponse
 
     @DELETE("api/v1/sessions/{sessionId}")
     suspend fun deleteSession(@Path("sessionId") sessionId: String)

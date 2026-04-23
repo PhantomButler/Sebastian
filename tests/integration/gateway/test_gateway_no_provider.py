@@ -41,8 +41,14 @@ def empty_db_client(tmp_path):
                 name="test-owner",
                 password_hash=password_hash,
             )
+            from sebastian.store.database import get_engine
+
+            await get_engine().dispose()
+            await asyncio.sleep(0)
 
         asyncio.run(_seed())
+        db_module._engine = None
+        db_module._session_factory = None
         (tmp_path / "secret.key").write_text("test-secret-key")
 
         from sebastian.gateway.app import create_app
@@ -110,7 +116,6 @@ def test_send_turn_to_session_returns_400(empty_db_client: TestClient) -> None:
             depth=1,
         )
         await state.session_store.create_session(session)
-        await state.index_store.upsert(session)
         return session.id
 
     session_id = asyncio.run(_seed())

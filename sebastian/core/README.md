@@ -11,7 +11,7 @@
 ```
 core/
 ├── __init__.py          # 模块入口（空导出，按需 import 子模块）
-├── base_agent.py        # 所有 Agent 的抽象基类，持有 registry/session_store/event_bus，提供 run_streaming() 入口
+├── base_agent.py        # 所有 Agent 的抽象基类，持有 registry/session_store/event_bus，提供 run_streaming() 入口；通过 SessionStore.get_context_messages() 获取对话上下文，append_message() 写入消息
 ├── agent_loop.py        # 单次 LLM turn 执行循环：发请求 → 处理 tool_use → 迭代，最多 MAX_ITERATIONS=20 轮
 ├── session_runner.py    # Sub-Agent session 独立执行入口：run_agent_session()，供 gateway 通过 asyncio.create_task 调用
 ├── stalled_watchdog.py  # 僵死 session 检测：定期扫描长时间无响应的 session 并触发恢复或告警
@@ -52,6 +52,7 @@ CREATED → PLANNING → RUNNING → COMPLETED
 | 多轮 thinking signature 回填逻辑 | [agent_loop.py](agent_loop.py) 处理 `ThinkingBlockStop` 的分支 |
 | BaseAgent 默认行为（system_prompt、run_streaming、thinking_effort 参数） | [base_agent.py](base_agent.py) |
 | 每轮 system prompt 的记忆上下文注入（`_memory_section`、`db_factory` 参数） | [base_agent.py](base_agent.py) |
+| 对话上下文读取（`get_context_messages`）和消息写入（`append_message`） | [base_agent.py](base_agent.py) 直接调用 `SessionStore`（不经 `EpisodicMemory`） |
 | Sub-Agent session 执行入口 | [session_runner.py](session_runner.py) 的 `run_agent_session()` |
 | 僵死 session 检测与恢复 | [stalled_watchdog.py](stalled_watchdog.py) |
 | 新增核心数据类型 | [types.py](types.py) |
@@ -72,7 +73,7 @@ await task_manager.submit(task, async_fn)
 
 # Sub-Agent session 执行（供 gateway 通过 asyncio.create_task 调用）
 from sebastian.core.session_runner import run_agent_session
-await run_agent_session(agent, session, goal, session_store, index_store, event_bus)
+await run_agent_session(agent, session, goal, session_store, event_bus)
 
 # 注册工具（capabilities/tools/ 中使用）
 from sebastian.core.tool import tool

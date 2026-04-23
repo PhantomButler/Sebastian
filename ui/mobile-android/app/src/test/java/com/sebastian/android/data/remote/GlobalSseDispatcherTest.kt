@@ -22,7 +22,7 @@ class GlobalSseDispatcherTest {
     @Test
     fun `events flow fans out to multiple subscribers`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val upstream = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
+        val upstream = MutableSharedFlow<SseEnvelope>(extraBufferCapacity = 64)
         val chatRepo = mock<ChatRepository>()
         val settings = mock<SettingsRepository>()
         whenever(settings.serverUrl).thenReturn(MutableStateFlow("http://x"))
@@ -39,7 +39,7 @@ class GlobalSseDispatcherTest {
         sut.start(scope)
         testScheduler.advanceUntilIdle()
 
-        upstream.emit(StreamEvent.ApprovalGranted("a1"))
+        upstream.emit(SseEnvelope(eventId = "1", event = StreamEvent.ApprovalGranted("a1")))
         testScheduler.advanceUntilIdle()
 
         assertEquals(listOf(StreamEvent.ApprovalGranted("a1")), received1)
@@ -53,7 +53,7 @@ class GlobalSseDispatcherTest {
     @Test
     fun `connectionState reports Connected when upstream emits first event`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val upstream = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 64)
+        val upstream = MutableSharedFlow<SseEnvelope>(extraBufferCapacity = 64)
         val chatRepo = mock<ChatRepository>()
         val settings = mock<SettingsRepository>()
         whenever(settings.serverUrl).thenReturn(MutableStateFlow("http://x"))
@@ -68,7 +68,7 @@ class GlobalSseDispatcherTest {
             testScheduler.advanceUntilIdle()
             assertEquals(ConnectionState.Connecting, awaitItem())
 
-            upstream.emit(StreamEvent.ApprovalGranted("a1"))
+            upstream.emit(SseEnvelope(eventId = "1", event = StreamEvent.ApprovalGranted("a1")))
             testScheduler.advanceUntilIdle()
             assertEquals(ConnectionState.Connected, awaitItem())
 

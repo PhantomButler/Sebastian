@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
@@ -45,12 +46,14 @@ class GlobalSseDispatcher @Inject constructor(
             if (baseUrl.isEmpty()) return@launch
             _connectionState.value = ConnectionState.Connecting
             try {
-                chatRepository.globalStream(baseUrl, null).collect { event ->
-                    if (_connectionState.value != ConnectionState.Connected) {
-                        _connectionState.value = ConnectionState.Connected
+                chatRepository.globalStream(baseUrl, null)
+                    .map { it.event }
+                    .collect { event ->
+                        if (_connectionState.value != ConnectionState.Connected) {
+                            _connectionState.value = ConnectionState.Connected
+                        }
+                        _events.emit(event)
                     }
-                    _events.emit(event)
-                }
             } catch (_: CancellationException) {
                 throw CancellationException()
             } catch (_: Exception) {

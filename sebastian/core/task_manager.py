@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from sebastian.core.types import InvalidTaskTransitionError, Task, TaskStatus
 from sebastian.protocol.events.bus import EventBus
 from sebastian.protocol.events.types import Event, EventType
-from sebastian.store.index_store import IndexStore
 from sebastian.store.session_store import SessionStore
 
 logger = logging.getLogger(__name__)
@@ -44,17 +43,14 @@ class TaskManager:
         self,
         session_store: SessionStore,
         event_bus: EventBus,
-        index_store: IndexStore | None = None,
     ) -> None:
         self._store = session_store
         self._bus = event_bus
-        self._index = index_store
         self._running: dict[str, asyncio.Task[None]] = {}
         self._tasks: dict[str, Task] = {}
 
     async def submit(self, task: Task, fn: TaskFn) -> None:
         await self._store.create_task(task, task.assigned_agent)
-        await self._sync_index(task.session_id, task.assigned_agent)
         self._tasks[task.id] = task
         await self._bus.publish(
             Event(
@@ -136,8 +132,6 @@ class TaskManager:
             task.completed_at = old_completed_at
             raise
 
-        await self._sync_index(task.session_id, task.assigned_agent)
-
         event_type = _STATUS_TO_EVENT.get(new_status)
         if event_type is None:
             return
@@ -149,10 +143,3 @@ class TaskManager:
         if error is not None:
             data["error"] = error
         await self._bus.publish(Event(type=event_type, data=data))
-
-    async def _sync_index(self, session_id: str, agent: str) -> None:
-        if self._index is None:
-            return
-        session = await self._store.get_session(session_id, agent)
-        if session is not None:
-            await self._index.upsert(session)

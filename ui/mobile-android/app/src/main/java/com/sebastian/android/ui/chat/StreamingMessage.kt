@@ -1,17 +1,31 @@
 package com.sebastian.android.ui.chat
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.luminance
@@ -42,6 +56,7 @@ fun MessageBubble(
     message: Message,
     onToggleThinking: (String, String) -> Unit,
     onToggleTool: (String, String) -> Unit,
+    onToggleSummary: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (message.role == MessageRole.USER) {
@@ -52,6 +67,7 @@ fun MessageBubble(
             blocks = message.blocks,
             onToggleThinking = onToggleThinking,
             onToggleTool = onToggleTool,
+            onToggleSummary = onToggleSummary,
             modifier = modifier,
         )
     }
@@ -94,6 +110,7 @@ private fun AssistantMessageBlocks(
     blocks: List<ContentBlock>,
     onToggleThinking: (String, String) -> Unit,
     onToggleTool: (String, String) -> Unit,
+    onToggleSummary: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val knownIds = remember { mutableStateListOf<String>() }
@@ -147,9 +164,74 @@ private fun AssistantMessageBlocks(
                             .fillMaxWidth()
                             .alpha(alpha),
                     )
+                    is ContentBlock.SummaryBlock -> SummaryCard(
+                        block = block,
+                        onToggle = { onToggleSummary(msgId, block.blockId) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(alpha),
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun SummaryCard(
+    block: ContentBlock.SummaryBlock,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val titleColor = mutedColor.copy(alpha = 0.6f)
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onToggle,
+            ),
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Compressed summary",
+                style = MaterialTheme.typography.titleMedium,
+                color = titleColor,
+            )
+            Spacer(Modifier.width(6.dp))
+            Icon(
+                imageVector = if (block.expanded) {
+                    Icons.Default.KeyboardArrowDown
+                } else {
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                },
+                contentDescription = if (block.expanded) "折叠" else "展开",
+                tint = titleColor,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = block.expanded,
+            enter = fadeIn(animationSpec = tween(durationMillis = 360)) +
+                expandVertically(animationSpec = tween(durationMillis = 300)),
+            exit = fadeOut(animationSpec = tween(durationMillis = 200)) +
+                shrinkVertically(animationSpec = tween(durationMillis = 300)),
+        ) {
+            MarkdownView(
+                text = block.text,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+            )
         }
     }
 }

@@ -86,6 +86,9 @@ async def test_worker_merges_extractor_and_consolidator_proposed_slots(
     mock_consolidator.last_resolved = None
 
     mock_session_store = MagicMock()
+    mock_session_store.get_context_timeline_items = AsyncMock(
+        side_effect=RuntimeError("no timeline")
+    )
     mock_session_store.get_messages = AsyncMock(return_value=[{"role": "user", "content": "hi"}])
 
     worker = SessionConsolidationWorker(
@@ -142,6 +145,9 @@ async def test_worker_passes_slot_proposal_handler_to_process_candidates(
     mock_consolidator.last_resolved = None
 
     mock_session_store = MagicMock()
+    mock_session_store.get_context_timeline_items = AsyncMock(
+        side_effect=RuntimeError("no timeline")
+    )
     mock_session_store.get_messages = AsyncMock(return_value=[])
 
     worker = SessionConsolidationWorker(
@@ -192,6 +198,9 @@ async def test_worker_proposed_by_is_consolidator(
     mock_consolidator.last_resolved = None
 
     mock_session_store = MagicMock()
+    mock_session_store.get_context_timeline_items = AsyncMock(
+        side_effect=RuntimeError("no timeline")
+    )
     mock_session_store.get_messages = AsyncMock(return_value=[])
 
     worker = SessionConsolidationWorker(
@@ -260,6 +269,9 @@ async def test_worker_proposed_slot_persisted_only_when_artifact_references_it(
     mock_consolidator.last_resolved = None
 
     mock_session_store = MagicMock()
+    mock_session_store.get_context_timeline_items = AsyncMock(
+        side_effect=RuntimeError("no timeline")
+    )
     mock_session_store.get_messages = AsyncMock(return_value=[{"role": "user", "content": "hi"}])
 
     worker = SessionConsolidationWorker(

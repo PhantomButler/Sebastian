@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from sebastian.core.tool_context import _current_tool_ctx
 from sebastian.core.types import TodoStatus
@@ -12,10 +12,24 @@ from sebastian.store.todo_store import TodoStore
 
 
 @pytest.fixture
-def patched_state(tmp_path: Path):
-    sessions_dir = tmp_path / "sessions"
-    sessions_dir.mkdir()
-    store = TodoStore(sessions_dir)
+async def db_factory():
+    import sebastian.store.models  # noqa: F401
+    from sebastian.store.database import Base, _apply_idempotent_migrations
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        await _apply_idempotent_migrations(conn)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        yield factory
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture
+def patched_state(db_factory):
+    store = TodoStore(db_factory=db_factory)
 
     fake_state = MagicMock()
     fake_state.todo_store = store
@@ -23,7 +37,7 @@ def patched_state(tmp_path: Path):
     fake_state.event_bus.publish = AsyncMock()
 
     with patch.dict("sys.modules", {"sebastian.gateway.state": fake_state}):
-        yield fake_state, store, sessions_dir
+        yield fake_state, store
 
 
 @pytest.fixture
@@ -49,7 +63,7 @@ def set_ctx():
 
 @pytest.mark.asyncio
 async def test_write_persists_todos(patched_state, set_ctx) -> None:
-    _, store, _ = patched_state
+    _, store = patched_state
     set_ctx("s1", "sebastian")
 
     from sebastian.capabilities.tools.todo_write import todo_write
@@ -70,7 +84,7 @@ async def test_write_persists_todos(patched_state, set_ctx) -> None:
 
 @pytest.mark.asyncio
 async def test_write_overwrites(patched_state, set_ctx) -> None:
-    _, store, _ = patched_state
+    _, store = patched_state
     set_ctx("s1", "sebastian")
     from sebastian.capabilities.tools.todo_write import todo_write
 
@@ -123,7 +137,7 @@ async def test_missing_context_returns_error(patched_state) -> None:
 
 @pytest.mark.asyncio
 async def test_publishes_event(patched_state, set_ctx) -> None:
-    fake_state, _, _ = patched_state
+    fake_state, _ = patched_state
     set_ctx("s1", "sebastian")
     from sebastian.capabilities.tools.todo_write import todo_write
 

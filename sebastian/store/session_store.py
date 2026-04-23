@@ -9,7 +9,7 @@ import shutil
 import weakref
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import aiofiles
@@ -22,6 +22,9 @@ from sebastian.core.types import (
     TaskPlan,
     TaskStatus,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 # WeakValueDictionary lets unreferenced locks be GC'd, preventing unbounded growth (m2).
 _SESSION_LOCKS_BY_PATH: weakref.WeakValueDictionary[Path, asyncio.Lock] = (
@@ -46,12 +49,39 @@ def _session_dir_by_id(
 
 
 class SessionStore:
-    """File-based storage for sessions, messages, tasks, and checkpoints."""
+    """Storage for sessions, messages, tasks, and checkpoints.
 
-    def __init__(self, sessions_dir: Path) -> None:
-        self._dir = sessions_dir
+    When ``db_factory`` is provided, session metadata CRUD is delegated to
+    ``SessionRecordsStore`` (SQLite).  This is the only supported runtime mode.
+
+    The legacy file-based path (``sessions_dir`` without ``db_factory``) is
+    DEPRECATED and will be removed in a future release.  It is retained only
+    for migration tooling.  Do not use file mode in new code.
+    """
+
+    def __init__(
+        self,
+        sessions_dir: Path | None = None,
+        db_factory: async_sessionmaker[AsyncSession] | None = None,
+    ) -> None:
+        self._dir = sessions_dir or Path("/tmp/sebastian-sessions-legacy")
+        self._db_factory = db_factory
+        if db_factory is not None:
+            from sebastian.store.session_records import SessionRecordsStore
+            from sebastian.store.session_tasks import SessionTaskStore
+            from sebastian.store.session_timeline import SessionTimelineStore
+
+            self._records: SessionRecordsStore | None = SessionRecordsStore(db_factory)
+            self._timeline: SessionTimelineStore | None = SessionTimelineStore(db_factory)
+            self._tasks: SessionTaskStore | None = SessionTaskStore(db_factory)
+        else:
+            self._records = None
+            self._timeline = None
+            self._tasks = None
 
     async def create_session(self, session: Session) -> Session:
+        if self._records is not None:
+            return await self._records.create(session)
         _session_dir(self._dir, session)
         async with self._session_lock(session.id, session.agent_type):
             await self._write_session_meta(session)
@@ -62,6 +92,8 @@ class SessionStore:
         session_id: str,
         agent_type: str = "sebastian",
     ) -> Session | None:
+        if self._records is not None:
+            return await self._records.get(session_id, agent_type)
         directory = _session_dir_by_id(self._dir, session_id, agent_type)
         meta_path = directory / "meta.json"
         if not meta_path.exists():
@@ -79,11 +111,17 @@ class SessionStore:
         return await self.get_session(session_id, agent_type)
 
     async def update_session(self, session: Session) -> None:
+        if self._records is not None:
+            await self._records.update(session)
+            return
         async with self._session_lock(session.id, session.agent_type):
             await self._write_session_meta(session)
 
     async def update_activity(self, session_id: str, agent_type: str) -> None:
-        """Lightweight update: set last_activity_at=now, transition stalled→active in meta."""
+        """Lightweight update: set last_activity_at=now, transition stalled→active."""
+        if self._records is not None:
+            await self._records.update_activity(session_id, agent_type)
+            return
         async with self._session_lock(session_id, agent_type):
             directory = _session_dir_by_id(self._dir, session_id, agent_type)
             meta_path = directory / "meta.json"
@@ -97,9 +135,74 @@ class SessionStore:
             await self._atomic_write_text(meta_path, json.dumps(data))
 
     async def delete_session(self, session: Session) -> None:
+        if self._records is not None:
+            await self._records.delete(session)
+            return
         directory = _session_dir_by_id(self._dir, session.id, session.agent_type)
         if directory.exists():
             await asyncio.to_thread(shutil.rmtree, directory)
+
+    async def list_sessions(self) -> list[dict[str, Any]]:
+        """Return metadata dicts for all sessions, ordered by last_activity_at desc."""
+        if self._records is not None:
+            return await self._records.list_all()
+        sessions: list[dict[str, Any]] = []
+        if not self._dir.exists():
+            return sessions
+        for agent_dir in self._dir.iterdir():
+            if not agent_dir.is_dir():
+                continue
+            for session_dir in agent_dir.iterdir():
+                meta_path = session_dir / "meta.json"
+                if not meta_path.exists():
+                    continue
+                async with aiofiles.open(meta_path) as f:
+                    data = json.loads(await f.read())
+                sessions.append(data)
+        return sorted(sessions, key=lambda s: s.get("last_activity_at", ""), reverse=True)
+
+    async def list_sessions_by_agent_type(self, agent_type: str) -> list[dict[str, Any]]:
+        """Return metadata dicts for sessions of the given agent_type."""
+        if self._records is not None:
+            return await self._records.list_by_agent_type(agent_type)
+        sessions: list[dict[str, Any]] = []
+        agent_dir = self._dir / agent_type
+        if not agent_dir.exists():
+            return sessions
+        for session_dir in agent_dir.iterdir():
+            meta_path = session_dir / "meta.json"
+            if not meta_path.exists():
+                continue
+            async with aiofiles.open(meta_path) as f:
+                data = json.loads(await f.read())
+            sessions.append(data)
+        return sorted(sessions, key=lambda s: s.get("last_activity_at", ""), reverse=True)
+
+    async def list_active_children(
+        self,
+        agent_type: str,
+        parent_session_id: str,
+    ) -> list[dict[str, Any]]:
+        """Return metadata dicts for active child sessions of the given parent."""
+        if self._records is not None:
+            return await self._records.list_active_children(agent_type, parent_session_id)
+        active_statuses = {"active", "stalled", "waiting"}
+        sessions: list[dict[str, Any]] = []
+        agent_dir = self._dir / agent_type
+        if not agent_dir.exists():
+            return sessions
+        for session_dir in agent_dir.iterdir():
+            meta_path = session_dir / "meta.json"
+            if not meta_path.exists():
+                continue
+            async with aiofiles.open(meta_path) as f:
+                data = json.loads(await f.read())
+            if (
+                data.get("parent_session_id") == parent_session_id
+                and data.get("status") in active_statuses
+            ):
+                sessions.append(data)
+        return sessions
 
     async def append_message(
         self,
@@ -109,6 +212,11 @@ class SessionStore:
         agent_type: str = "sebastian",
         blocks: list[dict[str, Any]] | None = None,
     ) -> None:
+        if self._timeline is not None:
+            await self._timeline.append_message_compat(
+                session_id, role, content, agent_type, blocks
+            )
+            return
         directory = _session_dir_by_id(
             self._dir,
             session_id,
@@ -131,6 +239,8 @@ class SessionStore:
         agent_type: str = "sebastian",
         limit: int = 50,
     ) -> list[dict[str, Any]]:
+        if self._timeline is not None:
+            return await self._timeline.get_recent_items(session_id, agent_type, limit=limit)
         directory = _session_dir_by_id(self._dir, session_id, agent_type)
         path = directory / "messages.jsonl"
         if not path.exists():
@@ -140,11 +250,114 @@ class SessionStore:
         messages = [json.loads(line) for line in lines if line.strip()]
         return messages[-limit:]
 
+    # ------------------------------------------------------------------
+    # Timeline facade methods (SQLite-backed only)
+    # ------------------------------------------------------------------
+
+    async def append_timeline_items(
+        self,
+        session_id: str,
+        agent_type: str,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Append timeline items atomically. Requires db_factory."""
+        if self._timeline is None:
+            raise RuntimeError("append_timeline_items requires db_factory")
+        return await self._timeline.append_items(session_id, agent_type, items)
+
+    async def get_context_timeline_items(
+        self,
+        session_id: str,
+        agent_type: str = "sebastian",
+    ) -> list[dict[str, Any]]:
+        """Return non-archived items ordered for the LLM context window.
+
+        This view sorts by logical context position and excludes archived source
+        items. UI audit history should use get_timeline_items().
+        """
+        if self._timeline is None:
+            raise RuntimeError("get_context_timeline_items requires db_factory")
+        return await self._timeline.get_context_items(session_id, agent_type)
+
+    async def get_timeline_items(
+        self,
+        session_id: str,
+        agent_type: str = "sebastian",
+        include_archived: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Return audit timeline items ordered by real seq ASC.
+
+        This is the UI/history view. Set include_archived=True for the complete
+        persisted session history, including compressed source items.
+        """
+        if self._timeline is None:
+            raise RuntimeError("get_timeline_items requires db_factory")
+        return await self._timeline.get_items(
+            session_id, agent_type, include_archived=include_archived
+        )
+
+    async def get_recent_timeline_items(
+        self,
+        session_id: str,
+        agent_type: str = "sebastian",
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        """Return most recent non-archived timeline items in ascending seq order.
+        Requires db_factory.
+        """
+        if self._timeline is None:
+            raise RuntimeError("get_recent_timeline_items requires db_factory")
+        return await self._timeline.get_recent_items(session_id, agent_type, limit=limit)
+
+    async def get_context_messages(
+        self,
+        session_id: str,
+        agent_type: str,
+        provider_format: str,
+        include_thinking: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Project timeline items into provider-specific message dicts.
+
+        Args:
+            session_id: Session identifier.
+            agent_type: Agent type (e.g. "sebastian").
+            provider_format: "anthropic" or "openai".
+            include_thinking: Include thinking blocks (Anthropic only).
+
+        Requires db_factory.
+        """
+        if self._timeline is None:
+            raise NotImplementedError("get_context_messages requires db_factory")
+        if include_thinking:
+            items = await self._timeline.get_context_items_with_thinking(session_id, agent_type)
+        else:
+            items = await self._timeline.get_context_items(session_id, agent_type)
+        from sebastian.store.session_context import build_context_messages
+
+        return build_context_messages(items, provider_format, include_thinking=include_thinking)
+
+    async def get_messages_since(
+        self,
+        session_id: str,
+        agent_type: str = "sebastian",
+        after_seq: int = 0,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return items with seq > after_seq, excluding thinking/raw_block. Requires db_factory."""
+        if self._timeline is None:
+            raise RuntimeError("get_messages_since requires db_factory")
+        items = await self._timeline.get_items_since(session_id, agent_type, after_seq)
+        if limit is not None:
+            items = items[:limit]
+        return items
+
     async def create_task(
         self,
         task: Task,
         agent_type: str = "sebastian",
     ) -> Task:
+        if self._tasks is not None:
+            return await self._tasks.create(task, agent_type)
         async with self._session_lock(task.session_id, agent_type):
             directory = _session_dir_by_id(self._dir, task.session_id, agent_type)
             tasks_dir = directory / "tasks"
@@ -162,6 +375,8 @@ class SessionStore:
         task_id: str,
         agent_type: str = "sebastian",
     ) -> Task | None:
+        if self._tasks is not None:
+            return await self._tasks.get(session_id, task_id, agent_type)
         directory = _session_dir_by_id(
             self._dir,
             session_id,
@@ -179,6 +394,8 @@ class SessionStore:
         session_id: str,
         agent_type: str = "sebastian",
     ) -> list[Task]:
+        if self._tasks is not None:
+            return await self._tasks.list_tasks(session_id, agent_type)
         directory = _session_dir_by_id(
             self._dir,
             session_id,
@@ -201,6 +418,9 @@ class SessionStore:
         status: TaskStatus,
         agent_type: str = "sebastian",
     ) -> None:
+        if self._tasks is not None:
+            await self._tasks.update_status(session_id, task_id, status, agent_type)
+            return
         async with self._session_lock(session_id, agent_type):
             task = await self.get_task(session_id, task_id, agent_type)
             if task is None:
@@ -233,6 +453,9 @@ class SessionStore:
         checkpoint: Checkpoint,
         agent_type: str = "sebastian",
     ) -> None:
+        if self._tasks is not None:
+            await self._tasks.append_checkpoint(session_id, checkpoint, agent_type)
+            return
         directory = _session_dir_by_id(
             self._dir,
             session_id,
@@ -249,6 +472,8 @@ class SessionStore:
         task_id: str,
         agent_type: str = "sebastian",
     ) -> list[Checkpoint]:
+        if self._tasks is not None:
+            return await self._tasks.get_checkpoints(session_id, task_id, agent_type)
         directory = _session_dir_by_id(
             self._dir,
             session_id,

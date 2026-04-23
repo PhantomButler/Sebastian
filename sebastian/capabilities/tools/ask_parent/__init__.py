@@ -37,7 +37,6 @@ async def ask_parent(question: str) -> ToolResult:
 
     session.status = SessionStatus.WAITING
     await state.session_store.update_session(session)
-    await state.index_store.upsert(session)
 
     await state.event_bus.publish(
         Event(

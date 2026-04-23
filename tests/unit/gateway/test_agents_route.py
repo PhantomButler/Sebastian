@@ -13,8 +13,8 @@ def _build_app_with_mocks(agents: dict, bindings: list, all_records: list | None
     _records = all_records or []
 
     state.agent_registry = agents
-    state.index_store = MagicMock()
-    state.index_store.list_by_agent_type = AsyncMock(return_value=[])
+    state.session_store = MagicMock()
+    state.session_store.list_sessions_by_agent_type = AsyncMock(return_value=[])
     state.llm_registry = MagicMock()
     state.llm_registry.list_bindings = AsyncMock(return_value=bindings)
     state.llm_registry.list_all = AsyncMock(return_value=_records)

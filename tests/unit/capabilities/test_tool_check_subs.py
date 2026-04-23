@@ -11,8 +11,8 @@ async def test_check_sub_agents_as_sebastian():
     from sebastian.capabilities.tools.check_sub_agents import check_sub_agents
 
     mock_state = MagicMock()
-    mock_state.index_store = AsyncMock()
-    mock_state.index_store.list_all = AsyncMock(
+    mock_state.session_store = AsyncMock()
+    mock_state.session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "s1",
@@ -80,8 +80,8 @@ async def test_check_sub_agents_as_leader():
     from sebastian.capabilities.tools.check_sub_agents import check_sub_agents
 
     mock_state = MagicMock()
-    mock_state.index_store = AsyncMock()
-    mock_state.index_store.list_all = AsyncMock(
+    mock_state.session_store = AsyncMock()
+    mock_state.session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": "s1",

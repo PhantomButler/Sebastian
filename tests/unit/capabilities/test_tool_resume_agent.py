@@ -30,10 +30,9 @@ def _make_session(
 
 def _make_mock_state(session: Session) -> tuple[MagicMock, AsyncMock]:
     state = MagicMock()
-    state.index_store = AsyncMock()
     state.session_store = AsyncMock()
     state.event_bus = AsyncMock()
-    state.index_store.list_all = AsyncMock(
+    state.session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": session.id,
@@ -90,14 +89,15 @@ async def test_resume_waiting_session_appends_instruction_and_restarts() -> None
 
     assert result.ok is True
     assert session.status == SessionStatus.ACTIVE
-    state.session_store.append_message.assert_awaited_once_with(
+    state.session_store.append_timeline_items.assert_awaited_once_with(
         session.id,
-        role="user",
-        content="继续推进修复",
-        agent_type="code",
+        "code",
+        [
+            {"kind": "system_event", "role": "system", "content": f"Agent {session.id} resumed"},
+            {"kind": "user_message", "role": "user", "content": "继续推进修复"},
+        ],
     )
     state.session_store.update_session.assert_awaited_once_with(session)
-    state.index_store.upsert.assert_awaited_once_with(session)
     state.event_bus.publish.assert_awaited_once()
     published_event = state.event_bus.publish.await_args.args[0]
     assert published_event.type == EventType.SESSION_RESUMED
@@ -109,7 +109,7 @@ async def test_resume_waiting_session_appends_instruction_and_restarts() -> None
 
 
 @pytest.mark.asyncio
-async def test_resume_waiting_session_without_instruction_skips_append() -> None:
+async def test_resume_waiting_session_without_instruction_writes_system_event() -> None:
     import sebastian.capabilities.tools.resume_agent as resume_mod
     from sebastian.capabilities.tools.resume_agent import resume_agent
 
@@ -124,11 +124,15 @@ async def test_resume_waiting_session_without_instruction_skips_append() -> None
         result = await resume_agent(agent_type="code", session_id=session.id, instruction="")
 
     assert result.ok is True
-    state.session_store.append_message.assert_not_awaited()
+    state.session_store.append_timeline_items.assert_awaited_once_with(
+        session.id,
+        "code",
+        [{"kind": "system_event", "role": "system", "content": f"Agent {session.id} resumed"}],
+    )
 
 
 @pytest.mark.asyncio
-async def test_resume_idle_session_without_instruction_does_not_append_message() -> None:
+async def test_resume_idle_session_without_instruction_writes_system_event() -> None:
     import sebastian.capabilities.tools.resume_agent as resume_mod
     from sebastian.capabilities.tools.resume_agent import resume_agent
 
@@ -144,7 +148,11 @@ async def test_resume_idle_session_without_instruction_does_not_append_message()
 
     assert result.ok is True
     assert session.status == SessionStatus.ACTIVE
-    state.session_store.append_message.assert_not_awaited()
+    state.session_store.append_timeline_items.assert_awaited_once_with(
+        session.id,
+        "code",
+        [{"kind": "system_event", "role": "system", "content": f"Agent {session.id} resumed"}],
+    )
 
 
 @pytest.mark.asyncio
@@ -167,11 +175,13 @@ async def test_resume_idle_session_with_instruction_appends_message() -> None:
         )
 
     assert result.ok is True
-    state.session_store.append_message.assert_awaited_once_with(
+    state.session_store.append_timeline_items.assert_awaited_once_with(
         session.id,
-        role="user",
-        content="继续执行任务",
-        agent_type="code",
+        "code",
+        [
+            {"kind": "system_event", "role": "system", "content": f"Agent {session.id} resumed"},
+            {"kind": "user_message", "role": "user", "content": "继续执行任务"},
+        ],
     )
 
 
@@ -298,8 +308,8 @@ async def test_concurrent_resume_only_schedules_once_for_same_session() -> None:
 
     session = _make_session(SessionStatus.WAITING)
     state, _ = _make_mock_state(session)
-    # Keep index stale as waiting to ensure code relies on session-level state under lock.
-    state.index_store.list_all = AsyncMock(
+    # Keep list_sessions stale as waiting to ensure code relies on session-level state under lock.
+    state.session_store.list_sessions = AsyncMock(
         return_value=[
             {
                 "id": session.id,
@@ -344,36 +354,34 @@ async def test_resume_waits_until_stop_finishes_writing_pause_message() -> None:
     }
 
     state = MagicMock()
-    state.index_store = AsyncMock()
     state.session_store = AsyncMock()
     state.event_bus = AsyncMock()
     state.agent_instances = {session.agent_type: AsyncMock()}
-    state.index_store.list_all = AsyncMock(return_value=[index_entry])
+    state.session_store.list_sessions = AsyncMock(return_value=[index_entry])
     state.session_store.get_session = AsyncMock(return_value=session)
 
     async def _update_session(s: Session) -> None:
         index_entry["status"] = s.status.value
 
-    async def _upsert(s: Session) -> None:
-        index_entry["status"] = s.status.value
-
     pause_append_started = asyncio.Event()
     release_pause_append = asyncio.Event()
 
-    async def _append_message(
+    append_calls: list[tuple[str, list[dict]]] = []
+
+    async def _append_timeline_items(
         _session_id: str,
-        *,
-        role: str,
-        content: str,
-        agent_type: str,
-    ) -> None:
-        if role == "system":
+        _agent_type: str,
+        items: list[dict],
+    ) -> list[dict]:
+        first_item = items[0] if items else {}
+        if first_item.get("kind") == "system_event":
             pause_append_started.set()
             await release_pause_append.wait()
+        append_calls.append((_agent_type, items))
+        return items
 
     state.session_store.update_session = AsyncMock(side_effect=_update_session)
-    state.index_store.upsert = AsyncMock(side_effect=_upsert)
-    state.session_store.append_message = AsyncMock(side_effect=_append_message)
+    state.session_store.append_timeline_items = AsyncMock(side_effect=_append_timeline_items)
     state.agent_instances[session.agent_type].cancel_session = AsyncMock(return_value=True)
 
     schedule_mock = AsyncMock()
@@ -405,8 +413,13 @@ async def test_resume_waits_until_stop_finishes_writing_pause_message() -> None:
     assert stop_result.ok is True
     assert resume_result.ok is True
     assert schedule_mock.await_count == 1
-    assert state.session_store.append_message.await_count == 2
-    first_call = state.session_store.append_message.await_args_list[0]
-    second_call = state.session_store.append_message.await_args_list[1]
-    assert first_call.kwargs["role"] == "system"
-    assert second_call.kwargs["role"] == "user"
+    assert len(append_calls) == 2
+    first_items = append_calls[0][1]
+    second_items = append_calls[1][1]
+    # stop_agent writes the pause system_event first
+    assert first_items[0]["kind"] == "system_event"
+    # resume_agent always writes a system_event, then the user_message instruction
+    assert second_items[0]["kind"] == "system_event"
+    assert second_items[0]["content"] == f"Agent {session.id} resumed"
+    assert second_items[1]["kind"] == "user_message"
+    assert second_items[1]["content"] == "继续执行"

@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from sebastian.core.base_agent import BaseAgent
     from sebastian.llm.registry import LLMProviderRegistry
     from sebastian.protocol.events.bus import EventBus
-    from sebastian.store.index_store import IndexStore
     from sebastian.store.session_store import SessionStore
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,6 @@ def _initialize_agent_instances(
     gate: Any,
     session_store: SessionStore,
     event_bus: EventBus,
-    index_store: IndexStore,
     llm_registry: LLMProviderRegistry,
     db_factory: Any = None,
 ) -> dict[str, BaseAgent]:
@@ -34,7 +32,6 @@ def _initialize_agent_instances(
             gate=gate,
             session_store=session_store,
             event_bus=event_bus,
-            index_store=index_store,
             llm_registry=llm_registry,
             allowed_tools=cfg.allowed_tools,
             allowed_skills=cfg.allowed_skills,
@@ -66,7 +63,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import bus
     from sebastian.store.database import get_engine, get_session_factory, init_db
-    from sebastian.store.index_store import IndexStore
     from sebastian.store.session_store import SessionStore
     from sebastian.store.todo_store import TodoStore
 
@@ -111,9 +107,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with db_factory() as _bootstrap_session:
         await bootstrap_slot_registry(_bootstrap_session, DEFAULT_SLOT_REGISTRY)
 
-    session_store = SessionStore(settings.sessions_dir)
-    todo_store = TodoStore(settings.sessions_dir)
-    index_store = IndexStore(settings.sessions_dir, session_store=session_store)
+    session_store = SessionStore(settings.sessions_dir, db_factory=db_factory)
+    todo_store = TodoStore(db_factory=db_factory)
 
     from sebastian.llm.registry import LLMProviderRegistry
 
@@ -164,12 +159,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await sweep_unconsolidated(
         db_factory=db_factory,
         worker=consolidation_worker,
-        index_store=index_store,
+        session_store=session_store,
         memory_settings_fn=lambda: state.memory_settings.enabled,
     )
 
     conversation = ConversationManager(event_bus, db_factory=db_factory)
-    task_manager = TaskManager(session_store, event_bus, index_store=index_store)
+    task_manager = TaskManager(session_store, event_bus)
     sse_mgr = SSEManager(event_bus)
 
     from sebastian.permissions.gate import PolicyGate
@@ -186,7 +181,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     sebastian_agent = Sebastian(
         gate=gate,
         session_store=session_store,
-        index_store=index_store,
         task_manager=task_manager,
         conversation=conversation,
         event_bus=event_bus,
@@ -200,7 +194,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state.conversation = conversation
     state.session_store = session_store
     state.todo_store = todo_store
-    state.index_store = index_store
     state.db_factory = db_factory
     state.llm_registry = llm_registry
     state.agent_registry = {cfg.agent_type: cfg for cfg in agent_configs}
@@ -209,34 +202,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         gate=gate,
         session_store=state.session_store,
         event_bus=state.event_bus,
-        index_store=state.index_store,
         llm_registry=llm_registry,
         db_factory=state.db_factory,
     )
 
-    # 孤儿 session 目录提醒（agent 重命名后遗留数据）
-    sessions_dir = settings.sessions_dir
-    if sessions_dir.exists():
-        known = {"sebastian", *state.agent_registry.keys()}
-        orphans = [d.name for d in sessions_dir.iterdir() if d.is_dir() and d.name not in known]
-        if orphans:
-            logger.warning(
-                "Found orphan session dirs (not in registry): %s. "
-                "Likely from a renamed agent. See CHANGELOG for migration.",
-                orphans,
-            )
-
-    # 剔除 index.json 中磁盘目录已不存在的死条目（避免 UI 列表显示打不开的会话）
-    dropped_entries = await state.index_store.prune_orphans(sessions_dir)
-    if dropped_entries:
-        logger.warning(
-            "Pruned %d orphan index entries (no matching dir on disk): %s",
-            len(dropped_entries),
-            [(e["agent_type"], e["id"]) for e in dropped_entries],
-        )
-
     watchdog_task = start_watchdog(
-        index_store=state.index_store,
         session_store=state.session_store,
         event_bus=state.event_bus,
         agent_registry=state.agent_registry,
@@ -247,7 +217,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     completion_notifier = CompletionNotifier(
         event_bus=state.event_bus,
         session_store=state.session_store,
-        index_store=state.index_store,
         sebastian=state.sebastian,
         agent_instances=state.agent_instances,
         agent_registry=state.agent_registry,
@@ -292,6 +261,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await completion_notifier.aclose()
     if state.consolidation_scheduler is not None:
         await state.consolidation_scheduler.aclose()
+    from sebastian.store.database import get_engine
+
+    await get_engine().dispose()
     logger.info("Sebastian gateway shutdown")
 
 
