@@ -390,7 +390,9 @@ class ChatViewModel @Inject constructor(
                             startSseCollection(lastEventId = "0")
                             sessionRepository.loadSessions()
                         } else {
-                            if (sseJob?.isActive != true) startSseCollection(lastEventId = "0")
+                            if (sseJob?.isActive != true) startSseCollection(
+                                lastEventId = lastDeliveredSseEventIds[currentSessionId],
+                            )
                         }
                     }
                     .onFailure { e ->
@@ -483,7 +485,9 @@ class ChatViewModel @Inject constructor(
                     .onSuccess {
                         sendTurnJob = null
                         if (sseJob?.isActive != true) {
-                            startSseCollection(lastEventId = "0")
+                            startSseCollection(
+                                lastEventId = lastDeliveredSseEventIds[currentSessionId],
+                            )
                         }
                     }
                     .onFailure { e ->

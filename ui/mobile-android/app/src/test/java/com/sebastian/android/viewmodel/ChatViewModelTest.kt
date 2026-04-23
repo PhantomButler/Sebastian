@@ -879,6 +879,63 @@ class ChatViewModelTest {
         assertNull("Existing session first connect should use null cursor", firstCallCursor)
     }
 
+    @Test
+    fun `sendMessage to existing session with SSE inactive reconnects with stored cursor`() = vmTest {
+        val capturedLastEventIds = mutableListOf<String?>()
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenAnswer { inv ->
+            capturedLastEventIds.add(inv.getArgument(2))
+            sseFlow
+        }
+
+        activateSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Emit an event with eventId "42" so cursor is stored
+        sseFlow.emit(SseEnvelope(eventId = "42", event = StreamEvent.Unknown))
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // Stop SSE
+        viewModel.onAppStop()
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // sendMessage on existing session "s1" — sendTurn returns "s1" (same id)
+        viewModel.sendMessage("test")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        val lastCursor = capturedLastEventIds.lastOrNull()
+        assertEquals("SSE reconnect after sendMessage must use stored cursor", "42", lastCursor)
+    }
+
+    @Test
+    fun `sendAgentMessage to existing session with SSE inactive reconnects with stored cursor`() = vmTest {
+        val capturedLastEventIds = mutableListOf<String?>()
+        whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenAnswer { inv ->
+            capturedLastEventIds.add(inv.getArgument(2))
+            sseFlow
+        }
+        runBlocking {
+            whenever(chatRepository.sendSessionTurn(any(), any())).thenReturn(Result.success(Unit))
+        }
+
+        activateSession("s1")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        // Emit an event with eventId "42" so cursor is stored
+        sseFlow.emit(SseEnvelope(eventId = "42", event = StreamEvent.Unknown))
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // Stop SSE
+        viewModel.onAppStop()
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        // sendAgentMessage on existing session "s1"
+        viewModel.sendAgentMessage("research", "test")
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        val lastCursor = capturedLastEventIds.lastOrNull()
+        assertEquals("SSE reconnect after sendAgentMessage must use stored cursor", "42", lastCursor)
+    }
+
     // ── Task 8: provisional session for SubAgent ─────────────────────────────
 
     @Test
