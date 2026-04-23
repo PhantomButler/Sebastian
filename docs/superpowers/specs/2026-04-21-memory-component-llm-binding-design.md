@@ -1,3 +1,8 @@
+---
+integrated_to: memory/implementation.md
+integrated_at: 2026-04-23
+---
+
 # Memory Component LLM Provider Binding
 
 **Date**: 2026-04-21  

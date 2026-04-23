@@ -1,3 +1,8 @@
+---
+integrated_to: memory/implementation.md
+integrated_at: 2026-04-23
+---
+
 # Memory Settings Persistence & Confidence Scoring Design
 
 **Goal:** 持久化记忆功能开关（重启不丢失）+ Android 前端开关 UI + Extractor 置信度评分规则。
