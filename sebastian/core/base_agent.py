@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from sebastian.context.compaction import CompactionScheduler
     from sebastian.llm.provider import LLMProvider
     from sebastian.llm.registry import LLMProviderRegistry
 
@@ -22,6 +23,7 @@ from ulid import ULID
 from sebastian.config import settings
 from sebastian.core.agent_loop import AgentLoop, _tool_result_content
 from sebastian.core.stream_events import (
+    ProviderCallEnd,
     ProviderCallStart,
     TextBlockStart,
     TextBlockStop,
@@ -182,9 +184,11 @@ class BaseAgent(ABC):
         allowed_skills: list[str] | None = None,
         llm_registry: LLMProviderRegistry | None = None,
         db_factory: async_sessionmaker[AsyncSession] | None = None,
+        compaction_scheduler: CompactionScheduler | None = None,
     ) -> None:
         self._gate = gate
         self._db_factory = db_factory
+        self._compaction_scheduler = compaction_scheduler
         self._current_task_goals: dict[str, str] = {}  # session_id → goal
         self._current_depth: dict[str, int] = {}  # session_id → depth
         self._session_store = session_store
@@ -573,11 +577,14 @@ class BaseAgent(ABC):
         exchange_id: str | None = None,
         exchange_index: int | None = None,
     ) -> str:
+        from sebastian.context.usage import TokenUsage as _TokenUsage  # noqa: F401 — type only
+
         full_text = ""
         assistant_blocks: list[dict[str, Any]] = []
         assistant_turn_id = str(ULID())
         current_pci: int = 0
         block_index: int = 0
+        last_provider_usage: _TokenUsage | None = None
         todo_section = await self._session_todos_section(session_id, agent_context)
         last_user_msg = messages[-1].get("content", "") if messages else ""
         memory_section = await self._memory_section(
@@ -606,6 +613,11 @@ class BaseAgent(ABC):
                 if isinstance(event, ProviderCallStart):
                     current_pci = event.index
                     block_index = 0
+                    continue
+
+                if isinstance(event, ProviderCallEnd):
+                    if event.usage is not None:
+                        last_provider_usage = event.usage
                     continue
 
                 if isinstance(event, TextDelta):
@@ -809,6 +821,13 @@ class BaseAgent(ABC):
                         },
                     )
                     await self._update_activity(session_id, agent_context)
+                    await self._maybe_schedule_compaction(
+                        session_id=session_id,
+                        agent_type=agent_context,
+                        usage=last_provider_usage,
+                        messages=messages,
+                        system_prompt=effective_system_prompt,
+                    )
                     return event.full_text
         except asyncio.CancelledError:
             # When cancelled via cancel_session(), the finally block in run_streaming
@@ -840,6 +859,38 @@ class BaseAgent(ABC):
                     },
                 )
             raise
+
+    async def _maybe_schedule_compaction(
+        self,
+        *,
+        session_id: str,
+        agent_type: str,
+        usage: Any,
+        messages: list[dict[str, Any]],
+        system_prompt: str,
+    ) -> None:
+        """Fire-and-forget compaction check after a successful turn.
+
+        Errors are logged and swallowed — compaction must never affect the user turn.
+        """
+        if self._compaction_scheduler is None:
+            return
+        try:
+            await self._compaction_scheduler.maybe_schedule_after_turn(
+                session_id=session_id,
+                agent_type=agent_type,
+                usage=usage,
+                messages=messages,
+                system_prompt=system_prompt,
+            )
+        except Exception as exc:
+            logger.warning(
+                "compaction scheduling error session=%s agent=%s: %s",
+                session_id,
+                agent_type,
+                exc,
+                exc_info=True,
+            )
 
     async def _update_activity(self, session_id: str, agent_type: str) -> None:
         """Update last_activity_at for stalled detection."""

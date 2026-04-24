@@ -24,6 +24,7 @@ def _initialize_agent_instances(
     event_bus: EventBus,
     llm_registry: LLMProviderRegistry,
     db_factory: Any = None,
+    compaction_scheduler: Any = None,
 ) -> dict[str, BaseAgent]:
     """Create a singleton instance for each registered agent type."""
     instances: dict[str, BaseAgent] = {}
@@ -36,6 +37,7 @@ def _initialize_agent_instances(
             allowed_tools=cfg.allowed_tools,
             allowed_skills=cfg.allowed_skills,
             db_factory=db_factory,
+            compaction_scheduler=compaction_scheduler,
         )
         agent.name = cfg.agent_type
         instances[cfg.agent_type] = agent
@@ -153,6 +155,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state.consolidation_scheduler = consolidation_scheduler
     state.memory_extractor = extractor
 
+    from sebastian.context.compaction import (
+        SessionContextCompactionWorker,
+        TurnEndCompactionScheduler,
+    )
+    from sebastian.context.estimator import TokenEstimator
+    from sebastian.context.token_meter import ContextTokenMeter
+
+    _compaction_worker = SessionContextCompactionWorker(
+        session_store=session_store,
+        llm_registry=llm_registry,
+    )
+    # TODO(task-8): source context_window from model binding metadata instead of constant.
+    # 200_000 is a safe upper bound for current Claude models.
+    state.context_compaction_scheduler = TurnEndCompactionScheduler(
+        worker=_compaction_worker,
+        token_meter=ContextTokenMeter(context_window=200_000),
+        estimator=TokenEstimator(),
+    )
+
     # Catch-up sweep: consolidate sessions that completed while the gateway was down.
     from sebastian.memory.consolidation import sweep_unconsolidated
 
@@ -204,6 +225,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         event_bus=state.event_bus,
         llm_registry=llm_registry,
         db_factory=state.db_factory,
+        compaction_scheduler=state.context_compaction_scheduler,
     )
 
     watchdog_task = start_watchdog(

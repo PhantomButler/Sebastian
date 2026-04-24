@@ -717,3 +717,78 @@ async def test_cancel_flush_carries_same_exchange_as_user_message() -> None:
         assert call.kwargs.get("exchange_index") == _EXCHANGE_IDX, (
             f"exchange_index mismatch in call: {call}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Compaction scheduler integration
+# ---------------------------------------------------------------------------
+
+
+class FakeCompactionScheduler:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def maybe_schedule_after_turn(self, **kwargs: Any) -> None:
+        self.calls.append(kwargs)
+
+
+@pytest.mark.asyncio
+async def test_stream_inner_schedules_compaction_after_turn() -> None:
+    """After TurnDone is persisted, the compaction scheduler receives one call
+    containing session_id, agent_type, usage (from ProviderCallEnd), messages,
+    and system_prompt.
+    """
+    from sebastian.context.usage import TokenUsage
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.store.session_store import SessionStore
+
+    fake_usage = TokenUsage(input_tokens=1000, output_tokens=200)
+
+    provider = MockLLMProvider(
+        [
+            TextBlockStart(block_id="b0_0"),
+            TextDelta(block_id="b0_0", delta="Hello."),
+            TextBlockStop(block_id="b0_0", text="Hello."),
+            ProviderCallEnd(stop_reason="end_turn", usage=fake_usage),
+        ]
+    )
+
+    class TestAgent(BaseAgent):
+        name = "test"
+        system_prompt = "You are a test agent."
+
+    session_store = MagicMock(spec=SessionStore)
+    session_store.get_session_for_agent_type = AsyncMock(return_value=MagicMock())
+    session_store.update_activity = AsyncMock()
+    session_store.get_messages = AsyncMock(return_value=[])
+    session_store.append_message = AsyncMock()
+
+    gate = MagicMock()
+    gate.get_tool_specs = MagicMock(return_value=[])
+    gate.get_skill_specs = MagicMock(return_value=[])
+
+    scheduler = FakeCompactionScheduler()
+
+    agent = TestAgent(
+        gate=gate,
+        session_store=session_store,
+        provider=provider,
+        compaction_scheduler=scheduler,
+    )
+
+    result = await agent.run("hi", session_id="sess_compaction")
+    assert result == "Hello."
+
+    # Scheduler must have been called exactly once
+    assert len(scheduler.calls) == 1, f"Expected 1 scheduler call, got: {scheduler.calls}"
+
+    call = scheduler.calls[0]
+    assert call["session_id"] == "sess_compaction"
+    assert call["agent_type"] == "test"
+    # usage forwarded from ProviderCallEnd
+    assert call["usage"] is fake_usage
+    # messages include user message
+    assert any(m.get("role") == "user" for m in call["messages"])
+    # system_prompt is non-empty
+    assert isinstance(call["system_prompt"], str)
+    assert len(call["system_prompt"]) > 0

@@ -92,6 +92,7 @@ async def test_agent_loop_streams_thinking_and_text_then_turn_done() -> None:
         TextBlockStart(block_id="b0_1"),
         TextDelta(block_id="b0_1", delta="Hello there!"),
         TextBlockStop(block_id="b0_1", text="Hello there!"),
+        ProviderCallEnd(stop_reason="end_turn"),
         TurnDone(full_text="Hello there!"),
     ]
     assert provider.call_count == 1
@@ -118,6 +119,7 @@ async def test_agent_loop_ends_after_single_no_tool_turn() -> None:
     assert await gen.asend(None) == TextBlockStart(block_id="b0_0")
     assert await gen.asend(None) == TextDelta(block_id="b0_0", delta="Done.")
     assert await gen.asend(None) == TextBlockStop(block_id="b0_0", text="Done.")
+    assert await gen.asend(None) == ProviderCallEnd(stop_reason="end_turn")
     assert await gen.asend(None) == TurnDone(full_text="Done.")
 
     with pytest.raises(StopAsyncIteration):
@@ -183,10 +185,12 @@ async def test_agent_loop_accepts_injected_tool_result_and_continues() -> None:
     injected = ToolResult(
         tool_id="toolu_1", name="weather_lookup", ok=True, output="Sunny", error=None
     )
-    assert await gen.asend(injected) == ProviderCallStart(index=1)
+    assert await gen.asend(injected) == ProviderCallEnd(stop_reason="tool_use")
+    assert await gen.asend(None) == ProviderCallStart(index=1)
     assert await gen.asend(None) == TextBlockStart(block_id="b1_0")
     assert await gen.asend(None) == TextDelta(block_id="b1_0", delta="It is sunny.")
     assert await gen.asend(None) == TextBlockStop(block_id="b1_0", text="It is sunny.")
+    assert await gen.asend(None) == ProviderCallEnd(stop_reason="end_turn")
     assert await gen.asend(None) == TurnDone(full_text="Checking...It is sunny.")
 
     assert provider.call_count == 2
@@ -306,10 +310,12 @@ async def test_agent_loop_formats_failed_tool_result_for_next_turn() -> None:
         ToolResult(
             tool_id="toolu_1", name="weather_lookup", ok=False, output=None, error="network down"
         )
-    ) == ProviderCallStart(index=1)
+    ) == ProviderCallEnd(stop_reason="tool_use")
+    assert await gen.asend(None) == ProviderCallStart(index=1)
     assert await gen.asend(None) == TextBlockStart(block_id="b1_0")
     assert await gen.asend(None) == TextDelta(block_id="b1_0", delta="Fallback.")
     assert await gen.asend(None) == TextBlockStop(block_id="b1_0", text="Fallback.")
+    assert await gen.asend(None) == ProviderCallEnd(stop_reason="end_turn")
     assert await gen.asend(None) == TurnDone(full_text="Fallback.")
 
     last_messages = provider.last_messages

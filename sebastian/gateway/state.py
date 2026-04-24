@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from sebastian.agents._loader import AgentConfig
+    from sebastian.context.compaction import TurnEndCompactionScheduler
     from sebastian.core.base_agent import BaseAgent
     from sebastian.gateway.sse import SSEManager
     from sebastian.llm.registry import LLMProviderRegistry
@@ -36,6 +37,7 @@ llm_registry: LLMProviderRegistry = None  # type: ignore[assignment]
 memory_settings: MemoryRuntimeSettings
 consolidation_scheduler: MemoryConsolidationScheduler | None = None
 memory_extractor: MemoryExtractor | None = None
+context_compaction_scheduler: TurnEndCompactionScheduler | None = None
 agent_instances: dict[str, BaseAgent] = {}
 agent_registry: dict[str, AgentConfig] = {}
 

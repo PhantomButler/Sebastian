@@ -135,6 +135,7 @@ class AgentLoop:
 
                 if isinstance(event, ProviderCallEnd):
                     stop_reason = event.stop_reason
+                    yield event
                     continue
 
                 if isinstance(event, ThinkingBlockStop):

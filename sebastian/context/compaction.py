@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from sebastian.context.usage import TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -266,3 +270,75 @@ class SessionContextCompactionWorker:
             source_token_estimate=source_token_estimate,
             summary_token_estimate=summary_token_estimate,
         )
+
+
+# ---------------------------------------------------------------------------
+# CompactionScheduler protocol + TurnEndCompactionScheduler
+# ---------------------------------------------------------------------------
+
+
+class CompactionScheduler(Protocol):
+    """Protocol consumed by BaseAgent to schedule post-turn compaction."""
+
+    async def maybe_schedule_after_turn(
+        self,
+        *,
+        session_id: str,
+        agent_type: str,
+        usage: TokenUsage | None,
+        messages: list[dict[str, Any]],
+        system_prompt: str,
+    ) -> None: ...
+
+
+class TurnEndCompactionScheduler:
+    """Decides whether compaction is needed and fires it as a background task.
+
+    The decision uses the last ProviderCallEnd usage (authoritative token count
+    from the provider) when available, falling back to a local estimate derived
+    from the message list.  If compaction is triggered, it is fired with
+    ``asyncio.create_task`` so it never blocks the response stream.
+    """
+
+    def __init__(
+        self,
+        *,
+        worker: SessionContextCompactionWorker,
+        token_meter: Any,
+        estimator: Any,
+    ) -> None:
+        self._worker = worker
+        self._token_meter = token_meter
+        self._estimator = estimator
+
+    async def maybe_schedule_after_turn(
+        self,
+        *,
+        session_id: str,
+        agent_type: str,
+        usage: TokenUsage | None,
+        messages: list[dict[str, Any]],
+        system_prompt: str,
+    ) -> None:
+        estimate = self._estimator.estimate_messages(messages, system_prompt=system_prompt)
+        decision = self._token_meter.should_compact(usage=usage, estimate=estimate)
+        if not decision.should_compact:
+            return
+
+        async def _run() -> None:
+            try:
+                await self._worker.compact_session(
+                    session_id,
+                    agent_type,
+                    reason=f"auto_{decision.reason}",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "context compaction failed session=%s agent=%s: %s",
+                    session_id,
+                    agent_type,
+                    exc,
+                    exc_info=True,
+                )
+
+        asyncio.create_task(_run())
