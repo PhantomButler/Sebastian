@@ -339,6 +339,41 @@ async def test_worker_skips_when_llm_returns_empty_summary() -> None:
 
 
 @pytest.mark.asyncio
+async def test_worker_payload_records_effective_retain_when_overridden() -> None:
+    """Payload retained_recent_exchanges must reflect the caller-supplied value, not the default."""
+    from sebastian.context.compaction import SessionContextCompactionWorker
+
+    # 30 exchanges: retain_recent_exchanges=16 → 14 source groups × 2 = 28 ≥ min_items=12
+    items = []
+    seq = 1
+    for ex in range(1, 31):
+        items.append({
+            "seq": seq, "kind": "user_message", "exchange_index": ex,
+            "exchange_id": f"ex-{ex}", "archived": False,
+            "payload": {}, "content": f"u{ex}", "role": "user",
+        })
+        seq += 1
+        items.append({
+            "seq": seq, "kind": "assistant_message", "exchange_index": ex,
+            "exchange_id": f"ex-{ex}", "archived": False,
+            "payload": {}, "content": f"a{ex}" * 200, "role": "assistant",
+        })
+        seq += 1
+
+    store = FakeSessionStore(items=items)
+    registry = FakeLLMRegistry(FakeLLMProvider("summary"))
+    worker = SessionContextCompactionWorker(session_store=store, llm_registry=registry)
+
+    result = await worker.compact_session(
+        "s1", "sebastian", reason="manual", retain_recent_exchanges=16
+    )
+
+    assert result.status == "compacted"
+    payload = store.compact_calls[0]["summary_payload"]
+    assert payload["retained_recent_exchanges"] == 16
+
+
+@pytest.mark.asyncio
 async def test_worker_dry_run_returns_dry_run_even_below_min_source_tokens() -> None:
     """dry_run=True must return status='dry_run' even when token count is below
     min_source_tokens — the dry_run short-circuit fires before the token gate."""

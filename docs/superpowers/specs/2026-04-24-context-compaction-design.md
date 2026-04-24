@@ -146,15 +146,15 @@ provider actual usage
 ```text
 usage_soft_threshold = context_window * 0.70
 estimate_soft_threshold = context_window * 0.65
-hard_threshold = context_window * 0.85
+usage_hard_threshold = context_window * 0.85
 ```
 
 规则：
 
-- 有 provider usage 时，effective input tokens 超过模型 context window 的 70% 自动压缩。
-- 只有本地估算时，超过 65% 自动压缩。
-- `stop_reason == "max_tokens"` 只作为 warning；它可能是输出预算不足，不一定是 input context 过长。
-- 如果 provider 返回 context length exceeded，执行 emergency compaction，并自动重试该 turn 一次。
+- 有 provider usage 时，effective input tokens 超过模型 context window 的 70% 触发 soft 压缩（`reason="usage_threshold"`）。
+- 有 provider usage 且超过 85% 时触发 hard 压缩（`reason="usage_hard"`）；hard 优先于 soft 判断，语义上是 soft 失败/skip 后的兜底档。
+- 只有本地估算时，超过 65% 自动压缩（`reason="estimate_threshold"`）。
+- emergency compaction（provider 返回 context length exceeded 时同步压缩并重试 turn）为独立功能，不在 v1 范围内。
 
 触发时机：
 
@@ -305,7 +305,9 @@ POST /api/v1/sessions/{session_id}/compact
 
 `retain_recent_exchanges` 为 `int`，默认 `8`（非 nullable）。`dry_run` 默认 `false`：设为 `true` 时选择压缩范围但不调用 LLM 也不持久化，用于预检。
 
-响应：
+**dry_run 门槛语义**：dry_run 仍受 range 选择门槛约束（范围选不出来时返回 `skipped/range_too_small`），但**不受** `min_source_tokens`（默认 8000）门槛约束——即使源 token 估算低于门槛，只要能选出范围就返回 `dry_run` + 范围元数据。这是为了让调用方在小 session 上也能预览理论压缩范围，与 `reason="manual"` 的豁免行为一致。
+
+响应（`status="compacted"` 时）：
 
 ```json
 {
@@ -318,6 +320,22 @@ POST /api/v1/sessions/{session_id}/compact
   "summary_token_estimate": 3200
 }
 ```
+
+响应（`status="dry_run"` 时）：
+
+```json
+{
+  "status": "dry_run",
+  "summary_item_id": null,
+  "source_seq_start": 1,
+  "source_seq_end": 148,
+  "archived_item_count": 96,
+  "source_token_estimate": 42000,
+  "summary_token_estimate": null
+}
+```
+
+`archived_item_count` 在 dry_run 语境下是**将要**被 archive 的条数，非实际 archive 数；`summary_token_estimate` 为 null（未生成 summary）。
 
 `status` 实际取值：`"compacted" | "skipped" | "dry_run"`。`already_compacted` 并发冲突内部映射为 `status="skipped", reason="already_compacted"`，不单独暴露为 status 值。
 
@@ -340,11 +358,13 @@ GET /api/v1/sessions/{session_id}/compaction/status
 
 实现备注：字段名为 `token_estimate`（非 `context_token_estimate`）；`context_window` 和 `last_compacted_at` 字段未实现，不在响应中。
 
+`compactable_exchange_count` = 当前 context view 中非 archived、非 `context_summary` 的 exchange 分组数减去 `retained_recent_exchanges`，下限 0。不单独排除进行中的 exchange；手动 compact 路径由 409 拦截 active stream，不存在竞争。
+
 错误与跳过：
 
-- active stream：`409 session_active`
-- 没有有价值的压缩范围：`200 skipped`，reason 为 `range_too_small`
-- 已被其他 worker 压缩：`200 skipped`，reason 为 `already_compacted`
+- active stream：`409`，`detail: "Session has an active streaming turn; retry after the turn completes."`
+- 没有有价值的压缩范围：`200`，body `{"status": "skipped", "reason": "range_too_small"}`
+- 已被其他 worker 压缩：`200`，body `{"status": "skipped", "reason": "already_compacted"}`
 
 ## Android UX
 

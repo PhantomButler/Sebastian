@@ -281,7 +281,7 @@ class SessionContextCompactionWorker:
             "source_exchange_end": compaction_range.source_exchange_end,
             "source_token_estimate": source_token_estimate,
             "summary_token_estimate": summary_token_estimate,
-            "retained_recent_exchanges": self._retain_recent_exchanges,
+            "retained_recent_exchanges": effective_retain,
             "model": resolved.model,
             "reason": reason,
         }

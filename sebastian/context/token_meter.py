@@ -20,10 +20,12 @@ class ContextTokenMeter:
         context_window: int,
         usage_ratio: float = 0.70,
         estimate_ratio: float = 0.65,
+        hard_ratio: float = 0.85,
     ) -> None:
         self._context_window = context_window
         self._usage_threshold = int(context_window * usage_ratio)
         self._estimate_threshold = int(context_window * estimate_ratio)
+        self._hard_threshold = int(context_window * hard_ratio)
 
     def should_compact(
         self,
@@ -33,6 +35,13 @@ class ContextTokenMeter:
     ) -> CompactionDecision:
         usage_tokens = usage.effective_input_tokens if usage is not None else None
         if usage_tokens is not None:
+            if usage_tokens >= self._hard_threshold:
+                return CompactionDecision(
+                    should_compact=True,
+                    reason="usage_hard",
+                    token_count=usage_tokens,
+                    threshold=self._hard_threshold,
+                )
             return CompactionDecision(
                 should_compact=usage_tokens >= self._usage_threshold,
                 reason="usage_threshold",
