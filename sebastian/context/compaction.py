@@ -96,6 +96,7 @@ def _has_incomplete_tool_chain(items: list[dict[str, Any]]) -> bool:
 # CompactionResult
 # ---------------------------------------------------------------------------
 
+
 @dataclass(slots=True)
 class CompactionResult:
     status: str  # "compacted" | "skipped"
@@ -109,8 +110,20 @@ class CompactionResult:
 
 
 # ---------------------------------------------------------------------------
+# Worker constants
+# ---------------------------------------------------------------------------
+
+_MAX_SUMMARY_TOKENS = 8192
+_MIN_SUMMARY_TOKENS = 2048
+_SUMMARY_BUDGET_RATIO = 0.20
+_DEFAULT_RETAIN_RECENT_EXCHANGES = 8
+_DEFAULT_MIN_SOURCE_TOKENS = 8000
+
+
+# ---------------------------------------------------------------------------
 # SessionContextCompactionWorker
 # ---------------------------------------------------------------------------
+
 
 class SessionContextCompactionWorker:
     """Orchestrate a single context-compaction pass for one session.
@@ -131,8 +144,8 @@ class SessionContextCompactionWorker:
         *,
         session_store: Any,
         llm_registry: Any,
-        retain_recent_exchanges: int = 8,
-        min_source_tokens: int = 8000,
+        retain_recent_exchanges: int = _DEFAULT_RETAIN_RECENT_EXCHANGES,
+        min_source_tokens: int = _DEFAULT_MIN_SOURCE_TOKENS,
     ) -> None:
         self._session_store = session_store
         self._llm_registry = llm_registry
@@ -187,7 +200,10 @@ class SessionContextCompactionWorker:
         # and already falls back to the global default provider if no explicit
         # binding exists for "context_compactor".
         resolved = await self._llm_registry.get_provider("context_compactor")
-        max_tokens = min(8192, max(2048, int(source_token_estimate * 0.20)))
+        max_tokens = min(
+            _MAX_SUMMARY_TOKENS,
+            max(_MIN_SUMMARY_TOKENS, int(source_token_estimate * _SUMMARY_BUDGET_RATIO)),
+        )
 
         # 8. Call LLM (accumulate streaming text deltas)
         summary_text = ""
@@ -201,10 +217,14 @@ class SessionContextCompactionWorker:
             if isinstance(event, TextDelta):
                 summary_text += event.delta
 
-        # 9. Estimate summary tokens
+        # 9. Guard: empty summary means LLM produced nothing useful
+        if not summary_text.strip():
+            return CompactionResult(status="skipped", reason="empty_summary")
+
+        # 10. Estimate summary tokens
         summary_token_estimate = estimator.estimate_text(summary_text)
 
-        # 10. Build payload
+        # 11. Build payload
         payload: dict[str, Any] = {
             "summary_version": "context_compaction_v1",
             "source_seq_start": compaction_range.source_seq_start,
@@ -218,7 +238,7 @@ class SessionContextCompactionWorker:
             "reason": reason,
         }
 
-        # 11. Persist via store
+        # 12. Persist via store
         result = await self._session_store.compact_range(
             session_id,
             agent_type,
@@ -228,11 +248,11 @@ class SessionContextCompactionWorker:
             summary_payload=payload,
         )
 
-        # 12. Handle already-compacted race
+        # 13. Handle already-compacted race
         if result.status == "already_compacted":
             return CompactionResult(status="skipped", reason="already_compacted")
 
-        # 13. Return compaction metadata
+        # 14. Return compaction metadata
         summary_item_id: str | None = None
         if result.summary_item is not None:
             summary_item_id = str(result.summary_item.get("id", ""))

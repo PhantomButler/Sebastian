@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -164,10 +164,11 @@ class FakeLLMProvider:
         model: str,
         max_tokens: int,
         **kwargs: Any,
-    ) -> AsyncGenerator[Any, None]:
+    ) -> AsyncIterator[Any]:
         from sebastian.core.stream_events import ProviderCallEnd, TextDelta
 
-        yield TextDelta(block_id="b0", delta=self._text)
+        if self._text:
+            yield TextDelta(block_id="b0", delta=self._text)
         yield ProviderCallEnd(stop_reason="end_turn")
 
 
@@ -242,9 +243,43 @@ async def test_worker_compacts_and_returns_metadata() -> None:
     payload = call["summary_payload"]
     for key in [
         "summary_version", "source_seq_start", "source_seq_end",
+        "source_exchange_start", "source_exchange_end",
         "source_token_estimate", "summary_token_estimate",
         "retained_recent_exchanges", "model", "reason",
     ]:
         assert key in payload, f"missing key: {key}"
     assert payload["summary_version"] == "context_compaction_v1"
     assert payload["reason"] == "manual"
+
+
+@pytest.mark.asyncio
+async def test_worker_skips_when_llm_returns_empty_summary() -> None:
+    from sebastian.context.compaction import SessionContextCompactionWorker
+
+    items = []
+    seq = 1
+    for ex in range(1, 17):
+        items.append({
+            "seq": seq, "kind": "user_message", "exchange_index": ex,
+            "exchange_id": f"ex-{ex}", "archived": False,
+            "payload": {}, "content": f"u{ex}", "role": "user",
+        })
+        seq += 1
+        items.append({
+            "seq": seq, "kind": "assistant_message", "exchange_index": ex,
+            "exchange_id": f"ex-{ex}", "archived": False,
+            "payload": {}, "content": f"a{ex}" * 200, "role": "assistant",
+        })
+        seq += 1
+
+    store = FakeSessionStore(items=items)
+    # FakeLLMProvider with empty text yields no TextDelta → summary_text stays ""
+    registry = FakeLLMRegistry(FakeLLMProvider(""))
+    worker = SessionContextCompactionWorker(session_store=store, llm_registry=registry)
+
+    result = await worker.compact_session("s1", "sebastian", reason="manual")
+
+    assert result.status == "skipped"
+    assert result.reason == "empty_summary"
+    # compact_range should NOT have been called
+    assert len(store.compact_calls) == 0

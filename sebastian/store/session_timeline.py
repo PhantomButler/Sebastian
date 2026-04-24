@@ -24,6 +24,11 @@ class CompactRangeResult:
     summary_item: dict[str, Any] | None
     archived_item_count: int
 
+
+class _AlreadyCompacted(Exception):
+    """Sentinel raised inside db.begin() to trigger rollback and skip the write."""
+
+
 # kind 值不进入"上下文窗口"投影的黑名单
 _CONTEXT_EXCLUDED_KINDS = frozenset({"thinking", "raw_block", "system_event"})
 
@@ -443,66 +448,73 @@ class SessionTimelineStore:
     ) -> CompactRangeResult:
         now = datetime.now(UTC)
         async with self._db() as db:
-            async with db.begin():
-                # 1. Select source items in range
-                result = await db.execute(
-                    select(SessionItemRecord)
-                    .where(
-                        SessionItemRecord.session_id == session_id,
-                        SessionItemRecord.agent_type == agent_type,
-                        SessionItemRecord.seq >= source_seq_start,
-                        SessionItemRecord.seq <= source_seq_end,
+            try:
+                async with db.begin():
+                    # 1. Select source items in range.
+                    # Serialization is provided by _get_session_lock (intra-process)
+                    # and SQLite's write-serialization (cross-statement); row locks
+                    # are not available on SQLite.
+                    result = await db.execute(
+                        select(SessionItemRecord).where(
+                            SessionItemRecord.session_id == session_id,
+                            SessionItemRecord.agent_type == agent_type,
+                            SessionItemRecord.seq >= source_seq_start,
+                            SessionItemRecord.seq <= source_seq_end,
+                        )
                     )
-                    .with_for_update()
-                )
-                source_items = list(result.scalars())
+                    source_items = list(result.scalars())
 
-                # 2. Guard: no items found or any already archived → already_compacted
-                if not source_items or any(item.archived for item in source_items):
-                    return CompactRangeResult("already_compacted", None, 0)
+                    # 2. Guard: no items found or any already archived → already_compacted.
+                    # Raise sentinel to roll back the transaction cleanly rather than
+                    # returning from inside db.begin(), which would commit an empty txn.
+                    if not source_items or any(item.archived for item in source_items):
+                        raise _AlreadyCompacted
 
-                # 3. Archive all source items
-                for item in source_items:
-                    item.archived = True
+                    # 3. Archive all source items
+                    for item in source_items:
+                        item.archived = True
 
-                # 4. Allocate a new seq for the summary item
-                seq_result = await db.execute(
-                    text(
-                        "UPDATE sessions SET next_item_seq = next_item_seq + 1"
-                        " WHERE id = :sid AND agent_type = :at"
-                        " RETURNING next_item_seq - 1"
-                    ),
-                    {"sid": session_id, "at": agent_type},
-                )
-                seq_row = seq_result.first()
-                if seq_row is None:
-                    raise ValueError(
-                        f"Session {session_id!r} (agent={agent_type!r}) not found"
+                    # 4. Allocate a new seq for the summary item
+                    seq_result = await db.execute(
+                        text(
+                            "UPDATE sessions SET next_item_seq = next_item_seq + 1"
+                            " WHERE id = :sid AND agent_type = :at"
+                            " RETURNING next_item_seq - 1"
+                        ),
+                        {"sid": session_id, "at": agent_type},
                     )
-                summary_seq: int = seq_row[0]
+                    seq_row = seq_result.first()
+                    if seq_row is None:
+                        raise ValueError(
+                            f"Session {session_id!r} (agent={agent_type!r}) not found"
+                        )
+                    summary_seq: int = seq_row[0]
 
-                # 5. Insert context_summary item
-                summary_record = SessionItemRecord(
-                    id=str(uuid4()),
-                    session_id=session_id,
-                    agent_type=agent_type,
-                    seq=summary_seq,
-                    kind="context_summary",
-                    role="assistant",
-                    content=summary_content,
-                    payload=summary_payload,
-                    archived=False,
-                    assistant_turn_id=None,
-                    provider_call_index=None,
-                    block_index=None,
-                    effective_seq=source_seq_start,
-                    exchange_id=None,
-                    exchange_index=None,
-                    created_at=now,
-                )
-                db.add(summary_record)
-                # flush so _record_to_dict can read back the record state
-                await db.flush()
-                summary_dict = _record_to_dict(summary_record)
+                    # 5. Insert context_summary item
+                    summary_record = SessionItemRecord(
+                        id=str(uuid4()),
+                        session_id=session_id,
+                        agent_type=agent_type,
+                        seq=summary_seq,
+                        kind="context_summary",
+                        role="assistant",
+                        content=summary_content,
+                        payload=summary_payload,
+                        archived=False,
+                        assistant_turn_id=None,
+                        provider_call_index=None,
+                        block_index=None,
+                        effective_seq=source_seq_start,
+                        exchange_id=None,
+                        exchange_index=None,
+                        created_at=now,
+                    )
+                    db.add(summary_record)
+                    # flush so _record_to_dict can read back the record state
+                    await db.flush()
+                    summary_dict = _record_to_dict(summary_record)
+                    archived_count = len(source_items)
+            except _AlreadyCompacted:
+                return CompactRangeResult("already_compacted", None, 0)
 
-        return CompactRangeResult("compacted", summary_dict, len(source_items))
+        return CompactRangeResult("compacted", summary_dict, archived_count)
