@@ -1,6 +1,6 @@
 ---
 version: "1.0"
-last_updated: 2026-04-23
+last_updated: 2026-04-24
 status: implemented
 ---
 
@@ -68,7 +68,7 @@ val messages: List<MessageDto>
 val timelineItems: List<TimelineItemDto> = emptyList()
 ```
 
-`TimelineItemDto` 覆盖：id, session_id, agent_type, seq, kind, role, content, payload, archived, turn_id, provider_call_index, block_index, created_at。
+`TimelineItemDto` 覆盖：id, session_id, agent_type, seq, kind, role, content, payload, archived, assistant_turn_id, provider_call_index, block_index, created_at。
 
 `ChatRepository.getMessages(sessionId)` 请求 `include_archived=true`，优先使用 `timelineItems`，fallback 到 `messages`。
 
@@ -91,14 +91,14 @@ data class SummaryBlock(
 `TimelineMapper.kt` 中 `List<TimelineItemDto>.toMessagesFromTimeline()` 按 `seq ASC` 排序后投影到 `Message`：
 
 - `user_message`：独立 `Message(role=USER)`。
-- assistant-side items 按 `(turn_id, provider_call_index)` 聚合为 assistant message。
+- assistant-side items 按 `(assistant_turn_id, provider_call_index)` 聚合为 assistant message。
 - `thinking` → `ThinkingBlock(done=true)`。
 - `assistant_message` → `TextBlock(done=true)`。
 - `tool_call + tool_result` 按 `tool_call_id` 合并为 `ToolBlock`。
 - `context_summary` → 独立 assistant message，含 `SummaryBlock`。
 - `system_event`、`raw_block` 默认不显示。
 
-Message.id 和 ContentBlock.blockId 从 timeline 坐标稳定可复算，格式为 `timeline-${sessionId}-${turnId}-${providerCallIndex}-${blockIndex}`，缺少坐标时退化到 seq-based id。
+Message.id 和 ContentBlock.blockId 从 timeline 坐标稳定可复算，格式为 `timeline-${sessionId}-${assistantTurnId}-${providerCallIndex}-${blockIndex}`，缺少坐标时退化到 seq-based id。
 
 ## 实时与 REST 历史恢复流程
 

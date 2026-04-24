@@ -180,20 +180,20 @@ async def test_concurrent_append_no_duplicate_seq(store, session_in_db):
 
 
 @pytest.mark.asyncio
-async def test_append_message_preserves_turn_id_from_blocks(store, session_in_db):
-    """append_message 传入带 turn_id 的 blocks 时，写入 DB 的 item 应保留 turn_id。"""
+async def test_append_message_preserves_assistant_turn_id_from_blocks(store, session_in_db):
+    """append_message 传入带 assistant_turn_id 的 blocks 时，写入 DB 的 item 应保留。"""
     blocks = [
         {
             "type": "thinking",
             "thinking": "thought",
-            "turn_id": "01JQTEST00000000000000000A",
+            "assistant_turn_id": "01JQTEST00000000000000000A",
             "provider_call_index": 0,
             "block_index": 0,
         },
         {
             "type": "text",
             "text": "reply",
-            "turn_id": "01JQTEST00000000000000000A",
+            "assistant_turn_id": "01JQTEST00000000000000000A",
             "provider_call_index": 0,
             "block_index": 1,
         },
@@ -209,11 +209,11 @@ async def test_append_message_preserves_turn_id_from_blocks(store, session_in_db
     thinking = next(i for i in items if i["kind"] == "thinking")
     text = next(i for i in items if i["kind"] == "assistant_message")
 
-    assert thinking["turn_id"] == "01JQTEST00000000000000000A"
+    assert thinking["assistant_turn_id"] == "01JQTEST00000000000000000A"
     assert thinking["provider_call_index"] == 0
     assert thinking["block_index"] == 0
     assert thinking["content"] == "thought"
-    assert text["turn_id"] == "01JQTEST00000000000000000A"
+    assert text["assistant_turn_id"] == "01JQTEST00000000000000000A"
     assert text["block_index"] == 1
 
 
@@ -225,14 +225,14 @@ async def test_append_message_thinking_content_replays_to_anthropic(store, sessi
             "type": "thinking",
             "thinking": "real thought",
             "signature": "sig-real",
-            "turn_id": "01JQTEST00000000000000000E",
+            "assistant_turn_id": "01JQTEST00000000000000000E",
             "provider_call_index": 0,
             "block_index": 0,
         },
         {
             "type": "text",
             "text": "answer",
-            "turn_id": "01JQTEST00000000000000000E",
+            "assistant_turn_id": "01JQTEST00000000000000000E",
             "provider_call_index": 0,
             "block_index": 1,
         },
@@ -266,7 +266,7 @@ async def test_append_message_tool_use_block_content_is_json_input(store, sessio
             "tool_id": "tc1",
             "name": "my_tool",
             "input": {"key": "value"},
-            "turn_id": "01JQTEST00000000000000000B",
+            "assistant_turn_id": "01JQTEST00000000000000000B",
             "provider_call_index": 0,
             "block_index": 0,
         }
@@ -294,7 +294,7 @@ async def test_append_message_tool_use_normalizes_legacy_id_name(store, session_
             "id": "tc_legacy",
             "name": "legacy_tool",
             "input": {"q": "weather"},
-            "turn_id": "01JQTEST00000000000000000C",
+            "assistant_turn_id": "01JQTEST00000000000000000C",
             "provider_call_index": 0,
             "block_index": 0,
         }
@@ -331,7 +331,7 @@ async def test_append_message_tool_result_normalizes_tool_use_id(store, session_
             "type": "tool_result",
             "tool_use_id": "tc_legacy",
             "content": "legacy result",
-            "turn_id": "01JQTEST00000000000000000D",
+            "assistant_turn_id": "01JQTEST00000000000000000D",
             "provider_call_index": 0,
             "block_index": 0,
         }
@@ -442,7 +442,7 @@ async def test_get_context_with_thinking_excludes_system_event(store, session_in
             "kind": "user_message",
             "role": "user",
             "content": "hi",
-            "turn_id": "t1",
+            "assistant_turn_id": "t1",
             "provider_call_index": 0,
             "block_index": 0,
         },
@@ -450,7 +450,7 @@ async def test_get_context_with_thinking_excludes_system_event(store, session_in
             "kind": "thinking",
             "role": "assistant",
             "content": "thoughts",
-            "turn_id": "t1",
+            "assistant_turn_id": "t1",
             "provider_call_index": 0,
             "block_index": 1,
             "payload": {"signature": "sig1"},
@@ -461,7 +461,7 @@ async def test_get_context_with_thinking_excludes_system_event(store, session_in
             "kind": "assistant_message",
             "role": "assistant",
             "content": "reply",
-            "turn_id": "t1",
+            "assistant_turn_id": "t1",
             "provider_call_index": 0,
             "block_index": 2,
         },

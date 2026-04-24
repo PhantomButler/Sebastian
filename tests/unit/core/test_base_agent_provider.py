@@ -59,8 +59,8 @@ async def test_base_agent_uses_injected_provider() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_inner_sets_turn_id_and_pci() -> None:
-    """_stream_inner 写入的 assistant items 应携带非空 turn_id 和正确的 provider_call_index。
+async def test_stream_inner_sets_assistant_turn_id_and_pci() -> None:
+    """_stream_inner 写入的 assistant items 应携带非空 assistant_turn_id。
 
     2-iteration 流程:
       iteration 0: ProviderCallStart(0), ToolCallReady (tool_use), ProviderCallEnd(tool_use)
@@ -124,11 +124,15 @@ async def test_stream_inner_sets_turn_id_and_pci() -> None:
     blocks = assistant_calls[0].kwargs.get("blocks") or []
     assert len(blocks) >= 2, f"Expected at least 2 blocks, got: {blocks}"
 
-    # All blocks share the same turn_id (26-char ULID)
-    turn_ids = {b["turn_id"] for b in blocks}
-    assert len(turn_ids) == 1, f"Expected one unique turn_id, got: {turn_ids}"
-    turn_id = next(iter(turn_ids))
-    assert len(turn_id) == 26, f"turn_id should be 26-char ULID, got: {turn_id!r}"
+    # All blocks share the same assistant_turn_id (26-char ULID)
+    assistant_turn_ids = {b["assistant_turn_id"] for b in blocks}
+    assert len(assistant_turn_ids) == 1, (
+        f"Expected one unique assistant_turn_id, got: {assistant_turn_ids}"
+    )
+    assistant_turn_id = next(iter(assistant_turn_ids))
+    assert len(assistant_turn_id) == 26, (
+        f"assistant_turn_id should be 26-char ULID, got: {assistant_turn_id!r}"
+    )
 
     # Tool block is from iteration 0
     tool_blocks = [b for b in blocks if b["type"] == "tool"]
@@ -219,11 +223,11 @@ async def test_cancel_session_flushes_pending_blocks() -> None:
     thinking_blocks = [b for b in blocks if b["type"] == "thinking"]
     assert len(thinking_blocks) >= 1, f"Expected thinking block in flushed blocks, got: {blocks}"
 
-    # Verify thinking block has correct turn_id, provider_call_index, and block_index
+    # Verify thinking block has correct assistant_turn_id, provider_call_index, and block_index
     thinking_block = thinking_blocks[0]
-    assert thinking_block["turn_id"] is not None
-    assert len(thinking_block["turn_id"]) == 26, (
-        f"turn_id should be 26-char ULID, got: {thinking_block['turn_id']!r}"
+    assert thinking_block["assistant_turn_id"] is not None
+    assert len(thinking_block["assistant_turn_id"]) == 26, (
+        f"assistant_turn_id should be 26-char ULID, got: {thinking_block['assistant_turn_id']!r}"
     )
     assert thinking_block["provider_call_index"] == 0
     assert thinking_block["block_index"] == 0

@@ -1,6 +1,6 @@
 ---
 version: "1.0"
-last_updated: 2026-04-23
+last_updated: 2026-04-24
 status: implemented
 ---
 
@@ -65,7 +65,7 @@ session 内统一 timeline。不只保存 user/assistant message，也保存 thi
 - `payload JSON`
 - `archived BOOLEAN DEFAULT false`
 - `created_at DATETIME`
-- `turn_id TEXT NULL`
+- `assistant_turn_id TEXT NULL`
 - `provider_call_index INTEGER NULL`
 - `block_index INTEGER NULL`
 - `effective_seq INTEGER NULL`
@@ -77,7 +77,7 @@ session 内统一 timeline。不只保存 user/assistant message，也保存 thi
 - index: `(agent_type, session_id, archived, effective_seq, seq)`
 - index: `(agent_type, session_id, created_at)`
 - index: `(agent_type, session_id, kind, seq)`
-- index: `(agent_type, session_id, turn_id, provider_call_index, block_index)`
+- index: `(agent_type, session_id, assistant_turn_id, provider_call_index, block_index)`
 
 首期 `kind`：
 
@@ -245,7 +245,7 @@ Phase 1 采用 turn 内缓冲 + 边界批量 flush：
 - `ThinkingBlockStop` / `TextBlockStop` / `ToolCallReady`：放入 turn-local buffer。
 - `TurnDone`：一次性批量写入本 turn 所有 items。
 
-每个 turn 生成一个 `turn_id`，同一 provider call 内按事件完成顺序写 `provider_call_index` 和 `block_index`。
+每个 assistant response 生成一个 `assistant_turn_id`，同一 provider call 内按事件完成顺序写 `provider_call_index` 和 `block_index`。
 
 ## Context 投影
 

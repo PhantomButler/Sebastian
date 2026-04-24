@@ -82,7 +82,7 @@ def _append_tool_result_block(
     tool_name: str,
     result: StreamToolResult,
     display: str,
-    turn_id: str | None,
+    assistant_turn_id: str | None,
     provider_call_index: int | None,
     block_index: int,
 ) -> None:
@@ -93,7 +93,7 @@ def _append_tool_result_block(
         "model_content": _tool_result_content(result),
         "display": display,
         "ok": result.ok,
-        "turn_id": turn_id,
+        "assistant_turn_id": assistant_turn_id,
         "provider_call_index": provider_call_index,
         "block_index": block_index,
     }
@@ -139,7 +139,7 @@ def _ensure_tool_results_for_pending_calls(
             tool_name=tool_name,
             result=result,
             display=reason,
-            turn_id=block.get("turn_id"),
+            assistant_turn_id=block.get("assistant_turn_id") or block.get("turn_id"),
             provider_call_index=block.get("provider_call_index"),
             block_index=next_block_index,
         )
@@ -560,7 +560,7 @@ class BaseAgent(ABC):
     ) -> str:
         full_text = ""
         assistant_blocks: list[dict[str, Any]] = []
-        turn_id = str(ULID())
+        assistant_turn_id = str(ULID())
         current_pci: int = 0
         block_index: int = 0
         todo_section = await self._session_todos_section(session_id, agent_context)
@@ -617,7 +617,7 @@ class BaseAgent(ABC):
                     block: dict[str, Any] = {
                         "type": "thinking",
                         "thinking": event.thinking,
-                        "turn_id": turn_id,
+                        "assistant_turn_id": assistant_turn_id,
                         "provider_call_index": current_pci,
                         "block_index": block_index,
                     }
@@ -634,7 +634,7 @@ class BaseAgent(ABC):
                         {
                             "type": "text",
                             "text": event.text,
-                            "turn_id": turn_id,
+                            "assistant_turn_id": assistant_turn_id,
                             "provider_call_index": current_pci,
                             "block_index": block_index,
                         }
@@ -663,7 +663,7 @@ class BaseAgent(ABC):
                         "tool_name": event.name,
                         "input": event.inputs,
                         "status": "failed",
-                        "turn_id": turn_id,
+                        "assistant_turn_id": assistant_turn_id,
                         "provider_call_index": current_pci,
                         "block_index": block_index,
                     }
@@ -707,7 +707,7 @@ class BaseAgent(ABC):
                             tool_name=event.name,
                             result=stream_result,
                             display=error,
-                            turn_id=turn_id,
+                            assistant_turn_id=assistant_turn_id,
                             provider_call_index=current_pci,
                             block_index=block_index,
                         )
@@ -765,7 +765,7 @@ class BaseAgent(ABC):
                             tool_name=event.name,
                             result=stream_result,
                             display=display_content,
-                            turn_id=turn_id,
+                            assistant_turn_id=assistant_turn_id,
                             provider_call_index=current_pci,
                             block_index=block_index,
                         )

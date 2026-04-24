@@ -297,6 +297,47 @@ async def test_verify_schema_invariants_detects_missing_ix_session_items_ctx():
 
 
 @pytest.mark.asyncio
+async def test_migration_backfills_assistant_turn_id_from_legacy_turn_id():
+    """旧库只有 turn_id 时，迁移应新增 assistant_turn_id 并回填历史值。"""
+    from sebastian.store.database import _apply_idempotent_migrations
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.exec_driver_sql(
+            "CREATE TABLE session_items ("
+            "  id TEXT PRIMARY KEY,"
+            "  agent_type TEXT NOT NULL,"
+            "  session_id TEXT NOT NULL,"
+            "  seq INTEGER NOT NULL,"
+            "  kind TEXT NOT NULL,"
+            "  turn_id TEXT,"
+            "  provider_call_index INTEGER,"
+            "  block_index INTEGER,"
+            "  archived INTEGER NOT NULL DEFAULT 0,"
+            "  CONSTRAINT uq_session_items_seq UNIQUE (agent_type, session_id, seq)"
+            ")"
+        )
+        await conn.exec_driver_sql(
+            "INSERT INTO session_items "
+            "(id, agent_type, session_id, seq, kind, turn_id, provider_call_index, block_index) "
+            "VALUES ('i1', 'sebastian', 's1', 1, 'assistant_message', 't1', 0, 0)"
+        )
+
+        await _apply_idempotent_migrations(conn)
+
+        row = (
+            await conn.exec_driver_sql(
+                "SELECT assistant_turn_id FROM session_items WHERE id = 'i1'"
+            )
+        ).first()
+        assert row is not None
+        assert row[0] == "t1"
+
+    await engine.dispose()
+    await asyncio.sleep(0)
+
+
+@pytest.mark.asyncio
 async def test_verify_schema_invariants_detects_wrong_session_todos_pk():
     """session_todos 表 PK 首列不是 agent_type 时 _verify_schema_invariants 抛出 RuntimeError。"""
     from sebastian.store.database import _verify_schema_invariants

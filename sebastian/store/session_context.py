@@ -95,7 +95,7 @@ def _build_anthropic(
     Rules:
     - user_message → {"role": "user", "content": str}
     - assistant_message, tool_call, thinking within the same
-      (turn_id, provider_call_index) group → merged into one assistant message
+      (assistant_turn_id, provider_call_index) group → merged into one assistant message
       whose content is a list of blocks.
     - tool_result → appended as a tool_result block to the next user message
       (or a standalone user message if none follows).
@@ -107,7 +107,7 @@ def _build_anthropic(
     # Pending tool_result blocks to attach to the next user message.
     _pending_tool_results: list[dict[str, Any]] = []
 
-    # Group consecutive items that share the same (turn_id, provider_call_index)
+    # Group consecutive items that share the same (assistant_turn_id, provider_call_index)
     # so we can merge assistant blocks correctly.
     groups = _group_by_call(items)
 
@@ -362,13 +362,13 @@ def _group_by_call(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     """Group timeline items for projection.
 
     Only assistant-side items (assistant_message, tool_call, thinking) that
-    share the same (turn_id, provider_call_index) are merged into a single
+    share the same (assistant_turn_id, provider_call_index) are merged into a single
     group.  Everything else is a singleton:
     - user_message: always singleton (becomes a user message)
     - tool_result: always singleton (held as pending in Anthropic, emitted as
       role=tool in OpenAI)
     - context_summary / system_event: always singleton
-    - items missing turn_id or provider_call_index: singleton
+    - items missing assistant_turn_id or provider_call_index: singleton
 
     Within each group items retain their original order (already sorted by
     effective_seq, seq from the DB).
@@ -391,11 +391,11 @@ def _group_by_call(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
             groups.append([item])
             continue
 
-        turn_id = item.get("turn_id")
+        assistant_turn_id = item.get("assistant_turn_id") or item.get("turn_id")
         pci = item.get("provider_call_index")
 
         # Assistant items without grouping keys → singleton
-        if turn_id is None or pci is None:
+        if assistant_turn_id is None or pci is None:
             if current_group:
                 groups.append(current_group)
                 current_group = []
@@ -403,7 +403,7 @@ def _group_by_call(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
             groups.append([item])
             continue
 
-        key = (turn_id, pci)
+        key = (assistant_turn_id, pci)
         if key != current_key:
             if current_group:
                 groups.append(current_group)

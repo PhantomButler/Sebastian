@@ -15,7 +15,7 @@ class TimelineMapperTest {
         val items = listOf(
             item(seq = 3, kind = "context_summary", content = "summary"),
             item(seq = 1, kind = "user_message", role = "user", content = "hello"),
-            item(seq = 2, kind = "assistant_message", role = "assistant", content = "hi", turnId = "t1"),
+            item(seq = 2, kind = "assistant_message", role = "assistant", content = "hi", assistantTurnId = "t1"),
         )
         val messages = items.toMessagesFromTimeline()
         // Must be sorted by seq: user(1), assistant(2), summary(3)
@@ -30,7 +30,7 @@ class TimelineMapperTest {
         val messages = listOf(
             item(
                 seq = 1, kind = "thinking", content = "considering",
-                turnId = "t1", providerCallIndex = 0, blockIndex = 2,
+                assistantTurnId = "t1", providerCallIndex = 0, blockIndex = 2,
                 payload = mapOf("duration_ms" to 1500.0),
             )
         ).toMessagesFromTimeline()
@@ -45,12 +45,12 @@ class TimelineMapperTest {
         val messages = listOf(
             item(
                 seq = 1, kind = "tool_call", content = "search",
-                turnId = "t1", blockIndex = 0,
+                assistantTurnId = "t1", blockIndex = 0,
                 payload = mapOf("tool_call_id" to "tool-1", "tool_name" to "web_search"),
             ),
             item(
                 seq = 2, kind = "tool_result", content = "done",
-                turnId = "t1",
+                assistantTurnId = "t1",
                 payload = mapOf("tool_call_id" to "tool-1", "ok" to true),
             ),
         ).toMessagesFromTimeline()
@@ -72,8 +72,8 @@ class TimelineMapperTest {
     @Test
     fun flushesAssistantGroupWhenGroupKeyChanges() {
         val messages = listOf(
-            item(seq = 1, kind = "assistant_message", content = "first", turnId = "t1", providerCallIndex = 0),
-            item(seq = 2, kind = "assistant_message", content = "second", turnId = "t1", providerCallIndex = 1),
+            item(seq = 1, kind = "assistant_message", content = "first", assistantTurnId = "t1", providerCallIndex = 0),
+            item(seq = 2, kind = "assistant_message", content = "second", assistantTurnId = "t1", providerCallIndex = 1),
         ).toMessagesFromTimeline()
         assertEquals(2, messages.size)
         assertEquals(MessageRole.ASSISTANT, messages[0].role)
@@ -83,15 +83,15 @@ class TimelineMapperTest {
     @Test
     fun stableMessageIdForAssistantGroup() {
         val messages = listOf(
-            item(seq = 5, kind = "assistant_message", content = "hello", turnId = "t99", providerCallIndex = 2),
+            item(seq = 5, kind = "assistant_message", content = "hello", assistantTurnId = "t99", providerCallIndex = 2),
         ).toMessagesFromTimeline()
         assertEquals("timeline-s1-t99-2", messages.single().id)
     }
 
     @Test
-    fun stableMessageIdFallbackWhenTurnIdNull() {
+    fun stableMessageIdFallbackWhenAssistantTurnIdNull() {
         val messages = listOf(
-            item(seq = 7, kind = "assistant_message", content = "hello", turnId = null, providerCallIndex = null),
+            item(seq = 7, kind = "assistant_message", content = "hello", assistantTurnId = null, providerCallIndex = null),
         ).toMessagesFromTimeline()
         assertEquals("timeline-s1-7", messages.single().id)
     }
@@ -99,7 +99,7 @@ class TimelineMapperTest {
     @Test
     fun userMessageHasCorrectIdAndText() {
         val messages = listOf(
-            item(seq = 3, kind = "user_message", role = "user", content = "ping", turnId = null),
+            item(seq = 3, kind = "user_message", role = "user", content = "ping", assistantTurnId = null),
         ).toMessagesFromTimeline()
         val msg = messages.single()
         assertEquals("timeline-s1-3", msg.id)
@@ -130,7 +130,7 @@ class TimelineMapperTest {
         val messages = listOf(
             item(
                 seq = 4, kind = "tool_result", content = "result content",
-                turnId = "t1",
+                assistantTurnId = "t1",
                 payload = mapOf("tool_call_id" to "orphan-id", "ok" to true),
             ),
         ).toMessagesFromTimeline()
@@ -146,12 +146,12 @@ class TimelineMapperTest {
         val messages = listOf(
             item(
                 seq = 1, kind = "tool_call", content = "{}",
-                turnId = "t1", blockIndex = 0,
+                assistantTurnId = "t1", blockIndex = 0,
                 payload = mapOf("tool_call_id" to "tc-1", "tool_name" to "risky_tool"),
             ),
             item(
                 seq = 2, kind = "tool_result", content = null,
-                turnId = "t1",
+                assistantTurnId = "t1",
                 payload = mapOf("tool_call_id" to "tc-1", "ok" to false, "error" to "timeout"),
             ),
         ).toMessagesFromTimeline()
@@ -165,7 +165,7 @@ class TimelineMapperTest {
         val messages = listOf(
             item(
                 seq = 1, kind = "tool_call", content = "{}",
-                turnId = "t1", blockIndex = 0,
+                assistantTurnId = "t1", blockIndex = 0,
                 payload = mapOf("tool_call_id" to "tc-x", "tool_name" to "slow_tool"),
             ),
         ).toMessagesFromTimeline()
@@ -176,8 +176,8 @@ class TimelineMapperTest {
     @Test
     fun multipleBlockKindsInOneGroup() {
         val messages = listOf(
-            item(seq = 1, kind = "thinking", content = "let me think", turnId = "t1", blockIndex = 0),
-            item(seq = 2, kind = "assistant_message", content = "the answer", turnId = "t1", blockIndex = 1),
+            item(seq = 1, kind = "thinking", content = "let me think", assistantTurnId = "t1", blockIndex = 0),
+            item(seq = 2, kind = "assistant_message", content = "the answer", assistantTurnId = "t1", blockIndex = 1),
         ).toMessagesFromTimeline()
         val msg = messages.single()
         assertEquals(2, msg.blocks.size)
@@ -188,8 +188,8 @@ class TimelineMapperTest {
     @Test
     fun createdAtTakenFromFirstItemInGroup() {
         val messages = listOf(
-            item(seq = 1, kind = "thinking", content = "a", turnId = "t1", createdAt = "2026-04-22T10:00:00Z"),
-            item(seq = 2, kind = "assistant_message", content = "b", turnId = "t1", createdAt = "2026-04-22T10:00:01Z"),
+            item(seq = 1, kind = "thinking", content = "a", assistantTurnId = "t1", createdAt = "2026-04-22T10:00:00Z"),
+            item(seq = 2, kind = "assistant_message", content = "b", assistantTurnId = "t1", createdAt = "2026-04-22T10:00:01Z"),
         ).toMessagesFromTimeline()
         assertEquals("2026-04-22T10:00:00Z", messages.single().createdAt)
     }
@@ -203,7 +203,7 @@ class TimelineMapperTest {
         kind: String,
         role: String? = "assistant",
         content: String? = null,
-        turnId: String? = null,
+        assistantTurnId: String? = null,
         providerCallIndex: Int? = 0,
         blockIndex: Int? = null,
         payload: Map<String, Any?>? = null,
@@ -217,7 +217,7 @@ class TimelineMapperTest {
         role = role,
         content = content,
         payload = payload,
-        turnId = turnId,
+        assistantTurnId = assistantTurnId,
         providerCallIndex = providerCallIndex,
         blockIndex = blockIndex,
         createdAt = createdAt,

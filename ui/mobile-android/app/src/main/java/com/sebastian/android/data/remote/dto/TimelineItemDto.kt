@@ -14,7 +14,7 @@ data class TimelineItemDto(
     @param:Json(name = "content") val content: String? = null,
     @param:Json(name = "payload") val payload: Map<String, Any?>? = null,
     @param:Json(name = "archived") val archived: Boolean = false,
-    @param:Json(name = "turn_id") val turnId: String? = null,
+    @param:Json(name = "assistant_turn_id") val assistantTurnId: String? = null,
     @param:Json(name = "provider_call_index") val providerCallIndex: Int? = null,
     @param:Json(name = "block_index") val blockIndex: Int? = null,
     @param:Json(name = "created_at") val createdAt: String? = null,

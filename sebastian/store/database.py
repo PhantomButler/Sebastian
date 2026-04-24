@@ -99,6 +99,8 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
         ("session_consolidations", "last_seen_item_seq", "INTEGER"),
         ("session_consolidations", "last_consolidated_source_seq", "INTEGER"),
         ("session_consolidations", "consolidation_mode", "VARCHAR(50) DEFAULT 'full_session'"),
+        # session_items：turn_id 重命名为 assistant_turn_id
+        ("session_items", "assistant_turn_id", "TEXT"),
     ]
     for table, column, ddl in patches:
         result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
@@ -110,6 +112,8 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
         if column not in existing:
             await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
             logger.info("Applied migration: %s.%s", table, column)
+
+    await _backfill_assistant_turn_id(conn)
 
     # PK 列顺序修复（幂等，仅在 PK 首列错误时重建）
     await _rebuild_pk_if_needed(conn, "sessions", wrong_first_col="id")
@@ -131,6 +135,12 @@ async def _normalize_confidence_types(conn: Any) -> None:
     """
     tables = ("profile_memories", "episode_memories", "relation_candidates")
     for table in tables:
+        table_exists = await conn.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:table",
+            {"table": table},
+        )
+        if table_exists.first() is None:
+            continue
         result = await conn.exec_driver_sql(
             f"UPDATE {table} SET confidence = CAST(confidence AS REAL) "
             f"WHERE typeof(confidence) = 'text'"
@@ -142,12 +152,30 @@ async def _normalize_confidence_types(conn: Any) -> None:
 async def _apply_idempotent_indexes(conn: Any) -> None:
     """幂等创建 session/timeline 查询索引。"""
     indexes = [
-        "CREATE INDEX IF NOT EXISTS ix_checkpoints_session"
-        " ON checkpoints (agent_type, session_id, task_id)",
-        "CREATE INDEX IF NOT EXISTS ix_session_consolidations_agent"
-        " ON session_consolidations (agent_type)",
+        (
+            "checkpoints",
+            "CREATE INDEX IF NOT EXISTS ix_checkpoints_session"
+            " ON checkpoints (agent_type, session_id, task_id)",
+        ),
+        (
+            "session_consolidations",
+            "CREATE INDEX IF NOT EXISTS ix_session_consolidations_agent"
+            " ON session_consolidations (agent_type)",
+        ),
+        (
+            "session_items",
+            "CREATE INDEX IF NOT EXISTS ix_session_items_assistant_turn"
+            " ON session_items "
+            "(agent_type, session_id, assistant_turn_id, provider_call_index, block_index)",
+        ),
     ]
-    for sql in indexes:
+    for table, sql in indexes:
+        table_exists = await conn.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:table",
+            {"table": table},
+        )
+        if table_exists.first() is None:
+            continue
         await conn.exec_driver_sql(sql)
 
 
@@ -159,6 +187,19 @@ async def _drop_obsolete_columns(conn: Any) -> None:
     if result.first():
         await conn.exec_driver_sql("ALTER TABLE agent_llm_bindings DROP COLUMN thinking_adaptive")
         logger.info("Dropped obsolete column: agent_llm_bindings.thinking_adaptive")
+
+
+async def _backfill_assistant_turn_id(conn: Any) -> None:
+    result = await conn.exec_driver_sql("PRAGMA table_info(session_items)")
+    existing = {row[1] for row in result.fetchall()}
+    if not {"assistant_turn_id", "turn_id"} <= existing:
+        return
+    updated = await conn.exec_driver_sql(
+        "UPDATE session_items SET assistant_turn_id = turn_id "
+        "WHERE assistant_turn_id IS NULL AND turn_id IS NOT NULL"
+    )
+    if updated.rowcount:
+        logger.info("Backfilled %d session_items.assistant_turn_id rows", updated.rowcount)
 
 
 async def _rebuild_pk_if_needed(

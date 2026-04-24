@@ -53,7 +53,15 @@ def _normalize_block_payload(block: dict[str, Any]) -> dict[str, Any]:
     payload = {
         k: v
         for k, v in block.items()
-        if k not in ("text", "content", "turn_id", "provider_call_index", "block_index")
+        if k
+        not in (
+            "text",
+            "content",
+            "assistant_turn_id",
+            "turn_id",
+            "provider_call_index",
+            "block_index",
+        )
     }
     block_type = block.get("type", "")
     if block_type in ("tool_use", "tool"):
@@ -74,7 +82,7 @@ class TimelineItemInput(TypedDict, total=False):
     content: str
     payload: dict[str, Any]
     archived: bool
-    turn_id: str | None
+    assistant_turn_id: str | None
     provider_call_index: int | None
     block_index: int | None
     effective_seq: int | None
@@ -92,7 +100,7 @@ def _record_to_dict(record: SessionItemRecord) -> dict[str, Any]:
         "content": record.content,
         "payload": record.payload if record.payload is not None else {},
         "archived": record.archived,
-        "turn_id": record.turn_id,
+        "assistant_turn_id": record.assistant_turn_id,
         "provider_call_index": record.provider_call_index,
         "block_index": record.block_index,
         "created_at": record.created_at.isoformat() if record.created_at else None,
@@ -179,7 +187,8 @@ class SessionTimelineStore:
                                 content=item.get("content", ""),
                                 payload=item.get("payload", {}),
                                 archived=item.get("archived", False),
-                                turn_id=item.get("turn_id"),
+                                assistant_turn_id=item.get("assistant_turn_id")
+                                or item.get("turn_id"),
                                 provider_call_index=item.get("provider_call_index"),
                                 block_index=item.get("block_index"),
                                 effective_seq=eff_seq,
@@ -231,7 +240,7 @@ class SessionTimelineStore:
                     "kind": kind,
                     "role": role,
                     "content": block_content,
-                    "turn_id": block.get("turn_id"),
+                    "assistant_turn_id": block.get("assistant_turn_id") or block.get("turn_id"),
                     "provider_call_index": block.get("provider_call_index"),
                     "block_index": block.get("block_index", idx),
                     "payload": _normalize_block_payload(block),

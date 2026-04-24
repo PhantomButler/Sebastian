@@ -40,7 +40,16 @@ async def test_session_items_table_exists(sqlite_session_factory):
     async with sqlite_session_factory() as session:
         rows = await session.execute(sqlalchemy.text("PRAGMA table_info(session_items)"))
         columns = {row[1] for row in rows.fetchall()}
-        expected = {"id", "session_id", "agent_type", "seq", "kind", "archived", "effective_seq"}
+        expected = {
+            "id",
+            "session_id",
+            "agent_type",
+            "seq",
+            "kind",
+            "archived",
+            "assistant_turn_id",
+            "effective_seq",
+        }
         assert expected.issubset(columns)
 
 

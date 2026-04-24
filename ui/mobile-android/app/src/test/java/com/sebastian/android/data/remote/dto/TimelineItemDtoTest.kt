@@ -31,7 +31,7 @@ class TimelineItemDtoTest {
                   "content": "thinking text",
                   "payload": {"duration_ms": 1234},
                   "archived": false,
-                  "turn_id": "t1",
+                  "assistant_turn_id": "t1",
                   "provider_call_index": 0,
                   "block_index": 0,
                   "created_at": "2026-04-22T00:00:01Z"
