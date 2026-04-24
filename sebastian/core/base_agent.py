@@ -40,16 +40,10 @@ from sebastian.core.stream_events import (
 )
 from sebastian.core.stream_events import ToolResult as StreamToolResult
 from sebastian.core.stream_helpers import (
-    _DISPLAY_MAX as _DISPLAY_MAX,  # noqa: F401 — re-exported for tests
-)
-from sebastian.core.stream_helpers import (
     dispatch_tool_call as _dispatch_tool_call_fn,
 )
 from sebastian.core.stream_helpers import (
     ensure_tool_results_for_pending_calls as _ensure_tool_results_for_pending_calls,
-)
-from sebastian.core.stream_helpers import (
-    format_tool_display as _format_tool_display,  # noqa: F401 — re-exported for tests
 )
 from sebastian.memory.depth_guard import is_memory_eligible
 from sebastian.memory.working_memory import WorkingMemory
