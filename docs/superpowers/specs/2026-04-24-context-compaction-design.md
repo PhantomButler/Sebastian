@@ -156,6 +156,13 @@ usage_hard_threshold = context_window * 0.85
 - 只有本地估算时，超过 65% 自动压缩（`reason="estimate_threshold"`）。
 - emergency compaction（provider 返回 context length exceeded 时同步压缩并重试 turn）为独立功能，不在 v1 范围内。
 
+  > **未来实现参考**：两个主要 provider 均会报错而非静默截断，但信号路径不同：
+  > - **OpenAI**：`400 BadRequestError`，`error.code == "context_length_exceeded"`，可精准 catch。
+  > - **Anthropic 旧行为**：`400 invalid_request_error`，无具体 code，需 match message 文本（`"prompt is too long"`）。
+  > - **Anthropic 新行为（Claude 4.5+）**：`200` 正常返回，但 `stop_reason == "model_context_window_exceeded"`，需在流结束后检查。
+  >
+  > 因此实现时需在 provider 层归一化为统一的 `ContextLengthExceededError`，再由 BaseAgent 捕获、同步压缩、重试一次。Anthropic 新老两条路径（exception vs stop_reason）是主要复杂度所在。
+
 触发时机：
 
 - 自动压缩在 `TurnDone` 已持久化后执行。
