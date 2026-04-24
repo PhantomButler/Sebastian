@@ -390,3 +390,114 @@ async def test_worker_dry_run_returns_dry_run_even_below_min_source_tokens() -> 
     fake_provider.stream.assert_not_called()
     store.compact_range.assert_not_called()
 
+
+# ---------------------------------------------------------------------------
+# TurnEndCompactionScheduler tests
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _FakeDecision:
+    should_compact: bool
+    reason: str = "token_limit"
+
+
+class _FakeMeter:
+    def __init__(self, decision: _FakeDecision) -> None:
+        self._decision = decision
+
+    def should_compact(self, *, usage: Any, estimate: int) -> _FakeDecision:
+        return self._decision
+
+
+class _FakeEstimator:
+    def estimate_messages(self, messages: Any, *, system_prompt: str = "") -> int:
+        return 100
+
+
+@pytest.mark.asyncio
+async def test_scheduler_skips_when_should_compact_false() -> None:
+    """Scheduler must not call worker when meter returns should_compact=False."""
+    from sebastian.context.compaction import TurnEndCompactionScheduler
+
+    worker_mock = AsyncMock()
+    scheduler = TurnEndCompactionScheduler(
+        worker=worker_mock,
+        token_meter=_FakeMeter(_FakeDecision(should_compact=False)),
+        estimator=_FakeEstimator(),
+    )
+
+    await scheduler.maybe_schedule_after_turn(
+        session_id="s1",
+        agent_type="sebastian",
+        usage=None,
+        messages=[],
+        system_prompt="",
+    )
+    # Give event loop a chance to run any background tasks
+    await asyncio.sleep(0)
+
+    worker_mock.compact_session.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_dispatches_when_should_compact_true() -> None:
+    """Scheduler must call worker.compact_session with correct kwargs when meter fires."""
+    from sebastian.context.compaction import CompactionResult, TurnEndCompactionScheduler
+
+    worker_mock = AsyncMock()
+    worker_mock.compact_session.return_value = CompactionResult(status="compacted")
+
+    scheduler = TurnEndCompactionScheduler(
+        worker=worker_mock,
+        token_meter=_FakeMeter(_FakeDecision(should_compact=True, reason="token_limit")),
+        estimator=_FakeEstimator(),
+    )
+
+    await scheduler.maybe_schedule_after_turn(
+        session_id="s1",
+        agent_type="sebastian",
+        usage=None,
+        messages=[],
+        system_prompt="",
+    )
+    # Drain the background task spawned by asyncio.create_task
+    await asyncio.sleep(0)
+
+    worker_mock.compact_session.assert_called_once_with(
+        "s1",
+        "sebastian",
+        reason="auto_token_limit",
+    )
+
+
+@pytest.mark.asyncio
+async def test_scheduler_swallows_worker_exception(caplog: Any) -> None:
+    """Worker raising an exception must not propagate out of the scheduler."""
+    from sebastian.context.compaction import TurnEndCompactionScheduler
+
+    worker_mock = AsyncMock()
+    worker_mock.compact_session.side_effect = RuntimeError("boom")
+
+    scheduler = TurnEndCompactionScheduler(
+        worker=worker_mock,
+        token_meter=_FakeMeter(_FakeDecision(should_compact=True, reason="token_limit")),
+        estimator=_FakeEstimator(),
+    )
+
+    # Call must not raise even though the worker raises
+    with caplog.at_level(logging.WARNING, logger="sebastian.context.compaction"):
+        await scheduler.maybe_schedule_after_turn(
+            session_id="s1",
+            agent_type="sebastian",
+            usage=None,
+            messages=[],
+            system_prompt="",
+        )
+        # Drain the background task so the exception is handled
+        await asyncio.sleep(0)
+
+    # Worker was called (it raised), no exception propagated
+    worker_mock.compact_session.assert_called_once()
+    # Warning should have been logged
+    assert any("context compaction failed" in r.message for r in caplog.records)
