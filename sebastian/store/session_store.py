@@ -204,6 +204,42 @@ class SessionStore:
                 sessions.append(data)
         return sessions
 
+    async def allocate_exchange(
+        self,
+        session_id: str,
+        agent_type: str,
+    ) -> tuple[str, int]:
+        """Atomically allocate a new exchange slot for this session.
+
+        Reads sessions.next_exchange_index, increments it in one UPDATE...RETURNING
+        statement, generates a ULID exchange_id, and returns (exchange_id, old_index).
+        Requires db_factory.
+        """
+        if self._db_factory is None:
+            raise RuntimeError("allocate_exchange requires db_factory")
+        from sqlalchemy import text
+        from ulid import ULID
+
+        async with self._db_factory() as db:
+            async with db.begin():
+                result = await db.execute(
+                    text(
+                        "UPDATE sessions"
+                        " SET next_exchange_index = next_exchange_index + 1"
+                        " WHERE id = :sid AND agent_type = :at"
+                        " RETURNING next_exchange_index - 1"
+                    ),
+                    {"sid": session_id, "at": agent_type},
+                )
+                row = result.first()
+                if row is None:
+                    raise ValueError(
+                        f"Session {session_id!r} (agent={agent_type!r}) not found"
+                    )
+                exchange_index: int = row[0]
+        exchange_id = str(ULID())
+        return exchange_id, exchange_index
+
     async def append_message(
         self,
         session_id: str,
@@ -211,10 +247,14 @@ class SessionStore:
         content: str,
         agent_type: str = "sebastian",
         blocks: list[dict[str, Any]] | None = None,
+        exchange_id: str | None = None,
+        exchange_index: int | None = None,
     ) -> None:
         if self._timeline is not None:
             await self._timeline.append_message_compat(
-                session_id, role, content, agent_type, blocks
+                session_id, role, content, agent_type, blocks,
+                exchange_id=exchange_id,
+                exchange_index=exchange_index,
             )
             return
         directory = _session_dir_by_id(

@@ -86,6 +86,8 @@ class TimelineItemInput(TypedDict, total=False):
     provider_call_index: int | None
     block_index: int | None
     effective_seq: int | None
+    exchange_id: str | None
+    exchange_index: int | None
 
 
 def _record_to_dict(record: SessionItemRecord) -> dict[str, Any]:
@@ -104,6 +106,8 @@ def _record_to_dict(record: SessionItemRecord) -> dict[str, Any]:
         "provider_call_index": record.provider_call_index,
         "block_index": record.block_index,
         "created_at": record.created_at.isoformat() if record.created_at else None,
+        "exchange_id": record.exchange_id,
+        "exchange_index": record.exchange_index,
     }
 
 
@@ -192,6 +196,8 @@ class SessionTimelineStore:
                                 provider_call_index=item.get("provider_call_index"),
                                 block_index=item.get("block_index"),
                                 effective_seq=eff_seq,
+                                exchange_id=item.get("exchange_id"),
+                                exchange_index=item.get("exchange_index"),
                                 created_at=now,
                             )
                             db.add(record)
@@ -255,9 +261,15 @@ class SessionTimelineStore:
         content: str,
         agent_type: str,
         blocks: list[dict[str, Any]] | None = None,
+        exchange_id: str | None = None,
+        exchange_index: int | None = None,
     ) -> None:
         """Convert a legacy message call into timeline items and persist."""
         items = self._message_to_items(role, content, blocks)
+        if exchange_id is not None or exchange_index is not None:
+            for item in items:
+                item["exchange_id"] = exchange_id
+                item["exchange_index"] = exchange_index
         await self.append_items(session_id, agent_type, items)
 
     # ------------------------------------------------------------------

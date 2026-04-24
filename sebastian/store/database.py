@@ -99,6 +99,11 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
         ("session_consolidations", "last_seen_item_seq", "INTEGER"),
         ("session_consolidations", "last_consolidated_source_seq", "INTEGER"),
         ("session_consolidations", "consolidation_mode", "VARCHAR(50) DEFAULT 'full_session'"),
+        # sessions：exchange 计数器
+        ("sessions", "next_exchange_index", "INTEGER DEFAULT 1"),
+        # session_items：exchange 边界字段
+        ("session_items", "exchange_id", "VARCHAR"),
+        ("session_items", "exchange_index", "INTEGER"),
     ]
     for table, column, ddl in patches:
         result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
@@ -163,6 +168,11 @@ async def _apply_idempotent_indexes(conn: Any) -> None:
             "CREATE INDEX IF NOT EXISTS ix_session_items_assistant_turn"
             " ON session_items "
             "(agent_type, session_id, assistant_turn_id, provider_call_index, block_index)",
+        ),
+        (
+            "session_items",
+            "CREATE INDEX IF NOT EXISTS ix_session_items_exchange"
+            " ON session_items (agent_type, session_id, exchange_index, seq)",
         ),
     ]
     for table, sql in indexes:

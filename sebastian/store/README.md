@@ -64,6 +64,22 @@ sessions = await store.list_sessions(agent_type)
 - `get_timeline_items(..., include_archived=True)` 是 audit/UI 历史视图，返回真实 `seq ASC` 顺序。
 - `get_context_timeline_items(...)` 是 LLM context 视图，按非归档 item 的逻辑上下文顺序返回。
 
+## Exchange 边界字段
+
+一个 **exchange** = 一条用户消息 + 该消息触发的所有 assistant/tool 输出。Exchange 字段用于按用户交互轮次对 timeline item 切片，为上下文压缩（context compaction）提供精确边界。
+
+| 字段 | 所在表 | 含义 |
+|------|--------|------|
+| `sessions.next_exchange_index` | sessions | 下一个可用 exchange 序号（初始为 1），通过 `allocate_exchange` 原子递增 |
+| `session_items.exchange_id` | session_items | 本 item 所属 exchange 的 ULID（可为 NULL，表示系统内部 item） |
+| `session_items.exchange_index` | session_items | 本 item 所属 exchange 的序号（可为 NULL） |
+
+**分配方式：** 在每条用户消息入库之前，调用 `SessionStore.allocate_exchange(session_id, agent_type)` 得到 `(exchange_id, exchange_index)` 元组，再将其传入 `append_message(..., exchange_id=..., exchange_index=...)` 和后续所有 assistant/tool item 的写入路径。
+
+**索引：** `ix_session_items_exchange(agent_type, session_id, exchange_index, seq)` 支持按 exchange 范围查询。
+
+**压缩范围：** 上下文压缩应使用 `exchange_index` 界定压缩区间（不用旧的 `assistant_turn_id`）。
+
 ---
 
 ```python

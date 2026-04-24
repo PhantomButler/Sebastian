@@ -497,6 +497,65 @@ async def test_tool_dispatch_exception_persists_failed_tool_result() -> None:
 
 
 @pytest.mark.asyncio
+async def test_exchange_id_propagated_to_all_blocks() -> None:
+    """db_factory 存在时，run_streaming 应为该 exchange 分配 exchange_id/exchange_index，
+    并将其传递给 user 消息和 assistant 消息的所有 blocks。
+    """
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.store.session_store import SessionStore
+
+    provider = MockLLMProvider(
+        [
+            TextBlockStart(block_id="b0_0"),
+            TextDelta(block_id="b0_0", delta="Hi!"),
+            TextBlockStop(block_id="b0_0", text="Hi!"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ]
+    )
+
+    class TestAgent(BaseAgent):
+        name = "test"
+        system_prompt = "You are a test agent."
+
+    session_store = MagicMock(spec=SessionStore)
+    session_store.get_session_for_agent_type = AsyncMock(return_value=MagicMock())
+    session_store.update_activity = AsyncMock()
+    session_store.get_context_messages = AsyncMock(return_value=[])
+    session_store.append_message = AsyncMock()
+    session_store.allocate_exchange = AsyncMock(return_value=("01JEXCHANGE0000000000000001", 1))
+
+    # Pass a non-None db_factory to trigger the allocate_exchange path
+    fake_db_factory = MagicMock()
+
+    gate = MagicMock()
+    gate.get_tool_specs = MagicMock(return_value=[])
+    gate.get_skill_specs = MagicMock(return_value=[])
+
+    agent = TestAgent(
+        gate=gate,
+        session_store=session_store,
+        provider=provider,
+        db_factory=fake_db_factory,
+    )
+
+    result = await agent.run("hi", session_id="sess_exchange")
+    assert result == "Hi!"
+
+    # allocate_exchange should have been called once
+    session_store.allocate_exchange.assert_called_once_with("sess_exchange", "test")
+
+    calls = session_store.append_message.call_args_list
+    # All calls (user + assistant) should carry exchange fields
+    for call in calls:
+        assert call.kwargs.get("exchange_id") == "01JEXCHANGE0000000000000001", (
+            f"exchange_id missing or wrong in call: {call}"
+        )
+        assert call.kwargs.get("exchange_index") == 1, (
+            f"exchange_index missing or wrong in call: {call}"
+        )
+
+
+@pytest.mark.asyncio
 async def test_cancel_during_tool_call_flushes_cancelled_tool_result() -> None:
     """取消发生在工具执行中时，flush 不能留下孤立 tool_call。"""
     from sebastian.core.base_agent import BaseAgent

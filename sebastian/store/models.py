@@ -282,6 +282,7 @@ class SessionRecord(Base):
     task_count: Mapped[int] = mapped_column(Integer, default=0)
     active_task_count: Mapped[int] = mapped_column(Integer, default=0)
     next_item_seq: Mapped[int] = mapped_column(Integer, default=1)
+    next_exchange_index: Mapped[int] = mapped_column(Integer, default=1)
 
     __table_args__ = (
         Index("ix_sessions_agent_type", "agent_type"),
@@ -307,6 +308,8 @@ class SessionItemRecord(Base):
     provider_call_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     block_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     effective_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    exchange_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    exchange_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("agent_type", "session_id", "seq", name="uq_session_items_seq"),
@@ -328,6 +331,13 @@ class SessionItemRecord(Base):
             "assistant_turn_id",
             "provider_call_index",
             "block_index",
+        ),
+        Index(
+            "ix_session_items_exchange",
+            "agent_type",
+            "session_id",
+            "exchange_index",
+            "seq",
         ),
     )
 

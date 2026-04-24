@@ -536,3 +536,33 @@ async def test_get_recent_items_selects_window_by_seq_not_effective_seq(store, s
         f"recent should select by real seq, including the newly inserted summary; got seqs: {seqs}"
     )
     assert recent[-1]["kind"] == "context_summary"
+
+
+@pytest.mark.asyncio
+async def test_append_message_persists_exchange_fields(store, session_in_db) -> None:
+    """append_message 传入 exchange_id/exchange_index 时，item 应持久化这两个字段。"""
+    await store.append_message(
+        session_in_db.id,
+        "user",
+        "hello",
+        "sebastian",
+        exchange_id="ex-1",
+        exchange_index=1,
+    )
+
+    items = await store.get_timeline_items(session_in_db.id, "sebastian")
+
+    assert items[0]["exchange_id"] == "ex-1"
+    assert items[0]["exchange_index"] == 1
+
+
+@pytest.mark.asyncio
+async def test_allocate_exchange_increments_next_exchange_index(store, session_in_db) -> None:
+    """allocate_exchange 每次调用返回递增的 exchange_index 并生成唯一 exchange_id。"""
+    ex_id1, ex_idx1 = await store.allocate_exchange(session_in_db.id, "sebastian")
+    ex_id2, ex_idx2 = await store.allocate_exchange(session_in_db.id, "sebastian")
+
+    assert ex_idx1 == 1
+    assert ex_idx2 == 2
+    assert ex_id1 != ex_id2
+    assert len(ex_id1) == 26  # ULID length

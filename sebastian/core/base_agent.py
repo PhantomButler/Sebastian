@@ -474,11 +474,20 @@ class BaseAgent(ABC):
 
         messages.append({"role": "user", "content": user_message})
 
+        exchange_id: str | None = None
+        exchange_index: int | None = None
+        if self._db_factory is not None:
+            exchange_id, exchange_index = await self._session_store.allocate_exchange(
+                session_id, agent_context
+            )
+
         await self._session_store.append_message(
             session_id,
             "user",
             user_message,
             agent_type=agent_context,
+            exchange_id=exchange_id,
+            exchange_index=exchange_index,
         )
 
         current_stream = asyncio.create_task(
@@ -488,6 +497,8 @@ class BaseAgent(ABC):
                 task_id=task_id,
                 agent_context=agent_context,
                 thinking_effort=thinking_effort_for_llm,
+                exchange_id=exchange_id,
+                exchange_index=exchange_index,
             )
         )
         self._active_streams[session_id] = current_stream
@@ -526,6 +537,8 @@ class BaseAgent(ABC):
                             (f"{partial}\n\n[用户中断]" if cancel_intent == "cancel" else partial),
                             agent_type=agent_context,
                             blocks=pending_blocks if pending_blocks else None,
+                            exchange_id=exchange_id,
+                            exchange_index=exchange_index,
                         )
                     except Exception:
                         logger.warning("Failed to flush partial text on cancel", exc_info=True)
@@ -557,6 +570,8 @@ class BaseAgent(ABC):
         task_id: str | None,
         agent_context: str,
         thinking_effort: str | None = None,
+        exchange_id: str | None = None,
+        exchange_index: int | None = None,
     ) -> str:
         full_text = ""
         assistant_blocks: list[dict[str, Any]] = []
@@ -782,6 +797,8 @@ class BaseAgent(ABC):
                         event.full_text,
                         agent_type=agent_context,
                         blocks=assistant_blocks if assistant_blocks else None,
+                        exchange_id=exchange_id,
+                        exchange_index=exchange_index,
                     )
                     await self._publish(
                         session_id,
@@ -810,6 +827,8 @@ class BaseAgent(ABC):
                             full_text,
                             agent_type=agent_context,
                             blocks=assistant_blocks if assistant_blocks else None,
+                            exchange_id=exchange_id,
+                            exchange_index=exchange_index,
                         )
                     except Exception:
                         logger.warning("Failed to flush blocks on external cancel", exc_info=True)
