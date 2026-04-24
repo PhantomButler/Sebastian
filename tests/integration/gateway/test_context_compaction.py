@@ -317,10 +317,11 @@ def test_compaction_status_unknown_session_returns_404(client) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_compact_session_dry_run_returns_dry_run_status_and_no_summary(client) -> None:
-    """POST /compact with dry_run=true returns status='dry_run' and summary_item_id=None.
+def test_compact_session_dry_run_forwards_flag_and_returns_status(client) -> None:
+    """Verifies the gateway forwards dry_run=True and returns the worker's dry_run response shape.
 
-    The worker must not insert a context_summary item.
+    DB non-persistence is covered by the unit test:
+    tests/unit/context/test_compaction.py::test_worker_dry_run_skips_llm_and_returns_dry_run_status
     """
     import sebastian.gateway.state as state
     from sebastian.context.compaction import CompactionResult
