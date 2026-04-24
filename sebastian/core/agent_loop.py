@@ -5,7 +5,6 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
-from sebastian.context.usage import TokenUsage
 from sebastian.core.protocols import ToolSpecProvider
 from sebastian.core.stream_events import (
     LLMStreamEvent,
@@ -120,7 +119,6 @@ class AgentLoop:
             # Anthropic: list of tool_result blocks; OpenAI: list of role:tool messages
             tool_results_for_next: list[dict[str, Any]] = []
             stop_reason = "end_turn"
-            provider_call_usage: TokenUsage | None = None
 
             async for event in self._provider.stream(
                 system=system_prompt,
@@ -137,7 +135,6 @@ class AgentLoop:
 
                 if isinstance(event, ProviderCallEnd):
                     stop_reason = event.stop_reason
-                    provider_call_usage = event.usage  # noqa: F841  # reserved for Task 2 (context compaction)
                     continue
 
                 if isinstance(event, ThinkingBlockStop):

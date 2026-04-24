@@ -172,7 +172,7 @@ class OpenAICompatProvider(LLMProvider):
                         tool_calls_raw[idx]["arguments"] += tc.function.arguments
 
             if finish is not None:
-                break
+                stop_reason = finish
 
         # Flush open text/thinking blocks
         if think_block_started and self._thinking_format in ("reasoning_content", "think_tags"):

@@ -237,7 +237,7 @@ class SessionStore:
                         f"Session {session_id!r} (agent={agent_type!r}) not found"
                     )
                 exchange_index: int = row[0]
-        exchange_id = str(ULID())
+                exchange_id = str(ULID())
         return exchange_id, exchange_index
 
     async def append_message(

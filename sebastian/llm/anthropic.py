@@ -166,14 +166,12 @@ class AnthropicProvider(LLMProvider):
                     )
 
             final = await stream.get_final_message()
-            usage = getattr(final, "usage", None)
-            token_usage: TokenUsage | None = None
-            if usage is not None:
-                token_usage = TokenUsage(
-                    input_tokens=getattr(usage, "input_tokens", None),
-                    output_tokens=getattr(usage, "output_tokens", None),
-                    cache_creation_input_tokens=getattr(usage, "cache_creation_input_tokens", None),
-                    cache_read_input_tokens=getattr(usage, "cache_read_input_tokens", None),
-                    raw=usage.model_dump() if hasattr(usage, "model_dump") else None,
-                )
+            usage = final.usage
+            token_usage = TokenUsage(
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_creation_input_tokens=getattr(usage, "cache_creation_input_tokens", None),
+                cache_read_input_tokens=getattr(usage, "cache_read_input_tokens", None),
+                raw=usage.model_dump() if hasattr(usage, "model_dump") else None,
+            )
             yield ProviderCallEnd(stop_reason=final.stop_reason or "end_turn", usage=token_usage)
