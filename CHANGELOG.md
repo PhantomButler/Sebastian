@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+- 新增 session 上下文自动/手动压缩能力：provider token usage + 本地估算双阈值触发，保留完整 audit timeline，通过 `context_summary` 缩短 LLM 当前上下文；新增 `POST /api/v1/sessions/{id}/compact` 和 `GET /api/v1/sessions/{id}/compaction/status` 接口。
+- `session_items` 增加 `exchange_id` / `exchange_index` 边界字段；`sessions` 增加 `next_exchange_index` 计数器。
+
 ## [0.4.0] - 2026-04-23
 
 ### Added

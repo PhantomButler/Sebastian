@@ -37,6 +37,7 @@ Session 数据曾以文件系统为事实源（`~/.sebastian/sessions/{agent_typ
 - `task_count INTEGER`
 - `active_task_count INTEGER`
 - `next_item_seq INTEGER DEFAULT 1`：下一条 timeline item 的 session 内 seq。
+- `next_exchange_index INTEGER DEFAULT 1`：下一个可用 exchange 序号，从 1 开始单调递增，通过 `allocate_exchange` 原子递增。
 
 约束和索引：
 
@@ -69,6 +70,8 @@ session 内统一 timeline。不只保存 user/assistant message，也保存 thi
 - `provider_call_index INTEGER NULL`
 - `block_index INTEGER NULL`
 - `effective_seq INTEGER NULL`
+- `exchange_id TEXT NULL`：该 item 所属的 exchange ULID，标识一次用户输入及其全部 assistant/tool 输出。
+- `exchange_index INTEGER NULL`：session 内从 1 开始的用户交互序号，同一 exchange 内所有 item 相同。
 
 约束和索引：
 
@@ -78,6 +81,7 @@ session 内统一 timeline。不只保存 user/assistant message，也保存 thi
 - index: `(agent_type, session_id, created_at)`
 - index: `(agent_type, session_id, kind, seq)`
 - index: `(agent_type, session_id, assistant_turn_id, provider_call_index, block_index)`
+- index: `ix_session_items_exchange(agent_type, session_id, exchange_index, seq)`：支持按 exchange 范围查询，用于压缩范围选择。
 
 首期 `kind`：
 
@@ -286,11 +290,18 @@ Phase 1 采用 turn 内缓冲 + 边界批量 flush：
 通过 timeline 视图切换实现，不删除历史：
 
 1. 选择旧 item 范围，标记 `archived=true`。
-2. 插入 `kind="context_summary"` item，`effective_seq = source_seq_start`。
+2. 插入 `kind="context_summary"` item，`effective_seq = source_seq_start`（使 summary 在上下文视图中排序在被压缩范围的原始位置）。
 3. `get_context_timeline_items()` 只看到 summary 和后续未归档 item。
-4. `get_timeline_items(include_archived=True)` 仍能看到完整历史。
+4. `get_timeline_items(include_archived=True)` 仍能看到完整历史（archived 源 items 保留用于审计）。
 
-Phase 1 只定义视图，不实现压缩 worker。
+压缩由 `SessionContextCompactionWorker`（`sebastian/context/compaction.py`）编排，触发阈值：
+
+- provider 真实 usage 超过模型 context window 的 **70%** 时自动压缩。
+- 仅有本地估算时，超过 **65%** 自动压缩。
+- 自动压缩在 `TurnDone` 持久化后以后台任务运行，不阻塞 response stream。
+- 支持手动触发：`POST /api/v1/sessions/{id}/compact`（409 if active stream）。
+
+`SessionTimelineStore.compact_range()` 在单一事务内原子完成：archive 源 items + 插入 summary item。并发冲突（源 items 已 archived）返回 `already_compacted`。
 
 ## 已删除的历史包袱
 

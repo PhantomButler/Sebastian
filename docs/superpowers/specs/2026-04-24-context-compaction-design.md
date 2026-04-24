@@ -303,6 +303,8 @@ POST /api/v1/sessions/{session_id}/compact
 }
 ```
 
+`retain_recent_exchanges` 为 `int`，默认 `8`（非 nullable）。`dry_run` 默认 `false`：设为 `true` 时选择压缩范围但不调用 LLM 也不持久化，用于预检。
+
 响应：
 
 ```json
@@ -317,6 +319,8 @@ POST /api/v1/sessions/{session_id}/compact
 }
 ```
 
+`status` 实际取值：`"compacted" | "skipped" | "dry_run"`。`already_compacted` 并发冲突内部映射为 `status="skipped", reason="already_compacted"`，不单独暴露为 status 值。
+
 状态接口：
 
 ```http
@@ -327,14 +331,14 @@ GET /api/v1/sessions/{session_id}/compaction/status
 
 ```json
 {
-  "context_token_estimate": 56000,
-  "context_window": 128000,
-  "last_compacted_at": "2026-04-24T12:34:56Z",
+  "token_estimate": 56000,
   "last_summary_seq": 121,
   "compactable_exchange_count": 14,
   "retained_recent_exchanges": 8
 }
 ```
+
+实现备注：字段名为 `token_estimate`（非 `context_token_estimate`）；`context_window` 和 `last_compacted_at` 字段未实现，不在响应中。
 
 错误与跳过：
 
