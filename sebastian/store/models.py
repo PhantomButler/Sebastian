@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -282,7 +283,9 @@ class SessionRecord(Base):
     task_count: Mapped[int] = mapped_column(Integer, default=0)
     active_task_count: Mapped[int] = mapped_column(Integer, default=0)
     next_item_seq: Mapped[int] = mapped_column(Integer, default=1)
-    next_exchange_index: Mapped[int] = mapped_column(Integer, default=1)
+    next_exchange_index: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1")
+    )
 
     __table_args__ = (
         Index("ix_sessions_agent_type", "agent_type"),
