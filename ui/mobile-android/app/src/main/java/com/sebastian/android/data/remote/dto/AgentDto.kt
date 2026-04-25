@@ -25,7 +25,7 @@ data class AgentDto(
         displayName = displayName ?: agentType.replaceFirstChar { it.uppercase() },
         description = description,
         isOrchestrator = isOrchestrator,
-        boundProviderId = binding?.providerId,
+        boundProviderId = binding?.accountId,
         thinkingEffort = binding?.thinkingEffort.toThinkingEffort(),
         activeSessionCount = activeSessionCount,
         maxChildren = maxChildren ?: 0,

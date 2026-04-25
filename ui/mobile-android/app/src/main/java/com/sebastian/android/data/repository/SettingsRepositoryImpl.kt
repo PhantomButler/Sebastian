@@ -2,12 +2,9 @@ package com.sebastian.android.data.repository
 
 import com.sebastian.android.data.local.SecureTokenStore
 import com.sebastian.android.data.local.SettingsDataStore
-import com.sebastian.android.data.model.Provider
+import com.sebastian.android.data.model.*
 import com.sebastian.android.data.remote.ApiService
-import com.sebastian.android.data.remote.dto.LogConfigPatchDto
-import com.sebastian.android.data.remote.dto.LogStateDto
-import com.sebastian.android.data.remote.dto.MemorySettingsDto
-import com.sebastian.android.data.remote.dto.ProviderDto
+import com.sebastian.android.data.remote.dto.*
 import com.sebastian.android.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
@@ -64,7 +61,6 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateProvider(id: String, name: String, type: String, baseUrl: String?, apiKey: String?, model: String?, thinkingCapability: String?, isDefault: Boolean): Result<Provider> = runCatching {
-        // 只发送有值的字段，避免用 null 覆盖服务端已有数据（如 api_key）
         val body = buildMap<String, Any> {
             put("name", name)
             put("provider_type", type)
@@ -116,7 +112,6 @@ class SettingsRepositoryImpl @Inject constructor(
         try {
             apiService.logout()
         } catch (_: Exception) {
-            // 忽略 logout 网络错误，确保本地能清除
         }
         tokenStore.clearToken()
         _isLoggedIn.value = false
@@ -148,5 +143,111 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setMemoryEnabled(enabled: Boolean): Result<MemorySettingsDto> = runCatching {
         apiService.putMemorySettings(MemorySettingsDto(enabled = enabled))
+    }
+
+    override suspend fun getLlmCatalog(): Result<List<CatalogProvider>> = runCatching {
+        apiService.getLlmCatalog().providers.map { it.toDomain() }
+    }
+
+    override suspend fun getLlmAccounts(): Result<List<LlmAccount>> = runCatching {
+        apiService.getLlmAccounts().accounts.map { it.toDomain() }
+    }
+
+    override suspend fun createLlmAccount(
+        name: String,
+        catalogProviderId: String,
+        apiKey: String,
+        providerType: String?,
+        baseUrlOverride: String?,
+    ): Result<LlmAccount> = runCatching {
+        apiService.createLlmAccount(
+            LlmAccountCreateRequest(
+                name = name,
+                catalogProviderId = catalogProviderId,
+                apiKey = apiKey,
+                providerType = providerType,
+                baseUrlOverride = baseUrlOverride,
+            )
+        ).toDomain()
+    }
+
+    override suspend fun updateLlmAccount(
+        accountId: String,
+        name: String?,
+        apiKey: String?,
+        baseUrlOverride: String?,
+    ): Result<LlmAccount> = runCatching {
+        apiService.updateLlmAccount(
+            accountId,
+            LlmAccountUpdateRequest(name = name, apiKey = apiKey, baseUrlOverride = baseUrlOverride),
+        ).toDomain()
+    }
+
+    override suspend fun deleteLlmAccount(accountId: String): Result<Unit> = runCatching {
+        apiService.deleteLlmAccount(accountId)
+    }
+
+    override suspend fun getCustomModels(accountId: String): Result<List<CustomModel>> = runCatching {
+        apiService.getCustomModels(accountId).models.map { it.toDomain() }
+    }
+
+    override suspend fun createCustomModel(
+        accountId: String,
+        modelId: String,
+        displayName: String,
+        contextWindowTokens: Long,
+        thinkingCapability: String?,
+        thinkingFormat: String?,
+    ): Result<CustomModel> = runCatching {
+        apiService.createCustomModel(
+            accountId,
+            CustomModelCreateRequest(
+                modelId = modelId,
+                displayName = displayName,
+                contextWindowTokens = contextWindowTokens,
+                thinkingCapability = thinkingCapability,
+                thinkingFormat = thinkingFormat,
+            ),
+        ).toDomain()
+    }
+
+    override suspend fun updateCustomModel(
+        accountId: String,
+        modelRecordId: String,
+        modelId: String?,
+        displayName: String?,
+        contextWindowTokens: Long?,
+        thinkingCapability: String?,
+        thinkingFormat: String?,
+    ): Result<CustomModel> = runCatching {
+        apiService.updateCustomModel(
+            accountId,
+            modelRecordId,
+            CustomModelUpdateRequest(
+                modelId = modelId,
+                displayName = displayName,
+                contextWindowTokens = contextWindowTokens,
+                thinkingCapability = thinkingCapability,
+                thinkingFormat = thinkingFormat,
+            ),
+        ).toDomain()
+    }
+
+    override suspend fun deleteCustomModel(accountId: String, modelRecordId: String): Result<Unit> = runCatching {
+        apiService.deleteCustomModel(accountId, modelRecordId)
+    }
+
+    override suspend fun getDefaultBinding(): Result<AgentBinding?> = runCatching {
+        apiService.getDefaultBinding().toDomain()
+    }
+
+    override suspend fun setDefaultBinding(
+        accountId: String,
+        modelId: String,
+        thinkingEffort: String?,
+    ): Result<AgentBinding> = runCatching {
+        apiService.setDefaultBinding(
+            SetBindingRequest(accountId = accountId, modelId = modelId, thinkingEffort = thinkingEffort),
+        ).toDomain()
     }
 }
