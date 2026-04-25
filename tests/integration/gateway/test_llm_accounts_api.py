@@ -739,10 +739,14 @@ def test_delete_default_agent_binding_returns_400(client) -> None:
 
 
 def test_delete_nonexistent_agent_binding_returns_404(client) -> None:
-    """DELETE a truly nonexistent agent_type must still return 404 (guard doesn't over-block)."""
+    """DELETE a truly nonexistent agent_type must still return 404 (guard doesn't over-block).
+
+    Precondition: ``__nope_not_registered__`` is intentionally chosen to be unlike any real
+    agent_type so it cannot collide with `agent_registry` content under any seeding.
+    """
     http_client, token = client
     resp = http_client.delete(
-        "/api/v1/agents/nonexistent_agent/llm-binding",
+        "/api/v1/agents/__nope_not_registered__/llm-binding",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 404
