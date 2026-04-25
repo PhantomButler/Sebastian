@@ -113,7 +113,7 @@ fun AgentBindingEditorPage(
                 accounts = state.accounts,
                 selectedAccount = state.selectedAccount,
                 onSelect = vm::selectAccount,
-                onClear = vm::clearBinding,
+                onClear = if (state.isDefault) null else vm::clearBinding,
             )
 
             Spacer(Modifier.height(16.dp))
@@ -174,7 +174,7 @@ private fun AccountSelector(
     accounts: List<com.sebastian.android.data.model.LlmAccount>,
     selectedAccount: com.sebastian.android.data.model.LlmAccount?,
     onSelect: (String?) -> Unit,
-    onClear: () -> Unit,
+    onClear: (() -> Unit)?,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -202,7 +202,7 @@ private fun AccountSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            if (selectedAccount != null) {
+            if (selectedAccount != null && onClear != null) {
                 androidx.compose.material3.DropdownMenuItem(
                     text = {
                         Column {
