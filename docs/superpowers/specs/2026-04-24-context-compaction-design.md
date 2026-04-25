@@ -169,6 +169,15 @@ usage_hard_threshold = context_window * 0.85
 - 自动压缩作为后台任务运行，不阻塞 response stream。
 - 手动压缩立即执行，但要求该 session 当前没有 active stream。
 
+对应 `summary.payload.reason` 字段取值（自动触发统一加 `auto_` 前缀）：
+
+| 触发档 | reason 值 |
+|--------|-----------|
+| usage soft | `auto_usage_threshold` |
+| usage hard | `auto_usage_hard` |
+| estimate | `auto_estimate_threshold` |
+| 手动触发 | `manual` |
+
 ## 压缩范围选择
 
 压缩范围必须按完整 exchange 切分，不能按任意 item 切分。
@@ -260,7 +269,7 @@ summary_target_tokens = min(8192, max(2048, source_tokens * 0.20))
   "summary_token_estimate": 3200,
   "retained_recent_exchanges": 8,
   "model": "claude-...",
-  "reason": "auto_threshold"
+  "reason": "auto_usage_threshold"
 }
 ```
 
