@@ -407,6 +407,7 @@ Settings 首页保留两个入口，但调整文案和职责。
 - API key 创建必填；更新时省略保留、非空替换、`null` 或空字符串返回 `400`。
 - 删除 account 时，如果任何 binding 正在引用它，返回 `409`，要求用户先切换或清除相关 binding；未被引用的 account 可删除。
 - 删除 custom model 时，如果任何 binding 正在引用它，返回 `409`；未被引用的 custom model 可删除。
+- 更新 custom model 时，如果任何 binding 正在引用它，`model_id` 不允许变更并返回 `409`；`display_name`、`context_window_tokens`、`thinking_capability`、`thinking_format` 可更新，运行时继续按最新 metadata 解析并钳制 thinking effort。
 - 删除 custom account 时同时删除其未被引用的 custom models。由于 account 被引用时会先返回 `409`，不会产生悬空 binding。
 - 内置 catalog model 不能通过 API 删除；如果随版本移除导致 binding 悬空，运行时返回配置错误，Android 提示用户重新选择模型。
 
@@ -430,6 +431,7 @@ Settings 首页保留两个入口，但调整文案和职责。
 - Account API：被任何 binding 引用时删除返回 `409`；未被引用的 custom account 删除时级联删除其 custom models。
 - Custom model API：只允许 custom account、必填上下文窗口、同 account model ID 唯一。
 - Custom model API：被任何 binding 引用时删除返回 `409`。
+- Custom model API：被任何 binding 引用时变更 `model_id` 返回 `409`。
 - Binding API：保存 `account_id + model_id`，默认 binding 使用 `__default__`。
 - Registry：agent binding 优先；缺省 fallback `__default__`；无默认时报错。
 - Registry：内置模型从 catalog 解析，自定义模型从 DB 解析。
