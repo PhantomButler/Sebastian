@@ -1,3 +1,8 @@
+---
+integrated_to: core/context-compaction.md
+integrated_at: 2026-04-25
+---
+
 # 上下文自动压缩设计
 
 ## 背景

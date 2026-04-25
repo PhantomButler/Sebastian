@@ -27,22 +27,23 @@ AgentLoop 流式引擎与 SSE 事件协议。涵盖：
 
 ### [llm-provider.md](llm-provider.md) — LLM Provider 管理与 Thinking 控制
 
-LLM 多 Provider 抽象层 + Agent Binding + Thinking Effort 全链路设计。涵盖：
+LLM 三层架构（Catalog → Account → Binding）+ 多 Provider 抽象 + Thinking Effort 全链路设计。涵盖：
 
 - LLMProvider 抽象接口（单次调用职责、stream() 签名）
-- Anthropic 适配（SDK 事件 → LLMStreamEvent 映射）
-- OpenAI 兼容适配（thinking_format 三模式：None / reasoning_content / think_tags）
-- LLMProviderRecord 数据模型（api_key Fernet 加密、thinking_capability 字段）
-- AgentLLMBindingRecord 数据模型（agent_type PK、provider_id FK、thinking_effort）
-- LLMProviderRegistry（binding 表优先查询、ResolvedProvider 返回值、thinking 钳制）
-- AgentLoop / BaseAgent 集成（provider 依赖注入、per-turn live 生效）
-- Thinking Effort 控制：thinking_capability 五档能力模型、effort 翻译表、从 binding 表读取注入、多轮 thinking signature 修复
-- 前端 Thinking 迁移（移除 Composer ThinkButton → Agent Binding EditorPage 持久化配置）
-- Gateway CRUD 路由（Provider + Agent Binding）
+- Anthropic 适配（SDK 事件 → LLMStreamEvent 映射、TokenUsage 采集）
+- OpenAI 兼容适配（thinking_format 三模式、stream_options usage 采集）
+- 内置 Catalog JSON + Loader（provider/model 元数据、校验规则）
+- LLMAccountRecord（连接与凭据、catalog_provider_id / base_url_override）
+- LLMCustomModelRecord（自定义 provider 模型元数据）
+- AgentLLMBindingRecord（agent_type PK、account_id + model_id、thinking_effort）
+- LLMProviderRegistry 三层解析（binding → account → model_spec → ResolvedProvider）
+- Thinking Effort 控制：thinking_capability 五档能力模型、effort 翻译表、全链路透传
+- 前端 Binding 编辑页（account + model + effort 三级选择）
+- Gateway CRUD 路由（Catalog / Account / Custom Model / Binding 四组 API）
 
 | 版本 | 状态 | 最后更新 |
 |------|------|---------|
-| 2.0 | implemented | 2026-04-23 |
+| 3.0 | implemented | 2026-04-25 |
 
 ---
 
@@ -59,6 +60,26 @@ Agent 结构化 Prompt 构建体系。涵盖：
 | 版本 | 状态 | 最后更新 |
 |------|------|---------|
 | 1.0 | implemented | 2026-04-10 |
+
+---
+
+### [context-compaction.md](context-compaction.md) — 上下文自动压缩
+
+Session 短期上下文的运行时压缩系统。涵盖：
+
+- `sebastian/context/` 包结构（TokenUsage、TokenEstimator、ContextTokenMeter、CompactionWorker、prompts）
+- Exchange 字段语义与分配流程（exchange_id / exchange_index / next_exchange_index）
+- Provider Token Usage 归一化（Anthropic / OpenAI-compatible 映射）
+- 触发策略（usage 0.70/0.85、estimate 0.65 三档阈值）
+- 压缩范围选择（按完整 exchange 切分、保留最近 N 个、跳过不完整 tool chain）
+- Summary 契约（7-section Markdown handoff、memory-relevant facts）
+- Timeline 原子更新（compact_range 事务：archive 源记录 + 插入 context_summary）
+- Per-turn 模型窗口（context_window_resolver 动态解析，不再硬编码 200k）
+- API（POST /compact 手动压缩 + GET /compaction/status 状态查询）
+
+| 版本 | 状态 | 最后更新 |
+|------|------|---------|
+| 1.0 | implemented | 2026-04-25 |
 
 ---
 

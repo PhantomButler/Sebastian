@@ -19,12 +19,13 @@ Sebastian 的顶层设计：愿景、核心概念、技术栈、三层 Agent 架
 
 ### [core/](core/INDEX.md) — 核心运行时与基础设施
 
-AgentLoop 流式引擎、LLM Provider 抽象与 Thinking 控制、System Prompt 构造、日志系统。
+AgentLoop 流式引擎、LLM Provider 三层架构与 Thinking 控制、上下文自动压缩、System Prompt 构造、日志系统。
 
 | Spec | 摘要 |
 |------|------|
 | [runtime.md](core/runtime.md) | AgentLoop async generator 流式引擎、LLMStreamEvent 类型体系（含 ThinkingBlockStop duration_ms）、block_id 规范、BaseAgent streaming + 打断机制、Task 状态机、SSE 事件协议与帧格式 |
-| [llm-provider.md](core/llm-provider.md) | LLMProvider 抽象接口、Anthropic/OpenAI 双适配、api_key Fernet 加密、AgentLLMBindingRecord（thinking_effort）、Provider Registry（binding 表优先）、Thinking Effort 全链路（binding 注入 → Provider adapter 翻译）、前端迁移（ThinkButton → EditorPage）、Gateway 路由 |
+| [llm-provider.md](core/llm-provider.md) | LLM 三层架构（Catalog → Account → Binding）、LLMProvider 抽象接口、Anthropic/OpenAI 双适配 + TokenUsage 采集、api_key Fernet 加密、内置 Catalog JSON + Loader、LLMAccountRecord / LLMCustomModelRecord / AgentLLMBindingRecord 三表、Provider Registry 三层解析、Thinking Effort 五档能力模型 + 全链路透传、前端 Binding 编辑页、Gateway 四组 CRUD API |
+| [context-compaction.md](core/context-compaction.md) | Session 短期上下文运行时压缩：TokenUsage 归一化、TokenEstimator 本地估算、ContextTokenMeter 三档阈值、Exchange 字段与按轮次切分、Summary 7-section handoff 契约、compact_range 原子更新、per-turn 动态模型窗口、手动 / 自动压缩 API |
 | [system-prompt.md](core/system-prompt.md) | Sebastian 人设提示词、BaseAgent 结构化 prompt 构造体系（persona/tools/skills/agents/knowledge 五段式）、per-agent 工具与 Skill 白名单 |
 | [logging.md](core/logging.md) | 三文件日志架构（main/llm_stream/sse）、RotatingFileHandler 轮转策略、LogManager 热切换、Gateway debug API、App Settings UI 集成 |
 

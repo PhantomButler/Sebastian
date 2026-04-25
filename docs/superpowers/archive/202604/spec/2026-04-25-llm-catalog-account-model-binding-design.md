@@ -2,6 +2,8 @@
 version: "1.0"
 last_updated: 2026-04-25
 status: planned
+integrated_to: core/llm-provider.md
+integrated_at: 2026-04-25
 ---
 
 # LLM Catalog、Account 与模型绑定设计
