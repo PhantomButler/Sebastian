@@ -162,32 +162,32 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
     }
 
     fun selectAccount(accountId: String?) {
+        val prev = _uiState.value
+        val account = prev.accounts.firstOrNull { it.id == accountId }
+        val accountChanged = prev.selectedAccount?.id != accountId
+        val hadConfig = prev.thinkingEffort != ThinkingEffort.OFF
+
+        // Apply selection synchronously; models will be resolved asynchronously.
+        _uiState.update {
+            it.copy(
+                selectedAccount = account,
+                availableModels = emptyList(),
+                selectedModel = null,
+                thinkingEffort = ThinkingEffort.OFF,
+            )
+        }
+        if (accountChanged && hadConfig) {
+            _events.tryEmit(EditorEvent.Snackbar("Thinking config reset for new account"))
+        }
+
         viewModelScope.launch {
-            val prev = _uiState.value
-            val account = prev.accounts.firstOrNull { it.id == accountId }
-            val accountChanged = prev.selectedAccount?.id != accountId
-            val hadConfig = prev.thinkingEffort != ThinkingEffort.OFF
-
-            val models = if (account != null) {
-                resolveModelsForAccount(account, prev.catalogProviders)
-            } else {
-                emptyList()
-            }
-
-            if (account?.catalogProviderId == "custom" && models.isEmpty()) {
+            if (account == null) return@launch
+            val models = resolveModelsForAccount(account, prev.catalogProviders)
+            // If user picked a different account while models were loading, discard stale result.
+            if (_uiState.value.selectedAccount?.id != account.id) return@launch
+            _uiState.update { it.copy(availableModels = models) }
+            if (account.catalogProviderId == "custom" && models.isEmpty()) {
                 _events.tryEmit(EditorEvent.Snackbar("Add a custom model before binding this account"))
-            }
-
-            _uiState.update {
-                it.copy(
-                    selectedAccount = account,
-                    availableModels = models,
-                    selectedModel = null,
-                    thinkingEffort = ThinkingEffort.OFF,
-                )
-            }
-            if (accountChanged && hadConfig) {
-                _events.tryEmit(EditorEvent.Snackbar("Thinking config reset for new account"))
             }
         }
     }
@@ -224,7 +224,7 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
             )
         }
         viewModelScope.launch {
-            clearPersistedBinding(_uiState.value)
+            clearPersistedBinding(s)
         }
     }
 
@@ -233,10 +233,8 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
         schedulePut()
     }
 
-    private fun isPersistableSelection(s: EditorUiState): Boolean {
-        if (s.isDefault) return s.selectedAccount != null && s.selectedModel != null
-        return s.selectedAccount != null && s.selectedModel != null
-    }
+    private fun isPersistableSelection(s: EditorUiState): Boolean =
+        s.selectedAccount != null && s.selectedModel != null
 
     private suspend fun persistBinding(s: EditorUiState): Result<AgentBinding> {
         val effort = s.thinkingEffort.toApiString()
