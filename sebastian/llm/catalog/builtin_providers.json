@@ -76,7 +76,7 @@
     },
     {
       "id": "zhipu",
-      "display_name": "智谱",
+      "display_name": "Zhi Pu Coding",
       "provider_type": "anthropic",
       "base_url": "https://open.bigmodel.cn/api/anthropic",
       "models": [
@@ -90,6 +90,13 @@
         {
           "id": "glm-5v-turbo",
           "display_name": "GLM-5V-Turbo",
+          "context_window_tokens": 200000,
+          "thinking_capability": "toggle",
+          "thinking_format": null
+        },
+        {
+          "id": "glm-4.7",
+          "display_name": "GLM-4.7",
           "context_window_tokens": 200000,
           "thinking_capability": "toggle",
           "thinking_format": null
