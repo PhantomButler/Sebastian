@@ -9,7 +9,6 @@ from sqlalchemy import select
 
 from sebastian.gateway.auth import require_auth
 from sebastian.llm.catalog import load_builtin_catalog
-from sebastian.llm.crypto import decrypt
 
 router = APIRouter(tags=["llm-accounts"])
 
@@ -69,7 +68,7 @@ def _account_to_dict(record: Any) -> JSONDict:
         "name": record.name,
         "catalog_provider_id": record.catalog_provider_id,
         "provider_type": record.provider_type,
-        "api_key": decrypt(record.api_key_enc),
+        "has_api_key": bool(record.api_key_enc),
         "base_url_override": record.base_url_override,
         "created_at": record.created_at.isoformat() if record.created_at else None,
         "updated_at": record.updated_at.isoformat() if record.updated_at else None,
@@ -87,6 +86,32 @@ def _custom_model_to_dict(record: Any) -> JSONDict:
         "thinking_format": record.thinking_format,
         "created_at": record.created_at.isoformat(),
         "updated_at": record.updated_at.isoformat(),
+    }
+
+
+async def _build_resolved_metadata(registry: Any, account_id: str, model_id: str) -> JSONDict:
+    """Build resolved metadata for a binding response."""
+    account = await registry.get_account(account_id)
+    if account is None:
+        return {}
+    try:
+        model_spec = await registry.get_model_spec(account, model_id)
+    except (KeyError, RuntimeError):
+        return {}
+    provider_display_name = account.catalog_provider_id
+    if account.catalog_provider_id != "custom":
+        try:
+            catalog = load_builtin_catalog()
+            provider_spec = catalog.get_provider(account.catalog_provider_id)
+            provider_display_name = provider_spec.display_name
+        except KeyError:
+            pass
+    return {
+        "account_name": account.name,
+        "provider_display_name": provider_display_name,
+        "model_display_name": model_spec.display_name,
+        "context_window_tokens": model_spec.context_window_tokens,
+        "thinking_capability": model_spec.thinking_capability,
     }
 
 
@@ -315,6 +340,12 @@ async def create_custom_model(
             detail="Custom models can only be added to custom accounts",
         )
 
+    if body.context_window_tokens < 1000 or body.context_window_tokens > 10_000_000:
+        raise HTTPException(
+            status_code=400,
+            detail="context_window_tokens must be between 1,000 and 10,000,000",
+        )
+
     # Enforce unique (account_id, model_id)
     async with state.db_factory() as session:
         existing = await session.execute(
@@ -365,10 +396,15 @@ async def update_custom_model(
         if record is None:
             raise HTTPException(status_code=404, detail="Custom model not found")
 
-        if record.account_id != account_id:
-            raise HTTPException(status_code=404, detail="Custom model not found")
-
         data = body.model_dump(exclude_unset=True)
+
+        if "context_window_tokens" in data:
+            cwt = data["context_window_tokens"]
+            if cwt is not None and (cwt < 1000 or cwt > 10_000_000):
+                raise HTTPException(
+                    status_code=400,
+                    detail="context_window_tokens must be between 1,000 and 10,000,000",
+                )
 
         # If model_id changes, check bindings
         if "model_id" in data and data["model_id"] != record.model_id:
@@ -448,12 +484,17 @@ async def get_default_binding(
             "account_id": None,
             "model_id": None,
             "thinking_effort": None,
+            "resolved": {},
         }
+    resolved = await _build_resolved_metadata(
+        state.llm_registry, binding.account_id, binding.model_id
+    )
     return {
         "agent_type": binding.agent_type,
         "account_id": binding.account_id,
         "model_id": binding.model_id,
         "thinking_effort": binding.thinking_effort,
+        "resolved": resolved,
     }
 
 
@@ -483,9 +524,13 @@ async def set_default_binding(
         body.model_id,
         thinking_effort=effort,
     )
+    resolved = await _build_resolved_metadata(
+        state.llm_registry, binding.account_id, binding.model_id
+    )
     return {
         "agent_type": binding.agent_type,
         "account_id": binding.account_id,
         "model_id": binding.model_id,
         "thinking_effort": binding.thinking_effort,
+        "resolved": resolved,
     }

@@ -104,7 +104,7 @@ def test_create_builtin_account(client) -> None:
     assert data["name"] == "Anthropic Home"
     assert data["catalog_provider_id"] == "anthropic"
     assert data["provider_type"] == "anthropic"
-    assert data["api_key"] == "sk-ant-fake"
+    assert data["has_api_key"] is True
     assert data["base_url_override"] is None
     assert "id" in data
 
@@ -204,7 +204,7 @@ def test_update_account_api_key(client) -> None:
         headers={"Authorization": f"Bearer {token}"},
     )
     assert upd.status_code == 200
-    assert upd.json()["api_key"] == "sk-new"
+    assert upd.json()["has_api_key"] is True
 
 
 def test_delete_account_unbound(client) -> None:
@@ -407,3 +407,89 @@ def test_create_account_rejects_invalid_base_url(client) -> None:
     )
     assert resp.status_code == 400
     assert "base_url" in resp.json()["detail"]
+
+
+def test_custom_model_model_id_change_returns_409_when_referenced(client) -> None:
+    http_client, token = client
+
+    account = http_client.post(
+        "/api/v1/llm-accounts",
+        json={
+            "name": "Custom 409 Test",
+            "catalog_provider_id": "custom",
+            "api_key": "sk-custom",
+            "provider_type": "openai",
+            "base_url_override": "https://custom.api.com/v1",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert account.status_code == 201
+    account_id = account.json()["id"]
+
+    model = http_client.post(
+        f"/api/v1/llm-accounts/{account_id}/models",
+        json={
+            "model_id": "my-model-v1",
+            "display_name": "My Model V1",
+            "context_window_tokens": 32000,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert model.status_code == 201
+    model_record_id = model.json()["id"]
+
+    http_client.put(
+        "/api/v1/llm-bindings/default",
+        json={"account_id": account_id, "model_id": "my-model-v1"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    resp = http_client.put(
+        f"/api/v1/llm-accounts/{account_id}/models/{model_record_id}",
+        json={"model_id": "my-model-v2"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+    assert "binding" in resp.json()["detail"].lower()
+
+
+def test_custom_model_delete_returns_409_when_referenced(client) -> None:
+    http_client, token = client
+
+    account = http_client.post(
+        "/api/v1/llm-accounts",
+        json={
+            "name": "Custom Delete 409",
+            "catalog_provider_id": "custom",
+            "api_key": "sk-custom2",
+            "provider_type": "openai",
+            "base_url_override": "https://custom2.api.com/v1",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert account.status_code == 201
+    account_id = account.json()["id"]
+
+    model = http_client.post(
+        f"/api/v1/llm-accounts/{account_id}/models",
+        json={
+            "model_id": "bound-model",
+            "display_name": "Bound Model",
+            "context_window_tokens": 64000,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert model.status_code == 201
+    model_record_id = model.json()["id"]
+
+    http_client.put(
+        "/api/v1/llm-bindings/default",
+        json={"account_id": account_id, "model_id": "bound-model"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    resp = http_client.delete(
+        f"/api/v1/llm-accounts/{account_id}/models/{model_record_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409

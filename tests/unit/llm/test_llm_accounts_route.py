@@ -350,10 +350,11 @@ def test_default_binding_set_validates_account(
     assert resp.status_code == 400
 
 
-def test_account_to_dict_decrypts_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    from sebastian.llm.crypto import encrypt
-
-    enc = encrypt("secret-key")
-    record = _make_account(api_key_enc=enc)
+def test_account_to_dict_masks_api_key() -> None:
+    record = _make_account(api_key_enc="enc-key")
     result = _account_to_dict(record)
-    assert result["api_key"] == "secret-key"
+    assert result["has_api_key"] is True
+
+    record_empty = _make_account(api_key_enc="")
+    result_empty = _account_to_dict(record_empty)
+    assert result_empty["has_api_key"] is False
