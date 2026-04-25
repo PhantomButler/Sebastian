@@ -9,6 +9,8 @@
 - `GET/POST/PUT/DELETE /api/v1/llm-providers` 全部替换为新的 Account + Catalog + CustomModel + Binding API（见下方 Added）
 
 ### Fixed
+- Android Settings: LLM 连接列表添加后返回不刷新 — 改用 LifecycleResumeEffect 每次回前台重新拉取。
+- Android Settings: Agent LLM Bindings 列表非默认项 subtitle 硬编码"使用默认模型" — 现在显示真实绑定的模型名称与账户名（无绑定时回退默认文本）。
 - 修复 LLM 绑定编辑页打开时误清空 Agent 绑定的问题。
 - 修复 Memory component 模型绑定读写到错误接口的问题。
 - 修复自定义 LLM account/model 可保存非法配置并在运行时失败的问题。
@@ -38,6 +40,8 @@
 - 新增 `sebastian/context/README.md` 模块文档与 `sebastian/README.md` 顶层 `context/` 索引
 
 ### Changed
+- `GET /agents` 与 `GET /memory/components` 列表 binding 节点新增 `resolved`（account_name / model_display_name / context_window_tokens / thinking_capability），账户或模型缺失时降级为空对象。
+- Android Settings: Agent Binding Editor 顶部标题改用列表传入的 displayName（如 "Memory Extractor"），selector 改为悬浮卡片样式（与 LLM 连接表单一致）。
 - `sebastian/llm/registry.py` 完全重写：resolution chain 为 agent_type → binding → account → model_spec → instantiate
 - `sebastian/gateway/routes/agents.py` 和 `memory_components.py` 绑定字段从 `provider_id` 改为 `account_id + model_id`
 - `sebastian/gateway/routes/llm_providers.py` 已删除，由 `llm_accounts.py` 替代
