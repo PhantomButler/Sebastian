@@ -17,6 +17,7 @@ from sebastian.llm.catalog import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _minimal_model(**overrides: object) -> dict:
     base: dict = {
         "id": "test-model",
@@ -97,9 +98,7 @@ class TestLoadCatalogFromPath:
         with pytest.raises(KeyError):
             catalog.get_provider("nonexistent")
 
-    def test_get_model_raises_keyerror_for_unknown_model(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_model_raises_keyerror_for_unknown_model(self, tmp_path: Path) -> None:
         path = _write_catalog(tmp_path, _make_catalog())
         catalog = load_catalog_from_path(path)
 
