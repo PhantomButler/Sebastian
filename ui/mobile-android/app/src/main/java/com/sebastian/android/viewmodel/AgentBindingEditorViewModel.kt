@@ -320,6 +320,12 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
         putJob = viewModelScope.launch {
             delay(300)
             val current = _uiState.value
+            if (!isPersistableSelection(current) ||
+                (current.isDefault && (current.selectedAccount == null || current.selectedModel == null))) {
+                putPending = false
+                _uiState.update { it.copy(isSaving = false) }
+                return@launch
+            }
             _uiState.update { it.copy(isSaving = true) }
 
             val r = persistBinding(current)

@@ -452,3 +452,131 @@ def test_create_custom_model_rejects_invalid_thinking_format(
     )
     assert resp.status_code == 400
     assert "thinking_format" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Fix 3: custom model rename uniqueness (unit tests)
+# ---------------------------------------------------------------------------
+
+
+def _make_session_with_results(*scalar_results: Any):
+    """
+    Returns a fake async context-manager session whose consecutive execute()
+    calls return scalar_one_or_none() values from *scalar_results in order.
+    After the list is exhausted, returns None for any further call.
+    """
+
+    class _Result:
+        def __init__(self, value: Any) -> None:
+            self._value = value
+
+        def scalar_one_or_none(self) -> Any:
+            return self._value
+
+        def scalars(self) -> "_Result":
+            return self
+
+        def all(self) -> list:
+            return [] if self._value is None else [self._value]
+
+    class _Session:
+        def __init__(self) -> None:
+            self._results = list(scalar_results)
+
+        async def __aenter__(self) -> "_Session":
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            pass
+
+        async def execute(self, stmt: Any) -> _Result:
+            if self._results:
+                return _Result(self._results.pop(0))
+            return _Result(None)
+
+        async def commit(self) -> None:
+            pass
+
+        def add(self, obj: Any) -> None:
+            pass
+
+        async def refresh(self, obj: Any) -> None:
+            pass
+
+        async def delete(self, obj: Any) -> None:
+            pass
+
+    factory = MagicMock(return_value=_Session())
+    return factory
+
+
+def test_update_custom_model_rename_to_existing_same_account_returns_409(
+    mock_registry: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Renaming a model to an already-taken model_id under the same account → 409."""
+    existing_model = _make_custom_model(id="cm1", model_id="old-name")
+    duplicate_model = _make_custom_model(id="cm2", model_id="new-name")
+
+    # execute calls in update_custom_model:
+    # 1st: fetch the record being updated (returns existing_model)
+    # 2nd: uniqueness check for new model_id (returns duplicate_model → conflict!)
+    session_factory = _make_session_with_results(existing_model, duplicate_model)
+
+    import sebastian.gateway.state as state
+
+    monkeypatch.setattr(state, "llm_registry", mock_registry)
+    monkeypatch.setattr(state, "db_factory", session_factory, raising=False)
+
+    from sebastian.gateway.auth import require_auth
+    from sebastian.gateway.routes.llm_accounts import router
+
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    app.dependency_overrides[require_auth] = lambda: {"sub": "owner"}
+    c = TestClient(app)
+
+    resp = c.put(
+        "/api/v1/llm-accounts/acc1/models/cm1",
+        json={"model_id": "new-name"},
+    )
+    assert resp.status_code == 409
+    assert "already exists" in resp.json()["detail"]
+
+
+def test_update_custom_model_rename_to_new_id_returns_200(
+    mock_registry: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Renaming a model to a brand-new model_id → 200 (no conflict)."""
+    existing_model = _make_custom_model(id="cm1", model_id="old-name")
+
+    # execute calls:
+    # 1st: fetch the record (returns existing_model)
+    # 2nd: uniqueness check (returns None → no conflict)
+    # 3rd: bindings check (returns None → not bound)
+    session_factory = _make_session_with_results(existing_model, None, None)
+
+    import sebastian.gateway.state as state
+
+    monkeypatch.setattr(state, "llm_registry", mock_registry)
+    monkeypatch.setattr(state, "db_factory", session_factory, raising=False)
+
+    from sebastian.gateway.auth import require_auth
+    from sebastian.gateway.routes.llm_accounts import router
+
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    app.dependency_overrides[require_auth] = lambda: {"sub": "owner"}
+    c = TestClient(app)
+
+    resp = c.put(
+        "/api/v1/llm-accounts/acc1/models/cm1",
+        json={"model_id": "brand-new-name"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["model_id"] == "brand-new-name"

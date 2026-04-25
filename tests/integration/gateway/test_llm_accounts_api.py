@@ -627,6 +627,106 @@ def test_update_custom_model_rejects_invalid_thinking_format(client) -> None:
     assert "thinking_format" in resp.json()["detail"]
 
 
+def test_rename_custom_model_to_duplicate_model_id_same_account_returns_409(client) -> None:
+    """Renaming model_id to one that already exists under the same account → 409."""
+    http_client, token = client
+
+    account = http_client.post(
+        "/api/v1/llm-accounts",
+        json={
+            "name": "Rename 409 Test",
+            "catalog_provider_id": "custom",
+            "api_key": "sk-custom",
+            "provider_type": "openai",
+            "base_url_override": "https://rename-test.api.com/v1",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert account.status_code == 201
+    account_id = account.json()["id"]
+
+    model_a = http_client.post(
+        f"/api/v1/llm-accounts/{account_id}/models",
+        json={"model_id": "model-alpha", "display_name": "Alpha", "context_window_tokens": 32000},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert model_a.status_code == 201
+    mid_a = model_a.json()["id"]
+
+    model_b = http_client.post(
+        f"/api/v1/llm-accounts/{account_id}/models",
+        json={"model_id": "model-beta", "display_name": "Beta", "context_window_tokens": 32000},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert model_b.status_code == 201
+
+    # Rename model-alpha → model-beta (already taken by another model)
+    resp = http_client.put(
+        f"/api/v1/llm-accounts/{account_id}/models/{mid_a}",
+        json={"model_id": "model-beta"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+    assert "already exists" in resp.json()["detail"]
+
+
+def test_rename_custom_model_to_model_id_of_different_account_returns_200(client) -> None:
+    """Renaming model_id to a name used under a DIFFERENT account → 200 (no conflict)."""
+    http_client, token = client
+
+    account_x = http_client.post(
+        "/api/v1/llm-accounts",
+        json={
+            "name": "Account X",
+            "catalog_provider_id": "custom",
+            "api_key": "sk-x",
+            "provider_type": "openai",
+            "base_url_override": "https://account-x.api.com/v1",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert account_x.status_code == 201
+    aid_x = account_x.json()["id"]
+
+    account_y = http_client.post(
+        "/api/v1/llm-accounts",
+        json={
+            "name": "Account Y",
+            "catalog_provider_id": "custom",
+            "api_key": "sk-y",
+            "provider_type": "openai",
+            "base_url_override": "https://account-y.api.com/v1",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert account_y.status_code == 201
+
+    # model-shared exists under account X
+    http_client.post(
+        f"/api/v1/llm-accounts/{aid_x}/models",
+        json={"model_id": "model-shared", "display_name": "Shared", "context_window_tokens": 32000},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    # model-unique exists under account Y; rename it to model-shared (no conflict — different account)
+    aid_y = account_y.json()["id"]
+    model_y = http_client.post(
+        f"/api/v1/llm-accounts/{aid_y}/models",
+        json={"model_id": "model-unique", "display_name": "Unique", "context_window_tokens": 32000},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert model_y.status_code == 201
+    mid_y = model_y.json()["id"]
+
+    resp = http_client.put(
+        f"/api/v1/llm-accounts/{aid_y}/models/{mid_y}",
+        json={"model_id": "model-shared"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["model_id"] == "model-shared"
+
+
 def test_custom_model_delete_returns_409_when_referenced(client) -> None:
     http_client, token = client
 

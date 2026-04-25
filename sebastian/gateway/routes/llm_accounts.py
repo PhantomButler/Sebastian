@@ -461,8 +461,23 @@ async def update_custom_model(
         if "thinking_format" in data:
             data["thinking_format"] = _validate_thinking_format(data["thinking_format"])
 
-        # If model_id changes, check bindings
+        # If model_id changes, check uniqueness and bindings
         if "model_id" in data and data["model_id"] != record.model_id:
+            # Check that the new model_id doesn't already exist for this account
+            dup_result = await session.execute(
+                select(LLMCustomModelRecord).where(
+                    LLMCustomModelRecord.account_id == account_id,
+                    LLMCustomModelRecord.model_id == data["model_id"],
+                    LLMCustomModelRecord.id != model_record_id,
+                )
+            )
+            if dup_result.scalar_one_or_none() is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Model {data['model_id']!r} already exists for this account",
+                )
+
+            # Check that the old model_id is not referenced by bindings
             bind_result = await session.execute(
                 select(AgentLLMBindingRecord).where(
                     AgentLLMBindingRecord.account_id == account_id,

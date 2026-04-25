@@ -313,4 +313,43 @@ class AgentBindingEditorViewModelTest {
 
         verify(settingsRepo, never()).setDefaultBinding(anyOrNull(), anyOrNull(), anyOrNull())
     }
+
+    @Test
+    fun `debounce race - account switch during delay suppresses stale PUT`() = runTest(dispatcher) {
+        // Two accounts, each with their own models under "anthropic" catalog
+        val acc1 = account(id = "acc-1")
+        val acc2 = account(id = "acc-2", name = "Account 2")
+        val catalog = catalogProvider(
+            models = listOf(
+                CatalogModel("model-a", "Model A", 100_000L, ThinkingCapability.NONE, null),
+            ),
+        )
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(
+            Result.success(binding(accountId = "acc-1", modelId = "model-a"))
+        )
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(
+            Result.success(listOf(acc1, acc2))
+        )
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(
+            Result.success(listOf(catalog))
+        )
+
+        val vm = makeVm("forge")
+        vm.load()
+        advanceUntilIdle()
+
+        // User selects a model → schedules PUT with 300ms debounce
+        vm.selectModel("model-a")
+
+        // Before the 300ms window elapses, user switches account (clears selectedModel)
+        dispatcher.scheduler.advanceTimeBy(100)
+        vm.selectAccount("acc-2")
+
+        // Now advance past the original 300ms debounce window
+        dispatcher.scheduler.advanceTimeBy(350)
+        advanceUntilIdle()
+
+        // The stale PUT should NOT have fired — selectedModel was null after account switch
+        verify(agentRepo, never()).setAgentBinding(any(), anyOrNull(), anyOrNull(), anyOrNull())
+    }
 }

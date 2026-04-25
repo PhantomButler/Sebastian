@@ -49,6 +49,8 @@ class SettingsViewModelTest {
         whenever(repository.currentProvider).thenReturn(currentProviderFlow)
         whenever(repository.isLoggedIn).thenReturn(isLoggedInFlow)
         wheneverBlocking { repository.getProviders() }.thenReturn(Result.success(emptyList()))
+        wheneverBlocking { repository.getLlmCatalog() }.thenReturn(Result.success(emptyList()))
+        wheneverBlocking { repository.getLlmAccounts() }.thenReturn(Result.success(emptyList()))
         viewModel = SettingsViewModel(repository, dispatcher)
         dispatcher.scheduler.advanceTimeBy(200)
     }
