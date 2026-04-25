@@ -8,6 +8,11 @@
 - LLM 配置从单行 `LLMProviderRecord` 迁移为三层 Catalog → Account → Binding 架构；旧 `llm_providers` 表和 API 已移除，需清空 DB 重建
 - `GET/POST/PUT/DELETE /api/v1/llm-providers` 全部替换为新的 Account + Catalog + CustomModel + Binding API（见下方 Added）
 
+### Fixed
+- 修复 LLM 绑定编辑页打开时误清空 Agent 绑定的问题。
+- 修复 Memory component 模型绑定读写到错误接口的问题。
+- 修复自定义 LLM account/model 可保存非法配置并在运行时失败的问题。
+
 ### Added
 - 新增 session 上下文自动/手动压缩能力：provider token usage + 本地估算双阈值触发，保留完整 audit timeline，通过 `context_summary` 缩短 LLM 当前上下文；新增 `POST /api/v1/sessions/{id}/compact` 和 `GET /api/v1/sessions/{id}/compaction/status` 接口。
 - `session_items` 增加 `exchange_id` / `exchange_index` 边界字段；`sessions` 增加 `next_exchange_index` 计数器。

@@ -81,7 +81,13 @@ Anthropic 旧版 effort 模式的 budget_tokens 映射写在 `AnthropicProvider.
 
 为保证 `effort=high` 始终可用，`llm_max_tokens` 默认值已设为 **32000**（> 24576）。通过 `SEBASTIAN_LLM_MAX_TOKENS` 下调到 < 24577 时，选择 `high` 档位将稳定触发上述 ValueError。
 
-UI 层需在 clamp 规则中保证传入 Provider 的 effort 始终合法（见 `ui/mobile/src/store/composer.ts` 的 `clampAllToCapability`）。
+UI 层需在 clamp 规则中保证传入 Provider 的 effort 始终合法（见 Android `AgentBindingEditorViewModel` 的 effort clamp 逻辑）。
+
+**API 层校验**：`POST/PUT /llm/accounts` 和 `POST/PUT /llm/custom-models` 会对以下字段执行枚举验证，非法值返回 HTTP 400：
+- `provider_type`：必须是 `SUPPORTED_PROVIDER_TYPES` 中的值（`anthropic` / `openai`）
+- `thinking_capability`：必须是 `SUPPORTED_THINKING_CAPABILITIES` 中的值（`none` / `toggle` / `effort` / `adaptive` / `always_on`）
+- `thinking_format`：必须是 `SUPPORTED_THINKING_FORMATS` 中的值（`reasoning_content` / `think_tags`，或留空）
+- 自定义 Account（`catalog_provider_id="custom"`）的 `base_url_override` 不可在 PUT 时清空（会被拒绝返回 400）
 
 ## Token Usage 采集
 

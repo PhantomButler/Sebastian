@@ -113,9 +113,10 @@ Agent LLM 绑定主列表页的 ViewModel，仅负责数据加载：
 
 ### `ProviderFormViewModel`
 
-- 管理 Provider 表单状态（name / type / api_key / base_url / model / thinking_capability）
-- 支持新增（`providerId == null`）和编辑（`providerId != null`）两种模式
-- 调用 `createProvider()` / `updateProvider()` / `deleteProvider()`
+- 管理 LLM Account 表单状态（name / selectedCatalogId / providerType / base_url / api_key）
+- 支持新增（`existingId == null`）和编辑（`existingId != null`）两种模式
+- 支持内置 catalog 模式（`selectedCatalogId != "custom"`）和自定义模式（`selectedCatalogId == "custom"`，需填 base_url）
+- 调用 `repository.createLlmAccount()` / `repository.updateLlmAccount()`；删除由 `ProviderListPage` 直接触发
 
 ## 数据流向
 
