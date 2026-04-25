@@ -26,7 +26,6 @@ class SettingsDataStore @Inject constructor(
 ) {
     companion object {
         val SERVER_URL = stringPreferencesKey("server_url")
-        val ACTIVE_PROVIDER_ID = stringPreferencesKey("active_provider_id")
         val THEME = stringPreferencesKey("theme")
     }
 
@@ -36,20 +35,12 @@ class SettingsDataStore @Inject constructor(
         .map { prefs -> prefs[SERVER_URL] ?: "" }
         .stateIn(scope, SharingStarted.Eagerly, "")
 
-    val activeProviderId: Flow<String?> = context.dataStore.data.map { prefs ->
-        prefs[ACTIVE_PROVIDER_ID]
-    }
-
     val theme: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[THEME] ?: "system"
     }
 
     suspend fun saveServerUrl(url: String) {
         context.dataStore.edit { it[SERVER_URL] = url }
-    }
-
-    suspend fun saveActiveProviderId(id: String) {
-        context.dataStore.edit { it[ACTIVE_PROVIDER_ID] = id }
     }
 
     suspend fun saveTheme(theme: String) {

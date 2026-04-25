@@ -1,17 +1,5 @@
 package com.sebastian.android.data.model
 
-// ── Legacy provider model (kept until UI migration in Task 7) ──────────
-
-data class Provider(
-    val id: String,
-    val name: String,
-    val type: String,         // "anthropic" | "openai" | "ollama"
-    val baseUrl: String?,
-    val model: String? = null,
-    val isDefault: Boolean,
-    val thinkingCapability: ThinkingCapability,
-)
-
 enum class ThinkingCapability {
     NONE, ALWAYS_ON, TOGGLE, EFFORT, ADAPTIVE;
 

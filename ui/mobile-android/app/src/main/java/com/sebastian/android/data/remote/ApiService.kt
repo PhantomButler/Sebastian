@@ -64,19 +64,6 @@ interface ApiService {
     @DELETE("api/v1/agents/{agentType}/llm-binding")
     suspend fun clearAgentBinding(@Path("agentType") agentType: String)
 
-    // Providers
-    @GET("api/v1/llm-providers")
-    suspend fun getProviders(): ProviderListResponse
-
-    @POST("api/v1/llm-providers")
-    suspend fun createProvider(@Body body: ProviderDto): ProviderDto
-
-    @PUT("api/v1/llm-providers/{id}")
-    suspend fun updateProvider(@Path("id") id: String, @Body body: Map<String, @JvmSuppressWildcards Any>): ProviderDto
-
-    @DELETE("api/v1/llm-providers/{id}")
-    suspend fun deleteProvider(@Path("id") id: String)
-
     // Approvals
     @GET("api/v1/approvals")
     suspend fun getPendingApprovals(): PendingApprovalsResponse
