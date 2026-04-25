@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-04-25
+
 ### Breaking Changes
 - LLM 配置从单行 `LLMProviderRecord` 迁移为三层 Catalog → Account → Binding 架构；旧 `llm_providers` 表和 API 已移除，需清空 DB 重建
 - `GET/POST/PUT/DELETE /api/v1/llm-providers` 全部替换为新的 Account + Catalog + CustomModel + Binding API（见下方 Added）
