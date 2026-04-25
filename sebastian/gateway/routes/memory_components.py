@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from sebastian.gateway.auth import require_auth
+from sebastian.gateway.routes.llm_accounts import _build_resolved_metadata
 from sebastian.memory.provider_bindings import MEMORY_COMPONENT_META, MEMORY_COMPONENT_TYPES
 
 if TYPE_CHECKING:
@@ -24,12 +25,26 @@ class ComponentBindingUpdate(BaseModel):
     thinking_effort: str | None = None
 
 
-def _binding_to_dict(component_type: str, binding: AgentLLMBindingRecord | None) -> JSONDict:
+async def _binding_to_dict(
+    registry: Any,
+    component_type: str,
+    binding: AgentLLMBindingRecord | None,
+) -> JSONDict:
+    if binding is None:
+        return {
+            "component_type": component_type,
+            "account_id": None,
+            "model_id": None,
+            "thinking_effort": None,
+            "resolved": {},
+        }
+    resolved = await _build_resolved_metadata(registry, binding.account_id, binding.model_id)
     return {
         "component_type": component_type,
-        "account_id": binding.account_id if binding is not None else None,
-        "model_id": binding.model_id if binding is not None else None,
-        "thinking_effort": binding.thinking_effort if binding is not None else None,
+        "account_id": binding.account_id,
+        "model_id": binding.model_id,
+        "thinking_effort": binding.thinking_effort,
+        "resolved": resolved,
     }
 
 
@@ -45,18 +60,24 @@ async def list_memory_components(
     components: list[JSONDict] = []
     for component_type, meta in MEMORY_COMPONENT_META.items():
         binding = binding_map.get(component_type)
+        if binding is None:
+            binding_payload: JSONDict | None = None
+        else:
+            resolved = await _build_resolved_metadata(
+                state.llm_registry, binding.account_id, binding.model_id
+            )
+            binding_payload = {
+                "account_id": binding.account_id,
+                "model_id": binding.model_id,
+                "thinking_effort": binding.thinking_effort,
+                "resolved": resolved,
+            }
         components.append(
             {
                 "component_type": component_type,
                 "display_name": meta["display_name"],
                 "description": meta["description"],
-                "binding": {
-                    "account_id": binding.account_id,
-                    "model_id": binding.model_id,
-                    "thinking_effort": binding.thinking_effort,
-                }
-                if binding is not None
-                else None,
+                "binding": binding_payload,
             }
         )
     return {"components": components}
@@ -73,7 +94,7 @@ async def get_component_binding(
         raise HTTPException(status_code=404, detail="Memory component not found")
 
     binding = await state.llm_registry.get_binding(component_type)
-    return _binding_to_dict(component_type, binding)
+    return await _binding_to_dict(state.llm_registry, component_type, binding)
 
 
 @router.put("/memory/components/{component_type}/llm-binding")
@@ -95,7 +116,7 @@ async def set_component_binding(
                 detail="account_id and model_id must both be provided or both be null",
             )
         await state.llm_registry.clear_binding(component_type)
-        return _binding_to_dict(component_type, None)
+        return await _binding_to_dict(state.llm_registry, component_type, None)
 
     account = await state.llm_registry.get_account(body.account_id)
     if account is None:
@@ -120,7 +141,7 @@ async def set_component_binding(
         body.model_id,
         thinking_effort=effort,
     )
-    return _binding_to_dict(component_type, binding)
+    return await _binding_to_dict(state.llm_registry, component_type, binding)
 
 
 @router.delete("/memory/components/{component_type}/llm-binding", status_code=204)

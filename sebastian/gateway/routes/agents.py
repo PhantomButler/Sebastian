@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from sebastian.gateway.auth import require_auth
+from sebastian.gateway.routes.llm_accounts import _build_resolved_metadata
 
 router = APIRouter(tags=["agents"])
 
@@ -21,12 +22,14 @@ class BindingUpdate(BaseModel):
     thinking_effort: str | None = None
 
 
-def _binding_to_dict(binding: Any) -> JSONDict:
+async def _binding_to_dict(registry: Any, binding: Any) -> JSONDict:
+    resolved = await _build_resolved_metadata(registry, binding.account_id, binding.model_id)
     return {
         "agent_type": binding.agent_type,
         "account_id": binding.account_id,
         "model_id": binding.model_id,
         "thinking_effort": binding.thinking_effort,
+        "resolved": resolved,
     }
 
 
@@ -47,7 +50,11 @@ async def list_agents(_auth: AuthPayload = Depends(require_auth)) -> JSONDict:
             "is_orchestrator": True,
             "active_session_count": 0,
             "max_children": None,
-            "binding": _binding_to_dict(seb_binding) if seb_binding is not None else None,
+            "binding": (
+                await _binding_to_dict(state.llm_registry, seb_binding)
+                if seb_binding is not None
+                else None
+            ),
         }
     )
 
@@ -66,7 +73,11 @@ async def list_agents(_auth: AuthPayload = Depends(require_auth)) -> JSONDict:
                 "is_orchestrator": False,
                 "active_session_count": active_count,
                 "max_children": config.max_children,
-                "binding": _binding_to_dict(binding) if binding is not None else None,
+                "binding": (
+                    await _binding_to_dict(state.llm_registry, binding)
+                    if binding is not None
+                    else None
+                ),
             }
         )
 
@@ -91,7 +102,7 @@ async def get_agent_binding(
             "model_id": None,
             "thinking_effort": None,
         }
-    return _binding_to_dict(binding)
+    return await _binding_to_dict(state.llm_registry, binding)
 
 
 @router.put("/agents/{agent_type}/llm-binding")
@@ -148,7 +159,7 @@ async def set_agent_binding(
         body.model_id,
         thinking_effort=effort,
     )
-    return _binding_to_dict(binding)
+    return await _binding_to_dict(state.llm_registry, binding)
 
 
 @router.delete("/agents/{agent_type}/llm-binding", status_code=204)
