@@ -193,6 +193,8 @@ async def create_account(
     if not body.api_key:
         raise HTTPException(status_code=400, detail="api_key must be non-empty")
 
+    base_url: str | None = None
+    provider_type: str = ""
     if body.catalog_provider_id == "custom":
         if not body.provider_type:
             raise HTTPException(

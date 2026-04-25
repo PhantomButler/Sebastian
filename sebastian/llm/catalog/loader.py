@@ -4,6 +4,7 @@ import importlib.resources
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 SUPPORTED_PROVIDER_TYPES = {"anthropic", "openai"}
 SUPPORTED_THINKING_CAPABILITIES = {
@@ -61,7 +62,7 @@ class LLMCatalog:
         raise KeyError(f"{provider_id}/{model_id}")
 
 
-def _parse_model(raw: dict[str, object]) -> LLMModelSpec:
+def _parse_model(raw: dict[str, Any]) -> LLMModelSpec:
     return LLMModelSpec(
         id=raw["id"],
         display_name=raw["display_name"],
@@ -71,7 +72,7 @@ def _parse_model(raw: dict[str, object]) -> LLMModelSpec:
     )
 
 
-def _validate_catalog(data: dict[str, object]) -> None:
+def _validate_catalog(data: dict[str, Any]) -> None:
     if "version" not in data:
         raise CatalogValidationError("Missing top-level 'version'")
     if data["version"] != 1:
@@ -147,7 +148,7 @@ def _validate_catalog(data: dict[str, object]) -> None:
                 )
 
 
-def _build_catalog(data: dict[str, object]) -> LLMCatalog:
+def _build_catalog(data: dict[str, Any]) -> LLMCatalog:
     providers: list[LLMProviderSpec] = []
     for prov in data["providers"]:
         models = tuple(_parse_model(m) for m in prov["models"])

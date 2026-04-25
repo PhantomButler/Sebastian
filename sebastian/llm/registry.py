@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
-from sebastian.llm.catalog.loader import LLMModelSpec, load_builtin_catalog
+from sebastian.llm.catalog.loader import LLMCatalog, LLMModelSpec, load_builtin_catalog
 from sebastian.llm.crypto import decrypt, encrypt
 from sebastian.llm.provider import LLMProvider
 from sebastian.store.models import (
@@ -55,14 +55,15 @@ class ResolvedProvider:
     model_display_name: str
 
 
-def _get_catalog():
+def _get_catalog() -> LLMCatalog:
     """Module-level lazy singleton for the builtin catalog."""
-    if _get_catalog._cache is None:
-        _get_catalog._cache = load_builtin_catalog()
-    return _get_catalog._cache
+    global _catalog_cache
+    if _catalog_cache is None:
+        _catalog_cache = load_builtin_catalog()
+    return _catalog_cache
 
 
-_get_catalog._cache = None
+_catalog_cache: LLMCatalog | None = None
 
 
 class LLMProviderRegistry:
@@ -291,7 +292,7 @@ class LLMProviderRegistry:
         self,
         account: LLMAccountRecord,
         model_spec: LLMModelSpec,
-        effective_base_url: str,
+        effective_base_url: str | None,
     ) -> LLMProvider:
         """Instantiate the correct LLMProvider subclass from account + model spec."""
         plain_key = decrypt(account.api_key_enc)

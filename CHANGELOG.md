@@ -4,9 +4,38 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+- LLM 配置从单行 `LLMProviderRecord` 迁移为三层 Catalog → Account → Binding 架构；旧 `llm_providers` 表和 API 已移除，需清空 DB 重建
+- `GET/POST/PUT/DELETE /api/v1/llm-providers` 全部替换为新的 Account + Catalog + CustomModel + Binding API（见下方 Added）
+
 ### Added
 - 新增 session 上下文自动/手动压缩能力：provider token usage + 本地估算双阈值触发，保留完整 audit timeline，通过 `context_summary` 缩短 LLM 当前上下文；新增 `POST /api/v1/sessions/{id}/compact` 和 `GET /api/v1/sessions/{id}/compaction/status` 接口。
 - `session_items` 增加 `exchange_id` / `exchange_index` 边界字段；`sessions` 增加 `next_exchange_index` 计数器。
+- 新增 LLM 三层架构：Catalog（内置 Provider/Model 元数据）→ Account（用户 API Key 绑定）→ Binding（per-agent 模型绑定）
+- 内置 Catalog 支持 4 个 Provider（Anthropic、OpenAI、DeepSeek、智谱），10 个模型（含 GPT-5.5、GPT-5.4、Claude Opus 4.7、DeepSeek V4、GLM-5.1 等）
+- 新增 `sebastian/llm/catalog/` 模块（loader + builtin_providers.json）
+- 新增 `LLMAccountRecord`（加密存储 API Key）和 `LLMCustomModelRecord`（自定义模型元数据）
+- 新增 `AgentLLMBindingRecord` 使用 `account_id + model_id` 替代旧 `provider_id`
+- `ResolvedProvider` 扩展：`context_window_tokens`、`thinking_format`、`account_id`、`model_display_name`
+- 新增 `sebastian/gateway/routes/llm_accounts.py` — Account CRUD、Custom Model CRUD、Catalog 查询、Default Binding
+- Context Compaction 改用 per-model `context_window_tokens` 动态解析（替代静态 TokenMeter）
+- Android App：新增 LlmAccount / CatalogProvider / CatalogModel / CustomModel / AgentBinding 域模型和 DTO
+- Android App：新增 CustomModelsPage + CustomModelsViewModel（自定义模型管理）
+- Android App：ProviderListPage 改用 account 列表（显示 catalog provider + API key 状态）
+- Android App：ProviderFormPage 支持内置 catalog 选择 / 自定义模式
+- Android App：AgentBindingEditorPage 改用 account → model 二级选择
+- Android App：新增默认模型绑定行 + thinking effort 按 model capability 自动钳位
+
+### Changed
+- `sebastian/llm/registry.py` 完全重写：resolution chain 为 agent_type → binding → account → model_spec → instantiate
+- `sebastian/gateway/routes/agents.py` 和 `memory_components.py` 绑定字段从 `provider_id` 改为 `account_id + model_id`
+- `sebastian/gateway/routes/llm_providers.py` 已删除，由 `llm_accounts.py` 替代
+- 上下文压缩 `TurnEndCompactionScheduler` 改用 `context_window_resolver: Callable` 替代静态 `ContextTokenMeter`
+
+### Removed
+- `LLMProviderRecord` 模型（由 `LLMAccountRecord` + `LLMCustomModelRecord` 替代）
+- `sebastian/gateway/routes/llm_providers.py`（由 `llm_accounts.py` 替代）
+- 旧 `GET/POST/PUT/DELETE /api/v1/llm-providers` 端点
 
 ## [0.4.0] - 2026-04-23
 

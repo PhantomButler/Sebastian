@@ -96,11 +96,12 @@ Route.SubAgents → AgentListScreen
 
 Route.Settings → SettingsScreen
     ├── → Route.SettingsConnection → ConnectionPage
-    ├── → Route.SettingsProviders → ProviderListPage
-    │       ├── → Route.SettingsProvidersNew → ProviderFormPage(null)
+    ├── → Route.SettingsProviders → ProviderListPage（account 列表，显示 catalog provider + API key 状态）
+    │       ├── → Route.SettingsProvidersNew → ProviderFormPage(null)（支持内置 catalog 选择 / 自定义模式）
     │       └── → Route.SettingsProvidersEdit(id) → ProviderFormPage(id)
-    └── → Route.SettingsAgentBindings → AgentBindingsPage
-            └── → Route.SettingsAgentBindingEditor(agentType) → AgentBindingEditorPage
+    ├── → Route.SettingsCustomModels(accountId) → CustomModelsPage（自定义模型管理）
+    └── → Route.SettingsAgentBindings → AgentBindingsPage（含默认模型行）
+            └── → Route.SettingsAgentBindingEditor(agentType) → AgentBindingEditorPage（account → model 二级选择）
 ```
 
 手机竖屏：Detail Pane 全屏，点击 Menu 图标滑至 List Pane，点击 Checklist 图标滑至 Extra Pane。
