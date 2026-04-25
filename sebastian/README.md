@@ -32,6 +32,7 @@ sebastian/
 │   └── skills/     → capabilities/skills/README.md
 ├── cli/            → cli/README.md
 ├── config/         → config/README.md
+├── context/        → context/README.md
 ├── core/           → core/README.md
 ├── gateway/        → gateway/README.md
 │   └── routes/     → gateway/routes/README.md
@@ -70,6 +71,22 @@ sebastian/
 - 修复 Agent 行为问题
 - 调整任务执行与中断逻辑
 - 接入新的基础工具调用能力
+
+### `context/`
+
+session 短期上下文的运行时压缩，包含 token usage 归一化、估算器、阈值判断、压缩 worker 与 prompt。详见 [context/README.md](context/README.md)。
+
+- `usage.py`：`TokenUsage` 与 provider usage 归一化
+- `estimator.py`：本地兜底 token 估算
+- `token_meter.py`：阈值判断
+- `compaction.py`：压缩 worker + turn 后调度器
+- `prompts.py`：summary prompt
+
+适合在以下场景进入：
+
+- 调整压缩触发阈值或 retain 窗口
+- 修改 summary prompt 结构
+- 新增 provider usage 字段
 
 ### `orchestrator/`
 
@@ -217,6 +234,7 @@ Typer CLI 子命令与进程守护工具。
 | 新增 MCP 集成 | [capabilities/README.md](capabilities/README.md) → `mcps/` |
 | 新增 Sub-Agent | [agents/README.md](agents/README.md) |
 | 修改 LLM 提供商适配 | [llm/README.md](llm/README.md) |
+| 修改上下文压缩阈值 / summary prompt | [context/README.md](context/README.md) |
 | 修改日志系统或热切换 | [log/README.md](log/README.md) |
 | 修改记忆系统 | [memory/README.md](memory/README.md) |
 | 修改权限审查或 workspace 边界 | [permissions/README.md](permissions/README.md) |
