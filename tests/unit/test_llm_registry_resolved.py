@@ -4,6 +4,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from sebastian.llm.crypto import encrypt
 from sebastian.llm.registry import (
     LLMProviderRegistry,
     ResolvedProvider,
@@ -37,7 +38,6 @@ def test_coerce_adaptive_passes_through():
 
 
 def test_coerce_none_capability_returns_unmodified():
-    # capability is None → pass through
     assert _coerce_thinking("high", None) == "high"
 
 
@@ -48,7 +48,6 @@ def test_coerce_none_capability_returns_unmodified():
 
 @pytest_asyncio.fixture
 async def registry(tmp_path, monkeypatch):
-    """In-memory SQLite registry fixture, mirrors pattern in test_registry_bindings.py."""
     key_file = tmp_path / "secret.key"
     key_file.write_text("test-secret")
     monkeypatch.setattr("sebastian.config.settings.sebastian_data_dir", str(tmp_path))
@@ -65,75 +64,82 @@ async def registry(tmp_path, monkeypatch):
     await engine.dispose()
 
 
-@pytest.mark.asyncio
-async def test_set_binding_stores_thinking(registry) -> None:
-    """set_binding 带 effort，get_provider 应返回对应钳制结果。"""
-    from sebastian.llm.crypto import encrypt
-    from sebastian.store.models import LLMProviderRecord
+@pytest_asyncio.fixture
+async def default_account_id(registry) -> str:
+    from sebastian.store.models import LLMAccountRecord
 
-    record = LLMProviderRecord(
-        name="adaptive-provider",
+    record = LLMAccountRecord(
+        name="default-anthropic",
+        catalog_provider_id="anthropic",
         provider_type="anthropic",
-        api_key_enc=encrypt("sk-adaptive"),
-        model="claude-opus-4-6",
-        thinking_capability="adaptive",
-        is_default=True,
+        api_key_enc=encrypt("sk-default"),
     )
-    await registry.create(record)
-    records = await registry.list_all()
-    pid = records[0].id
+    await registry.create_account(record)
+    return record.id
 
-    await registry.set_binding("forge", pid, thinking_effort="high")
+
+@pytest.mark.asyncio
+async def test_resolved_provider_has_new_fields(registry, default_account_id: str) -> None:
+    await registry.set_binding(
+        "__default__", default_account_id, "claude-opus-4-7", thinking_effort="high"
+    )
     resolved = await registry.get_provider("forge")
 
     assert isinstance(resolved, ResolvedProvider)
-    assert resolved.model == "claude-opus-4-6"
+    assert resolved.model == "claude-opus-4-7"
     assert resolved.thinking_effort == "high"
     assert resolved.capability == "adaptive"
+    assert resolved.context_window_tokens == 1_000_000
+    assert resolved.thinking_format is None
+    assert resolved.account_id == default_account_id
+    assert resolved.model_display_name == "Claude Opus 4.7"
 
 
 @pytest.mark.asyncio
-async def test_get_provider_falls_back_to_default_when_no_binding(registry) -> None:
-    from sebastian.llm.crypto import encrypt
-    from sebastian.store.models import LLMProviderRecord
-
-    record = LLMProviderRecord(
-        name="default",
-        provider_type="anthropic",
-        api_key_enc=encrypt("sk-default"),
-        model="claude-haiku-4-5",
-        thinking_capability="none",
-        is_default=True,
-    )
-    await registry.create(record)
-
+async def test_fallback_to_default_binding(registry, default_account_id: str) -> None:
+    await registry.set_binding("__default__", default_account_id, "claude-haiku-4-5")
     resolved = await registry.get_provider("some-agent")
-    assert isinstance(resolved, ResolvedProvider)
+
     assert resolved.model == "claude-haiku-4-5"
+    assert resolved.context_window_tokens == 200_000
+    assert resolved.capability == "none"
     assert resolved.thinking_effort is None
 
 
 @pytest.mark.asyncio
-async def test_get_provider_coerces_max_down_in_effort_capability(registry) -> None:
-    """存入 capability=effort 的 provider，binding 设 effort=max，
-    get_provider 应钳制返回 "high"。"""
-    from sebastian.llm.crypto import encrypt
-    from sebastian.store.models import LLMProviderRecord
+async def test_effort_coerced_max_to_high(registry, default_account_id: str) -> None:
+    """capability='effort' (openai/gpt-5.5), effort='max' → coerced to 'high'."""
+    from sebastian.store.models import LLMAccountRecord
 
-    record = LLMProviderRecord(
-        name="effort-provider",
-        provider_type="anthropic",
-        api_key_enc=encrypt("sk-effort"),
-        model="claude-sonnet-4-6",
-        thinking_capability="effort",
-        is_default=True,
+    record = LLMAccountRecord(
+        name="openai",
+        catalog_provider_id="openai",
+        provider_type="openai",
+        api_key_enc=encrypt("sk-openai"),
     )
-    await registry.create(record)
-    records = await registry.list_all()
-    pid = records[0].id
+    await registry.create_account(record)
 
-    await registry.set_binding("forge", pid, thinking_effort="max")
+    await registry.set_binding("forge", record.id, "gpt-5.5", thinking_effort="max")
     resolved = await registry.get_provider("forge")
 
     assert resolved.thinking_effort == "high"
     assert resolved.capability == "effort"
+
+
+@pytest.mark.asyncio
+async def test_deepseek_thinking_format(registry) -> None:
+    from sebastian.store.models import LLMAccountRecord
+
+    record = LLMAccountRecord(
+        name="deepseek",
+        catalog_provider_id="deepseek",
+        provider_type="openai",
+        api_key_enc=encrypt("sk-ds"),
+    )
+    await registry.create_account(record)
+    await registry.set_binding("forge", record.id, "deepseek-v4-pro")
+
+    resolved = await registry.get_provider("forge")
+    assert resolved.thinking_format == "reasoning_content"
+    assert resolved.capability == "toggle"
+    assert resolved.model_display_name == "DeepSeek V4 Pro"

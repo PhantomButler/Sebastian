@@ -10,7 +10,7 @@ from sebastian.store.database import Base, _install_sqlite_fk_pragma
 
 
 @pytest_asyncio.fixture
-async def registry_with_db(tmp_path, monkeypatch):
+async def registry(tmp_path, monkeypatch):
     key_file = tmp_path / "secret.key"
     key_file.write_text("test-secret")
     monkeypatch.setattr("sebastian.config.settings.sebastian_data_dir", str(tmp_path))
@@ -26,179 +26,133 @@ async def registry_with_db(tmp_path, monkeypatch):
     await engine.dispose()
 
 
-@pytest.mark.asyncio
-async def test_set_and_get_binding(registry_with_db) -> None:
-    from sebastian.store.models import LLMProviderRecord
+@pytest_asyncio.fixture
+async def account_a_id(registry) -> str:
+    from sebastian.store.models import LLMAccountRecord
 
-    record = LLMProviderRecord(
-        name="X",
+    r = LLMAccountRecord(
+        name="A",
+        catalog_provider_id="anthropic",
         provider_type="anthropic",
-        api_key_enc=encrypt("k"),
-        model="claude-opus-4-6",
-        is_default=False,
+        api_key_enc=encrypt("k1"),
     )
-    await registry_with_db.create(record)
-    records = await registry_with_db.list_all()
-    pid = records[0].id
-
-    await registry_with_db.set_binding("forge", pid)
-    bindings = await registry_with_db.list_bindings()
-    assert len(bindings) == 1
-    assert bindings[0].agent_type == "forge"
-    assert bindings[0].provider_id == pid
+    await registry.create_account(r)
+    return r.id
 
 
-@pytest.mark.asyncio
-async def test_set_binding_upsert_overwrites(registry_with_db) -> None:
-    from sebastian.store.models import LLMProviderRecord
+@pytest_asyncio.fixture
+async def account_b_id(registry) -> str:
+    from sebastian.store.models import LLMAccountRecord
 
-    r1 = LLMProviderRecord(
-        name="A", provider_type="anthropic", api_key_enc=encrypt("k1"), model="m1", is_default=False
+    r = LLMAccountRecord(
+        name="B",
+        catalog_provider_id="openai",
+        provider_type="openai",
+        api_key_enc=encrypt("k2"),
     )
-    r2 = LLMProviderRecord(
-        name="B", provider_type="openai", api_key_enc=encrypt("k2"), model="m2", is_default=False
-    )
-    await registry_with_db.create(r1)
-    await registry_with_db.create(r2)
-    records = await registry_with_db.list_all()
-    id_a = next(r.id for r in records if r.name == "A")
-    id_b = next(r.id for r in records if r.name == "B")
-
-    await registry_with_db.set_binding("forge", id_a)
-    await registry_with_db.set_binding("forge", id_b)
-
-    bindings = await registry_with_db.list_bindings()
-    assert len(bindings) == 1
-    assert bindings[0].provider_id == id_b
+    await registry.create_account(r)
+    return r.id
 
 
 @pytest.mark.asyncio
-async def test_set_binding_with_null_provider_id(registry_with_db) -> None:
-    await registry_with_db.set_binding("forge", None)
-    bindings = await registry_with_db.list_bindings()
-    assert len(bindings) == 1
-    assert bindings[0].agent_type == "forge"
-    assert bindings[0].provider_id is None
+async def test_set_and_get_binding(registry, account_a_id: str) -> None:
+    binding = await registry.set_binding("forge", account_a_id, "claude-opus-4-7")
+    assert binding.agent_type == "forge"
+    assert binding.account_id == account_a_id
+    assert binding.model_id == "claude-opus-4-7"
+
+    fetched = await registry.get_binding("forge")
+    assert fetched is not None
+    assert fetched.account_id == account_a_id
+    assert fetched.model_id == "claude-opus-4-7"
 
 
 @pytest.mark.asyncio
-async def test_clear_binding_removes_row(registry_with_db) -> None:
-    await registry_with_db.set_binding("forge", None)
-    await registry_with_db.clear_binding("forge")
-    bindings = await registry_with_db.list_bindings()
-    assert bindings == []
+async def test_list_bindings(registry, account_a_id: str) -> None:
+    await registry.set_binding("forge", account_a_id, "claude-opus-4-7")
+    await registry.set_binding("sebastian", account_a_id, "claude-sonnet-4-6")
+
+    bindings = await registry.list_bindings()
+    assert len(bindings) == 2
+    types = {b.agent_type for b in bindings}
+    assert types == {"forge", "sebastian"}
 
 
 @pytest.mark.asyncio
-async def test_clear_binding_noop_when_missing(registry_with_db) -> None:
-    # Should not raise
-    await registry_with_db.clear_binding("nonexistent")
-    assert await registry_with_db.list_bindings() == []
-
-
-@pytest.mark.asyncio
-async def test_get_provider_uses_binding(registry_with_db) -> None:
-    from sebastian.llm.anthropic import AnthropicProvider
-    from sebastian.store.models import LLMProviderRecord
-
-    default = LLMProviderRecord(
-        name="default",
-        provider_type="anthropic",
-        api_key_enc=encrypt("sk-default"),
-        model="claude-opus-4-6",
-        is_default=True,
-    )
-    bound = LLMProviderRecord(
-        name="bound",
-        provider_type="anthropic",
-        api_key_enc=encrypt("sk-bound"),
-        model="claude-haiku-4-5",
-        is_default=False,
-    )
-    await registry_with_db.create(default)
-    await registry_with_db.create(bound)
-    records = await registry_with_db.list_all()
-    bound_id = next(r.id for r in records if r.name == "bound")
-
-    await registry_with_db.set_binding("forge", bound_id)
-    resolved = await registry_with_db.get_provider("forge")
-    assert isinstance(resolved.provider, AnthropicProvider)
-    assert resolved.model == "claude-haiku-4-5"
-
-
-@pytest.mark.asyncio
-async def test_get_provider_falls_back_when_no_binding(registry_with_db) -> None:
-    from sebastian.store.models import LLMProviderRecord
-
-    default = LLMProviderRecord(
-        name="default",
-        provider_type="anthropic",
-        api_key_enc=encrypt("sk-default"),
-        model="claude-opus-4-6",
-        is_default=True,
-    )
-    await registry_with_db.create(default)
-
-    resolved = await registry_with_db.get_provider("forge")
-    _, model = resolved.provider, resolved.model
-    assert model == "claude-opus-4-6"
-
-
-@pytest.mark.asyncio
-async def test_get_provider_falls_back_when_binding_provider_id_is_null(
-    registry_with_db,
+async def test_set_binding_upsert_overwrites(
+    registry, account_a_id: str, account_b_id: str
 ) -> None:
-    from sebastian.store.models import LLMProviderRecord
+    await registry.set_binding("forge", account_a_id, "claude-opus-4-7")
+    await registry.set_binding("forge", account_b_id, "gpt-5.5", thinking_effort="low")
 
-    default = LLMProviderRecord(
-        name="default",
-        provider_type="anthropic",
-        api_key_enc=encrypt("sk-default"),
-        model="claude-opus-4-6",
-        is_default=True,
-    )
-    await registry_with_db.create(default)
-    await registry_with_db.set_binding("forge", None)
-
-    resolved = await registry_with_db.get_provider("forge")
-    _, model = resolved.provider, resolved.model
-    assert model == "claude-opus-4-6"
+    bindings = await registry.list_bindings()
+    assert len(bindings) == 1
+    assert bindings[0].account_id == account_b_id
+    assert bindings[0].model_id == "gpt-5.5"
+    assert bindings[0].thinking_effort == "low"
 
 
 @pytest.mark.asyncio
-async def test_get_provider_falls_back_when_bound_provider_deleted(
-    registry_with_db,
+async def test_clear_binding_removes_row(registry, account_a_id: str) -> None:
+    await registry.set_binding("forge", account_a_id, "claude-opus-4-7")
+    await registry.clear_binding("forge")
+    assert await registry.list_bindings() == []
+
+
+@pytest.mark.asyncio
+async def test_clear_binding_noop_when_missing(registry) -> None:
+    await registry.clear_binding("nonexistent")
+    assert await registry.list_bindings() == []
+
+
+@pytest.mark.asyncio
+async def test_get_binding_returns_none_when_missing(registry) -> None:
+    assert await registry.get_binding("nonexistent") is None
+
+
+@pytest.mark.asyncio
+async def test_binding_with_thinking_effort(registry, account_a_id: str) -> None:
+    await registry.set_binding("forge", account_a_id, "claude-sonnet-4-6", thinking_effort="medium")
+    fetched = await registry.get_binding("forge")
+    assert fetched is not None
+    assert fetched.thinking_effort == "medium"
+
+
+@pytest.mark.asyncio
+async def test_binding_null_thinking_effort(registry, account_a_id: str) -> None:
+    await registry.set_binding("forge", account_a_id, "claude-opus-4-7", thinking_effort=None)
+    fetched = await registry.get_binding("forge")
+    assert fetched is not None
+    assert fetched.thinking_effort is None
+
+
+@pytest.mark.asyncio
+async def test_get_provider_uses_explicit_binding(
+    registry, account_a_id: str, account_b_id: str
 ) -> None:
-    """Deleting the bound provider triggers ON DELETE SET NULL, then get_provider
-    should fallback to default."""
-    from sebastian.store.models import LLMProviderRecord
+    await registry.set_binding("__default__", account_a_id, "claude-opus-4-7")
+    await registry.set_binding("forge", account_b_id, "gpt-5.5")
 
-    default = LLMProviderRecord(
-        name="default",
-        provider_type="anthropic",
-        api_key_enc=encrypt("sk-default"),
-        model="claude-opus-4-6",
-        is_default=True,
-    )
-    bound = LLMProviderRecord(
-        name="bound",
-        provider_type="anthropic",
-        api_key_enc=encrypt("sk-bound"),
-        model="claude-haiku-4-5",
-        is_default=False,
-    )
-    await registry_with_db.create(default)
-    await registry_with_db.create(bound)
-    records = await registry_with_db.list_all()
-    bound_id = next(r.id for r in records if r.name == "bound")
-    await registry_with_db.set_binding("forge", bound_id)
+    resolved = await registry.get_provider("forge")
+    assert resolved.model == "gpt-5.5"
+    assert resolved.account_id == account_b_id
 
-    await registry_with_db.delete(bound_id)
 
-    bindings = await registry_with_db.list_bindings()
-    assert len(bindings) == 1
-    assert bindings[0].provider_id is None  # ON DELETE SET NULL
+@pytest.mark.asyncio
+async def test_get_provider_falls_back_to_default(registry, account_a_id: str) -> None:
+    await registry.set_binding("__default__", account_a_id, "claude-sonnet-4-6")
 
-    resolved = await registry_with_db.get_provider("forge")
-    _, model = resolved.provider, resolved.model
-    assert model == "claude-opus-4-6"
+    resolved = await registry.get_provider("unbound-agent")
+    assert resolved.model == "claude-sonnet-4-6"
+    assert resolved.account_id == account_a_id
+
+
+@pytest.mark.asyncio
+async def test_delete_account_does_not_check_bindings(registry, account_a_id: str) -> None:
+    """delete_account should succeed even if bindings reference it."""
+    await registry.set_binding("forge", account_a_id, "claude-opus-4-7")
+    assert await registry.delete_account(account_a_id) is True
+
+    binding = await registry.get_binding("forge")
+    assert binding is not None
+    assert binding.account_id == account_a_id
