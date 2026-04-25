@@ -1,9 +1,12 @@
 package com.sebastian.android.viewmodel
 
-import com.sebastian.android.data.model.Provider
+import com.sebastian.android.data.model.AgentBinding
+import com.sebastian.android.data.model.CatalogModel
+import com.sebastian.android.data.model.CatalogProvider
+import com.sebastian.android.data.model.CustomModel
+import com.sebastian.android.data.model.LlmAccount
 import com.sebastian.android.data.model.ThinkingCapability
 import com.sebastian.android.data.model.ThinkingEffort
-import com.sebastian.android.data.remote.dto.AgentBindingDto
 import com.sebastian.android.data.repository.AgentRepository
 import com.sebastian.android.data.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -52,62 +56,106 @@ class AgentBindingEditorViewModelTest {
     private fun makeVm(agentType: String, isMemoryComponent: Boolean = false) =
         AgentBindingEditorViewModel(agentType, isMemoryComponent, agentRepo, settingsRepo, appScope)
 
-    private fun provider(
-        id: String,
-        capability: ThinkingCapability,
-        isDefault: Boolean = false,
-    ) = Provider(
+    private fun account(
+        id: String = "acc-1",
+        name: String = "Account 1",
+        catalogProviderId: String = "anthropic",
+        providerType: String = "anthropic",
+    ) = LlmAccount(
         id = id,
-        name = id.uppercase(),
-        type = "anthropic",
-        baseUrl = null,
-        model = "m",
-        isDefault = isDefault,
-        thinkingCapability = capability,
+        name = name,
+        catalogProviderId = catalogProviderId,
+        providerType = providerType,
+        baseUrlOverride = null,
+        hasApiKey = true,
     )
 
-    @Test
-    fun `selectProvider resets thinking config and debounce-puts`() = runTest(dispatcher) {
-        val adaptive = provider("p1", ThinkingCapability.ADAPTIVE)
-        val effort = provider("p2", ThinkingCapability.EFFORT)
-        wheneverBlocking { agentRepo.getBinding("sebastian") }.thenReturn(
-            Result.success(AgentBindingDto("sebastian", "p1", "high")),
-        )
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
-            Result.success(listOf(adaptive, effort)),
-        )
-        wheneverBlocking {
-            agentRepo.setBinding("sebastian", "p2", ThinkingEffort.OFF)
-        }.thenReturn(Result.success(Unit))
+    private fun catalogProvider(
+        id: String = "anthropic",
+        models: List<CatalogModel> = listOf(
+            CatalogModel("claude-3-5-sonnet", "Claude 3.5 Sonnet", 200_000L, ThinkingCapability.NONE, null),
+        ),
+    ) = CatalogProvider(id = id, displayName = id.uppercase(), providerType = "anthropic", baseUrl = "https://api.anthropic.com", models = models)
 
-        val vm = makeVm("sebastian")
+    private fun binding(
+        agentType: String = "forge",
+        accountId: String? = "acc-1",
+        modelId: String? = "claude-3-5-sonnet",
+        thinkingEffort: String? = null,
+    ) = AgentBinding(agentType = agentType, accountId = accountId, modelId = modelId, thinkingEffort = thinkingEffort, resolved = null)
+
+    @Test
+    fun `load fetches agent binding without clearing`() = runTest(dispatcher) {
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(Result.success(binding()))
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account())))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(Result.success(listOf(catalogProvider())))
+
+        val vm = makeVm("forge")
         vm.load()
         advanceUntilIdle()
 
-        vm.selectProvider("p2")
-        // 本地立即重置
-        assertEquals(ThinkingEffort.OFF, vm.uiState.value.thinkingEffort)
+        verify(agentRepo).getAgentBinding("forge")
+        verify(agentRepo, never()).setAgentBinding(any(), anyOrNull(), anyOrNull(), anyOrNull())
+        assertEquals("acc-1", vm.uiState.value.selectedAccount?.id)
+        assertEquals("claude-3-5-sonnet", vm.uiState.value.selectedModel?.id)
+    }
 
-        // 300ms 后 PUT
+    @Test
+    fun `selectAccount resets model and does not persist partial binding`() = runTest(dispatcher) {
+        val acc2 = account(id = "acc-2", name = "Account 2")
+        val catalog = catalogProvider(models = listOf(
+            CatalogModel("model-a", "Model A", 100_000L, ThinkingCapability.NONE, null),
+        ))
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(Result.success(binding()))
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account(), acc2)))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(Result.success(listOf(catalog)))
+
+        val vm = makeVm("forge")
+        vm.load()
+        advanceUntilIdle()
+
+        vm.selectAccount("acc-2")
+        advanceUntilIdle()
+
+        assertEquals("acc-2", vm.uiState.value.selectedAccount?.id)
+        assertEquals(null, vm.uiState.value.selectedModel)
+        verify(agentRepo, never()).setAgentBinding(any(), anyOrNull(), anyOrNull(), anyOrNull())
+    }
+
+    @Test
+    fun `selectModel triggers debounced PUT after account and model are set`() = runTest(dispatcher) {
+        val effortModel = CatalogModel("model-e", "Model E", 100_000L, ThinkingCapability.EFFORT, null)
+        val catalog = catalogProvider(models = listOf(effortModel))
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(Result.success(binding(modelId = "model-e")))
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account())))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(Result.success(listOf(catalog)))
+        wheneverBlocking {
+            agentRepo.setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), anyOrNull())
+        }.thenReturn(Result.success(binding(modelId = "model-e")))
+
+        val vm = makeVm("forge")
+        vm.load()
+        advanceUntilIdle()
+
+        vm.selectModel("model-e")
         dispatcher.scheduler.advanceTimeBy(350)
         advanceUntilIdle()
-        verify(agentRepo).setBinding("sebastian", "p2", ThinkingEffort.OFF)
+
+        verify(agentRepo).setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), anyOrNull())
     }
 
     @Test
     fun `setEffort debounces consecutive changes into single put`() = runTest(dispatcher) {
-        val p = provider("p1", ThinkingCapability.EFFORT)
-        wheneverBlocking { agentRepo.getBinding("sebastian") }.thenReturn(
-            Result.success(AgentBindingDto("sebastian", "p1", null)),
-        )
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
-            Result.success(listOf(p)),
-        )
+        val effortModel = CatalogModel("model-e", "Model E", 100_000L, ThinkingCapability.EFFORT, null)
+        val catalog = catalogProvider(models = listOf(effortModel))
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(Result.success(binding(modelId = "model-e")))
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account())))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(Result.success(listOf(catalog)))
         wheneverBlocking {
-            agentRepo.setBinding("sebastian", "p1", ThinkingEffort.HIGH)
-        }.thenReturn(Result.success(Unit))
+            agentRepo.setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), eq("high"))
+        }.thenReturn(Result.success(binding(modelId = "model-e", thinkingEffort = "high")))
 
-        val vm = makeVm("sebastian")
+        val vm = makeVm("forge")
         vm.load()
         advanceUntilIdle()
 
@@ -119,148 +167,150 @@ class AgentBindingEditorViewModelTest {
         dispatcher.scheduler.advanceTimeBy(350)
         advanceUntilIdle()
 
-        verify(agentRepo).setBinding("sebastian", "p1", ThinkingEffort.HIGH)
+        verify(agentRepo, times(1)).setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), eq("high"))
     }
 
     @Test
-    fun `effective capability falls back to default provider when binding has no provider`() = runTest(dispatcher) {
-        val def = provider("pd", ThinkingCapability.ADAPTIVE, isDefault = true)
-        wheneverBlocking { agentRepo.getBinding("foo") }.thenReturn(
-            Result.success(AgentBindingDto("foo", null, null)),
-        )
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
-            Result.success(listOf(def)),
-        )
+    fun `concurrent load calls dedupe into a single getAgentBinding`() = runTest(dispatcher) {
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(Result.success(binding()))
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account())))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(Result.success(listOf(catalogProvider())))
 
-        val vm = makeVm("foo")
-        vm.load()
-        advanceUntilIdle()
-
-        assertEquals(ThinkingCapability.ADAPTIVE, vm.uiState.value.effectiveCapability)
-        // 合法的初始状态不应触发 PUT
-        dispatcher.scheduler.advanceTimeBy(400)
-        advanceUntilIdle()
-        verify(agentRepo, never()).setBinding(any(), anyOrNull(), any())
-    }
-
-    @Test
-    fun `concurrent load calls dedupe into a single getBinding`() = runTest(dispatcher) {
-        val p = provider("p1", ThinkingCapability.EFFORT, isDefault = true)
-        wheneverBlocking { agentRepo.getBinding("foo") }.thenReturn(
-            Result.success(AgentBindingDto("foo", "p1", null)),
-        )
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
-            Result.success(listOf(p)),
-        )
-
-        val vm = makeVm("foo")
-        // 模拟页面首次进入 + 旋转/重组再次触发
+        val vm = makeVm("forge")
         vm.load()
         vm.load()
         advanceUntilIdle()
 
-        verify(agentRepo, times(1)).getBinding("foo")
-        verify(settingsRepo, times(1)).getProviders()
+        verify(agentRepo, times(1)).getAgentBinding("forge")
+        verify(settingsRepo, times(1)).getLlmAccounts()
     }
 
     @Test
     fun `NONE capability with OFF effort does not trigger PUT on load`() = runTest(dispatcher) {
-        val noThink = provider("pn", ThinkingCapability.NONE)
-        wheneverBlocking { agentRepo.getBinding("foo") }.thenReturn(
-            Result.success(AgentBindingDto("foo", "pn", null)),
+        val noneModel = CatalogModel("model-n", "Model N", 100_000L, ThinkingCapability.NONE, null)
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(
+            Result.success(binding(modelId = "model-n", thinkingEffort = null))
         )
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
-            Result.success(listOf(noThink)),
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account())))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(
+            Result.success(listOf(catalogProvider(models = listOf(noneModel))))
         )
 
-        val vm = makeVm("foo")
+        val vm = makeVm("forge")
         vm.load()
         advanceUntilIdle()
         dispatcher.scheduler.advanceTimeBy(400)
         advanceUntilIdle()
 
         assertEquals(ThinkingEffort.OFF, vm.uiState.value.thinkingEffort)
-        verify(agentRepo, never()).setBinding(eq("foo"), anyOrNull(), any())
-    }
-
-    @Test
-    fun `ALWAYS_ON capability with OFF effort does not trigger PUT on load`() = runTest(dispatcher) {
-        val alwaysOn = provider("pa", ThinkingCapability.ALWAYS_ON)
-        wheneverBlocking { agentRepo.getBinding("foo") }.thenReturn(
-            Result.success(AgentBindingDto("foo", "pa", null)),
-        )
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
-            Result.success(listOf(alwaysOn)),
-        )
-
-        val vm = makeVm("foo")
-        vm.load()
-        advanceUntilIdle()
-        dispatcher.scheduler.advanceTimeBy(400)
-        advanceUntilIdle()
-
-        assertEquals(ThinkingEffort.OFF, vm.uiState.value.thinkingEffort)
-        verify(agentRepo, never()).setBinding(eq("foo"), anyOrNull(), any())
+        verify(agentRepo, never()).setAgentBinding(eq("forge"), anyOrNull(), anyOrNull(), anyOrNull())
     }
 
     @Test
     fun `out-of-range effort is coerced to highest valid step on init`() = runTest(dispatcher) {
-        val effortOnly = provider("p", ThinkingCapability.EFFORT)
-        // DB 里留下 max（上一任 provider 是 adaptive），EFFORT 只到 high
-        wheneverBlocking { agentRepo.getBinding("foo") }.thenReturn(
-            Result.success(AgentBindingDto("foo", "p", "max")),
+        val effortModel = CatalogModel("model-e", "Model E", 100_000L, ThinkingCapability.EFFORT, null)
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(
+            Result.success(binding(modelId = "model-e", thinkingEffort = "max"))
         )
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
-            Result.success(listOf(effortOnly)),
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account())))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(
+            Result.success(listOf(catalogProvider(models = listOf(effortModel))))
         )
         wheneverBlocking {
-            agentRepo.setBinding("foo", "p", ThinkingEffort.HIGH)
-        }.thenReturn(Result.success(Unit))
+            agentRepo.setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), eq("high"))
+        }.thenReturn(Result.success(binding(modelId = "model-e", thinkingEffort = "high")))
 
-        val vm = makeVm("foo")
+        val vm = makeVm("forge")
         vm.load()
         advanceUntilIdle()
 
         assertEquals(ThinkingEffort.HIGH, vm.uiState.value.thinkingEffort)
-        // 并且触发 PUT 纠正
         dispatcher.scheduler.advanceTimeBy(350)
         advanceUntilIdle()
-        verify(agentRepo).setBinding("foo", "p", ThinkingEffort.HIGH)
+        verify(agentRepo).setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), eq("high"))
     }
 
     @Test
     fun `pending debounced PUT is flushed via applicationScope on cleared`() = runTest(dispatcher) {
-        val p = provider("p1", ThinkingCapability.EFFORT)
-        wheneverBlocking { agentRepo.getBinding("sebastian") }.thenReturn(
-            Result.success(AgentBindingDto("sebastian", "p1", null)),
-        )
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(
-            Result.success(listOf(p)),
+        val effortModel = CatalogModel("model-e", "Model E", 100_000L, ThinkingCapability.EFFORT, null)
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(Result.success(binding(modelId = "model-e")))
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account())))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(
+            Result.success(listOf(catalogProvider(models = listOf(effortModel))))
         )
         wheneverBlocking {
-            agentRepo.setBinding("sebastian", "p1", ThinkingEffort.HIGH)
-        }.thenReturn(Result.success(Unit))
+            agentRepo.setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), eq("high"))
+        }.thenReturn(Result.success(binding(modelId = "model-e", thinkingEffort = "high")))
 
-        val vm = makeVm("sebastian")
+        val vm = makeVm("forge")
         vm.load()
         advanceUntilIdle()
 
-        // 把 VM 放进 ViewModelStore，store.clear() 会取消 viewModelScope 并回调 onCleared，
-        // 与真实 Activity/Fragment 销毁路径一致
         val store = androidx.lifecycle.ViewModelStore()
         store.put("vm", vm)
 
         vm.setEffort(ThinkingEffort.HIGH)
-        // debounce 未到期：尚未触发 PUT
         dispatcher.scheduler.advanceTimeBy(100)
-        verify(agentRepo, never()).setBinding("sebastian", "p1", ThinkingEffort.HIGH)
+        verify(agentRepo, never()).setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), eq("high"))
 
-        // 模拟用户离开页面
         store.clear()
         advanceUntilIdle()
 
-        // viewModelScope 已被 store.clear 取消，delay 未到期的 putJob 不会 setBinding；
-        // 依赖 applicationScope 补发
-        verify(agentRepo).setBinding("sebastian", "p1", ThinkingEffort.HIGH)
+        verify(agentRepo).setAgentBinding(eq("forge"), eq("acc-1"), eq("model-e"), eq("high"))
+    }
+
+    @Test
+    fun `memory component load uses getMemoryBinding not getAgentBinding`() = runTest(dispatcher) {
+        wheneverBlocking { agentRepo.getMemoryBinding("episodic") }.thenReturn(Result.success(binding(agentType = "episodic")))
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(account())))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(Result.success(listOf(catalogProvider())))
+
+        val vm = makeVm("episodic", isMemoryComponent = true)
+        vm.load()
+        advanceUntilIdle()
+
+        verify(agentRepo).getMemoryBinding("episodic")
+        verify(agentRepo, never()).getAgentBinding(any())
+    }
+
+    @Test
+    fun `selectAccount with custom provider fetches custom models`() = runTest(dispatcher) {
+        val customAcc = account(id = "acc-custom", catalogProviderId = "custom", providerType = "openai")
+        val customModel = CustomModel("cm-1", "acc-custom", "gpt-4o", "GPT-4o", 128_000L, ThinkingCapability.NONE, null)
+        wheneverBlocking { agentRepo.getAgentBinding("forge") }.thenReturn(
+            Result.success(binding(accountId = null, modelId = null))
+        )
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(listOf(customAcc)))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(Result.success(emptyList()))
+        wheneverBlocking { settingsRepo.getCustomModels("acc-custom") }.thenReturn(Result.success(listOf(customModel)))
+
+        val vm = makeVm("forge")
+        vm.load()
+        advanceUntilIdle()
+
+        vm.selectAccount("acc-custom")
+        advanceUntilIdle()
+
+        val models = vm.uiState.value.availableModels
+        assertEquals(1, models.size)
+        assertEquals("gpt-4o", models.first().id)
+        verify(agentRepo, never()).setAgentBinding(any(), anyOrNull(), anyOrNull(), anyOrNull())
+    }
+
+    @Test
+    fun `default binding empty account skips PUT and emits snackbar`() = runTest(dispatcher) {
+        wheneverBlocking { settingsRepo.getDefaultBinding() }.thenReturn(Result.success(null))
+        wheneverBlocking { settingsRepo.getLlmAccounts() }.thenReturn(Result.success(emptyList()))
+        wheneverBlocking { settingsRepo.getLlmCatalog() }.thenReturn(Result.success(emptyList()))
+
+        val vm = makeVm("__default__")
+        vm.load()
+        advanceUntilIdle()
+
+        vm.setEffort(ThinkingEffort.HIGH)
+        dispatcher.scheduler.advanceTimeBy(350)
+        advanceUntilIdle()
+
+        verify(settingsRepo, never()).setDefaultBinding(anyOrNull(), anyOrNull(), anyOrNull())
     }
 }

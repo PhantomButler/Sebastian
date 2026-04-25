@@ -1,8 +1,9 @@
 package com.sebastian.android.viewmodel
 
+import com.sebastian.android.data.model.AgentBinding
 import com.sebastian.android.data.model.AgentInfo
-import com.sebastian.android.data.model.Provider
-import com.sebastian.android.data.model.ThinkingCapability
+import com.sebastian.android.data.model.MemoryComponentInfo
+import com.sebastian.android.data.model.ThinkingEffort
 import com.sebastian.android.data.repository.AgentRepository
 import com.sebastian.android.data.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
@@ -41,31 +42,25 @@ class AgentBindingsViewModelTest {
 
     private fun sampleAgent(
         agentType: String = "forge",
-        boundId: String? = null,
         isOrchestrator: Boolean = false,
     ) = AgentInfo(
         agentType = agentType,
         displayName = agentType.replaceFirstChar { it.uppercase() },
         description = "Code",
         isOrchestrator = isOrchestrator,
-        boundProviderId = boundId,
     )
 
-    private fun sampleProvider() = Provider(
-        id = "p1",
-        name = "Test Provider",
-        type = "anthropic",
-        baseUrl = null,
-        model = "claude-3-5-sonnet",
-        isDefault = true,
-        thinkingCapability = ThinkingCapability.NONE,
+    private fun sampleMemoryComponent() = MemoryComponentInfo(
+        componentType = "episodic",
+        displayName = "Episodic Memory",
+        description = "Stores episodes",
     )
 
     @Test
-    fun `load emits agents and providers`() = runTest(dispatcher) {
+    fun `load emits agents and memory components`() = runTest(dispatcher) {
         wheneverBlocking { agentRepo.getAgents() }.thenReturn(Result.success(listOf(sampleAgent())))
-        wheneverBlocking { agentRepo.listMemoryComponents() }.thenReturn(Result.success(emptyList()))
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(Result.success(listOf(sampleProvider())))
+        wheneverBlocking { agentRepo.listMemoryComponents() }.thenReturn(Result.success(listOf(sampleMemoryComponent())))
+        wheneverBlocking { settingsRepo.getDefaultBinding() }.thenReturn(Result.success(null))
 
         val vm = AgentBindingsViewModel(agentRepo, settingsRepo)
         vm.load()
@@ -73,7 +68,7 @@ class AgentBindingsViewModelTest {
 
         val state = vm.uiState.value
         assertEquals(1, state.agents.size)
-        assertEquals(1, state.providers.size)
+        assertEquals(1, state.memoryComponents.size)
         assertNull(state.errorMessage)
     }
 
@@ -85,7 +80,7 @@ class AgentBindingsViewModelTest {
             Result.success(listOf(orchestrator, subAgent))
         )
         wheneverBlocking { agentRepo.listMemoryComponents() }.thenReturn(Result.success(emptyList()))
-        wheneverBlocking { settingsRepo.getProviders() }.thenReturn(Result.success(emptyList()))
+        wheneverBlocking { settingsRepo.getDefaultBinding() }.thenReturn(Result.success(null))
 
         val vm = AgentBindingsViewModel(agentRepo, settingsRepo)
         vm.load()
@@ -98,5 +93,27 @@ class AgentBindingsViewModelTest {
         assertEquals(1, subs.size)
         assertEquals("orchestrator", orch.first().agentType)
         assertEquals("forge", subs.first().agentType)
+    }
+
+    @Test
+    fun `load surfaces default binding when present`() = runTest(dispatcher) {
+        val defaultBinding = AgentBinding(
+            agentType = "__default__",
+            accountId = "acc-1",
+            modelId = "model-1",
+            thinkingEffort = null,
+            resolved = null,
+        )
+        wheneverBlocking { agentRepo.getAgents() }.thenReturn(Result.success(emptyList()))
+        wheneverBlocking { agentRepo.listMemoryComponents() }.thenReturn(Result.success(emptyList()))
+        wheneverBlocking { settingsRepo.getDefaultBinding() }.thenReturn(Result.success(defaultBinding))
+
+        val vm = AgentBindingsViewModel(agentRepo, settingsRepo)
+        vm.load()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals("acc-1", state.defaultBinding?.accountId)
+        assertEquals("model-1", state.defaultBinding?.modelId)
     }
 }

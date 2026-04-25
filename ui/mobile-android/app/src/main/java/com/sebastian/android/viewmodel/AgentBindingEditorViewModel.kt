@@ -3,7 +3,6 @@ package com.sebastian.android.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sebastian.android.data.model.AgentBinding
-import com.sebastian.android.data.model.CatalogModel
 import com.sebastian.android.data.model.CatalogProvider
 import com.sebastian.android.data.model.CustomModel
 import com.sebastian.android.data.model.LlmAccount
@@ -108,26 +107,10 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
             val accountsD = async { settingsRepository.getLlmAccounts() }
             val catalogD = async { settingsRepository.getLlmCatalog() }
 
-            val bindingD = if (isDefault) {
-                async { settingsRepository.getDefaultBinding() }
-            } else if (isMemoryComponent) {
-                async { agentRepository.getBinding(agentType) }
-            } else {
-                async {
-                    runCatching {
-                        agentRepository.setAgentBinding(agentType, null, null, null)
-                    }.recoverCatching {
-                        agentRepository.getBinding(agentType).getOrThrow().let { legacy ->
-                            AgentBinding(
-                                agentType = legacy.agentType,
-                                accountId = null,
-                                modelId = null,
-                                thinkingEffort = legacy.thinkingEffort,
-                                resolved = null,
-                            )
-                        }
-                    }
-                }
+            val bindingD = when {
+                isDefault -> async { settingsRepository.getDefaultBinding() }
+                isMemoryComponent -> async { agentRepository.getMemoryBinding(agentType) }
+                else -> async { agentRepository.getAgentBinding(agentType) }
             }
 
             val accountsR = accountsD.await()
@@ -142,19 +125,17 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
 
             val accounts = accountsR.getOrThrow()
             val catalog = catalogR.getOrThrow()
-            val binding: AgentBinding? = if (isDefault) {
-                @Suppress("UNCHECKED_CAST")
-                (bindingR.getOrNull() as? AgentBinding)
-            } else {
-                (bindingR.getOrNull() as? AgentBinding)
-            }
+            val binding: AgentBinding? = bindingR.getOrNull() as? AgentBinding
 
             val selectedAccountId = binding?.accountId
             val selectedAccount = accounts.firstOrNull { it.id == selectedAccountId }
             val models = if (selectedAccount != null) {
-                resolveModels(selectedAccount, catalog)
+                resolveModelsForAccount(selectedAccount, catalog)
             } else {
                 emptyList()
+            }
+            if (selectedAccount?.catalogProviderId == "custom" && models.isEmpty()) {
+                _events.tryEmit(EditorEvent.Snackbar("Add a custom model before binding this account"))
             }
             val selectedModelOption = binding?.modelId?.let { mid ->
                 models.firstOrNull { it.id == mid }
@@ -181,29 +162,34 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
     }
 
     fun selectAccount(accountId: String?) {
-        val prev = _uiState.value
-        val account = prev.accounts.firstOrNull { it.id == accountId }
-        val accountChanged = prev.selectedAccount?.id != accountId
-        val hadConfig = prev.thinkingEffort != ThinkingEffort.OFF
+        viewModelScope.launch {
+            val prev = _uiState.value
+            val account = prev.accounts.firstOrNull { it.id == accountId }
+            val accountChanged = prev.selectedAccount?.id != accountId
+            val hadConfig = prev.thinkingEffort != ThinkingEffort.OFF
 
-        val models = if (account != null) {
-            resolveModels(account, prev.catalogProviders)
-        } else {
-            emptyList()
-        }
+            val models = if (account != null) {
+                resolveModelsForAccount(account, prev.catalogProviders)
+            } else {
+                emptyList()
+            }
 
-        _uiState.update {
-            it.copy(
-                selectedAccount = account,
-                availableModels = models,
-                selectedModel = null,
-                thinkingEffort = ThinkingEffort.OFF,
-            )
+            if (account?.catalogProviderId == "custom" && models.isEmpty()) {
+                _events.tryEmit(EditorEvent.Snackbar("Add a custom model before binding this account"))
+            }
+
+            _uiState.update {
+                it.copy(
+                    selectedAccount = account,
+                    availableModels = models,
+                    selectedModel = null,
+                    thinkingEffort = ThinkingEffort.OFF,
+                )
+            }
+            if (accountChanged && hadConfig) {
+                _events.tryEmit(EditorEvent.Snackbar("Thinking config reset for new account"))
+            }
         }
-        if (accountChanged && hadConfig) {
-            _events.tryEmit(EditorEvent.Snackbar("Thinking config reset for new account"))
-        }
-        schedulePut()
     }
 
     fun selectModel(modelId: String) {
@@ -227,6 +213,8 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
     }
 
     fun clearBinding() {
+        val s = _uiState.value
+        if (s.isDefault) return
         _uiState.update {
             it.copy(
                 selectedAccount = null,
@@ -235,7 +223,9 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
                 thinkingEffort = ThinkingEffort.OFF,
             )
         }
-        schedulePut()
+        viewModelScope.launch {
+            clearPersistedBinding(_uiState.value)
+        }
     }
 
     fun setEffort(e: ThinkingEffort) {
@@ -243,68 +233,98 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
         schedulePut()
     }
 
-    private fun resolveModels(
-        account: LlmAccount,
-        catalog: List<CatalogProvider>,
-    ): List<ModelOption> {
-        val catalogProvider = catalog.firstOrNull { it.id == account.catalogProviderId }
-        return if (catalogProvider != null) {
-            catalogProvider.models.map { m ->
-                ModelOption(
-                    id = m.id,
-                    displayName = m.displayName,
-                    contextWindowTokens = m.contextWindowTokens,
-                    thinkingCapability = m.thinkingCapability,
-                )
-            }
-        } else {
-            emptyList()
+    private fun isPersistableSelection(s: EditorUiState): Boolean {
+        if (s.isDefault) return s.selectedAccount != null && s.selectedModel != null
+        return s.selectedAccount != null && s.selectedModel != null
+    }
+
+    private suspend fun persistBinding(s: EditorUiState): Result<AgentBinding> {
+        val effort = s.thinkingEffort.toApiString()
+        return when {
+            s.isDefault -> settingsRepository.setDefaultBinding(
+                s.selectedAccount?.id ?: return Result.failure(IllegalStateException("Default model requires an account")),
+                s.selectedModel?.id ?: return Result.failure(IllegalStateException("Default model requires a model")),
+                effort,
+            )
+            isMemoryComponent -> agentRepository.setMemoryBinding(
+                s.agentType,
+                s.selectedAccount?.id,
+                s.selectedModel?.id,
+                effort,
+            )
+            else -> agentRepository.setAgentBinding(
+                s.agentType,
+                s.selectedAccount?.id,
+                s.selectedModel?.id,
+                effort,
+            )
         }
     }
 
-    private fun loadCustomModels(accountId: String) {
-        viewModelScope.launch {
-            val result = settingsRepository.getCustomModels(accountId)
-            result.onSuccess { customs ->
-                val options = customs.map { m ->
-                    ModelOption(
-                        id = m.modelId,
-                        displayName = m.displayName,
-                        contextWindowTokens = m.contextWindowTokens,
-                        thinkingCapability = m.thinkingCapability,
-                    )
-                }
-                if (_uiState.value.selectedAccount?.id == accountId) {
-                    _uiState.update { it.copy(availableModels = options) }
-                }
-            }
+    private suspend fun clearPersistedBinding(s: EditorUiState): Result<Unit> {
+        return when {
+            s.isDefault -> Result.failure(IllegalStateException("Default model cannot be cleared"))
+            isMemoryComponent -> agentRepository.clearMemoryComponentBinding(s.agentType)
+            else -> agentRepository.clearBinding(s.agentType)
+        }
+    }
+
+    private fun resolveCatalogModels(
+        account: LlmAccount,
+        catalog: List<CatalogProvider>,
+    ): List<ModelOption> {
+        val catalogProvider = catalog.firstOrNull { it.id == account.catalogProviderId } ?: return emptyList()
+        return catalogProvider.models.map { m ->
+            ModelOption(
+                id = m.id,
+                displayName = m.displayName,
+                contextWindowTokens = m.contextWindowTokens,
+                thinkingCapability = m.thinkingCapability,
+            )
+        }
+    }
+
+    private suspend fun resolveModelsForAccount(
+        account: LlmAccount,
+        catalog: List<CatalogProvider>,
+    ): List<ModelOption> {
+        if (account.catalogProviderId != "custom") {
+            return resolveCatalogModels(account, catalog)
+        }
+        return settingsRepository.getCustomModels(account.id).getOrElse { emptyList() }.map { m ->
+            ModelOption(
+                id = m.modelId,
+                displayName = m.displayName,
+                contextWindowTokens = m.contextWindowTokens,
+                thinkingCapability = m.thinkingCapability,
+            )
         }
     }
 
     private fun schedulePut() {
+        val s = _uiState.value
+
+        if (s.isDefault && (s.selectedAccount == null || s.selectedModel == null)) {
+            _uiState.update { it.copy(isSaving = false) }
+            _events.tryEmit(EditorEvent.Snackbar("Default model requires an account and model"))
+            return
+        }
+
+        if (!isPersistableSelection(s)) {
+            putPending = false
+            _uiState.update { it.copy(isSaving = false) }
+            return
+        }
+
         putJob?.cancel()
-        snapshot = _uiState.value
+        snapshot = s
         putPending = true
         putJob = viewModelScope.launch {
             delay(300)
-            val s = _uiState.value
+            val current = _uiState.value
             _uiState.update { it.copy(isSaving = true) }
 
-            val effort = s.thinkingEffort.toApiString()
-            val r = if (s.isDefault) {
-                settingsRepository.setDefaultBinding(
-                    s.selectedAccount?.id ?: "",
-                    s.selectedModel?.id ?: "",
-                    effort,
-                )
-            } else {
-                agentRepository.setAgentBinding(
-                    s.agentType,
-                    s.selectedAccount?.id,
-                    s.selectedModel?.id,
-                    effort,
-                )
-            }
+            val r = persistBinding(current)
             putPending = false
             _uiState.update { it.copy(isSaving = false) }
             r.onFailure {
@@ -319,22 +339,9 @@ class AgentBindingEditorViewModel @AssistedInject constructor(
         super.onCleared()
         if (putPending) {
             val s = _uiState.value
-            val effort = s.thinkingEffort.toApiString()
+            if (!isPersistableSelection(s)) return
             applicationScope.launch {
-                if (s.isDefault) {
-                    settingsRepository.setDefaultBinding(
-                        s.selectedAccount?.id ?: "",
-                        s.selectedModel?.id ?: "",
-                        effort,
-                    )
-                } else {
-                    agentRepository.setAgentBinding(
-                        s.agentType,
-                        s.selectedAccount?.id,
-                        s.selectedModel?.id,
-                        effort,
-                    )
-                }
+                persistBinding(s)
             }
         }
     }
