@@ -200,3 +200,52 @@ def test_sebastian_allowed_tools_use_resume_and_stop_agent() -> None:
     assert Sebastian.allowed_tools is not None
     assert "resume_agent" in Sebastian.allowed_tools
     assert "stop_agent" in Sebastian.allowed_tools
+
+
+def test_sebastian_accepts_runtime_wiring_dependencies(tmp_path: Path) -> None:
+    """Sebastian 主 agent 应和子 agent 一样持有 DB 与压缩调度依赖。"""
+    from sebastian.core.task_manager import TaskManager
+    from sebastian.orchestrator.conversation import ConversationManager
+    from sebastian.orchestrator.sebas import Sebastian
+    from sebastian.protocol.events.bus import EventBus
+    from sebastian.store.session_store import SessionStore
+
+    store = SessionStore(tmp_path / "sessions")
+    bus = EventBus()
+    conversation = ConversationManager(bus)
+    task_manager = TaskManager(store, bus)
+    fake_db_factory = MagicMock()
+    fake_compaction_scheduler = MagicMock()
+
+    agent = Sebastian(
+        gate=_make_mock_gate(),
+        session_store=store,
+        task_manager=task_manager,
+        conversation=conversation,
+        event_bus=bus,
+        db_factory=fake_db_factory,
+        compaction_scheduler=fake_compaction_scheduler,
+    )
+
+    assert agent._db_factory is fake_db_factory
+    assert agent._compaction_scheduler is fake_compaction_scheduler
+
+
+def test_gateway_wires_runtime_dependencies_into_sebastian() -> None:
+    """Gateway lifespan 创建 Sebastian 时必须传入主会话 runtime 依赖。"""
+    import ast
+
+    source = Path("sebastian/gateway/app.py").read_text()
+    tree = ast.parse(source)
+    sebastian_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "Sebastian"
+    ]
+
+    assert len(sebastian_calls) == 1
+    keyword_names = {keyword.arg for keyword in sebastian_calls[0].keywords}
+    assert "db_factory" in keyword_names
+    assert "compaction_scheduler" in keyword_names

@@ -208,6 +208,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         event_bus=event_bus,
         llm_registry=llm_registry,
         agent_registry={cfg.agent_type: cfg for cfg in agent_configs},
+        db_factory=db_factory,
+        compaction_scheduler=state.context_compaction_scheduler,
     )
 
     state.sebastian = sebastian_agent

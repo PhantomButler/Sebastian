@@ -22,7 +22,10 @@ from sebastian.protocol.events.bus import EventBus
 from sebastian.store.session_store import SessionStore
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
     from sebastian.agents._loader import AgentConfig
+    from sebastian.context.compaction import CompactionScheduler
     from sebastian.llm.registry import LLMProviderRegistry
 
 logger = logging.getLogger(__name__)
@@ -115,9 +118,18 @@ class Sebastian(BaseAgent):
         event_bus: EventBus,
         llm_registry: LLMProviderRegistry | None = None,
         agent_registry: dict[str, AgentConfig] | None = None,
+        db_factory: async_sessionmaker[AsyncSession] | None = None,
+        compaction_scheduler: CompactionScheduler | None = None,
     ) -> None:
         self._agent_registry: dict[str, AgentConfig] = agent_registry or {}
-        super().__init__(gate, session_store, event_bus=event_bus, llm_registry=llm_registry)
+        super().__init__(
+            gate,
+            session_store,
+            event_bus=event_bus,
+            llm_registry=llm_registry,
+            db_factory=db_factory,
+            compaction_scheduler=compaction_scheduler,
+        )
         self._task_manager = task_manager
         self._conversation = conversation
         # Rebuild with agent_registry so _agents_section is included
