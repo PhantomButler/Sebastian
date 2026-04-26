@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_updated: 2026-04-21
+version: "1.2"
+last_updated: 2026-04-26
 status: in-progress
 ---
 
@@ -288,6 +288,24 @@ Assembler 在最终注入前，必须统一执行以下过滤：
 - `policy_tags`
 - `confidence threshold`
 - `reader_agent_type / access_purpose`
+
+---
+
+## 6.1 常驻记忆快照与动态检索去重
+
+`RetrievalContext`（传入 `retrieve_memory_section()` 的上下文对象）新增三个字段，用于在动态检索时过滤掉已由常驻快照注入的内容：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `resident_record_ids` | `frozenset[str]` | 已在常驻快照中出现的 `memory_id`；Assembler 跳过 id 命中的记录 |
+| `resident_dedupe_keys` | `frozenset[str]` | 常驻快照各条目的规范化去重键（`slot_value_dedupe_key(slot_id, content)`）；Assembler 跳过 key 命中的记录 |
+| `resident_canonical_bullets` | `frozenset[str]` | 常驻快照各条目的规范化 bullet 文本（`canonical_bullet(content)`）；Assembler 跳过 bullet 文本命中的记录 |
+
+`MemorySectionAssembler` 在 `_keep()` 过滤阶段，对每条动态检索候选记录依次检查以上三个集合，任一命中即丢弃。
+
+去重逻辑的纯函数实现位于 `sebastian/memory/resident_dedupe.py`（`canonical_bullet`、`slot_value_dedupe_key` 等），常驻快照读写与脏标记管理位于 `sebastian/memory/resident_snapshot.py`（`ResidentMemorySnapshotRefresher`）。
+
+三个字段均有默认空值（`frozenset()`），未启用常驻快照时动态检索行为与原先完全相同。
 
 ---
 
