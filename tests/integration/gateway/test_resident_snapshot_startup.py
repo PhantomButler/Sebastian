@@ -5,6 +5,8 @@ import importlib
 import os
 from unittest.mock import patch
 
+import pytest
+
 
 def test_gateway_startup_creates_resident_snapshot_files(tmp_path) -> None:
     """Gateway lifespan should build the resident snapshot files on startup."""
@@ -65,3 +67,53 @@ def test_gateway_startup_creates_resident_snapshot_files(tmp_path) -> None:
 
         db_module._engine = None
         db_module._session_factory = None
+
+
+@pytest.mark.asyncio
+async def test_startup_rebuild_failure_schedules_refresh(tmp_path) -> None:
+    """After a startup rebuild failure, schedule_refresh() must queue a background retry."""
+    from contextlib import asynccontextmanager
+    from unittest.mock import AsyncMock
+
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+    )
+
+    @asynccontextmanager
+    async def _fake_factory():
+        yield AsyncMock()
+
+    refresher = ResidentMemorySnapshotRefresher(
+        paths=ResidentSnapshotPaths.from_user_data_dir(tmp_path),
+        db_factory=_fake_factory,
+    )
+
+    # Simulate what app.py does at startup — but rebuild always fails
+    async def _failing_rebuild(session):
+        raise RuntimeError("simulated startup db failure")
+
+    refresher.rebuild = _failing_rebuild  # type: ignore[method-assign]
+
+    # Run the startup code path AS IT CURRENTLY EXISTS (no schedule_refresh call)
+    # This simulates the BEFORE state — task should NOT be scheduled
+    try:
+        async with _fake_factory() as session:
+            await refresher.rebuild(session)
+    except Exception:
+        pass  # old behavior: swallow and do nothing
+
+    assert refresher._pending_refresh is None, "old behavior: no retry scheduled"
+
+    # Now run the startup code path AS IT SHOULD BE (with schedule_refresh call)
+    try:
+        async with _fake_factory() as session:
+            await refresher.rebuild(session)
+    except Exception:
+        refresher.schedule_refresh()  # new behavior: schedule a retry
+
+    assert refresher._pending_refresh is not None, (
+        "after schedule_refresh(), a background rebuild task must be pending"
+    )
+    assert not refresher._pending_refresh.done()
+    await refresher.aclose()

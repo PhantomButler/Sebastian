@@ -152,6 +152,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await resident_refresher.rebuild(_resident_session)
     except Exception as exc:  # noqa: BLE001
         logger.warning("resident snapshot rebuild failed at startup: %s", exc, exc_info=True)
+        resident_refresher.schedule_refresh()
 
     consolidator = MemoryConsolidator(llm_registry)
     extractor = MemoryExtractor(llm_registry)
