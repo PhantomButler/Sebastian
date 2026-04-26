@@ -137,7 +137,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         SessionConsolidationWorker,
     )
     from sebastian.memory.extraction import MemoryExtractor
-    from sebastian.memory.resident_snapshot import ResidentMemorySnapshotRefresher, ResidentSnapshotPaths
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+    )
 
     resident_refresher = ResidentMemorySnapshotRefresher(
         paths=ResidentSnapshotPaths.from_user_data_dir(settings.user_data_dir),

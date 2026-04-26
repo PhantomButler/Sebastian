@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 from sebastian.memory.resident_dedupe import (
     canonical_bullet as _canonical_bullet,
+)
+from sebastian.memory.resident_dedupe import (
     slot_value_dedupe_key as _slot_value_dedupe_key,
 )
 from sebastian.memory.retrieval_lexicon import (
@@ -328,7 +330,9 @@ class MemorySectionAssembler:
                 return False
             return True
 
-        profiles = [r for r in profile_records if _keep(r) and _not_resident_duplicate(r)][: plan.profile_limit]
+        profiles = [r for r in profile_records if _keep(r) and _not_resident_duplicate(r)][
+            : plan.profile_limit
+        ]
         contexts = [r for r in context_records if _keep(r)][: plan.context_limit]
         relations = [r for r in relation_records if _keep(r)][: plan.relation_limit]
         episodes = [r for r in episode_records if _keep(r)][: plan.episode_limit]

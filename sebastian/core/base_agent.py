@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from sebastian.context.compaction import CompactionScheduler
     from sebastian.llm.provider import LLMProvider
     from sebastian.llm.registry import LLMProviderRegistry
+    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
 
 from ulid import ULID
 
@@ -217,7 +218,7 @@ class BaseAgent(ABC):
         )
         return "\n".join(lines)
 
-    async def _resident_memory_section(self, session_id: str) -> "ResidentSnapshotReadResult":
+    async def _resident_memory_section(self, session_id: str) -> ResidentSnapshotReadResult:
         """Return the cached resident memory snapshot for depth-1 sessions.
 
         Returns an empty ResidentSnapshotReadResult on any failure, if memory is

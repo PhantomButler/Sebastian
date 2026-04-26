@@ -534,9 +534,7 @@ async def test_stream_inner_prompt_order_resident_dynamic_todo(mem_factory) -> N
 
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
         with patch.object(gw_state, "todo_store", fake_todo_store, create=True):
-            with patch.object(
-                gw_state, "resident_snapshot_refresher", fake_refresher, create=True
-            ):
+            with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
                 with patch(
                     "sebastian.memory.retrieval.retrieve_memory_section",
                     side_effect=_fake_retrieve,
@@ -613,9 +611,7 @@ async def test_memory_section_receives_resident_exclusions(mem_factory) -> None:
 
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
         with patch.object(gw_state, "todo_store", empty_todo_store, create=True):
-            with patch.object(
-                gw_state, "resident_snapshot_refresher", fake_refresher, create=True
-            ):
+            with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
                 with patch(
                     "sebastian.memory.retrieval.retrieve_memory_section",
                     side_effect=_fake_retrieve,
@@ -659,9 +655,7 @@ async def test_resident_memory_section_skips_depth_above_one(mem_factory) -> Non
     fake_settings.enabled = True
 
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
-        with patch.object(
-            gw_state, "resident_snapshot_refresher", fake_refresher, create=True
-        ):
+        with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
             result = await agent._resident_memory_section("s-depth")
 
     assert result.content == ""
@@ -692,9 +686,7 @@ async def test_resident_memory_section_skips_when_memory_disabled(mem_factory) -
     fake_settings.enabled = False
 
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
-        with patch.object(
-            gw_state, "resident_snapshot_refresher", fake_refresher, create=True
-        ):
+        with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
             result = await agent._resident_memory_section("s-dis")
 
     assert result.content == ""
@@ -755,9 +747,7 @@ async def test_resident_memory_read_does_not_open_db_factory(mem_factory) -> Non
     fake_settings.enabled = True
 
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
-        with patch.object(
-            gw_state, "resident_snapshot_refresher", fake_refresher, create=True
-        ):
+        with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
             result = await agent._resident_memory_section("s-nodb")
 
     # db_factory should never have been called

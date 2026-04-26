@@ -50,8 +50,9 @@ def test_gateway_startup_creates_resident_snapshot_files(tmp_path) -> None:
         db_module._engine = None
         db_module._session_factory = None
 
-        from sebastian.gateway.app import create_app
         from starlette.testclient import TestClient
+
+        from sebastian.gateway.app import create_app
 
         test_app = create_app()
         with TestClient(test_app, raise_server_exceptions=True):

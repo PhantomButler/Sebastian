@@ -603,9 +603,7 @@ class ResidentMemorySnapshotRefresher:
             async with self._db_factory() as session:
                 await self.rebuild(session)
         except Exception as exc:
-            logger.warning(
-                "resident_snapshot: background rebuild failed: %s", exc, exc_info=True
-            )
+            logger.warning("resident_snapshot: background rebuild failed: %s", exc, exc_info=True)
             await self._write_error_state()
 
     async def _write_error_state(self) -> None:

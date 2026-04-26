@@ -905,7 +905,7 @@ def test_assembler_skips_resident_record_id() -> None:
 
 
 def test_assembler_skips_resident_slot_value_key() -> None:
-    """Profile record whose slot_value dedupe key matches resident_dedupe_keys must be suppressed."""
+    """Profile record whose slot_value key matches resident_dedupe_keys must be suppressed."""
     from sebastian.memory.resident_dedupe import slot_value_dedupe_key
 
     key = slot_value_dedupe_key(
@@ -941,7 +941,7 @@ def test_assembler_skips_resident_slot_value_key() -> None:
 
 
 def test_assembler_skips_resident_canonical_bullet() -> None:
-    """Profile record whose canonical bullet matches resident_canonical_bullets must be suppressed."""
+    """Profile record whose canonical bullet matches resident_canonical_bullets must be skipped."""
     from sebastian.memory.resident_dedupe import canonical_bullet
 
     content = "用户偏好使用中文交流。"

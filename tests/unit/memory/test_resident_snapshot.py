@@ -574,6 +574,4 @@ async def test_read_returns_empty_while_writer_active(tmp_path: Path) -> None:
         result = await refresher.read()
         results.append(result)
 
-    assert results[0].content == "", (
-        "read() must return empty while writer is in mutation_scope()"
-    )
+    assert results[0].content == "", "read() must return empty while writer is in mutation_scope()"

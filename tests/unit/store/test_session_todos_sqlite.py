@@ -87,6 +87,7 @@ async def test_no_filesystem_directories_created(db_todo_store, tmp_path):
 async def test_rebuild_fk_drops_orphaned_rows() -> None:
     """_rebuild_if_missing_fk 应删除孤儿 todo（对应 session 不存在），迁移不应抛 FK violation。"""
     import asyncio
+
     import sebastian.store.models  # noqa: F401
     from sebastian.store.database import Base, _rebuild_if_missing_fk
 
@@ -105,7 +106,9 @@ async def test_rebuild_fk_drops_orphaned_rows() -> None:
             )
             # 同时建一张空的 sessions 表（供 FK 引用目标）
             await conn.run_sync(
-                lambda sync_conn: Base.metadata.tables["sessions"].create(sync_conn, checkfirst=True)
+                lambda sync_conn: Base.metadata.tables["sessions"].create(
+                    sync_conn, checkfirst=True
+                )
             )
             # 写入一条孤儿记录（sessions 表里没有对应行）
             await conn.exec_driver_sql(
@@ -121,7 +124,9 @@ async def test_rebuild_fk_drops_orphaned_rows() -> None:
             result = await conn.exec_driver_sql(
                 "SELECT COUNT(*) FROM session_todos WHERE session_id='orphan-session'"
             )
-            assert result.fetchone()[0] == 0, "orphaned todo should have been deleted during migration"
+            assert result.fetchone()[0] == 0, (
+                "orphaned todo should have been deleted during migration"
+            )
     finally:
         await engine.dispose()
         await asyncio.sleep(0)
