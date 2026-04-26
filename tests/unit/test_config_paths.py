@@ -52,3 +52,19 @@ def test_resolved_secret_key_under_user_data(tmp_path: Path) -> None:
 def test_sessions_dir_removed() -> None:
     # 显式断言旧属性已移除
     assert not hasattr(Settings, "sessions_dir")
+
+
+def test_memory_dir_under_user_data(tmp_path: Path) -> None:
+    """ensure_data_dir should create memory/ under user_data_dir."""
+    import unittest.mock
+
+    s = _settings(tmp_path)
+    # patch settings used inside ensure_data_dir
+    with unittest.mock.patch("sebastian.config.settings", s):
+        # migrate_layout_v2 must also be patched to avoid touching real dirs
+        with unittest.mock.patch("sebastian.store.migration.migrate_layout_v2"):
+            from sebastian.config import ensure_data_dir
+
+            ensure_data_dir()
+    memory_dir = tmp_path / "data" / "memory"
+    assert memory_dir.exists(), "memory/ subdir should be created by ensure_data_dir"

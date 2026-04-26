@@ -39,6 +39,15 @@ _BUILTIN_SLOTS: list[SlotDefinition] = [
         description="用户偏好的交流语言",
     ),
     SlotDefinition(
+        slot_id="user.preference.addressing",
+        scope=MemoryScope.USER,
+        subject_kind="user",
+        cardinality=Cardinality.SINGLE,
+        resolution_policy=ResolutionPolicy.SUPERSEDE,
+        kind_constraints=[MemoryKind.PREFERENCE],
+        description="用户偏好的称呼方式",
+    ),
+    SlotDefinition(
         slot_id="user.current_project_focus",
         scope=MemoryScope.USER,
         subject_kind="user",

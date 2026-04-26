@@ -96,6 +96,7 @@ def ensure_data_dir() -> None:
         settings.user_data_dir / "extensions" / "skills",
         settings.user_data_dir / "extensions" / "agents",
         settings.user_data_dir / "workspace",
+        settings.user_data_dir / "memory",
         settings.logs_dir,
         settings.run_dir,
     ):
