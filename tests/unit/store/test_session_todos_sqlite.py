@@ -112,7 +112,8 @@ async def test_rebuild_fk_drops_orphaned_rows() -> None:
             )
             # 写入一条孤儿记录（sessions 表里没有对应行）
             await conn.exec_driver_sql(
-                "INSERT INTO session_todos VALUES ('sebastian', 'orphan-session', '[]', '2024-01-01 00:00:00')"
+                "INSERT INTO session_todos VALUES"
+                " ('sebastian', 'orphan-session', '[]', '2024-01-01 00:00:00')"
             )
 
         # 运行迁移 —— 不应抛异常
