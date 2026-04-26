@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sebastian 系统架构总览</title>
+  <style>
+    :root {
+      --bg:          #0d1117;
+      --surface:     #161b22;
+      --border:      #30363d;
+      --text:        #c9d1d9;
+      --muted:       #8b949e;
+
+      --blue:        #58a6ff;  --blue-dim:   #0c1e3a;
+      --purple:      #bc8cff;  --purple-dim: #1a0e33;
+      --green:       #3fb950;  --green-dim:  #0d2a14;
+      --yellow:      #d29922;  --yellow-dim: #231900;
+      --red:         #f78166;  --red-dim:    #2d0e0d;
+      --teal:        #39c5cf;  --teal-dim:   #082224;
+      --orange:      #e3b341;  --orange-dim: #231500;
+      --gray:        #768390;  --gray-dim:   #161b22;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 40px 24px 64px;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ─── */
+    .hdr {
+      text-align: center;
+      margin-bottom: 44px;
+    }
+    .hdr h1 {
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.025em;
+    }
+    .hdr p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+    .hdr p em {
+      font-style: normal;
+      color: var(--blue);
+    }
+
+    /* ─── Diagram container ─── */
+    .diagram {
+      max-width: 1120px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    /* ─── Section wrapper ─── */
+    .sect {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px 16px;
+      position: relative;
+    }
+
+    .sect-label {
+      position: absolute;
+      top: -11px;
+      left: 18px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      padding: 0 8px;
+      background: var(--bg);
+      color: var(--muted);
+    }
+
+    /* ─── Row of cards ─── */
+    .row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    /* ─── Card ─── */
+    .card {
+      flex: 1;
+      border-radius: 8px;
+      padding: 11px 14px;
+      border: 1px solid;
+    }
+
+    .card h3 {
+      font-size: 0.84rem;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .card ul {
+      list-style: none;
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .card ul li::before { content: '· '; }
+
+    /* colour themes */
+    .c-blue   { background: var(--blue-dim);   border-color: var(--blue);   }
+    .c-blue   h3 { color: var(--blue);   }
+    .c-purple { background: var(--purple-dim); border-color: var(--purple); }
+    .c-purple h3 { color: var(--purple); }
+    .c-green  { background: var(--green-dim);  border-color: var(--green);  }
+    .c-green  h3 { color: var(--green);  }
+    .c-yellow { background: var(--yellow-dim); border-color: var(--yellow); }
+    .c-yellow h3 { color: var(--yellow); }
+    .c-red    { background: var(--red-dim);    border-color: var(--red);    }
+    .c-red    h3 { color: var(--red);    }
+    .c-pink   { background: var(--pink-dim);   border-color: var(--pink);   }
+    .c-pink   h3 { color: var(--pink);   }
+    .c-teal   { background: var(--teal-dim);   border-color: var(--teal);   }
+    .c-teal   h3 { color: var(--teal);   }
+    .c-orange { background: var(--orange-dim); border-color: var(--orange); }
+    .c-orange h3 { color: var(--orange); }
+    .c-gray   { background: var(--gray-dim);   border-color: var(--gray);   }
+    .c-gray   h3 { color: var(--gray);   }
+
+    /* dim / dashed variants */
+    .dim { opacity: 0.55; }
+    .dashed { border-style: dashed !important; }
+
+    /* ─── Badge ─── */
+    .badge {
+      display: inline-block;
+      font-size: 0.58rem;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: 5px;
+      vertical-align: middle;
+      line-height: 1.5;
+    }
+    .badge-primary { background: #173d27; color: #3fb950; border: 1px solid #3fb950; }
+    .badge-phase   { background: #1f2233; color: var(--muted); border: 1px solid var(--border); }
+
+    /* ─── Arrow connector ─── */
+    .arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 4px 0;
+      gap: 0;
+    }
+    .arrow-line {
+      width: 2px;
+      height: 20px;
+      background: var(--border);
+    }
+    .arrow-label {
+      font-size: 0.62rem;
+      color: var(--muted);
+      text-align: center;
+      padding: 2px 0;
+      letter-spacing: 0.03em;
+    }
+    .arrow-head {
+      color: var(--muted);
+      font-size: 0.7rem;
+      line-height: 1;
+    }
+
+    /* ─── Agent hierarchy ─── */
+    .agent-hier { display: flex; flex-direction: column; gap: 8px; }
+
+    .depth-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .depth-tag {
+      font-size: 0.6rem;
+      color: var(--muted);
+      width: 58px;
+      flex-shrink: 0;
+      text-align: right;
+      padding-right: 4px;
+    }
+
+    .depth-cards {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .delegate-note {
+      font-size: 0.65rem;
+      color: #404d5a;
+      text-align: center;
+      padding-left: 66px;
+      line-height: 2;
+    }
+    .delegate-note span {
+      border-top: 1px dashed #2d3748;
+      display: block;
+      width: 60%;
+      margin: 0 auto;
+    }
+
+    /* ─── Four-column parallel grid ─── */
+    .grid4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .grid-col {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .grid-col-label {
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      margin-bottom: 2px;
+    }
+
+    /* ─── Footer legend ─── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      margin-top: 36px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>Sebastian 系统架构总览</h1>
+  <p>目标驱动的个人全能 AI 管家 &nbsp;·&nbsp; <em>三层 Agent 编排</em> &nbsp;·&nbsp; 自托管 · Python 3.12+</p>
+</div>
+
+<div class="diagram">
+
+  <!-- ══════════════ CLIENT APPS ══════════════ -->
+  <div class="sect" style="background:#0c1526;">
+    <span class="sect-label" style="color:var(--blue);">客户端</span>
+    <div class="row">
+      <div class="card c-blue" style="max-width:280px;">
+        <h3>Android App <span class="badge badge-primary">主入口</span></h3>
+        <ul>
+          <li>Kotlin + Jetpack Compose</li>
+          <li>ThreePaneScaffold 自适应导航</li>
+          <li>Chat · SubAgents · Settings 三页</li>
+          <li>SSE 实时流 · 本地通知</li>
+        </ul>
+      </div>
+      <div class="card c-blue dim" style="max-width:200px;">
+        <h3>iOS App <span class="badge badge-phase">Phase 3</span></h3>
+        <ul>
+          <li>Swift / SwiftUI</li>
+          <li>共享后端协议层</li>
+        </ul>
+      </div>
+      <div class="card c-blue dim" style="max-width:200px;">
+        <h3>Web UI</h3>
+        <ul>
+          <li>React + TypeScript</li>
+          <li>辅助管理界面</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-label">HTTP REST · SSE 长连接 · JWT Bearer</div>
+    <div class="arrow-line"></div>
+    <div class="arrow-head">▼</div>
+  </div>
+
+  <!-- ══════════════ GATEWAY ══════════════ -->
+  <div class="sect" style="background:#0f0d22;">
+    <span class="sect-label" style="color:var(--purple);">Gateway 层 — FastAPI + asyncio</span>
+    <div class="row">
+      <div class="card c-purple">
+        <h3>REST API 路由</h3>
+        <ul>
+          <li>POST /turns (立即返回, 非阻塞)</li>
+          <li>POST /agents/{type}/sessions</li>
+          <li>GET  /sessions · /tasks · /agents</li>
+          <li>POST /approvals/{id}/grant|deny</li>
+          <li>GET/PATCH /llm/providers</li>
+        </ul>
+      </div>
+      <div class="card c-purple">
+        <h3>SSE Manager</h3>
+        <ul>
+          <li>GET /stream (全局流)</li>
+          <li>GET /sessions/{id}/stream (单 session)</li>
+          <li>500 条滑动缓冲 · 断线重放</li>
+          <li>Last-Event-ID 重连协议</li>
+        </ul>
+      </div>
+      <div class="card c-purple">
+        <h3>认证 · 审批</h3>
+        <ul>
+          <li>JWT 签名 (secret.key Fernet)</li>
+          <li>Owner / Family / Guest 三角色</li>
+          <li>Approval 队列 · 超时失效</li>
+          <li>PolicyGate Stage-0 校验</li>
+        </ul>
+      </div>
+      <div class="card c-purple">
+        <h3>启动初始化</h3>
+        <ul>
+          <li>Agent 单例实例化</li>
+          <li>Tools / MCPs / Skills 扫描注册</li>
+          <li>ResidentMemory 快照全量重建</li>
+          <li>SESSION_COMPLETED catch-up sweep</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-label">asyncio.create_task · Event Bus 解耦</div>
+    <div class="arrow-line"></div>
+    <div class="arrow-head">▼</div>
+  </div>
+
+  <!-- ══════════════ THREE-TIER AGENTS ══════════════ -->
+  <div class="sect" style="background:#0a1810;">
+    <span class="sect-label" style="color:var(--green);">三层 Agent 编排（单例 · per-session 并发）</span>
+    <div class="agent-hier">
+
+      <!-- depth=1 -->
+      <div class="depth-row">
+        <div class="depth-tag">depth = 1</div>
+        <div class="depth-cards">
+          <div class="card c-green" style="max-width:480px; border-width:2px;">
+            <h3>Sebastian <span class="badge badge-primary">总管家 · 唯一入口</span></h3>
+            <ul>
+              <li>理解主人高层意图 · Goal Decomposer 目标分解</li>
+              <li>五段式 System Prompt（persona / tools / skills / agents / knowledge）</li>
+              <li>delegate_to_agent → 委派组长（asyncio.create_task，立即返回）</li>
+              <li>对话路径永不阻塞后台任务 · check_sub_agents · inspect_session</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="delegate-note">
+        <span></span>
+        ↓ &nbsp; delegate_to_agent（async，创建 depth=2 Session）
+      </div>
+
+      <!-- depth=2 -->
+      <div class="depth-row">
+        <div class="depth-tag">depth = 2</div>
+        <div class="depth-cards">
+          <div class="card c-green">
+            <h3>Forge Agent</h3>
+            <ul>
+              <li>编写代码 · 调试 · 构建工具</li>
+              <li>沙箱执行 (Docker)</li>
+              <li>Dynamic Tool Factory</li>
+            </ul>
+          </div>
+          <div class="card c-green dim">
+            <h3>Life Agent <span class="badge badge-phase">Phase 2</span></h3>
+            <ul>
+              <li>日历 · 提醒</li>
+              <li>智能家居</li>
+            </ul>
+          </div>
+          <div class="card c-green dim">
+            <h3>Stock Agent <span class="badge badge-phase">Phase 4</span></h3>
+            <ul>
+              <li>行情数据</li>
+              <li>投资研究</li>
+            </ul>
+          </div>
+          <div class="card c-green dim dashed">
+            <h3>… 可扩展</h3>
+            <ul>
+              <li>manifest.toml 自动注册</li>
+              <li>extensions/ 外置目录</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="delegate-note">
+        <span></span>
+        ↓ &nbsp; spawn_sub_agent（max_children=5，Stalled Watchdog 5min）
+      </div>
+
+      <!-- depth=3 -->
+      <div class="depth-row">
+        <div class="depth-tag">depth = 3</div>
+        <div class="depth-cards">
+          <div class="card c-green dim" style="flex:none;min-width:120px;max-width:150px;">
+            <h3>Worker #1</h3>
+            <ul><li>子任务执行</li><li>同类 Agent 实例</li></ul>
+          </div>
+          <div class="card c-green dim" style="flex:none;min-width:120px;max-width:150px;">
+            <h3>Worker #2</h3>
+            <ul><li>子任务执行</li><li>parent_session_id 追溯</li></ul>
+          </div>
+          <div class="card c-green dim dashed" style="flex:none;min-width:120px;max-width:150px;">
+            <h3>… ≤5 并发</h3>
+            <ul><li>active 状态占位</li><li>stalled 仍占位</li></ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-label">BaseAgent._stream_inner() · AgentLoop async generator</div>
+    <div class="arrow-line"></div>
+    <div class="arrow-head">▼</div>
+  </div>
+
+  <!-- ══════════════ CORE ENGINE ══════════════ -->
+  <div class="sect" style="background:#191100;">
+    <span class="sect-label" style="color:var(--yellow);">核心引擎</span>
+    <div class="row">
+      <div class="card c-yellow">
+        <h3>AgentLoop</h3>
+        <ul>
+          <li>async generator 流式推理</li>
+          <li>LLMStreamEvent 类型体系</li>
+          <li>MAX_ITERATIONS = 20</li>
+          <li>cancel-and-replace 打断</li>
+          <li>多轮 thinking 签名回填</li>
+        </ul>
+      </div>
+      <div class="card c-yellow">
+        <h3>Task Manager</h3>
+        <ul>
+          <li>CREATED → PLANNING → RUNNING</li>
+          <li>→ COMPLETED / FAILED / CANCELLED</li>
+          <li>InvalidTaskTransitionError 严格校验</li>
+          <li>Session active_task_count 维护</li>
+          <li>Stalled Watchdog（每分钟扫描）</li>
+        </ul>
+      </div>
+      <div class="card c-yellow">
+        <h3>PolicyGate · Permission</h3>
+        <ul>
+          <li>LOW / MODEL_DECIDES / HIGH_RISK 三档</li>
+          <li>Workspace 边界路径强制</li>
+          <li>allowed_tools 两层：LLM 可见 + 执行校验</li>
+          <li>reason 注入 · Approval 挂起等待</li>
+          <li>协议工具自动注入</li>
+        </ul>
+      </div>
+      <div class="card c-yellow">
+        <h3>Context Compaction</h3>
+        <ul>
+          <li>TokenEstimator 本地估算</li>
+          <li>ContextTokenMeter 三档阈值</li>
+          <li>按 Exchange 轮次切分</li>
+          <li>7-section handoff 摘要契约</li>
+          <li>手动 / 自动压缩 API</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-label">能力注册表 · LLM Provider · 记忆读写 · 事件发布</div>
+    <div class="arrow-line"></div>
+    <div class="arrow-head">▼</div>
+  </div>
+
+  <!-- ══════════════ PARALLEL: Caps / LLM / Memory / EventBus ══════════════ -->
+  <div class="grid4">
+
+    <!-- Col 1: Capabilities -->
+    <div class="grid-col" style="background:#160f0f; border-color:#f78166;">
+      <div class="grid-col-label" style="color:var(--red);">能力层 (Capabilities)</div>
+      <div class="card c-red">
+        <h3>Native Tools</h3>
+        <ul>
+          <li>Bash · Read · Write · Edit</li>
+          <li>Glob · Grep · TodoWrite</li>
+          <li>delegate_to_agent (Sebastian)</li>
+          <li>spawn_sub_agent (组长)</li>
+          <li>check_sub_agents · inspect_session</li>
+          <li>stop_agent · resume_agent</li>
+          <li>memory_save · memory_search</li>
+        </ul>
+      </div>
+      <div class="card c-red">
+        <h3>MCP Servers</h3>
+        <ul>
+          <li>config.toml 自动连接</li>
+          <li>stdio / HTTP transport</li>
+          <li>GitHub · 自定义扩展</li>
+          <li>mcps/ 目录扫描</li>
+        </ul>
+      </div>
+      <div class="card c-red">
+        <h3>Skills</h3>
+        <ul>
+          <li>SKILL.md 格式自然语言步骤</li>
+          <li>skills/ 目录自动注册</li>
+          <li>per-agent 白名单过滤</li>
+          <li>extensions/ 外置目录</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Col 2: LLM Layer -->
+    <div class="grid-col" style="background:#120d1f; border-color:#bc8cff;">
+      <div class="grid-col-label" style="color:var(--purple);">LLM 层</div>
+      <div class="card c-purple">
+        <h3>Anthropic</h3>
+        <ul>
+          <li>claude-opus-4-7 / sonnet-4-6</li>
+          <li>Extended Thinking 五档能力</li>
+          <li>thinking signature 多轮回填</li>
+          <li>duration_ms 耗时追踪</li>
+          <li>TokenUsage 归一化采集</li>
+        </ul>
+      </div>
+      <div class="card c-purple">
+        <h3>OpenAI 兼容</h3>
+        <ul>
+          <li>gpt-4o · 本地模型</li>
+          <li>自定义 base_url</li>
+          <li>openai_compat.py 适配层</li>
+        </ul>
+      </div>
+      <div class="card c-purple">
+        <h3>Provider Registry</h3>
+        <ul>
+          <li>Catalog → Account → Binding 三层</li>
+          <li>Fernet 加密 API Key 存储</li>
+          <li>per-agent LLMBinding 绑定</li>
+          <li>内置 Catalog JSON Loader</li>
+          <li>运行时切换 · is_default</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Col 3: Memory -->
+    <div class="grid-col" style="background:#0a1624; border-color:#58a6ff;">
+      <div class="grid-col-label" style="color:var(--blue);">记忆系统 (Memory)</div>
+      <div class="card c-blue">
+        <h3>Working Memory</h3>
+        <ul>
+          <li>进程内 · 任务级临时状态</li>
+          <li>Task 结束即清理</li>
+        </ul>
+      </div>
+      <div class="card c-blue">
+        <h3>Profile Store</h3>
+        <ul>
+          <li>fact / preference 用户画像</li>
+          <li>Slot Registry 语义槽位注册表</li>
+          <li>动态 ProposedSlot 冲突决策</li>
+          <li>Decision Log 审计落盘</li>
+        </ul>
+      </div>
+      <div class="card c-blue">
+        <h3>Episode Store</h3>
+        <ul>
+          <li>episode / summary 经历摘要</li>
+          <li>四条 Retrieval Lane 检索</li>
+          <li>depth guard · confidence 双阈值</li>
+          <li>会话沉淀 · 跨会话合并</li>
+        </ul>
+      </div>
+      <div class="card c-blue">
+        <h3>Resident Snapshot</h3>
+        <ul>
+          <li>高置信画像预渲染 Markdown</li>
+          <li>每轮固定注入 system prompt</li>
+          <li>ResidentMemorySnapshotRefresher</li>
+          <li>动态检索去重 (RetrievalContext)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Col 4: Event Bus -->
+    <div class="grid-col" style="background:#081e1f; border-color:#39c5cf;">
+      <div class="grid-col-label" style="color:var(--teal);">事件总线 · 协议</div>
+      <div class="card c-teal">
+        <h3>Event Bus</h3>
+        <ul>
+          <li>turn.received / delta / response</li>
+          <li>thinking_block.start / stop</li>
+          <li>tool_block.start / stop</li>
+          <li>tool.running / executed / failed</li>
+          <li>task.created / started / completed</li>
+          <li>approval.requested / granted</li>
+          <li>session.paused / resumed / stalled</li>
+        </ul>
+      </div>
+      <div class="card c-teal">
+        <h3>CompletionNotifier</h3>
+        <ul>
+          <li>SubAgent → Parent 主动通知</li>
+          <li>ask_parent 双向通信工具</li>
+          <li>parent_session_id SSE 路由</li>
+          <li>SessionStatus.WAITING 挂起</li>
+        </ul>
+      </div>
+      <div class="card c-teal">
+        <h3>Log System</h3>
+        <ul>
+          <li>main / llm_stream / sse 三文件</li>
+          <li>RotatingFileHandler 自动轮转</li>
+          <li>LogManager 运行时热切换</li>
+          <li>GET/PATCH /api/debug/logging</li>
+        </ul>
+      </div>
+    </div>
+
+  </div><!-- /grid4 -->
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-label">SQLAlchemy async · aiosqlite</div>
+    <div class="arrow-line"></div>
+    <div class="arrow-head">▼</div>
+  </div>
+
+  <!-- ══════════════ PERSISTENCE ══════════════ -->
+  <div class="sect" style="background:#151000;">
+    <span class="sect-label" style="color:var(--orange);">持久化层</span>
+    <div class="row">
+      <div class="card c-orange">
+        <h3>SQLite (主数据库)</h3>
+        <ul>
+          <li>sessions / session_items / tasks</li>
+          <li>checkpoints / session_todos</li>
+          <li>llm_providers · llm_accounts · llm_bindings</li>
+          <li>memory_profiles · memory_episodes</li>
+          <li>memory_decision_log · entity_registry</li>
+          <li>app_settings KV 表</li>
+        </ul>
+      </div>
+      <div class="card c-orange">
+        <h3>用户数据目录</h3>
+        <ul>
+          <li>~/.sebastian/data/sebastian.db</li>
+          <li>~/.sebastian/data/secret.key (chmod 600)</li>
+          <li>~/.sebastian/data/extensions/</li>
+          <li>~/.sebastian/logs/ (三文件轮转)</li>
+          <li>setup wizard 首启自动生成</li>
+        </ul>
+      </div>
+      <div class="card c-orange dim">
+        <h3>ChromaDB <span class="badge badge-phase">Phase 2b</span></h3>
+        <ul>
+          <li>向量语义记忆检索</li>
+          <li>本地运行，无外部服务</li>
+          <li>embedding 混合检索</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-head">▼</div>
+  </div>
+
+  <!-- ══════════════ INFRASTRUCTURE ══════════════ -->
+  <div class="sect" style="background:#111111;">
+    <span class="sect-label" style="color:var(--gray);">基础设施</span>
+    <div class="row">
+      <div class="card c-gray">
+        <h3>Docker Compose</h3>
+        <ul>
+          <li>sebastian (Gateway + Agents, 主进程)</li>
+          <li>sandbox (代码执行 Docker 隔离)</li>
+          <li>chromadb (向量存储, Phase 2b)</li>
+          <li>voice (faster-whisper STT+TTS, Phase 3)</li>
+        </ul>
+      </div>
+      <div class="card c-gray">
+        <h3>CI / CD</h3>
+        <ul>
+          <li>backend-lint · backend-type · backend-test</li>
+          <li>mobile-lint (4 门禁全绿 + 1 approval)</li>
+          <li>release.yml 自动发版 (pyproject + gradle)</li>
+          <li>bootstrap.sh 一键安装 · sebastian update</li>
+        </ul>
+      </div>
+      <div class="card c-gray">
+        <h3>身份 · 推送</h3>
+        <ul>
+          <li>Owner / Family / Guest 三角色 (Phase 1)</li>
+          <li>声纹 + 人脸识别 · 抗仿冒 (Phase 5)</li>
+          <li>FCM / APNs 移动推送 (Phase 2)</li>
+          <li>Sandbox: 高危操作 Docker 隔离执行</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /diagram -->
+
+
+</body>
+</html>

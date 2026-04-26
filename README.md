@@ -25,16 +25,24 @@ Sebastian is a goal-driven personal AI butler system. Tell it what you want — 
 > [!NOTE]
 > Sebastian is designed for **personal and family use** — it's not an enterprise product. Self-hosted on your own machine, your data never leaves your control.
 
-<!-- TODO: Add app screenshots when available -->
-<!--
-## Screenshots
+---
 
-<div align="center">
-  <img src="docs/assets/screenshot-chat.png" width="240" alt="Chat Screen">
-  <img src="docs/assets/screenshot-agents.png" width="240" alt="Sub-Agents Screen">
-  <img src="docs/assets/screenshot-settings.png" width="240" alt="Settings Screen">
-</div>
--->
+## Demo
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/asset/coding_test.gif" alt="Forge Agent — autonomous coding and debugging">
+      <br><sub><b>Forge Agent — autonomous coding & debugging</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/asset/memory_test.gif" alt="Memory system — persistent context across sessions">
+      <br><sub><b>Memory system — remembers you across sessions</b></sub>
+    </td>
+  </tr>
+</table>
+
+---
 
 ## ✨ Key Features
 
@@ -42,25 +50,22 @@ Sebastian is a goal-driven personal AI butler system. Tell it what you want — 
 - 🤖 **Three-tier agent architecture** — Sebastian (head butler) delegates to team leads, who dispatch workers. Your goals get executed, not just answered.
 - 📱 **Native Android app** — Real-time streaming responses, thinking blocks, tool call cards. Built with Kotlin + Jetpack Compose.
 - 🔧 **Zero-config extensibility** — Add tools, MCP servers, skills, and sub-agents by creating files. No core code changes needed.
-- 🧠 **Three-layer memory** — Working memory for current tasks, episodic memory for conversation history, semantic memory with vector search (RAG).
+- 🧠 **Persistent memory** — Remembers your preferences and past interactions. Profile facts, episodic history, and a resident snapshot injected into every conversation.
 - 🔒 **Permission & approval system** — Sensitive operations require your approval. Three-tier risk classification (Low / Model-Decides / High-Risk).
 - 🚀 **Dynamic Tool Factory** — When an agent needs a tool that doesn't exist, it can write one, test it in a sandbox, and register it — all autonomously.
 
-## Feature Matrix
+## What's Built
 
-| Feature | Android App | Web UI | CLI |
-|---------|:-----------:|:------:|:---:|
-| Real-time chat with streaming | ✅ | 🔄 | ✅ |
-| Sub-agent management | ✅ | 🔄 | — |
-| Approval notifications | ✅ | 🔄 | — |
-| LLM provider configuration | ✅ | — | — |
-| Session & task history | ✅ | 🔄 | — |
-| Thinking block display | ✅ | — | — |
-| Tool call visualization | ✅ | — | — |
-| One-click install / update | — | — | ✅ |
-| Headless initialization | — | — | ✅ |
-
-✅ Available · 🔄 Planned · — Not applicable
+- ✅ Real-time chat with streaming responses & thinking block display
+- ✅ Three-tier agent orchestration — delegation, dispatch, stalled detection
+- ✅ Sub-agent management & session monitoring
+- ✅ Approval notifications for sensitive operations
+- ✅ LLM provider configuration (Anthropic, OpenAI, custom base URL)
+- ✅ Persistent memory — profile facts, episodic history, resident snapshot
+- ✅ Tool call visualization & execution feedback
+- ✅ Session & task history with timeline hydration
+- ✅ One-click install, update & auto-rollback
+- ✅ Headless server initialization
 
 ## ⚡ Quick Start
 
@@ -127,37 +132,14 @@ Upgrading from an older version? `sebastian serve` automatically migrates the fl
 
 ## 🏗️ Architecture
 
-```
-┌─────────────┐     REST + SSE     ┌──────────────────┐
-│  Android App │◄──────────────────►│     Gateway       │
-│  (Kotlin)    │                    │  (FastAPI + SSE)  │
-└─────────────┘                    └────────┬──────────┘
-                                            │
-                                   ┌────────▼────────┐
-                                   │    Sebastian     │  ← Head Butler (depth 1)
-                                   │  (Orchestrator)  │
-                                   └────────┬─────────┘
-                                            │ delegate_to_agent
-                              ┌──────────────┼──────────────┐
-                              ▼              ▼              ▼
-                        ┌──────────┐  ┌──────────┐  ┌──────────┐
-                        │  Forge   │  │  Stock   │  │  Life    │  ← Team Leads (depth 2)
-                        │  Agent   │  │  Agent   │  │  Agent   │
-                        └────┬─────┘  └──────────┘  └──────────┘
-                             │ spawn_sub_agent
-                        ┌────▼─────┐
-                        │ Workers  │                          ← Workers (depth 3)
-                        └──────────┘
+<div align="center">
+  <a href="docs/architecture/diagrams/system-overview.html">
+    <img src="docs/asset/sebastian_architecture_system-overview.png" alt="Sebastian System Architecture Overview">
+  </a>
+  <p><sub><a href="docs/architecture/diagrams/system-overview.html">↗ Open interactive diagram</a></sub></p>
+</div>
 
-          ┌─────────────────────────────────────────────┐
-          │            Shared Capabilities               │
-          │  Tools · MCPs · Skills · Memory · Sandbox    │
-          └─────────────────────────────────────────────┘
-```
-
-Every agent inherits from `BaseAgent` — same tool system, same streaming loop, same memory access. Sebastian adds goal decomposition and delegation; team leads add domain-specific tools and worker dispatch.
-
-For the full architecture spec, see [docs/architecture/spec/](docs/architecture/spec/).
+Every agent inherits from `BaseAgent` — same tool system, same streaming loop, same memory access. Sebastian adds goal decomposition and delegation on top; team leads add domain-specific tools and worker dispatch.
 
 ### The Manor System
 
@@ -173,12 +155,14 @@ You (Lord of the Manor)
 │     ├── Handles simple tasks directly, dispatches workers for complex ones
 │     └── Up to 5 workers concurrently
 │
-├── Stock Agent Lead (Planned)
+├── Stock Agent (Planned)
 │     └── ...
 └── ...
 ```
 
 Day-to-day: you only talk to Sebastian — it coordinates leads automatically. As you get started, you can also open direct conversations with any lead or intervene in any active session.
+
+For the full architecture spec, see [docs/architecture/spec/](docs/architecture/spec/).
 
 ## 🗺️ Roadmap
 

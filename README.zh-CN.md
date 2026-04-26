@@ -25,16 +25,24 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统。你只需告诉
 > [!NOTE]
 > Sebastian 的定位是 **个人与家庭使用** —— 不是企业产品。跑在你自己的机器上，数据永远在你手里。
 
-<!-- TODO: 添加 App 截图 -->
-<!--
-## 应用截图
+---
 
-<div align="center">
-  <img src="docs/assets/screenshot-chat.png" width="240" alt="对话页面">
-  <img src="docs/assets/screenshot-agents.png" width="240" alt="子代理管理">
-  <img src="docs/assets/screenshot-settings.png" width="240" alt="设置页面">
-</div>
--->
+## 演示
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/asset/coding_test.gif" alt="Forge Agent 自主编程演示">
+      <br><sub><b>Forge Agent — 自主编程与调试</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/asset/memory_test.gif" alt="记忆系统演示">
+      <br><sub><b>记忆系统 — 跨会话记住你的偏好</b></sub>
+    </td>
+  </tr>
+</table>
+
+---
 
 ## ✨ 核心特性
 
@@ -42,25 +50,21 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统。你只需告诉
 - 🤖 **三层 Agent 架构** — Sebastian（总管家）委派组长，组长分派组员。你的目标被**执行**，而不只是被回复。
 - 📱 **Android 原生客户端** — 流式响应实时显示、思考过程可视化、工具调用卡片。Kotlin + Jetpack Compose 构建。
 - 🔧 **零配置扩展** — 新增工具、MCP 服务、Skill、子代理只需创建文件并重启，无需改动核心代码。
-- 🧠 **三层记忆系统** — 工作记忆（当前任务）、情景记忆（对话历史）、语义记忆（向量检索 RAG）。
+- 🧠 **持久记忆系统** — 记住你的偏好与历史对话。画像事实、情景记忆、常驻快照每轮固定注入，越用越懂你。
 - 🔒 **权限与审批机制** — 敏感操作需要主人批准。三档风险分类（低 / 模型判断 / 高风险）。
 - 🚀 **动态工具工厂** — 代理发现缺少工具时，可以自己编写、沙箱测试、注册永久使用 —— 全自动。
 
-## 功能矩阵
+## 已实现功能
 
-| 功能 | Android App | Web UI | CLI |
-|------|:-----------:|:------:|:---:|
-| 实时流式对话 | ✅ | 🔄 | ✅ |
-| 子代理管理 | ✅ | 🔄 | — |
-| 审批通知 | ✅ | 🔄 | — |
-| LLM 服务商配置 | ✅ | — | — |
-| 会话与任务历史 | ✅ | 🔄 | — |
-| 思考过程展示 | ✅ | — | — |
-| 工具调用可视化 | ✅ | — | — |
-| 一键安装 / 升级 | — | — | ✅ |
-| 无头初始化 | — | — | ✅ |
-
-✅ 已实现 · 🔄 计划中 · — 不适用
+- ✅ 实时流式对话，思考过程与工具调用可视化
+- ✅ 三层 Agent 编排 — 委派、分派、Stalled 检测
+- ✅ 子代理管理与 Session 监控
+- ✅ 敏感操作审批通知
+- ✅ LLM 服务商配置（Anthropic、OpenAI、自定义 base URL）
+- ✅ 持久记忆 — 用户画像、情景历史、常驻快照
+- ✅ 会话与任务历史，支持 Timeline 历史恢复
+- ✅ 一键安装、升级与自动回滚
+- ✅ 无头服务器初始化
 
 ## ⚡ 快速开始
 
@@ -107,39 +111,49 @@ sebastian update                             # 升级到最新版本（失败自
 sebastian update --check                     # 仅检查更新，不执行升级
 ```
 
+## 🖥️ 作为系统服务运行
+
+安装完成后，可以注册为开机自启的系统服务：
+
+```bash
+sebastian service install   # 注册并启动服务
+sebastian service status    # 查看服务状态
+sebastian service stop      # 停止服务
+sebastian service uninstall # 卸载服务
+```
+
+- **macOS**: `~/Library/LaunchAgents/com.sebastian.plist`
+- **Linux**: `~/.config/systemd/user/sebastian.service`（用户级，无需 sudo）
+
+Linux 用户如需开机自启，还需要开启 linger：
+
+```bash
+sudo loginctl enable-linger $USER
+```
+
+### 数据目录结构
+
+```
+~/.sebastian/
+  app/         # 安装树（sebastian update 只动这里）
+  data/        # 用户数据：sebastian.db / secret.key / workspace / extensions
+  logs/        # 日志文件
+  run/         # PID 文件 + 升级回滚备份
+  .layout-v2   # 迁移标记
+```
+
+从旧版本升级？`sebastian serve` 启动时会自动将旧版平铺结构迁移到此目录布局。
+
 ## 🏗️ 架构
 
-```
-┌─────────────┐     REST + SSE     ┌──────────────────┐
-│  Android App │◄──────────────────►│     Gateway       │
-│  (Kotlin)    │                    │  (FastAPI + SSE)  │
-└─────────────┘                    └────────┬──────────┘
-                                            │
-                                   ┌────────▼────────┐
-                                   │    Sebastian     │  ← 总管家 (depth 1)
-                                   │  (Orchestrator)  │
-                                   └────────┬─────────┘
-                                            │ delegate_to_agent
-                              ┌──────────────┼──────────────┐
-                              ▼              ▼              ▼
-                        ┌──────────┐  ┌──────────┐  ┌──────────┐
-                        │  Forge   │  │  Stock   │  │  Life    │  ← 组长 (depth 2)
-                        │  Agent   │  │  Agent   │  │  Agent   │
-                        └────┬─────┘  └──────────┘  └──────────┘
-                             │ spawn_sub_agent
-                        ┌────▼─────┐
-                        │  组员     │                          ← 组员 (depth 3)
-                        └──────────┘
-
-          ┌─────────────────────────────────────────────┐
-          │              共享能力层                       │
-          │  Tools · MCPs · Skills · Memory · Sandbox    │
-          └─────────────────────────────────────────────┘
-```
+<div align="center">
+  <a href="docs/architecture/diagrams/system-overview.html">
+    <img src="docs/asset/sebastian_architecture_system-overview.png" alt="Sebastian 系统架构总览">
+  </a>
+  <p><sub><a href="docs/architecture/diagrams/system-overview.html">↗ 查看完整交互架构图</a></sub></p>
+</div>
 
 所有 Agent 继承自 `BaseAgent` — 共享工具系统、流式循环、记忆访问。Sebastian 在此基础上增加目标分解和委派能力；组长增加领域工具和组员分派能力。
-
-完整架构设计见 [docs/architecture/spec/](docs/architecture/spec/)。
 
 ### 城堡管理体系
 
@@ -161,6 +175,8 @@ sebastian update --check                     # 仅检查更新，不执行升级
 ```
 
 日常模式：你只和 Sebastian 对话，它自动协调组长执行。磨合期可直接与组长对话或干预任意 session。
+
+完整架构设计见 [docs/architecture/spec/](docs/architecture/spec/)。
 
 ## 🗺️ 路线图
 
