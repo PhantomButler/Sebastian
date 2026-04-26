@@ -2,6 +2,7 @@ package com.sebastian.android.data.repository
 
 import com.sebastian.android.data.model.ApprovalSnapshot
 import com.sebastian.android.data.model.Message
+import com.sebastian.android.data.model.TodoItem
 import com.sebastian.android.data.remote.SseEnvelope
 import kotlinx.coroutines.flow.Flow
 
@@ -16,4 +17,5 @@ interface ChatRepository {
     suspend fun grantApproval(approvalId: String): Result<Unit>
     suspend fun denyApproval(approvalId: String): Result<Unit>
     suspend fun getPendingApprovals(): Result<List<ApprovalSnapshot>>
+    suspend fun getTodos(sessionId: String): Result<List<TodoItem>>
 }

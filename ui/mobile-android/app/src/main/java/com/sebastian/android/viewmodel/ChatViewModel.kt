@@ -7,6 +7,7 @@ import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.StreamEvent
+import com.sebastian.android.data.model.TodoItem
 import com.sebastian.android.data.model.ToolStatus
 import com.sebastian.android.data.repository.ChatRepository
 import com.sebastian.android.data.repository.SessionRepository
@@ -49,6 +50,7 @@ data class ChatUiState(
     val isServerNotConfigured: Boolean = false,
     val connectionFailed: Boolean = false,
     val flushTick: Long = 0L,
+    val todos: List<TodoItem> = emptyList(),
 )
 
 @HiltViewModel
@@ -268,6 +270,15 @@ class ChatViewModel @Inject constructor(
             is StreamEvent.ToolFailed -> {
                 updateToolBlockByToolId(event.toolId) { existing ->
                     existing.copy(status = ToolStatus.FAILED, error = event.error)
+                }
+            }
+
+            is StreamEvent.TodoUpdated -> {
+                val sessionId = _uiState.value.activeSessionId ?: return
+                viewModelScope.launch(dispatcher) {
+                    chatRepository.getTodos(sessionId).onSuccess { todos ->
+                        _uiState.update { it.copy(todos = todos) }
+                    }
                 }
             }
 
@@ -575,6 +586,9 @@ class ChatViewModel @Inject constructor(
                 .onSuccess { history ->
                     _uiState.update { it.copy(messages = history) }
                 }
+            chatRepository.getTodos(sessionId).onSuccess { todos ->
+                _uiState.update { it.copy(todos = todos) }
+            }
             startSseCollection(sessionId = sessionId)
         }
     }
@@ -590,6 +604,7 @@ class ChatViewModel @Inject constructor(
             it.copy(
                 activeSessionId = null,
                 messages = emptyList(),
+                todos = emptyList(),
                 composerState = ComposerState.IDLE_EMPTY,
                 agentAnimState = AgentAnimState.IDLE,
                 connectionFailed = false,

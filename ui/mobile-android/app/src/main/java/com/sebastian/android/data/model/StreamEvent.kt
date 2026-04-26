@@ -60,6 +60,9 @@ sealed class StreamEvent {
         val error: String,
     ) : StreamEvent()
 
+    // Todo
+    data class TodoUpdated(val sessionId: String, val count: Int) : StreamEvent()
+
     // 未识别事件（忽略）
     object Unknown : StreamEvent()
 }

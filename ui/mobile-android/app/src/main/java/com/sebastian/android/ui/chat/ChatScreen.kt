@@ -327,7 +327,7 @@ fun ChatScreen(
             }
         },
         rightPane = {
-            TodoPanel()
+            TodoPanel(todos = chatState.todos)
         },
     )
 

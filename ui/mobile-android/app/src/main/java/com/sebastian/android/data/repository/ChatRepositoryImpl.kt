@@ -2,6 +2,7 @@ package com.sebastian.android.data.repository
 
 import com.sebastian.android.data.model.ApprovalSnapshot
 import com.sebastian.android.data.model.Message
+import com.sebastian.android.data.model.TodoItem
 import com.sebastian.android.data.remote.ApiService
 import com.sebastian.android.data.remote.SseClient
 import com.sebastian.android.data.remote.SseEnvelope
@@ -75,5 +76,9 @@ class ChatRepositoryImpl @Inject constructor(
                 reason = dto.reason.orEmpty(),
             )
         }
+    }
+
+    override suspend fun getTodos(sessionId: String): Result<List<TodoItem>> = runCatching {
+        apiService.getTodos(sessionId).todos.map { it.toDomain() }
     }
 }

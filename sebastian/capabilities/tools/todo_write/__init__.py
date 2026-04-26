@@ -84,8 +84,16 @@ async def todo_write(todos: list[dict[str, Any]]) -> ToolResult:
         )
     )
 
+    _status_labels = {"pending": "待完成", "in_progress": "进行中", "completed": "已完成"}
+    lines = [
+        f"• {item.content}（{_status_labels.get(item.status.value, item.status.value)}）"
+        for item in items
+    ]
+    display_text = f"写入 {len(items)} 个待办\n" + "\n".join(lines)
+
     return ToolResult(
         ok=True,
+        display=display_text,
         output={
             "old_count": len(old),
             "new_count": len(items),
