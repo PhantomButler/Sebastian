@@ -64,6 +64,8 @@ exit 1
     )
 
     assert result.returncode == 0, result.stderr
-    assert "venv\n" in calls.read_text()
-    assert "sebastian serve" in calls.read_text()
-    assert "service install" not in calls.read_text()
+    log = calls.read_text()
+    assert "venv\n" in log
+    # macOS / 有 $DISPLAY → sebastian serve；headless Linux → sebastian init --headless
+    assert ("sebastian serve" in log) or ("sebastian init --headless" in log)
+    assert "service install" not in log
