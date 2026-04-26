@@ -96,8 +96,14 @@ def _install_systemd() -> None:
     unit = _systemd_unit_path()
     if unit.exists():
         raise ServiceError(f"{unit} 已存在，请先 sebastian service uninstall")
+
+    from sebastian.cli.updater import resolve_install_dir
+    from sebastian.config import settings
+
+    settings.logs_dir.mkdir(parents=True, exist_ok=True)
     unit.parent.mkdir(parents=True, exist_ok=True)
-    unit.write_text(render_systemd_unit())
+    install_bin = resolve_install_dir() / ".venv" / "bin" / "sebastian"
+    unit.write_text(render_systemd_unit(install_bin=install_bin, logs_dir=settings.logs_dir))
     _run(["systemctl", "--user", "daemon-reload"])
     _run(["systemctl", "--user", "enable", "--now", "sebastian.service"])
     _check_linger()
@@ -156,8 +162,14 @@ def _install_launchd() -> None:
     plist = _launchd_plist_path()
     if plist.exists():
         raise ServiceError(f"{plist} 已存在，请先 sebastian service uninstall")
+
+    from sebastian.cli.updater import resolve_install_dir
+    from sebastian.config import settings
+
+    settings.logs_dir.mkdir(parents=True, exist_ok=True)
     plist.parent.mkdir(parents=True, exist_ok=True)
-    plist.write_text(render_launchd_plist(home=Path.home()))
+    install_bin = resolve_install_dir() / ".venv" / "bin" / "sebastian"
+    plist.write_text(render_launchd_plist(install_bin=install_bin, logs_dir=settings.logs_dir))
     _run(["launchctl", "load", "-w", str(plist)])
 
 

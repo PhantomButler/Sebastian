@@ -6,31 +6,34 @@ from pathlib import Path
 
 
 def test_setup_creates_logs_dir(tmp_path: Path) -> None:
-    """setup_logging 应在 data_dir/logs 下创建目录。"""
+    """setup_logging 应在 logs_dir 下创建目录。"""
     from sebastian.log.manager import LogManager
 
-    mgr = LogManager(data_dir=tmp_path)
+    logs_dir = tmp_path / "logs"
+    mgr = LogManager(logs_dir=logs_dir)
     mgr.setup()
-    assert (tmp_path / "logs").is_dir()
+    assert logs_dir.is_dir()
 
 
 def test_main_log_file_created(tmp_path: Path) -> None:
     """setup 后写一条日志，main.log 应存在。"""
     from sebastian.log.manager import LogManager
 
-    mgr = LogManager(data_dir=tmp_path)
+    logs_dir = tmp_path / "logs"
+    mgr = LogManager(logs_dir=logs_dir)
     mgr.setup()
     logging.getLogger("sebastian.test_main").info("hello")
-    assert (tmp_path / "logs" / "main.log").exists()
+    assert (logs_dir / "main.log").exists()
 
 
 def test_llm_stream_toggle(tmp_path: Path) -> None:
     """开启 llm_stream 后写 DEBUG 日志，llm_stream.log 应收到内容；关闭后不再写入。"""
     from sebastian.log.manager import LogManager
 
-    mgr = LogManager(data_dir=tmp_path)
+    logs_dir = tmp_path / "logs"
+    mgr = LogManager(logs_dir=logs_dir)
     mgr.setup()
-    log_path = tmp_path / "logs" / "llm_stream.log"
+    log_path = logs_dir / "llm_stream.log"
 
     # 默认关闭，写日志不落盘
     logging.getLogger("sebastian.llm.stream").debug("should not appear")
@@ -53,9 +56,10 @@ def test_sse_toggle(tmp_path: Path) -> None:
     """开启 sse 后写日志，sse.log 应收到内容。"""
     from sebastian.log.manager import LogManager
 
-    mgr = LogManager(data_dir=tmp_path)
+    logs_dir = tmp_path / "logs"
+    mgr = LogManager(logs_dir=logs_dir)
     mgr.setup()
-    log_path = tmp_path / "logs" / "sse.log"
+    log_path = logs_dir / "sse.log"
 
     mgr.set_sse(True)
     logging.getLogger("sebastian.gateway.sse").debug("sse payload")
@@ -67,7 +71,8 @@ def test_get_state_reflects_toggles(tmp_path: Path) -> None:
     """get_state 应返回当前开关状态。"""
     from sebastian.log.manager import LogManager
 
-    mgr = LogManager(data_dir=tmp_path)
+    logs_dir = tmp_path / "logs"
+    mgr = LogManager(logs_dir=logs_dir)
     mgr.setup()
 
     state = mgr.get_state()

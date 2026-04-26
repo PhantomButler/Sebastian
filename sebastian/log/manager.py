@@ -31,11 +31,11 @@ class LogManager:
 
     def __init__(
         self,
-        data_dir: Path,
+        logs_dir: Path,
         initial_llm_stream: bool = False,
         initial_sse: bool = False,
     ) -> None:
-        self._data_dir = data_dir
+        self._logs_dir = logs_dir
         self._initial_llm_stream = initial_llm_stream
         self._initial_sse = initial_sse
         self._llm_stream_handler: logging.handlers.RotatingFileHandler | None = None
@@ -45,7 +45,7 @@ class LogManager:
 
     def setup(self) -> None:
         """初始化日志目录和 handlers；在 Gateway lifespan 启动时调用一次。"""
-        logs_dir = self._data_dir / "logs"
+        logs_dir = self._logs_dir
         logs_dir.mkdir(parents=True, exist_ok=True)
 
         # main.log — 覆盖 sebastian root logger，DEBUG+，始终开启

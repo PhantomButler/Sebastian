@@ -1,7 +1,7 @@
 """Service unit / plist template rendering.
 
-systemd uses %h for $HOME at runtime; launchd plists do not support
-variable expansion, so HOME is rendered into the plist content directly.
+Both systemd and launchd templates are rendered with explicit absolute paths
+so that a custom SEBASTIAN_DATA_DIR is respected correctly.
 """
 
 from __future__ import annotations
@@ -15,11 +15,11 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.sebastian/app/.venv/bin/sebastian serve
+ExecStart={install_bin} serve
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:%h/.sebastian/logs/service.out.log
-StandardError=append:%h/.sebastian/logs/service.err.log
+StandardOutput=append:{out_log}
+StandardError=append:{err_log}
 
 [Install]
 WantedBy=default.target
@@ -33,7 +33,7 @@ _LAUNCHD_PLIST_TEMPLATE = """\
   <key>Label</key><string>com.sebastian</string>
   <key>ProgramArguments</key>
   <array>
-    <string>{home}/.sebastian/app/.venv/bin/sebastian</string>
+    <string>{install_bin}</string>
     <string>serve</string>
   </array>
   <key>RunAtLoad</key><true/>
@@ -41,16 +41,24 @@ _LAUNCHD_PLIST_TEMPLATE = """\
   <dict>
     <key>SuccessfulExit</key><false/>
   </dict>
-  <key>StandardOutPath</key><string>{home}/.sebastian/logs/service.out.log</string>
-  <key>StandardErrorPath</key><string>{home}/.sebastian/logs/service.err.log</string>
+  <key>StandardOutPath</key><string>{out_log}</string>
+  <key>StandardErrorPath</key><string>{err_log}</string>
 </dict>
 </plist>
 """
 
 
-def render_systemd_unit() -> str:
-    return _SYSTEMD_UNIT_TEMPLATE
+def render_systemd_unit(*, install_bin: Path, logs_dir: Path) -> str:
+    return (
+        _SYSTEMD_UNIT_TEMPLATE.replace("{install_bin}", str(install_bin))
+        .replace("{out_log}", str(logs_dir / "service.out.log"))
+        .replace("{err_log}", str(logs_dir / "service.err.log"))
+    )
 
 
-def render_launchd_plist(*, home: Path) -> str:
-    return _LAUNCHD_PLIST_TEMPLATE.replace("{home}", str(home))
+def render_launchd_plist(*, install_bin: Path, logs_dir: Path) -> str:
+    return (
+        _LAUNCHD_PLIST_TEMPLATE.replace("{install_bin}", str(install_bin))
+        .replace("{out_log}", str(logs_dir / "service.out.log"))
+        .replace("{err_log}", str(logs_dir / "service.err.log"))
+    )

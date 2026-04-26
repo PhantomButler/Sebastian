@@ -38,7 +38,7 @@ def serve(
             version = tomllib.load(_f)["project"]["version"]
     else:
         version = importlib.metadata.version("sebastian")
-    log_file = settings.data_dir / "logs" / "main.log"
+    log_file = settings.logs_dir / "main.log"
 
     # --- startup banner ---
     typer.echo(f"Sebastian v{version}")
@@ -55,7 +55,7 @@ def serve(
 
         typer.echo(f"  运行模式: 后台 (PID 文件: {pf})")
 
-        log_dir = settings.data_dir / "logs"
+        log_dir = settings.logs_dir
         log_dir.mkdir(parents=True, exist_ok=True)
 
         pid = os.fork()
@@ -115,7 +115,7 @@ def logs(
 
     from sebastian.config import settings
 
-    log_file = settings.data_dir / "logs" / "main.log"
+    log_file = settings.logs_dir / "main.log"
     if not log_file.exists():
         typer.echo(f"日志文件不存在: {log_file}")
         raise typer.Exit(code=1)

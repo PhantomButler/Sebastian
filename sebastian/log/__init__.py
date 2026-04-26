@@ -9,11 +9,11 @@ from sebastian.log.schema import LogConfigPatch, LogState
 _log_manager: LogManager | None = None
 
 
-def setup_logging(data_dir: Path, llm_stream: bool = False, sse: bool = False) -> LogManager:
+def setup_logging(logs_dir: Path, llm_stream: bool = False, sse: bool = False) -> LogManager:
     """初始化全局 LogManager 并调用 setup()。Gateway lifespan 调用一次。"""
     global _log_manager
     _log_manager = LogManager(
-        data_dir=data_dir,
+        logs_dir=logs_dir,
         initial_llm_stream=llm_stream,
         initial_sse=sse,
     )
