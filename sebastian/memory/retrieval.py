@@ -314,9 +314,16 @@ class MemorySectionAssembler:
             return True
 
         def _not_resident_duplicate(record: Any) -> bool:
-            """Return False if *record* is already injected by resident memory snapshot."""
+            """Return False if *record* is already injected by resident memory snapshot.
+
+            Dedup order per spec §11: record id → canonical bullet → slot_value key.
+            """
             record_id = getattr(record, "id", None)
             if record_id and record_id in effective_context.resident_record_ids:
+                return False
+            # canonical bullet check comes before slot_value per spec §11
+            bullet = _canonical_bullet(getattr(record, "content", "") or "")
+            if bullet and bullet in effective_context.resident_canonical_bullets:
                 return False
             key = _slot_value_dedupe_key(
                 subject_id=getattr(record, "subject_id", None) or effective_context.subject_id,
@@ -324,9 +331,6 @@ class MemorySectionAssembler:
                 structured_payload=getattr(record, "structured_payload", None) or {},
             )
             if key and key in effective_context.resident_dedupe_keys:
-                return False
-            bullet = _canonical_bullet(getattr(record, "content", "") or "")
-            if bullet and bullet in effective_context.resident_canonical_bullets:
                 return False
             return True
 
