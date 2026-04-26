@@ -18,6 +18,10 @@ def _seed_and_get_app(tmp_path: Path, password: str):
     from sebastian.store.database import get_session_factory, init_db
     from sebastian.store.owner_store import OwnerStore
 
+    data_subdir = tmp_path / "data"
+    data_subdir.mkdir(exist_ok=True)
+    (data_subdir / "secret.key").write_text("integration-secret")
+
     async def _seed() -> None:
         await init_db()
         await OwnerStore(get_session_factory()).create_owner(
@@ -31,7 +35,6 @@ def _seed_and_get_app(tmp_path: Path, password: str):
     asyncio.run(_seed())
     db_module._engine = None
     db_module._session_factory = None
-    (tmp_path / "secret.key").write_text("integration-secret")
 
     from sebastian.gateway.app import create_app
 

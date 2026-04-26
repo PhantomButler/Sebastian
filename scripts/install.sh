@@ -75,21 +75,25 @@ else
   color_grn "✓ 检测到已初始化数据，跳过向导"
 fi
 
-# 7. 询问是否注册服务
+# 7. 询问是否注册服务（仅在交互式终端下询问）
 echo ""
-read -r -p "是否注册为开机自启服务（systemd / launchd）？[y/N] " ANS
-case "${ANS:-N}" in
-  y|Y|yes|YES)
-    color_ylw "→ 安装系统服务..."
-    sebastian service install
-    color_grn "✓ 服务已注册"
-    REGISTERED=1
-    ;;
-  *)
-    color_dim "已跳过。稍后可执行：sebastian service install"
-    REGISTERED=0
-    ;;
-esac
+REGISTERED=0
+if [[ -t 0 ]]; then
+  read -r -p "是否注册为开机自启服务（systemd / launchd）？[y/N] " ANS
+  case "${ANS:-N}" in
+    y|Y|yes|YES)
+      color_ylw "→ 安装系统服务..."
+      sebastian service install
+      color_grn "✓ 服务已注册"
+      REGISTERED=1
+      ;;
+    *)
+      color_dim "已跳过。稍后可执行：sebastian service install"
+      ;;
+  esac
+else
+  color_dim "非交互式环境，跳过服务注册。稍后可执行：sebastian service install"
+fi
 
 # 8. 退出指引
 echo ""

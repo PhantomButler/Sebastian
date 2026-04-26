@@ -26,6 +26,8 @@ def _safe_move(src: Path, dst: Path) -> None:
             "Remove it manually or back it up before retrying."
         )
     shutil.move(str(src), str(dst))
+
+
 CURRENT_SCHEMA = "2"
 
 # 用户数据：从 root 搬到 data/

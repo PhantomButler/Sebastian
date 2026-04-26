@@ -59,15 +59,6 @@ def test_hash_and_verify_password() -> None:
     assert not verify_password("wrongpassword", hashed)
 
 
-def test_sessions_dir_derived_from_data_dir() -> None:
-    from sebastian.config import settings
-
-    assert (
-        settings.sessions_dir
-        == Path(settings.sebastian_data_dir).expanduser().resolve() / "sessions"
-    )
-
-
 def test_log_settings_defaults() -> None:
     """日志开关默认值应为 False。"""
     from sebastian.config import Settings

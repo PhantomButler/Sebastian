@@ -7,7 +7,7 @@ from sebastian.config import Settings
 
 def test_secret_key_path_default_uses_data_dir() -> None:
     s = Settings(sebastian_data_dir="/tmp/sebx")
-    assert s.resolved_secret_key_path() == Path("/tmp/sebx/secret.key")
+    assert s.resolved_secret_key_path() == Path("/tmp/sebx").resolve() / "data" / "secret.key"
 
 
 def test_secret_key_path_explicit_override() -> None:

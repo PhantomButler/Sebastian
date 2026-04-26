@@ -52,7 +52,11 @@ exit 1
     result = subprocess.run(
         [str(scripts / "install.sh")],
         cwd=project,
-        env={"PATH": f"{fake_bin}:{os.environ['PATH']}", "CALLS_LOG": str(calls)},
+        env={
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "CALLS_LOG": str(calls),
+            "HOME": os.environ.get("HOME", str(tmp_path)),
+        },
         capture_output=True,
         text=True,
         timeout=10,

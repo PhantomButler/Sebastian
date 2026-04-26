@@ -57,7 +57,9 @@ def test_coerce_thinking_rejects_invalid_effort_for_adaptive_capability() -> Non
 
 @pytest_asyncio.fixture
 async def registry(tmp_path, monkeypatch):
-    key_file = tmp_path / "secret.key"
+    data_subdir = tmp_path / "data"
+    data_subdir.mkdir()
+    key_file = data_subdir / "secret.key"
     key_file.write_text("test-secret")
     monkeypatch.setattr("sebastian.config.settings.sebastian_data_dir", str(tmp_path))
 

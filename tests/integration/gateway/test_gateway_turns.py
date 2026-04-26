@@ -51,6 +51,10 @@ def client(tmp_path):
                     db_module._engine = None
                     db_module._session_factory = None
 
+                    data_subdir = tmp_path / "data"
+                    data_subdir.mkdir(exist_ok=True)
+                    (data_subdir / "secret.key").write_text("test-secret-key")
+
                     from sebastian.store.database import get_session_factory, init_db
                     from sebastian.store.owner_store import OwnerStore
 
@@ -68,7 +72,6 @@ def client(tmp_path):
                     asyncio.run(_seed())
                     db_module._engine = None
                     db_module._session_factory = None
-                    (tmp_path / "secret.key").write_text("test-secret-key")
 
                     from starlette.testclient import TestClient
 
