@@ -1,5 +1,5 @@
 # Sebastian 的 AGENTS 指南
-本指南面向本仓库中的自治编码代理（Claude Code、Codex、OpenCode 等）。
+本指南面向本仓库中的自治编码代理。
 请使用可复现命令，遵循现有模式，并验证改动。
 
 ## 项目概述
@@ -9,6 +9,7 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 **架构 Spec 索引**：`docs/architecture/spec/INDEX.md`
 开始工作前必读，包含完整架构决策的分模块索引（总体架构、三层 Agent 模型、核心运行时、LLM Provider、System Prompt、日志系统等）。
+
 
 **目录 README 索引**：
 - `sebastian/README.md`：后端主包结构、模块职责、常见开发入口
@@ -21,7 +22,7 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 - 主语言：Python 3.12+
 - 包名：`sebastian`
-- 主要交互入口：Android App（Kotlin 原生），辅以 Web UI
+- 主要交互入口：Android App（React Native），其次 iOS，辅以 Web UI
 
 ## 2) 关键路径
 
@@ -43,7 +44,7 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 
 ### 模块 README 导航
 
-在针对某模块工作前，优先读对应 README（若存在）以快速获取上下文：
+在针对某模块工作前，优先读对应 README（若存在）以快速获取上下文，避免全量搜索引入无关内容：
 - `sebastian/README.md`
 - `ui/mobile-android/README.md`
 - `sebastian/core/README.md`
@@ -77,6 +78,16 @@ docker compose up
 
 - Android Studio 已安装，SDK 路径：`~/Library/Android/sdk`
 - AVD 已创建（推荐 `Medium_Phone_API_36.1`）
+- Node.js 已安装
+
+### 初次安装依赖
+
+```bash
+cd ui/mobile
+npm install --legacy-peer-deps   # react-query-devtools 有 peer conflict，必须加此 flag
+```
+
+> **注意**：`@tanstack/react-query-devtools` 是 Web-only 包，**不能** import 进 React Native 代码，否则 crash。
 
 ### 启动 Android 模拟器
 
@@ -97,28 +108,29 @@ docker compose up
 ### 首次构建并安装 APK
 
 ```bash
-cd ui/mobile-android
+cd ui/mobile
 
 # 配置 Android SDK 路径（仅首次，不提交）
-echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
+echo "sdk.dir=$HOME/Library/Android/sdk" > android/local.properties
 
-# 构建 debug APK 并安装到已连接设备
-./gradlew :app:installDebug
+# 构建 + 安装到已连接设备
+npx expo run:android
 ```
 
-### 日常开发
+### 日常开发（APK 已装，只改 JS）
 
 ```bash
-# 仅编译检查（不安装）
-cd ui/mobile-android
-./gradlew :app:compileDebugKotlin
-
-# Lint 检查
-./gradlew :app:lintDebug
-
-# 单元测试
-./gradlew :app:testDebugUnitTest
+cd ui/mobile
+npx expo start          # 启动 Metro，App 内自动热更新
 ```
+
+> Expo Router 默认路由：`app/index.tsx` 用 `<Redirect>` 控制落地页，**不要**在 `_layout.tsx` 用 `initialRouteName`（此版本不支持）。
+
+> **Metro 热更新注意**：热更新依赖 app 连上 Metro；不确定改动是否生效时，用 `npx expo run:android` 重新 build 更可靠。
+
+> **React Native SSE**：RN 原生 `fetch` streaming 不支持 SSE 长连接，需用 `react-native-sse` 包实现 EventSource。
+
+> **Anthropic SDK 0.87+**：`AsyncMessageStream.current_message` 已改名为 `current_message_snapshot`。
 
 ### 启动 Gateway 供 App 联调
 
@@ -165,8 +177,8 @@ SEBASTIAN_GATEWAY_PORT=8823
 ```
 
 > **注意**：从 v0.2.0 起，owner 账号、JWT 签名密钥和 LLM API Key 不再由环境变量提供：
-> - Owner 账号存在 `~/.sebastian/sebastian.db` 的 `users` 表
-> - JWT 密钥和 API Key 加密密钥均来自 `~/.sebastian/secret.key`（chmod 600）
+> - Owner 账号存在 `~/.sebastian/data/sebastian.db` 的 `users` 表
+> - JWT 密钥和 API Key 加密密钥均来自 `~/.sebastian/data/secret.key`（chmod 600）
 > - 两者均由首启 Web 向导或 `sebastian init --headless` 生成
 > - LLM API Key 通过 App Settings 页面添加，加密存储在数据库中
 
@@ -180,6 +192,19 @@ SEBASTIAN_GATEWAY_PORT=8823
 
 # Android 模拟器 Settings 页填写 Server URL：http://10.0.2.2:8824
 ```
+
+### 数据目录布局（v2）
+
+```
+~/.sebastian/
+  app/         # 安装树（sebastian update 只动这里）
+  data/        # 用户数据：sebastian.db / secret.key / workspace / extensions
+  logs/        # 日志
+  run/         # PID + update 回滚备份
+  .layout-v2   # 迁移标记
+```
+
+旧版本（平铺布局）会在 `sebastian serve` 启动时自动迁移到此结构。
 
 ## 4) Lint 与格式化
 
@@ -217,7 +242,7 @@ SEBASTIAN_GATEWAY_PORT=8823
 ```
 
 > LLM API Key 通过 App Settings 页面管理（加密存储在数据库），不再通过环境变量。
-> JWT 签名密钥和 API Key 加密密钥统一来自 `<data_dir>/secret.key`（setup wizard 自动生成）。
+> JWT 签名密钥和 API Key 加密密钥统一来自 `<data_dir>/data/secret.key`（setup wizard 自动生成）。
 
 ## 7) Python 代码风格
 
@@ -304,30 +329,32 @@ Linux 上该调用注册 `PidfdChildWatcher`，function-scoped event loop 关闭
 
 ### 第一性原理
 请使用第一性原理思考。从原始需求和问题本质出发，不从管理或模板出发。
-- 不要假设用户想要什么，动机或目标不清晰时，停下来讨论。
-- 目标清晰但路径不是最短的，直接告诉用户并建议更好的办法。
-- 遇到问题追根溯源，不打补丁。每个决策都要能回答"为什么"。
+- 不要假设我行出自己想要什么，动机或目标不清晰时，停下来讨论。
+- 目标清晰但路径不是最短的，直接告诉我并建议更好的办法。
+- 遇到问题追根溯源，不打补丁。每个决策都要能回答“为什么“。
 - 输出说重点，减少一切不改变决策的信息。
 
 ### 方案规范
-当需要给出修改或重构方案时必须符合以下规范：
+当需要你给出修改或重构方案时必须符合以下规范：
 
 - 不允许给出兼容性或补丁性的方案
 - 不允许过度设计，保持最短路径实现且不能违反第一条要求
-- 不允许自行给出用户需求以外的方案（如兜底和降级方案），这可能导致业务逻辑偏移
+- 不允许自行给出我提供的需求以外的方案，例如一些兜底和降级方案，这可能导致业务逻辑偏移问题
 - 必须确保方案的逻辑正确，必须经过全链路的逻辑验证
 
 ### 其他
-- (重要)在处理 Python 项目文件时，若当前环境有 JetBrains PyCharm MCP 可用，优先使用它进行符号、引用、实现、类型层级和文本索引查询；无则退回 agent 自带的搜索工具。
-- (重要)在处理 Kotlin/Android 项目文件时，若当前环境有 Android Studio MCP (android-studio-index) 可用，优先使用它进行符号、引用、实现查询；无则退回 agent 自带的搜索工具。
-- 在分派子任务时，记得告知子 agent 也可以使用 JetBrains PyCharm MCP 和 Android Studio MCP（如果可用）。
+- (重要)在处理 python 项目文件时，优先使用 JetBrains pycharm MCP 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于”未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
+- (重要)在处理 Kotlin/Android 项目文件时，优先使用 Android Studio MCP (android-studio-index) 进行符号、引用、实现、类型层级和文本索引查询；不要先使用 `rg`、`grep`、`find` 等本地搜索。只有在确认当前会话无法使用该 MCP，或其能力不足以完成当前任务时，才允许退回本地搜索；退回前必须明确说明失败点属于”未配置 / 未连接 / 当前 agent 无工具暴露 / 其他”中的哪一类。
+- (重要)在分派subagent 任务时记得告知subagent 也可以使用JetBrains pycharm MCP 和 Android Studio MCP
+- 尽量使用 Read/Edit/Write 等内置工具编辑文件，非必要不使用 echo/cat heredoc/sed 等 shell命令写文件，除非系统内置工具一直出问题得不到解决
 - 在修改过程中如果发现某个文件内容过多，记得提醒用户规划拆分计划
-- 针对某部分做修改时优先根据对应 README 了解模块上下文
-- 探索查询或修改任何功能模块前，必须先读对应的 README：
+- 在针对某部分做修改时优先根据 README 了解对应模块上下文
+- （重要）探索查询或修改任何功能模块前，必须先读对应的 README：
   - 从根目录 `INDEX.md` 开始，沿树状链接向下定位目标模块
   - 每个模块 README 包含「修改导航」表，直接指向需要修改的文件
   - 如果修改了某目录的内容，同步更新该目录的 README（以及受影响的上级 README）
-- 写代码过程中遵循模块化可扩展原则，推荐 500 行以下，不超过 800 行
+  - README 索引树：根 `INDEX.md` → `sebastian/README.md` → 各子模块 README
+- 写代码过程中尽量遵循模块化可扩展原则，推荐 500 行以下，不超过 800 行
 - 每个任务从 `main` 开 feature branch，PR 合并后删除，不保留长期分支
 
 ## 11) 代码提交与 PR 工作流
@@ -349,7 +376,8 @@ git checkout -b feat/your-feature   # 或 fix/ chore/ docs/ 等前缀
 - commit message 格式：`类型(范围): 中文摘要`
   - 类型：`feat` / `fix` / `docs` / `refactor` / `chore` / `test` / `style` / `ci`
   - 可在类型前加 emoji（参考现有历史记录风格）
-- message 末尾附：`Co-Authored-By: <Agent Name> <noreply@example.com>`
+- message 末尾附：`Co-Authored-By: Claude <noreply@anthropic.com>`
+  （或写当前实际模型，例如 `Claude Opus 4.6` / `Claude Sonnet 4.6` /  `gpt 5.5`）
 - 保持改动原子化，一个 commit 只做一件事
 
 ### 推送与 PR
@@ -360,7 +388,7 @@ git checkout -b feat/your-feature   # 或 fix/ chore/ docs/ 等前缀
 - PR body 必须包含两部分：
   - **Summary**：改了什么、为什么改（1-3 条要点）
   - **Test plan**：验证步骤 checklist
-- 合并使用 squash merge，合并后 feature branch 自动删除
+- 合并使用 squash merge（`gh pr merge --squash --delete-branch`），合并后 feature branch 自动删除
 
 ### 分支保护
 - `main` 只接受 PR squash merge，需 CI 四项 job（`backend-lint` / `backend-type` / `backend-test` / `mobile-lint`）全绿 + 1 个 approval
@@ -420,3 +448,12 @@ git checkout -b feat/your-feature   # 或 fix/ chore/ docs/ 等前缀
 - 绝不硬编码密钥，通过环境变量注入（参考 `.env.example`）
 - 沙箱执行（Dynamic Tool Factory 生成的代码）必须走 `sebastian/sandbox/executor.py`，不允许直接 `exec()`
 - 高危操作（文件删除、网络请求、系统命令）需要 Approval 机制
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `python3 -c "from graphify.watch import _rebuild_code; from pathlib import Path; _rebuild_code(Path('.'))"` to keep the graph current

@@ -10,7 +10,6 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 **架构 Spec 索引**：`docs/architecture/spec/INDEX.md`
 开始工作前必读，包含完整架构决策的分模块索引（总体架构、三层 Agent 模型、核心运行时、LLM Provider、System Prompt、日志系统等）。
 
-**关系说明**：OpenJax（`/Users/ericw/work/code/ai/openJax`）是前驱技术探索，Sebastian 继承其设计经验，不继承代码。
 
 **目录 README 索引**：
 - `sebastian/README.md`：后端主包结构、模块职责、常见开发入口
@@ -378,7 +377,7 @@ git checkout -b feat/your-feature   # 或 fix/ chore/ docs/ 等前缀
   - 类型：`feat` / `fix` / `docs` / `refactor` / `chore` / `test` / `style` / `ci`
   - 可在类型前加 emoji（参考现有历史记录风格）
 - message 末尾附：`Co-Authored-By: Claude <noreply@anthropic.com>`
-  （或写当前实际模型，例如 `Claude Opus 4.6` / `Claude Sonnet 4.6`）
+  （或写当前实际模型，例如 `Claude Opus 4.6` / `Claude Sonnet 4.6` / `gpt 5.5`）
 - 保持改动原子化，一个 commit 只做一件事
 
 ### 推送与 PR
