@@ -542,3 +542,38 @@ async def test_read_hash_mismatch_triggers_schedule_refresh(
     result = await refresher.read()
     assert result.content == ""
     assert refresh_called, "schedule_refresh must be called on hash mismatch"
+
+
+# ---------------------------------------------------------------------------
+# Writer-active barrier test
+# ---------------------------------------------------------------------------
+
+
+async def test_read_returns_empty_while_writer_active(tmp_path: Path) -> None:
+    """Reader must not serve stale snapshot while a writer is in mutation_scope()."""
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+        ResidentSnapshotReadResult,
+    )
+
+    refresher = ResidentMemorySnapshotRefresher(
+        paths=ResidentSnapshotPaths.from_user_data_dir(tmp_path)
+    )
+    # Set up a ready snapshot
+    await refresher._publish_ready_for_test(
+        "## Resident Memory\n- Profile memory: test content",
+        rendered_record_ids={"r1"},
+    )
+    assert (await refresher.read()).content != ""
+
+    # Simulate: writer enters mutation_scope (write lock held + _writer_active = True)
+    results: list[ResidentSnapshotReadResult] = []
+    async with refresher.mutation_scope():
+        # Inside mutation_scope: writer is active
+        result = await refresher.read()
+        results.append(result)
+
+    assert results[0].content == "", (
+        "read() must return empty while writer is in mutation_scope()"
+    )

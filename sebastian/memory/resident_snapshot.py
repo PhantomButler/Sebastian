@@ -234,7 +234,16 @@ class ResidentMemorySnapshotRefresher:
     # ------------------------------------------------------------------
 
     async def read(self) -> ResidentSnapshotReadResult:
-        """Return snapshot content if state is ready and hash matches; otherwise empty."""
+        """Return snapshot content if state is ready and hash matches; otherwise empty.
+
+        Checks _writer_active BEFORE acquiring the read lock.  In asyncio's
+        single-threaded model this is safe: if the flag is True the writer is
+        still inside mutation_scope() (between DB commit and mark_dirty_locked),
+        so serving the cached snapshot would be stale.
+        """
+        if self._writer_active:
+            return _EMPTY_READ_RESULT
+
         async with self._lock.read():
             if self._snapshot_state != "ready":
                 return _EMPTY_READ_RESULT

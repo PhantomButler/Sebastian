@@ -470,38 +470,11 @@ async def test_run_streaming_sqlite_mode_uses_get_context_messages(mem_factory) 
 
 @pytest.mark.asyncio
 async def test_stream_inner_prompt_order_resident_dynamic_todo(mem_factory) -> None:
-    """In the assembled system prompt, '## Resident Memory' appears before
-    '## Retrieved Memory' (or the memory section), which appears before
-    '## Session Todos'."""
-    from datetime import UTC, datetime
+    """In the assembled system prompt, resident memory → dynamic memory → todos.
 
-    from sebastian.store.models import ProfileMemoryRecord
-
-    # Seed a record so dynamic memory section is non-empty.
-    async with mem_factory() as session:
-        record = ProfileMemoryRecord(
-            id="mem-order-1",
-            subject_id="owner",
-            scope="user",
-            slot_id="user.pref.lang",
-            kind="preference",
-            content="用户偏好英文",
-            structured_payload={},
-            source="explicit",
-            confidence=0.9,
-            status="active",
-            valid_from=None,
-            valid_until=None,
-            provenance={},
-            policy_tags=[],
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-            last_accessed_at=None,
-            access_count=0,
-        )
-        session.add(record)
-        await session.commit()
-
+    Verifies the full three-way ordering:
+      resident_idx < dynamic_idx < todo_idx
+    """
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
     agent._current_depth["s-order"] = 1
     _stub_session_store(agent)
@@ -528,16 +501,25 @@ async def test_stream_inner_prompt_order_resident_dynamic_todo(mem_factory) -> N
     fake_todo_store = MagicMock()
     fake_todo_store.read = AsyncMock(return_value=[fake_todo])
 
-    # Build a fake resident refresher that returns a ready snapshot with content.
+    # Resident refresher returns a ready snapshot.
+    # rendered_record_ids contains "res-1" — so dynamic retrieval excludes that record.
     from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
 
     fake_refresher = MagicMock()
     fake_refresher.read = AsyncMock(
         return_value=ResidentSnapshotReadResult(
             content="## Resident Memory\n\n- Profile memory: 用户偏好英文\n",
-            rendered_record_ids={"mem-order-1"},
+            rendered_record_ids={"res-1"},
         )
     )
+
+    # Mock dynamic retrieval to return a non-empty section.
+    # The dynamic record id ("dyn-1") is NOT in resident's rendered_record_ids,
+    # so it would not be filtered out by the exclusion logic.
+    _DYNAMIC_SECTION = "## Current facts about user\n- [preference] 动态记忆内容"
+
+    async def _fake_retrieve(ctx: Any, *, db_session: Any) -> str:
+        return _DYNAMIC_SECTION
 
     import sebastian.gateway.state as gw_state
 
@@ -555,21 +537,32 @@ async def test_stream_inner_prompt_order_resident_dynamic_todo(mem_factory) -> N
             with patch.object(
                 gw_state, "resident_snapshot_refresher", fake_refresher, create=True
             ):
-                await agent._stream_inner(
-                    messages=[{"role": "user", "content": "hello"}],
-                    session_id="s-order",
-                    task_id=None,
-                    agent_context="test",
-                )
+                with patch(
+                    "sebastian.memory.retrieval.retrieve_memory_section",
+                    side_effect=_fake_retrieve,
+                ):
+                    await agent._stream_inner(
+                        messages=[{"role": "user", "content": "hello"}],
+                        session_id="s-order",
+                        task_id=None,
+                        agent_context="test",
+                    )
 
     assert captured_prompts, "stream() was never called"
     prompt = captured_prompts[0]
+
     resident_idx = prompt.find("## Resident Memory")
+    dynamic_idx = prompt.find("## Current facts about user")
     todo_idx = prompt.find("待办任务X")
+
     assert resident_idx != -1, "## Resident Memory not found in prompt"
+    assert dynamic_idx != -1, "## Current facts about user (dynamic) not found in prompt"
     assert todo_idx != -1, "Todo content not found in prompt"
-    assert resident_idx < todo_idx, (
-        f"Resident Memory ({resident_idx}) should appear before todo ({todo_idx})"
+    assert resident_idx < dynamic_idx, (
+        f"Resident Memory ({resident_idx}) must appear before dynamic memory ({dynamic_idx})"
+    )
+    assert dynamic_idx < todo_idx, (
+        f"Dynamic memory ({dynamic_idx}) must appear before todos ({todo_idx})"
     )
 
 
@@ -716,8 +709,6 @@ async def test_resident_memory_section_skips_when_memory_disabled(mem_factory) -
 @pytest.mark.asyncio
 async def test_resident_memory_section_skips_missing_refresher(mem_factory) -> None:
     """When state.resident_snapshot_refresher is None, return empty result."""
-    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
-
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
     agent._current_depth["s-noref"] = 1
 
