@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -46,7 +47,10 @@ MAX_PINNED_NOTES = 10
 _SCHEMA_VERSION = 1
 
 # Instruction-injection patterns (raw content check)
-_INJECTION_PREFIXES = ("system:", "ignore", "developer:", "assistant:", "user:")
+_INJECTION_ROLE_PREFIX = re.compile(
+    r"\b(system|developer|assistant|user)\s*:",
+    re.IGNORECASE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -172,12 +176,11 @@ def is_pinned_eligible(record: ProfileMemoryRecord) -> bool:
     if "```" in content:
         return False
 
-    # No instruction language
+    # No instruction language (role-prefixed or bare "ignore" directive)
     lower = content.lower().strip()
-    for prefix in _INJECTION_PREFIXES:
-        if lower.startswith(prefix):
-            return False
-    if "ignore" in lower:
+    if _INJECTION_ROLE_PREFIX.search(lower):
+        return False
+    if lower.startswith("ignore ") or lower == "ignore":
         return False
 
     return True
@@ -252,6 +255,7 @@ class ResidentMemorySnapshotRefresher:
 
             actual_hash = sha256_text(md_bytes.decode("utf-8"))
             if actual_hash != meta.markdown_hash:
+                self.schedule_refresh()
                 return _EMPTY_READ_RESULT
 
             return ResidentSnapshotReadResult(
@@ -439,8 +443,17 @@ class ResidentMemorySnapshotRefresher:
         seen_bullets: set[str] = set()
 
         def _try_add(rec: ProfileMemoryRecord) -> str | None:
-            """Attempt to add a record, respecting dedup. Returns bullet text or None."""
+            """Attempt to add a record, respecting dedup. Returns bullet text or None.
+
+            Dedup order per spec (Section 8): record id → canonical bullet → slot_value key.
+            """
             if rec.id in seen_ids:
+                return None
+
+            # Canonical bullet dedup (before slot_value per spec)
+            normalized = normalize_memory_text(rec.content)
+            bullet = canonical_bullet(normalized)
+            if bullet in seen_bullets:
                 return None
 
             # Slot-value dedupe key
@@ -450,12 +463,6 @@ class ResidentMemorySnapshotRefresher:
                 structured_payload=rec.structured_payload,
             )
             if sv_key is not None and sv_key in seen_dedupe_keys:
-                return None
-
-            # Canonical bullet dedup
-            normalized = normalize_memory_text(rec.content)
-            bullet = canonical_bullet(normalized)
-            if bullet in seen_bullets:
                 return None
 
             # Accept
@@ -549,8 +556,11 @@ class ResidentMemorySnapshotRefresher:
         self._cached_metadata = meta
 
     async def _write_empty_state(self, state: SnapshotState) -> None:
-        """Write a minimal metadata file with the given state (no markdown change)."""
+        """Write empty markdown and a minimal metadata file with the given state."""
         self._paths.directory.mkdir(parents=True, exist_ok=True)
+        # Empty the markdown file first (atomic); metadata written after.
+        # If this crashes before metadata is written the hash mismatch guard catches it.
+        await self._atomic_write(self._paths.markdown, b"")
         meta = ResidentSnapshotMetadata(
             schema_version=_SCHEMA_VERSION,
             generated_at=datetime.now(UTC).isoformat(),
@@ -583,8 +593,20 @@ class ResidentMemorySnapshotRefresher:
         try:
             async with self._db_factory() as session:
                 await self.rebuild(session)
+        except Exception as exc:
+            logger.warning(
+                "resident_snapshot: background rebuild failed: %s", exc, exc_info=True
+            )
+            await self._write_error_state()
+
+    async def _write_error_state(self) -> None:
+        """Best-effort: write error state to disk and update in-memory state."""
+        try:
+            async with self._lock.write():
+                await self._write_empty_state("error")
+                self._snapshot_state = "error"
         except Exception:
-            logger.exception("resident_snapshot: background rebuild failed")
+            pass  # best-effort; in-memory state is already non-ready after rebuild failure
 
 
 # ---------------------------------------------------------------------------

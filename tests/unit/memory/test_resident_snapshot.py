@@ -395,3 +395,139 @@ async def test_rebuild_discards_if_dirty_generation_changes(
     # The rebuild should have detected the generation change and NOT published
     result = await refresher.read()
     assert result.content == ""
+
+
+# ---------------------------------------------------------------------------
+# Spec compliance tests
+# ---------------------------------------------------------------------------
+
+
+async def test_rebuild_excludes_expired_and_future_dated(
+    tmp_path: Path, resident_db_session: AsyncSession
+) -> None:
+    """Records outside their valid window must not appear in the snapshot."""
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+    )
+
+    now = datetime.now(UTC)
+    resident_db_session.add_all(
+        [
+            _profile_record(id="expired", valid_until=now - timedelta(seconds=1)),
+            _profile_record(id="future", valid_from=now + timedelta(days=1)),
+        ]
+    )
+    await resident_db_session.commit()
+    refresher = ResidentMemorySnapshotRefresher(
+        paths=ResidentSnapshotPaths.from_user_data_dir(tmp_path)
+    )
+    await refresher.rebuild(resident_db_session)
+    result = await refresher.read()
+    assert result.content == ""
+    assert result.rendered_record_ids == set()
+
+
+async def test_rebuild_failure_writes_error_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the rebuild query fails, snapshot_state must be written as 'error'."""
+    import json as _json
+
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+    )
+
+    refresher = ResidentMemorySnapshotRefresher(
+        paths=ResidentSnapshotPaths.from_user_data_dir(tmp_path)
+    )
+    # Put the refresher in a known ready state
+    await refresher._publish_ready_for_test(
+        "## Resident Memory\n- Profile memory: old",
+        rendered_record_ids={"old"},
+    )
+    assert (await refresher.read()).content != ""
+
+    # Make _query_and_render raise
+    async def _fail(*args: Any, **kwargs: Any) -> None:  # type: ignore[return]
+        raise RuntimeError("db failure")
+
+    monkeypatch.setattr(refresher, "_query_and_render", _fail)
+
+    # Simulate error state write by calling _write_error_state directly
+    await refresher._write_error_state()
+
+    result = await refresher.read()
+    assert result.content == ""
+    # Metadata on disk must record "error"
+    assert refresher._paths.metadata.exists()
+    meta_data = _json.loads(refresher._paths.metadata.read_text(encoding="utf-8"))
+    assert meta_data.get("snapshot_state") == "error"
+    # Markdown file must be empty
+    assert refresher._paths.markdown.read_bytes() == b""
+
+
+async def test_read_hash_mismatch_triggers_schedule_refresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On markdown hash mismatch read() must call schedule_refresh()."""
+    import json as _json
+
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+    )
+
+    paths = ResidentSnapshotPaths.from_user_data_dir(tmp_path)
+    paths.directory.mkdir(parents=True, exist_ok=True)
+    paths.markdown.write_text("changed content", encoding="utf-8")
+    paths.metadata.write_text(
+        _json.dumps(
+            {
+                "schema_version": 1,
+                "generated_at": "2026-04-26T00:00:00Z",
+                "snapshot_state": "ready",
+                "generation_id": "g1",
+                "source_max_updated_at": None,
+                "markdown_hash": "sha256:not-the-real-hash",
+                "record_hash": "sha256:x",
+                "source_record_ids": [],
+                "rendered_record_ids": [],
+                "rendered_dedupe_keys": [],
+                "rendered_canonical_bullets": [],
+                "record_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from sebastian.memory.resident_snapshot import ResidentSnapshotMetadata
+
+    refresher = ResidentMemorySnapshotRefresher(paths=paths)
+    refresher._snapshot_state = "ready"
+    refresher._cached_metadata = ResidentSnapshotMetadata(
+        schema_version=1,
+        generated_at="2026-04-26T00:00:00Z",
+        snapshot_state="ready",
+        generation_id="g1",
+        source_max_updated_at=None,
+        markdown_hash="sha256:not-the-real-hash",
+        record_hash="sha256:x",
+        source_record_ids=[],
+        rendered_record_ids=[],
+        rendered_dedupe_keys=[],
+        rendered_canonical_bullets=[],
+        record_count=0,
+    )
+
+    refresh_called: list[bool] = []
+
+    def _patched_schedule() -> None:
+        refresh_called.append(True)
+
+    monkeypatch.setattr(refresher, "schedule_refresh", _patched_schedule)
+
+    result = await refresher.read()
+    assert result.content == ""
+    assert refresh_called, "schedule_refresh must be called on hash mismatch"

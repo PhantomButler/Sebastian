@@ -49,3 +49,7 @@ def test_slot_value_dedupe_key_returns_none_without_value() -> None:
         )
         is None
     )
+
+
+def test_canonical_bullet_strips_bare_memory_label() -> None:
+    assert canonical_bullet("memory: 用户喜欢中文。") == "用户喜欢中文。"
