@@ -532,8 +532,11 @@ class ResidentMemorySnapshotRefresher:
                 "content": rec.content,
                 "slot_id": rec.slot_id,
                 "kind": (
-                    str(rec.kind.value) if hasattr(rec.kind, "value")
-                    else str(rec.kind) if rec.kind else None
+                    str(rec.kind.value)
+                    if hasattr(rec.kind, "value")
+                    else str(rec.kind)
+                    if rec.kind
+                    else None
                 ),
                 "confidence": float(rec.confidence) if rec.confidence is not None else None,
                 "status": rec.status,
@@ -544,9 +547,7 @@ class ResidentMemorySnapshotRefresher:
             }
 
         record_hash = sha256_text(
-            canonical_json(
-                [_record_fields(r) for r in sorted(all_records, key=lambda r: r.id)]
-            )
+            canonical_json([_record_fields(r) for r in sorted(all_records, key=lambda r: r.id)])
         )
 
         # Source max updated_at
