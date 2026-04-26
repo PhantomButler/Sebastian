@@ -629,3 +629,40 @@ async def test_rw_lock_write_blocks_new_readers() -> None:
     assert order == ["write-complete", "read-complete"], (
         f"reader should not enter read section before writer exits, got {order}"
     )
+
+
+async def test_record_hash_changes_when_content_changes(
+    tmp_path: Path, resident_db_session: AsyncSession
+) -> None:
+    """record_hash must change when a record's content changes, not just when IDs change."""
+    import json as _json
+
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+    )
+
+    # First snapshot: record with content A
+    rec = _profile_record(id="ch1", content="内容版本一", confidence=0.9)
+    resident_db_session.add(rec)
+    await resident_db_session.flush()
+
+    paths = ResidentSnapshotPaths.from_user_data_dir(tmp_path)
+    refresher = ResidentMemorySnapshotRefresher(paths=paths)
+    await refresher.rebuild(resident_db_session)
+    meta1 = _json.loads(paths.metadata.read_text(encoding="utf-8"))
+    hash1 = meta1["record_hash"]
+
+    # Update content in-place (same id, different content)
+    rec.content = "内容版本二（已更新）"
+    await resident_db_session.flush()
+
+    paths2 = ResidentSnapshotPaths.from_user_data_dir(tmp_path / "snap2")
+    refresher2 = ResidentMemorySnapshotRefresher(paths=paths2)
+    await refresher2.rebuild(resident_db_session)
+    meta2 = _json.loads(paths2.metadata.read_text(encoding="utf-8"))
+    hash2 = meta2["record_hash"]
+
+    assert hash1 != hash2, (
+        "record_hash must differ when record content changes even if IDs are the same"
+    )

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import logging
 import os
 import re
@@ -19,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sebastian.memory.resident_dedupe import (
     canonical_bullet,
+    canonical_json,
     normalize_memory_text,
     sha256_text,
     slot_value_dedupe_key,
@@ -521,8 +520,33 @@ class ResidentMemorySnapshotRefresher:
         # Compute hashes
         md_hash = sha256_text(markdown)
         source_ids = [r.id for r in all_records]
+
+        def _record_fields(rec: ProfileMemoryRecord) -> dict[str, Any]:
+            def _dt(d: datetime | None) -> str | None:
+                if d is None:
+                    return None
+                return (d.replace(tzinfo=UTC) if d.tzinfo is None else d).isoformat()
+
+            return {
+                "id": rec.id,
+                "content": rec.content,
+                "slot_id": rec.slot_id,
+                "kind": (
+                    str(rec.kind.value) if hasattr(rec.kind, "value")
+                    else str(rec.kind) if rec.kind else None
+                ),
+                "confidence": float(rec.confidence) if rec.confidence is not None else None,
+                "status": rec.status,
+                "valid_from": _dt(rec.valid_from),
+                "valid_until": _dt(rec.valid_until),
+                "policy_tags": sorted(rec.policy_tags or []),
+                "updated_at": _dt(rec.updated_at),
+            }
+
         record_hash = sha256_text(
-            hashlib.sha256(json.dumps(sorted(source_ids)).encode()).hexdigest()
+            canonical_json(
+                [_record_fields(r) for r in sorted(all_records, key=lambda r: r.id)]
+            )
         )
 
         # Source max updated_at
