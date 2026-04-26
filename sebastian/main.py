@@ -6,7 +6,10 @@ import sys
 import typer
 import uvicorn
 
+from sebastian.cli.service import app as service_app
+
 app = typer.Typer(name="sebastian", help="Sebastian — Personal AI Butler")
+app.add_typer(service_app, name="service")
 
 
 @app.command()
