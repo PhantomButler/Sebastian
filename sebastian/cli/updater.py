@@ -38,7 +38,7 @@ from urllib.error import URLError
 
 REPO = "PhantomButler/Sebastian"
 # Top-level entries that we own and may safely replace inside the install dir.
-# Anything not in this list (.venv, .env, data/, ~/.sebastian/secret.key, etc.)
+# Anything not in this list (.venv, .env, ~/.sebastian/data/, etc.)
 # is left untouched.
 MANAGED_ENTRIES = (
     "sebastian",
