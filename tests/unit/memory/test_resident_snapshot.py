@@ -575,3 +575,26 @@ async def test_read_returns_empty_while_writer_active(tmp_path: Path) -> None:
         results.append(result)
 
     assert results[0].content == "", "read() must return empty while writer is in mutation_scope()"
+
+
+async def test_write_empty_state_produces_valid_markdown_hash(tmp_path: Path) -> None:
+    """_write_empty_state must write the real SHA-256 of empty content, not 'sha256:'."""
+    import json as _json
+
+    from sebastian.memory.resident_dedupe import sha256_text
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+    )
+
+    paths = ResidentSnapshotPaths.from_user_data_dir(tmp_path)
+    refresher = ResidentMemorySnapshotRefresher(paths=paths)
+
+    await refresher._write_empty_state("dirty")
+
+    meta = _json.loads(paths.metadata.read_text(encoding="utf-8"))
+    expected_hash = sha256_text("")  # sha256 of empty string
+    assert meta["markdown_hash"] == expected_hash, (
+        f"markdown_hash should be {expected_hash!r}, got {meta['markdown_hash']!r}"
+    )
+    assert paths.markdown.read_bytes() == b""
