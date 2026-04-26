@@ -59,7 +59,7 @@ CancelIntent = Literal["cancel", "stop"]
 
 
 BASE_PERSONA = (
-    "You are Sebastian, a personal AI butler for {owner_name}. "
+    "You are Sebastian, a personal AI butler. "
     "You are helpful, precise, and action-oriented. "
     "You have access to tools and will use them when needed."
 )
@@ -137,7 +137,7 @@ class BaseAgent(ABC):
         self.system_prompt = self.build_system_prompt(gate)
 
     def _persona_section(self) -> str:
-        return self.persona.replace("{owner_name}", settings.sebastian_owner_name)
+        return self.persona
 
     def _guidelines_section(self) -> str:
         return (

@@ -33,27 +33,25 @@ def _make_registry_with_tools_and_skills() -> CapabilityRegistry:
 
 
 @pytest.mark.asyncio
-async def test_persona_section_injects_owner_name(tmp_path: Path) -> None:
+async def test_persona_section_appears_in_system_prompt(tmp_path: Path) -> None:
     from sebastian.core.base_agent import BaseAgent
     from sebastian.store.session_store import SessionStore
 
     class MyAgent(BaseAgent):
         name = "test"
-        persona = "Hello {owner_name}, I serve you."
+        persona = "Hello, I serve you."
 
     store = SessionStore(tmp_path / "sessions")
     reg = CapabilityRegistry()
 
     with patch("anthropic.AsyncAnthropic", return_value=MagicMock()):
         with patch("sebastian.core.base_agent.settings") as mock_settings:
-            mock_settings.sebastian_owner_name = "Eric"
             mock_settings.sebastian_model = "claude-opus-4-6"
             mock_settings.anthropic_api_key = "test"
             mock_settings.llm_max_tokens = 16000
             agent = MyAgent(reg, store)
 
-    assert "Eric" in agent.system_prompt
-    assert "{owner_name}" not in agent.system_prompt
+    assert "Hello, I serve you." in agent.system_prompt
 
 
 @pytest.mark.asyncio
@@ -87,7 +85,7 @@ async def test_tools_section_filtered_by_allowed_tools(tmp_path: Path) -> None:
 
     class MyAgent(BaseAgent):
         name = "test"
-        persona = "I am {owner_name}."
+        persona = "I am your butler."
         allowed_tools: list[str] | None = ["file_read"]
         allowed_skills: list[str] | None = []
 
@@ -96,7 +94,6 @@ async def test_tools_section_filtered_by_allowed_tools(tmp_path: Path) -> None:
 
     with patch("anthropic.AsyncAnthropic", return_value=MagicMock()):
         with patch("sebastian.core.base_agent.settings") as mock_settings:
-            mock_settings.sebastian_owner_name = "Eric"
             mock_settings.sebastian_model = "claude-opus-4-6"
             mock_settings.anthropic_api_key = "test"
             mock_settings.llm_max_tokens = 16000
@@ -113,7 +110,7 @@ async def test_skills_section_filtered_by_allowed_skills(tmp_path: Path) -> None
 
     class MyAgent(BaseAgent):
         name = "test"
-        persona = "I am {owner_name}."
+        persona = "I am your butler."
         allowed_tools: list[str] | None = []
         allowed_skills: list[str] | None = ["web_research"]
 
@@ -122,7 +119,6 @@ async def test_skills_section_filtered_by_allowed_skills(tmp_path: Path) -> None
 
     with patch("anthropic.AsyncAnthropic", return_value=MagicMock()):
         with patch("sebastian.core.base_agent.settings") as mock_settings:
-            mock_settings.sebastian_owner_name = "Eric"
             mock_settings.sebastian_model = "claude-opus-4-6"
             mock_settings.anthropic_api_key = "test"
             mock_settings.llm_max_tokens = 16000
@@ -139,14 +135,13 @@ async def test_agents_section_empty_by_default(tmp_path: Path) -> None:
 
     class MyAgent(BaseAgent):
         name = "test"
-        persona = "I am {owner_name}."
+        persona = "I am your butler."
 
     store = SessionStore(tmp_path / "sessions")
     reg = CapabilityRegistry()
 
     with patch("anthropic.AsyncAnthropic", return_value=MagicMock()):
         with patch("sebastian.core.base_agent.settings") as mock_settings:
-            mock_settings.sebastian_owner_name = "Eric"
             mock_settings.sebastian_model = "claude-opus-4-6"
             mock_settings.anthropic_api_key = "test"
             mock_settings.llm_max_tokens = 16000
@@ -162,18 +157,16 @@ async def test_persona_with_extra_braces_does_not_crash(tmp_path: Path) -> None:
 
     class MyAgent(BaseAgent):
         name = "test"
-        persona = 'Hello {owner_name}. Use tools like: {"key": "value"}.'
+        persona = 'Use tools like: {"key": "value"}.'
 
     store = SessionStore(tmp_path / "sessions")
     reg = CapabilityRegistry()
 
     with patch("anthropic.AsyncAnthropic", return_value=MagicMock()):
         with patch("sebastian.core.base_agent.settings") as mock_settings:
-            mock_settings.sebastian_owner_name = "Eric"
             mock_settings.sebastian_model = "claude-opus-4-6"
             mock_settings.anthropic_api_key = "test"
             mock_settings.llm_max_tokens = 16000
             agent = MyAgent(reg, store)
 
-    assert "Eric" in agent.system_prompt
-    assert "{owner_name}" not in agent.system_prompt
+    assert '{"key": "value"}' in agent.system_prompt

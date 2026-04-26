@@ -292,7 +292,6 @@ def test_build_system_prompt_contains_guidelines_section() -> None:
 
     with patch("sebastian.core.base_agent.settings") as mock_settings:
         mock_settings.workspace_dir = fake_workspace
-        mock_settings.sebastian_owner_name = "Eric"
         mock_settings.sebastian_model = "claude-opus-4-6"
         agent = TestAgent(gate, MagicMock())
         prompt = agent.system_prompt
@@ -321,7 +320,6 @@ def test_guidelines_section_appears_before_tools_section() -> None:
 
     with patch("sebastian.core.base_agent.settings") as mock_settings:
         mock_settings.workspace_dir = Path("/fake/ws")
-        mock_settings.sebastian_owner_name = "Eric"
         mock_settings.sebastian_model = "claude-opus-4-6"
         agent = TestAgent(gate, MagicMock())
         prompt = agent.system_prompt
