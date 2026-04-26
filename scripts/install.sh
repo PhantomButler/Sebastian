@@ -9,6 +9,7 @@ cd "${PROJECT_ROOT}"
 color_red()  { printf "\033[31m%s\033[0m\n" "$*"; }
 color_grn()  { printf "\033[32m%s\033[0m\n" "$*"; }
 color_ylw()  { printf "\033[33m%s\033[0m\n" "$*"; }
+color_dim()  { printf "\033[90m%s\033[0m\n" "$*"; }
 
 # 1. OS check
 OS="$(uname -s)"
@@ -51,11 +52,53 @@ pip install --upgrade pip >/dev/null
 pip install -e .
 color_grn "✓ 依赖安装完成"
 
-# 5. 启动
-color_grn ""
+# 5. 数据目录定位
+DATA_ROOT="${SEBASTIAN_DATA_DIR:-$HOME/.sebastian}"
+USER_DATA_DIR="${DATA_ROOT}/data"
+
+# 6. 首启向导（数据库不存在则进）
+if [[ ! -f "${USER_DATA_DIR}/sebastian.db" ]]; then
+  color_ylw "→ 进入初始化向导..."
+  if [[ "$OS" == "Linux" && -z "${DISPLAY:-}" ]]; then
+    sebastian init --headless
+  else
+    # serve 启动时会唤起 web wizard 并在向导完成后自动退出
+    sebastian serve
+  fi
+else
+  color_grn "✓ 检测到已初始化数据，跳过向导"
+fi
+
+# 7. 询问是否注册服务
+echo ""
+read -r -p "是否注册为开机自启服务（systemd / launchd）？[y/N] " ANS
+case "${ANS:-N}" in
+  y|Y|yes|YES)
+    color_ylw "→ 安装系统服务..."
+    sebastian service install
+    color_grn "✓ 服务已注册"
+    REGISTERED=1
+    ;;
+  *)
+    color_dim "已跳过。稍后可执行：sebastian service install"
+    REGISTERED=0
+    ;;
+esac
+
+# 8. 退出指引
+echo ""
 color_grn "============================================"
-color_grn "  即将启动 Sebastian（首次启动会进入初始化向导）"
-color_grn "  后续升级到新版本：sebastian update"
+color_grn "  Sebastian 安装完成"
 color_grn "============================================"
-color_grn ""
-exec sebastian serve
+if [[ "${REGISTERED:-0}" -eq 1 ]]; then
+  color_dim "  服务状态:  sebastian service status"
+  color_dim "  停止服务:  sebastian service stop"
+else
+  color_dim "  启动服务:  sebastian serve"
+  color_dim "  注册服务:  sebastian service install"
+fi
+color_dim "  日志目录:  ${DATA_ROOT}/logs/"
+color_dim "  Android 配置:"
+color_dim "    模拟器:  http://10.0.2.2:8823"
+color_dim "    真机:    http://<本机局域网IP>:8823"
+color_grn "============================================"

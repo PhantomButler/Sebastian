@@ -39,8 +39,9 @@ elif [[ -z "${VIRTUAL_ENV:-}" && -z "${CONDA_DEFAULT_ENV:-}" ]]; then
 fi
 
 # ── 首次初始化提示 ──
-if [[ ! -d "${SEBASTIAN_DATA_DIR}" ]]; then
+if [[ ! -d "${SEBASTIAN_DATA_DIR}" ]] || [[ ! -f "${SEBASTIAN_DATA_DIR}/data/sebastian.db" ]]; then
   color_ylw "→ 首次使用开发数据目录: ${SEBASTIAN_DATA_DIR}"
+  color_dim "  数据将分布在 ${SEBASTIAN_DATA_DIR}/{app,data,logs,run} 子目录"
   color_ylw "  启动后会进入初始化向导，需要设置 owner 账号和 LLM Provider"
   color_dim "  Android 模拟器连接地址: http://10.0.2.2:${SEBASTIAN_GATEWAY_PORT}"
   echo ""
