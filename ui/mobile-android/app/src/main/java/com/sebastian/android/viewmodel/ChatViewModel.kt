@@ -277,7 +277,9 @@ class ChatViewModel @Inject constructor(
                 val sessionId = _uiState.value.activeSessionId ?: return
                 viewModelScope.launch(dispatcher) {
                     chatRepository.getTodos(sessionId).onSuccess { todos ->
-                        _uiState.update { it.copy(todos = todos) }
+                        _uiState.update { state ->
+                            if (state.activeSessionId == sessionId) state.copy(todos = todos) else state
+                        }
                     }
                 }
             }
@@ -577,6 +579,7 @@ class ChatViewModel @Inject constructor(
             it.copy(
                 activeSessionId = sessionId,
                 messages = emptyList(),
+                todos = emptyList(),
                 composerState = ComposerState.IDLE_EMPTY,
                 agentAnimState = AgentAnimState.IDLE,
             )
@@ -587,7 +590,9 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { it.copy(messages = history) }
                 }
             chatRepository.getTodos(sessionId).onSuccess { todos ->
-                _uiState.update { it.copy(todos = todos) }
+                _uiState.update { state ->
+                    if (state.activeSessionId == sessionId) state.copy(todos = todos) else state
+                }
             }
             startSseCollection(sessionId = sessionId)
         }
@@ -652,6 +657,12 @@ class ChatViewModel @Inject constructor(
                                     composerState = ComposerState.IDLE_EMPTY,
                                     agentAnimState = AgentAnimState.IDLE,
                                 )
+                            }
+                            // 补刷 todos：turn 已完成说明 todo_write 可能已执行
+                            chatRepository.getTodos(sessionId).onSuccess { todos ->
+                                _uiState.update { state ->
+                                    if (state.activeSessionId == sessionId) state.copy(todos = todos) else state
+                                }
                             }
                         }
                         startSseCollection()

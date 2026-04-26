@@ -74,6 +74,7 @@ class ChatViewModelTest {
             whenever(chatRepository.denyApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.cancelTurn(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.getMessages(any())).thenReturn(Result.success(emptyList()))
+            whenever(chatRepository.getTodos(any())).thenReturn(Result.success(emptyList()))
         }
         viewModel = ChatViewModel(chatRepository, sessionRepository, settingsRepository, networkMonitor, dispatcher)
         viewModel.clock = { dispatcher.scheduler.currentTime }
@@ -276,6 +277,7 @@ class ChatViewModelTest {
             override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
             override suspend fun denyApproval(approvalId: String) = Result.success(Unit)
             override suspend fun getPendingApprovals() = Result.success(emptyList<ApprovalSnapshot>())
+            override suspend fun getTodos(sessionId: String) = Result.success(emptyList<com.sebastian.android.data.model.TodoItem>())
         }
         viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, dispatcher)
         viewModel.clock = { dispatcher.scheduler.currentTime }
@@ -1044,6 +1046,89 @@ class ChatViewModelTest {
         assertTrue("SummaryBlock must be expanded after toggle", after?.expanded ?: false)
     }
 
+    // ── Todo 状态 bug 修复测试 ─────────────────────────────────────────────────
+
+    @Test
+    fun `switch session clears todos immediately even when getTodos fails`() = vmTest {
+        val todosS1 = listOf(com.sebastian.android.data.model.TodoItem("s1-task", "", "pending"))
+        runBlocking {
+            whenever(chatRepository.getTodos("s1")).thenReturn(Result.success(todosS1))
+            whenever(chatRepository.getTodos("s2")).thenReturn(Result.failure(RuntimeException("network error")))
+            whenever(chatRepository.getMessages(any())).thenReturn(Result.success(emptyList()))
+        }
+
+        viewModel.switchSession("s1")
+        dispatcher.scheduler.advanceTimeBy(500)
+        assertEquals(todosS1, viewModel.uiState.value.todos)
+
+        viewModel.switchSession("s2")
+        assertTrue(viewModel.uiState.value.todos.isEmpty())
+
+        dispatcher.scheduler.advanceTimeBy(500)
+        assertTrue(viewModel.uiState.value.todos.isEmpty())
+    }
+
+    @Test
+    fun `todo_updated does not overwrite todos after session switch`() = vmTest {
+        val todosS1 = listOf(com.sebastian.android.data.model.TodoItem("s1-task", "", "pending"))
+        val todosS2 = listOf(com.sebastian.android.data.model.TodoItem("s2-task", "", "in_progress"))
+        runBlocking {
+            whenever(chatRepository.getTodos("s1")).thenReturn(Result.success(todosS1))
+            whenever(chatRepository.getTodos("s2")).thenReturn(Result.success(todosS2))
+            whenever(chatRepository.getMessages(any())).thenReturn(Result.success(emptyList()))
+        }
+
+        viewModel.switchSession("s1")
+        dispatcher.scheduler.advanceTimeBy(500)
+        assertEquals(todosS1, viewModel.uiState.value.todos)
+
+        // Emit TodoUpdated for s1, then immediately switch to s2.
+        // The TodoUpdated coroutine for s1 must not overwrite s2's todos.
+        emitEvent(StreamEvent.TodoUpdated("s1", 1))
+        viewModel.switchSession("s2")
+        dispatcher.scheduler.advanceTimeBy(500)
+
+        val finalState = viewModel.uiState.value
+        assertEquals("s2", finalState.activeSessionId)
+        assertEquals(todosS2, finalState.todos)
+    }
+
+    @Test
+    fun `onAppStart in PENDING state fetches todos when turn is done`() = vmTest {
+        val completedMsg = com.sebastian.android.data.model.Message(
+            id = "m1",
+            sessionId = "s1",
+            role = MessageRole.ASSISTANT,
+            blocks = listOf(
+                com.sebastian.android.data.model.ContentBlock.TextBlock(
+                    blockId = "b1",
+                    text = "done",
+                    done = true,
+                )
+            ),
+        )
+        val todos = listOf(com.sebastian.android.data.model.TodoItem("task", "", "completed"))
+        runBlocking {
+            whenever(chatRepository.getMessages("s1")).thenReturn(Result.success(listOf(completedMsg)))
+            whenever(chatRepository.getTodos("s1")).thenReturn(Result.success(todos))
+            whenever(chatRepository.sendTurn(any(), any())).thenReturn(Result.success("s1"))
+        }
+
+        // 先 switchSession 让 activeSessionId = "s1"
+        viewModel.switchSession("s1")
+        dispatcher.scheduler.advanceTimeBy(500)
+
+        // 发送消息让 composerState 进入 PENDING
+        viewModel.sendMessage("hello")
+        // 不 advance，让它停留在 PENDING
+
+        // onAppStart：处于 PENDING，getMessages 返回已完成的 turn → 触发 getTodos
+        viewModel.onAppStart()
+        dispatcher.scheduler.advanceTimeBy(500)
+
+        assertEquals(todos, viewModel.uiState.value.todos)
+    }
+
     @Test
     fun `connectionFailed while PENDING resets composerState to IDLE_EMPTY`() = vmTest {
         // Cancel old ViewModel so we can install a throwing SSE flow
@@ -1067,6 +1152,7 @@ class ChatViewModelTest {
             override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
             override suspend fun denyApproval(approvalId: String) = Result.success(Unit)
             override suspend fun getPendingApprovals() = Result.success(emptyList<ApprovalSnapshot>())
+            override suspend fun getTodos(sessionId: String) = Result.success(emptyList<com.sebastian.android.data.model.TodoItem>())
         }
 
         viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, dispatcher)
