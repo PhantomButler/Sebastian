@@ -31,6 +31,7 @@ class FakeProfileRecord:
     id: str = "profile-1"
     slot_id: str | None = "slot-1"
     subject_id: str | None = None
+    structured_payload: dict | None = None
     status: str = "active"
     policy_tags: list[str] = field(default_factory=list)
     confidence: float = 1.0
@@ -874,6 +875,111 @@ def test_retrieval_context_accepts_active_project_or_agent_context() -> None:
         "agent_type": "sebastian",
         "project": "Sebastian",
     }
+
+
+# ---------------------------------------------------------------------------
+# Resident memory dedup tests
+# ---------------------------------------------------------------------------
+
+
+def test_assembler_skips_resident_record_id() -> None:
+    """Profile record whose id is in resident_record_ids must be suppressed."""
+    ctx = RetrievalContext(
+        subject_id="owner",
+        session_id="s1",
+        agent_type="orchestrator",
+        user_message="我喜欢中文",
+        resident_record_ids={"profile-1"},
+    )
+    out = MemorySectionAssembler().assemble(
+        profile_records=[
+            FakeProfileRecord(kind="preference", content="用户偏好使用中文交流。", id="profile-1")
+        ],
+        context_records=[],
+        episode_records=[],
+        relation_records=[],
+        plan=RetrievalPlan(profile_lane=True),
+        context=ctx,
+    )
+    assert out == ""
+
+
+def test_assembler_skips_resident_slot_value_key() -> None:
+    """Profile record whose slot_value key matches resident_dedupe_keys must be suppressed."""
+    from sebastian.memory.resident_dedupe import slot_value_dedupe_key
+
+    key = slot_value_dedupe_key(
+        subject_id="owner",
+        slot_id="user.preference.language",
+        structured_payload={"value": "中文"},
+    )
+    assert key is not None
+    record = FakeProfileRecord(
+        kind="preference",
+        content="用户偏好使用中文交流。",
+        id="profile-2",
+        slot_id="user.preference.language",
+        subject_id="owner",
+        structured_payload={"value": "中文"},
+    )
+    ctx = RetrievalContext(
+        subject_id="owner",
+        session_id="s1",
+        agent_type="orchestrator",
+        user_message="我喜欢中文",
+        resident_dedupe_keys={key},
+    )
+    out = MemorySectionAssembler().assemble(
+        profile_records=[record],
+        context_records=[],
+        episode_records=[],
+        relation_records=[],
+        plan=RetrievalPlan(profile_lane=True),
+        context=ctx,
+    )
+    assert out == ""
+
+
+def test_assembler_skips_resident_canonical_bullet() -> None:
+    """Profile record whose canonical bullet matches resident_canonical_bullets must be skipped."""
+    from sebastian.memory.resident_dedupe import canonical_bullet
+
+    content = "用户偏好使用中文交流。"
+    ctx = RetrievalContext(
+        subject_id="owner",
+        session_id="s1",
+        agent_type="orchestrator",
+        user_message="我喜欢中文",
+        resident_canonical_bullets={canonical_bullet(content)},
+    )
+    out = MemorySectionAssembler().assemble(
+        profile_records=[FakeProfileRecord(kind="preference", content=content)],
+        context_records=[],
+        episode_records=[],
+        relation_records=[],
+        plan=RetrievalPlan(profile_lane=True),
+        context=ctx,
+    )
+    assert out == ""
+
+
+def test_assembler_dedup_sets_empty_by_default_passes_all_records() -> None:
+    """Empty dedup sets (default) must not filter any records — backward-compat guard."""
+    ctx = RetrievalContext(
+        subject_id="owner",
+        session_id="s1",
+        agent_type="orchestrator",
+        user_message="我喜欢中文",
+    )
+    out = MemorySectionAssembler().assemble(
+        profile_records=[FakeProfileRecord(kind="preference", content="用户偏好使用中文交流。")],
+        context_records=[],
+        episode_records=[],
+        relation_records=[],
+        plan=RetrievalPlan(profile_lane=True),
+        context=ctx,
+    )
+    assert "用户偏好使用中文交流。" in out
 
 
 async def test_episode_lane_irrelevant_summaries_do_not_enter_results(db_session) -> None:

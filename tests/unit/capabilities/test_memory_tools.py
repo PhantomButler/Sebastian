@@ -1608,6 +1608,67 @@ async def test_memory_search_bypasses_planner_trigger_words(enabled_memory_state
 
 
 @pytest.mark.asyncio
+async def test_memory_search_unaffected_by_resident_dedup(enabled_memory_state) -> None:
+    """memory_search must return a profile record even if it would be filtered by resident dedup.
+
+    The resident dedup filter lives exclusively in MemorySectionAssembler.assemble() (the
+    context_injection path). The memory_search tool uses a different code path
+    (access_purpose="tool_search") and must never silently hide records from the agent.
+    """
+    from datetime import UTC, datetime
+
+    from sebastian.capabilities.tools.memory_search import memory_search
+    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.types import (
+        MemoryArtifact,
+        MemoryKind,
+        MemoryScope,
+        MemorySource,
+        MemoryStatus,
+    )
+
+    now = datetime.now(UTC)
+    async with enabled_memory_state() as session:
+        await ProfileMemoryStore(session).add(
+            MemoryArtifact(
+                id="resident-dedup-target",
+                kind=MemoryKind.PREFERENCE,
+                scope=MemoryScope.USER,
+                subject_id="owner",
+                slot_id="user.preference.language",
+                cardinality=None,
+                resolution_policy=None,
+                content="用户偏好使用中文交流",
+                structured_payload={"value": "中文"},
+                source=MemorySource.EXPLICIT,
+                confidence=1.0,
+                status=MemoryStatus.ACTIVE,
+                valid_from=None,
+                valid_until=None,
+                recorded_at=now,
+                last_accessed_at=None,
+                access_count=0,
+                provenance={},
+                links=[],
+                embedding_ref=None,
+                dedupe_key=None,
+                policy_tags=[],
+            )
+        )
+        await session.commit()
+
+    # memory_search does NOT consult RetrievalContext.resident_* sets; the record
+    # must always be returned regardless of whether resident memory already injected it.
+    result = await memory_search(query="偏好语言")
+
+    assert result.ok is True
+    items = result.output["items"]
+    assert any("用户偏好使用中文交流" in item.get("content", "") for item in items), (
+        "memory_search must return the record even if it would be filtered by resident dedup"
+    )
+
+
+@pytest.mark.asyncio
 async def test_memory_search_dedups_cross_lane_duplicates(enabled_memory_state) -> None:
     """Regression: 同一条画像记录在 profile_lane 和 context_lane 各命中一次时，
     应按 lane 优先级（profile > context）只保留一次，不给 LLM/UI 返回重复项。"""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from pydantic import ValidationError
@@ -14,6 +15,10 @@ from sebastian.protocol.events.types import Event, EventType
 def _parse_todos(raw: list[dict[str, Any]]) -> list[TodoItem]:
     items: list[TodoItem] = []
     for idx, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"todo item #{idx} must be an object with content, activeForm, and status fields"
+            )
         try:
             items.append(TodoItem(**entry))
         except ValidationError as e:
@@ -40,6 +45,17 @@ async def todo_write(todos: list[dict[str, Any]]) -> ToolResult:
     ctx = get_tool_context()
     if ctx is None or not ctx.session_id:
         return ToolResult(ok=False, error="todo_write requires session context")
+
+    if isinstance(todos, str):
+        try:
+            todos = json.loads(todos)
+        except (json.JSONDecodeError, ValueError):
+            return ToolResult(
+                ok=False,
+                error="todos must be an array of objects, not a JSON string",
+            )
+    if not isinstance(todos, list):
+        return ToolResult(ok=False, error="todos must be an array of todo item objects")
 
     try:
         items = _parse_todos(todos)
@@ -68,8 +84,16 @@ async def todo_write(todos: list[dict[str, Any]]) -> ToolResult:
         )
     )
 
+    _status_labels = {"pending": "待完成", "in_progress": "进行中", "completed": "已完成"}
+    lines = [
+        f"• {item.content}（{_status_labels.get(item.status.value, item.status.value)}）"
+        for item in items
+    ]
+    display_text = f"写入 {len(items)} 个待办\n" + "\n".join(lines)
+
     return ToolResult(
         ok=True,
+        display=display_text,
         output={
             "old_count": len(old),
             "new_count": len(items),

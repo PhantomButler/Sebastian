@@ -11,6 +11,7 @@
 - **统一入口**：`MemoryStore`，当前聚合 working memory；会话历史已由 `SessionStore` 直接承担。
 - **Phase A 长期记忆基础设施**：记忆 artifact 类型、slot 注册表、FTS 分词辅助、决策日志写入器。
 - **Phase B 画像与经历检索**：`ProfileMemoryStore`（profile 写入 / 查询，含 `valid_from/valid_until/status/subject_id` 四项 current truth 过滤）、`EpisodeMemoryStore`（经历 FTS 检索，含 summary-first 两阶段检索）、`retrieval.py`（检索 pipeline，含 Episode Lane query-aware summary-first 策略）、`resolver.py`（冲突解决）。检索结果在每次 LLM turn 前通过 `BaseAgent._memory_section()` 注入 system prompt；`memory_search` 工具输出 `citation_type`（`current_truth` / `historical_summary` / `historical_evidence`），并按 active lane 数量把用户请求的 `limit` 提升为 `effective_limit`，避免已激活通道被全局截断饿死。
+- **常驻记忆快照（Resident Memory Snapshot）**：`resident_snapshot.py`（`ResidentMemorySnapshotRefresher`，负责快照读写与脏标记管理）、`resident_dedupe.py`（纯函数辅助：`canonical_bullet`、`slot_value_dedupe_key` 等去重工具）。快照在会话结束后的记忆沉淀完成时触发重建，下一轮对话前通过 `BaseAgent._resident_memory_section()` 以固定顺序注入 system prompt（位于 base → **resident** → dynamic → todos 的第二位）。动态检索（`_memory_section()`）输出的 `RetrievalContext` 包含三个去重字段（`resident_record_ids`、`resident_dedupe_keys`、`resident_canonical_bullets`），`MemorySectionAssembler` 过滤掉已经出现在常驻快照中的记录，避免 prompt 重复。快照文件存储在 `settings.user_data_dir / "memory" / resident_snapshot.md|.meta.json`。
 - **Phase C LLM 沉淀**：`extraction.py`（`MemoryExtractor`，从会话片段提取候选 artifact；`ExtractorInput.task` 已对齐 spec，值为 `"extract_memory_artifacts"`）、`consolidation.py`（`MemoryConsolidator` + `SessionConsolidationWorker` + `MemoryConsolidationScheduler`）、`provider_bindings.py`（LLM binding 常量）。会话结束后由调度器触发后台沉淀，LLM 结果经 Normalize / Resolve 后方可写入，永不直接修改记忆状态。`memory_decision_log` 新增 `input_source` 字段，记录写入来源（`memory_save_tool` / `session_consolidation`）。
 - **统一写入 pipeline**：`pipeline.py`（`process_candidates()`，将 validate → resolve → persist → log 四步封装为单一可复用入口）。`memory_save` 工具后台任务和 `SessionConsolidationWorker` 均通过此函数写入，消除重复逻辑。
 - **Dynamic Slot System（动态 Slot 系统）**：`types.py` 新增 `ProposedSlot`、`slot_definition_store.py`（DB CRUD for `memory_slots` 表）、`slot_proposals.py`（`SlotProposalHandler`：校验 + 写 DB + 热更新 registry，savepoint 防并发 race）、`prompts.py`（Extractor / Consolidator 共享 prompt 模板）、`feedback.py`（`MemorySaveResult` 结构化结果 + `render_memory_save_summary()`）。Extractor 通过 `extract_with_slot_retry()` 支持 slot 被拒后注入反馈重试一次；`pipeline.py` 的 `process_candidates()` 在 `proposed_slots` 非空时强制要求 `slot_proposal_handler` 参数（否则 `raise ValueError`）。内置 seed slot 新增 `user.profile.name` / `user.profile.location` / `user.profile.occupation`（共 9 个）。
@@ -46,7 +47,9 @@ memory/
 ├── provider_bindings.py     # LLM binding 常量：MEMORY_EXTRACTOR_BINDING / MEMORY_CONSOLIDATOR_BINDING
 ├── extraction.py            # MemoryExtractor：LLM 提取候选 artifact；extract_with_slot_retry() 支持 slot 拒绝重试
 ├── pipeline.py              # process_candidates()：统一 validate→resolve→persist→log 写入流程（含 slot 注册）
-└── consolidation.py         # MemoryConsolidator + SessionConsolidationWorker + MemoryConsolidationScheduler
+├── consolidation.py         # MemoryConsolidator + SessionConsolidationWorker + MemoryConsolidationScheduler
+├── resident_snapshot.py     # ResidentMemorySnapshotRefresher：快照读写、脏标记、重建触发
+└── resident_dedupe.py       # canonical_bullet / slot_value_dedupe_key 等常驻记忆去重纯函数
 ```
 
 ## Phase A 基础文件
@@ -54,7 +57,7 @@ memory/
 | 文件 | 当前职责 |
 |------|----------|
 | [types.py](types.py) | 定义长期记忆基础类型：`MemoryKind`、`MemoryScope`、`MemoryStatus`、`MemorySource`、`MemoryDecisionType`、`Cardinality`、`ResolutionPolicy`、`SlotDefinition`、`CandidateArtifact`、`MemoryArtifact`、`ResolveDecision` |
-| [slots.py](slots.py) | 提供 `SlotRegistry`、6 个内置 `SlotDefinition` 和 `DEFAULT_SLOT_REGISTRY`；当前校验 `fact` / `preference` 必须绑定已注册 slot |
+| [slots.py](slots.py) | 提供 `SlotRegistry`、内置 `SlotDefinition`（含 `user.preference.addressing`）和 `DEFAULT_SLOT_REGISTRY`；当前校验 `fact` / `preference` 必须绑定已注册 slot |
 | [segmentation.py](segmentation.py) | 提供基于 `jieba.cut_for_search()` 的 FTS5 中文分词辅助：`segment_for_fts()`、`terms_for_query()`、`add_entity_terms()` |
 | [decision_log.py](decision_log.py) | 提供 `MemoryDecisionLogger.append()`，把 `ResolveDecision` 写入 `MemoryDecisionLogRecord` |
 
@@ -187,6 +190,8 @@ LLM 在对话中可提议新的记忆 slot，提议经校验后写入 `memory_sl
 | 动态 slot 的 DB 存储（memory_slots 表 CRUD） | [slot_definition_store.py](slot_definition_store.py) |
 | 动态 slot 校验、注册、并发 race 保护 | [slot_proposals.py](slot_proposals.py) |
 | memory_save 结构化结果与自然语言摘要渲染 | [feedback.py](feedback.py) |
+| 常驻记忆快照读写、脏标记、重建触发 | [resident_snapshot.py](resident_snapshot.py) |
+| 常驻记忆去重纯函数（canonical_bullet、slot_value_dedupe_key 等） | [resident_dedupe.py](resident_dedupe.py) |
 
 ---
 

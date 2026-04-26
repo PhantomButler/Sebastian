@@ -10,7 +10,7 @@ from sebastian.store.models import Base, MemorySlotRecord
 
 
 def test_builtin_slot_count() -> None:
-    assert len(_BUILTIN_SLOTS) == 9  # 原 6 + 新 3
+    assert len(_BUILTIN_SLOTS) == 10  # 原 6 + 新 3 + user.preference.addressing
 
 
 def test_new_seed_slots_present() -> None:
@@ -21,7 +21,7 @@ def test_new_seed_slots_present() -> None:
 
 
 @pytest.mark.asyncio
-async def test_seed_writes_all_9_slots() -> None:
+async def test_seed_writes_all_10_slots() -> None:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -32,4 +32,4 @@ async def test_seed_writes_all_9_slots() -> None:
         result = await session.execute(select(MemorySlotRecord))
         ids = {row.slot_id for row in result.scalars().all()}
     assert {"user.profile.name", "user.profile.location", "user.profile.occupation"} <= ids
-    assert len(ids) == 9
+    assert len(ids) == 10

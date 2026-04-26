@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -365,3 +366,11 @@ class SessionTodoRecord(Base):
     session_id: Mapped[str] = mapped_column(String, primary_key=True)
     todos: Mapped[list[Any]] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["agent_type", "session_id"],
+            ["sessions.agent_type", "sessions.id"],
+            ondelete="CASCADE",
+        ),
+    )

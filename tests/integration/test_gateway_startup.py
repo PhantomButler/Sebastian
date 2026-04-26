@@ -33,7 +33,7 @@ async def test_bootstrap_slot_registry_loads_all_seeds(fresh_gateway_db):
         await bootstrap_slot_registry(session, registry)
 
     # 9 builtin slots should all be in the in-memory registry
-    assert len(registry.list_all()) == 9
+    assert len(registry.list_all()) == 10
     assert registry.get("user.profile.name") is not None
 
 
@@ -44,13 +44,13 @@ async def test_bootstrap_slot_registry_is_additive(fresh_gateway_db):
     from sebastian.memory.slots import _BUILTIN_SLOTS
 
     registry = SlotRegistry(slots=_BUILTIN_SLOTS)
-    assert len(registry.list_all()) == 9
+    assert len(registry.list_all()) == 10
 
     async with fresh_gateway_db() as session:
         await bootstrap_slot_registry(session, registry)
 
     # After bootstrap, count should still be 9 (no duplicates)
-    assert len(registry.list_all()) == 9
+    assert len(registry.list_all()) == 10
 
 
 @pytest.mark.asyncio

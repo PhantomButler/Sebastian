@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import json
 import logging
 import types
 from collections.abc import Awaitable, Callable
@@ -58,6 +59,18 @@ def _unwrap_optional(hint: Any) -> Any:
     return hint
 
 
+def _type_to_json_schema(ann: Any) -> dict[str, Any]:
+    """Convert a single Python type annotation to a JSON Schema dict."""
+    origin = get_origin(ann)
+    if origin is list:
+        args = get_args(ann)
+        item_schema = _type_to_json_schema(args[0]) if args else {}
+        return {"type": "array", "items": item_schema}
+    if origin is dict or ann is dict:
+        return {"type": "object"}
+    return {"type": _TYPE_MAP.get(ann, "string")}
+
+
 def _infer_json_schema(fn: Callable[..., Any]) -> dict[str, Any]:
     """Infer JSON schema from function signature."""
     sig = inspect.signature(fn)
@@ -87,8 +100,7 @@ def _infer_json_schema(fn: Callable[..., Any]) -> dict[str, Any]:
             continue
         ann = hints.get(param_name, param.annotation)
         effective_ann = _unwrap_optional(ann)
-        json_type = _TYPE_MAP.get(effective_ann, "string")
-        properties[param_name] = {"type": json_type}
+        properties[param_name] = _type_to_json_schema(effective_ann)
         if param.default is inspect.Parameter.empty:
             required.append(param_name)
     return {"type": "object", "properties": properties, "required": required}
@@ -134,6 +146,14 @@ def _coerce_args(fn: Callable[..., Any], kwargs: dict[str, Any]) -> dict[str, An
                 pass
         elif target is bool:
             result[name] = value.lower() in ("true", "1", "yes")
+        elif get_origin(target) is list or get_origin(target) is dict:
+            try:
+                parsed = json.loads(value)
+                expected = list if get_origin(target) is list else dict
+                if isinstance(parsed, expected):
+                    result[name] = parsed
+            except (ValueError, TypeError):
+                pass
     return result
 
 

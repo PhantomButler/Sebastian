@@ -137,7 +137,13 @@ async def _do_save(content: str, session_id: str | None, agent_type: str) -> Mem
             input_source={"type": "memory_save_tool", "session_id": session_id},
             proposed_by="extractor",
         )
-        await db_session.commit()
+        _refresher = getattr(state, "resident_snapshot_refresher", None)
+        if _refresher is None:
+            await db_session.commit()
+        else:
+            async with _refresher.mutation_scope():
+                await db_session.commit()
+                await _refresher.mark_dirty_locked()
 
     save_result = MemorySaveResult(
         saved_count=result.saved_count,

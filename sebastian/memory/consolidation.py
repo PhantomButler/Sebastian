@@ -40,6 +40,7 @@ from sebastian.store.session_context import build_legacy_messages
 
 if TYPE_CHECKING:
     from sebastian.llm.registry import LLMProviderRegistry, ResolvedProvider
+    from sebastian.memory.resident_snapshot import ResidentMemorySnapshotRefresher
     from sebastian.protocol.events.bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -166,12 +167,14 @@ class SessionConsolidationWorker:
         extractor: MemoryExtractor,
         session_store: Any,
         memory_settings_fn: Callable[[], bool],
+        resident_snapshot_refresher: ResidentMemorySnapshotRefresher | None = None,
     ) -> None:
         self._db_factory = db_factory
         self._consolidator = consolidator
         self._extractor = extractor
         self._session_store = session_store
         self._memory_settings_fn = memory_settings_fn
+        self._resident_snapshot_refresher = resident_snapshot_refresher
 
     async def consolidate_session(self, session_id: str, agent_type: str) -> None:
         """Run consolidation for a completed session.
@@ -527,7 +530,12 @@ class SessionConsolidationWorker:
             )
             session.add(marker)
             try:
-                await session.commit()
+                if self._resident_snapshot_refresher is None:
+                    await session.commit()
+                else:
+                    async with self._resident_snapshot_refresher.mutation_scope():
+                        await session.commit()
+                        await self._resident_snapshot_refresher.mark_dirty_locked()
             except IntegrityError:
                 await session.rollback()
                 trace(

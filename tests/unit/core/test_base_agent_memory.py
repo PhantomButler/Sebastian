@@ -461,3 +461,295 @@ async def test_run_streaming_sqlite_mode_uses_get_context_messages(mem_factory) 
     call_args = agent._session_store.get_context_messages.call_args
     assert call_args.args[0] == "s-sqlite"  # session_id
     agent._session_store.get_messages.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test A — prompt order: resident before dynamic memory, memory before todo
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stream_inner_prompt_order_resident_dynamic_todo(mem_factory) -> None:
+    """In the assembled system prompt, resident memory → dynamic memory → todos.
+
+    Verifies the full three-way ordering:
+      resident_idx < dynamic_idx < todo_idx
+    """
+    agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s-order"] = 1
+    _stub_session_store(agent)
+
+    captured_prompts: list[str] = []
+    original_stream = agent._loop.stream
+
+    def capturing_stream(system_prompt: str, *args: Any, **kwargs: Any):
+        captured_prompts.append(system_prompt)
+        return original_stream(system_prompt, *args, **kwargs)
+
+    agent._loop.stream = capturing_stream  # type: ignore[method-assign]
+
+    from enum import Enum
+
+    class FakeStatus(Enum):
+        PENDING = "pending"
+
+    fake_todo = MagicMock()
+    fake_todo.status = FakeStatus.PENDING
+    fake_todo.content = "待办任务X"
+    fake_todo.active_form = "待办任务X"
+
+    fake_todo_store = MagicMock()
+    fake_todo_store.read = AsyncMock(return_value=[fake_todo])
+
+    # Resident refresher returns a ready snapshot.
+    # rendered_record_ids contains "res-1" — so dynamic retrieval excludes that record.
+    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+
+    fake_refresher = MagicMock()
+    fake_refresher.read = AsyncMock(
+        return_value=ResidentSnapshotReadResult(
+            content="## Resident Memory\n\n- Profile memory: 用户偏好英文\n",
+            rendered_record_ids={"res-1"},
+        )
+    )
+
+    # Mock dynamic retrieval to return a non-empty section.
+    # The dynamic record id ("dyn-1") is NOT in resident's rendered_record_ids,
+    # so it would not be filtered out by the exclusion logic.
+    _DYNAMIC_SECTION = "## Current facts about user\n- [preference] 动态记忆内容"
+
+    async def _fake_retrieve(ctx: Any, *, db_session: Any) -> str:
+        return _DYNAMIC_SECTION
+
+    import sebastian.gateway.state as gw_state
+
+    fake_settings = MagicMock()
+    fake_settings.enabled = True
+
+    session_store = MagicMock()
+    session_store.get_session_for_agent_type = AsyncMock(return_value=MagicMock())
+    session_store.update_activity = AsyncMock()
+    session_store.append_message = AsyncMock()
+    agent._session_store = session_store
+
+    with patch.object(gw_state, "memory_settings", fake_settings, create=True):
+        with patch.object(gw_state, "todo_store", fake_todo_store, create=True):
+            with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
+                with patch(
+                    "sebastian.memory.retrieval.retrieve_memory_section",
+                    side_effect=_fake_retrieve,
+                ):
+                    await agent._stream_inner(
+                        messages=[{"role": "user", "content": "hello"}],
+                        session_id="s-order",
+                        task_id=None,
+                        agent_context="test",
+                    )
+
+    assert captured_prompts, "stream() was never called"
+    prompt = captured_prompts[0]
+
+    resident_idx = prompt.find("## Resident Memory")
+    dynamic_idx = prompt.find("## Current facts about user")
+    todo_idx = prompt.find("待办任务X")
+
+    assert resident_idx != -1, "## Resident Memory not found in prompt"
+    assert dynamic_idx != -1, "## Current facts about user (dynamic) not found in prompt"
+    assert todo_idx != -1, "Todo content not found in prompt"
+    assert resident_idx < dynamic_idx, (
+        f"Resident Memory ({resident_idx}) must appear before dynamic memory ({dynamic_idx})"
+    )
+    assert dynamic_idx < todo_idx, (
+        f"Dynamic memory ({dynamic_idx}) must appear before todos ({todo_idx})"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test B — resident dedup sets are passed to _memory_section
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_memory_section_receives_resident_exclusions(mem_factory) -> None:
+    """When _stream_inner() calls _memory_section(), it passes the resident dedup sets
+    so that dynamic retrieval can skip already-rendered records."""
+    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+    from sebastian.memory.retrieval import RetrievalContext
+
+    agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s-excl"] = 1
+
+    import sebastian.gateway.state as gw_state
+
+    fake_settings = MagicMock()
+    fake_settings.enabled = True
+
+    captured_ctxs: list[RetrievalContext] = []
+
+    async def _fake_retrieve(ctx: RetrievalContext, *, db_session) -> str:
+        captured_ctxs.append(ctx)
+        return ""
+
+    fake_refresher = MagicMock()
+    fake_refresher.read = AsyncMock(
+        return_value=ResidentSnapshotReadResult(
+            content="## Resident Memory\n\n- Profile memory: 偏好英文\n",
+            rendered_record_ids={"rid-1"},
+            rendered_dedupe_keys={"dkey-1"},
+            rendered_canonical_bullets={"bullet-1"},
+        )
+    )
+
+    empty_todo_store = MagicMock()
+    empty_todo_store.read = AsyncMock(return_value=[])
+
+    session_store = MagicMock()
+    session_store.get_session_for_agent_type = AsyncMock(return_value=MagicMock())
+    session_store.update_activity = AsyncMock()
+    session_store.append_message = AsyncMock()
+    agent._session_store = session_store
+
+    with patch.object(gw_state, "memory_settings", fake_settings, create=True):
+        with patch.object(gw_state, "todo_store", empty_todo_store, create=True):
+            with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
+                with patch(
+                    "sebastian.memory.retrieval.retrieve_memory_section",
+                    side_effect=_fake_retrieve,
+                ):
+                    await agent._stream_inner(
+                        messages=[{"role": "user", "content": "hello"}],
+                        session_id="s-excl",
+                        task_id=None,
+                        agent_context="test",
+                    )
+
+    assert captured_ctxs, "retrieve_memory_section was never called"
+    ctx = captured_ctxs[0]
+    assert ctx.resident_record_ids == {"rid-1"}
+    assert ctx.resident_dedupe_keys == {"dkey-1"}
+    assert ctx.resident_canonical_bullets == {"bullet-1"}
+
+
+# ---------------------------------------------------------------------------
+# Test C — _resident_memory_section() skips depth > 1
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resident_memory_section_skips_depth_above_one(mem_factory) -> None:
+    """When _current_depth[session] != 1, _resident_memory_section must return an
+    empty result and must NOT call refresher.read()."""
+    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+
+    agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s-depth"] = 2  # sub-agent depth — memory ineligible
+
+    fake_refresher = MagicMock()
+    fake_refresher.read = AsyncMock(
+        return_value=ResidentSnapshotReadResult(content="should not be returned")
+    )
+
+    import sebastian.gateway.state as gw_state
+
+    fake_settings = MagicMock()
+    fake_settings.enabled = True
+
+    with patch.object(gw_state, "memory_settings", fake_settings, create=True):
+        with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
+            result = await agent._resident_memory_section("s-depth")
+
+    assert result.content == ""
+    fake_refresher.read.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test D — _resident_memory_section() skips when memory disabled
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resident_memory_section_skips_when_memory_disabled(mem_factory) -> None:
+    """When memory_settings.enabled is False, _resident_memory_section returns empty."""
+    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+
+    agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s-dis"] = 1
+
+    fake_refresher = MagicMock()
+    fake_refresher.read = AsyncMock(
+        return_value=ResidentSnapshotReadResult(content="should not be returned")
+    )
+
+    import sebastian.gateway.state as gw_state
+
+    fake_settings = MagicMock()
+    fake_settings.enabled = False
+
+    with patch.object(gw_state, "memory_settings", fake_settings, create=True):
+        with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
+            result = await agent._resident_memory_section("s-dis")
+
+    assert result.content == ""
+    fake_refresher.read.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test E — _resident_memory_section() skips when refresher is None
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resident_memory_section_skips_missing_refresher(mem_factory) -> None:
+    """When state.resident_snapshot_refresher is None, return empty result."""
+    agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
+    agent._current_depth["s-noref"] = 1
+
+    import sebastian.gateway.state as gw_state
+
+    fake_settings = MagicMock()
+    fake_settings.enabled = True
+
+    with patch.object(gw_state, "memory_settings", fake_settings, create=True):
+        with patch.object(gw_state, "resident_snapshot_refresher", None, create=True):
+            result = await agent._resident_memory_section("s-noref")
+
+    assert result.content == ""
+
+
+# ---------------------------------------------------------------------------
+# Test F — _resident_memory_section() does not open db_factory
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resident_memory_read_does_not_open_db_factory(mem_factory) -> None:
+    """_resident_memory_section() must read from refresher.read(), not the DB.
+    db_factory is patched to raise AssertionError if called."""
+    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+
+    # Build a db_factory that raises if called
+    bad_factory = MagicMock(side_effect=AssertionError("db_factory must not be called"))
+
+    agent = _make_test_agent(_silent_provider(), db_factory=bad_factory)
+    agent._current_depth["s-nodb"] = 1
+
+    fake_refresher = MagicMock()
+    fake_refresher.read = AsyncMock(
+        return_value=ResidentSnapshotReadResult(
+            content="## Resident Memory\n\n- Profile memory: test\n",
+            rendered_record_ids={"r1"},
+        )
+    )
+
+    import sebastian.gateway.state as gw_state
+
+    fake_settings = MagicMock()
+    fake_settings.enabled = True
+
+    with patch.object(gw_state, "memory_settings", fake_settings, create=True):
+        with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
+            result = await agent._resident_memory_section("s-nodb")
+
+    # db_factory should never have been called
+    bad_factory.assert_not_called()
+    assert "## Resident Memory" in result.content

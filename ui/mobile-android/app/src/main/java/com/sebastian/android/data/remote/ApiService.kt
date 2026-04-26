@@ -35,6 +35,9 @@ interface ApiService {
     @DELETE("api/v1/sessions/{sessionId}")
     suspend fun deleteSession(@Path("sessionId") sessionId: String)
 
+    @GET("api/v1/sessions/{sessionId}/todos")
+    suspend fun getTodos(@Path("sessionId") sessionId: String): TodoListResponse
+
     @POST("api/v1/sessions/{sessionId}/cancel")
     suspend fun cancelSession(@Path("sessionId") sessionId: String): OkResponse
 

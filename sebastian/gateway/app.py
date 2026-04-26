@@ -137,6 +137,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         SessionConsolidationWorker,
     )
     from sebastian.memory.extraction import MemoryExtractor
+    from sebastian.memory.resident_snapshot import (
+        ResidentMemorySnapshotRefresher,
+        ResidentSnapshotPaths,
+    )
+
+    resident_refresher = ResidentMemorySnapshotRefresher(
+        paths=ResidentSnapshotPaths.from_user_data_dir(settings.user_data_dir),
+        db_factory=db_factory,
+    )
+    state.resident_snapshot_refresher = resident_refresher
+    try:
+        async with db_factory() as _resident_session:
+            await resident_refresher.rebuild(_resident_session)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("resident snapshot rebuild failed at startup: %s", exc, exc_info=True)
+        resident_refresher.schedule_refresh()
 
     consolidator = MemoryConsolidator(llm_registry)
     extractor = MemoryExtractor(llm_registry)
@@ -146,6 +162,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         extractor=extractor,
         session_store=session_store,
         memory_settings_fn=lambda: state.memory_settings.enabled,
+        resident_snapshot_refresher=resident_refresher,
     )
     consolidation_scheduler = MemoryConsolidationScheduler(
         event_bus=event_bus,
@@ -289,6 +306,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await completion_notifier.aclose()
         if state.consolidation_scheduler is not None:
             await state.consolidation_scheduler.aclose()
+        if state.resident_snapshot_refresher is not None:
+            await state.resident_snapshot_refresher.aclose()
+            state.resident_snapshot_refresher = None
     finally:
         state.context_compaction_scheduler = None
         state.context_compaction_worker = None

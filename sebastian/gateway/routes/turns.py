@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import logging
+from asyncio import Task
+from asyncio import create_task as _create_task
 from datetime import UTC, datetime
 from typing import Any
 
@@ -51,7 +52,7 @@ async def _ensure_llm_ready(agent_type: str) -> None:
         )
 
 
-def _log_background_turn_failure(task: asyncio.Task[object]) -> None:
+def _log_background_turn_failure(task: Task[object]) -> None:
     if task.cancelled():
         return
     exc = task.exception()
@@ -79,7 +80,7 @@ async def send_turn(
 
     await _ensure_llm_ready("sebastian")
     session = await state.sebastian.get_or_create_session(body.session_id, body.content)
-    task = asyncio.create_task(state.sebastian.run_streaming(body.content, session.id))
+    task = _create_task(state.sebastian.run_streaming(body.content, session.id))
     task.add_done_callback(_log_background_turn_failure)
     return {
         "session_id": session.id,

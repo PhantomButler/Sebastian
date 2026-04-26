@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from sebastian.context.compaction import CompactionScheduler
     from sebastian.llm.provider import LLMProvider
     from sebastian.llm.registry import LLMProviderRegistry
+    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
 
 from ulid import ULID
 
@@ -58,7 +59,7 @@ CancelIntent = Literal["cancel", "stop"]
 
 
 BASE_PERSONA = (
-    "You are Sebastian, a personal AI butler for {owner_name}. "
+    "You are Sebastian, a personal AI butler. "
     "You are helpful, precise, and action-oriented. "
     "You have access to tools and will use them when needed."
 )
@@ -136,7 +137,7 @@ class BaseAgent(ABC):
         self.system_prompt = self.build_system_prompt(gate)
 
     def _persona_section(self) -> str:
-        return self.persona.replace("{owner_name}", settings.sebastian_owner_name)
+        return self.persona
 
     def _guidelines_section(self) -> str:
         return (
@@ -217,11 +218,38 @@ class BaseAgent(ABC):
         )
         return "\n".join(lines)
 
+    async def _resident_memory_section(self, session_id: str) -> ResidentSnapshotReadResult:
+        """Return the cached resident memory snapshot for depth-1 sessions.
+
+        Returns an empty ResidentSnapshotReadResult on any failure, if memory is
+        disabled, if the refresher is absent, or if depth != 1.
+        """
+        from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+
+        if not is_memory_eligible(self._current_depth.get(session_id)):
+            return ResidentSnapshotReadResult(content="")
+        try:
+            import sebastian.gateway.state as state
+
+            if not getattr(state, "memory_settings", None) or not state.memory_settings.enabled:
+                return ResidentSnapshotReadResult(content="")
+            refresher = getattr(state, "resident_snapshot_refresher", None)
+            if refresher is None:
+                return ResidentSnapshotReadResult(content="")
+            return cast("ResidentSnapshotReadResult", await refresher.read())
+        except Exception:
+            logger.warning("Resident memory section read failed", exc_info=True)
+            return ResidentSnapshotReadResult(content="")
+
     async def _memory_section(
         self,
         session_id: str,
         agent_context: str,
         user_message: str,
+        *,
+        resident_record_ids: set[str] | None = None,
+        resident_dedupe_keys: set[str] | None = None,
+        resident_canonical_bullets: set[str] | None = None,
     ) -> str:
         """Return assembled memory context string. Empty string on any failure or if disabled.
 
@@ -257,6 +285,9 @@ class BaseAgent(ABC):
                 agent_type=agent_context,
                 user_message=user_message,
                 active_project_or_agent_context={"agent_type": agent_context},
+                resident_record_ids=resident_record_ids or set(),
+                resident_dedupe_keys=resident_dedupe_keys or set(),
+                resident_canonical_bullets=resident_canonical_bullets or set(),
             )
             async with self._db_factory() as session:
                 section = await retrieve_memory_section(ctx, db_session=session)
@@ -495,11 +526,19 @@ class BaseAgent(ABC):
         block_index: int = 0
         last_provider_usage: TokenUsage | None = None
         todo_section = await self._session_todos_section(session_id, agent_context)
+        resident = await self._resident_memory_section(session_id)
         last_user_msg = messages[-1].get("content", "") if messages else ""
         memory_section = await self._memory_section(
-            session_id, agent_context, user_message=last_user_msg
+            session_id,
+            agent_context,
+            user_message=last_user_msg,
+            resident_record_ids=resident.rendered_record_ids,
+            resident_dedupe_keys=resident.rendered_dedupe_keys,
+            resident_canonical_bullets=resident.rendered_canonical_bullets,
         )
         sections = [self.system_prompt]
+        if resident.content:
+            sections.append(resident.content)
         if memory_section:
             sections.append(memory_section)
         if todo_section:

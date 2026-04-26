@@ -124,7 +124,7 @@ def test_send_turn_returns_immediate_session_metadata(client):
         return MagicMock()
 
     with patch(
-        "sebastian.gateway.routes.turns.asyncio.create_task",
+        "sebastian.gateway.routes.turns._create_task",
         side_effect=capture_background_task,
     ) as mock_create_task:
         response = http_client.post(
@@ -200,7 +200,7 @@ def test_post_turns_accepts_thinking_effort_field_in_dto(client):
         return MagicMock()
 
     with patch(
-        "sebastian.gateway.routes.turns.asyncio.create_task",
+        "sebastian.gateway.routes.turns._create_task",
         side_effect=capture_background_task,
     ):
         response = http_client.post(

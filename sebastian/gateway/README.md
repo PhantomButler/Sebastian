@@ -68,6 +68,7 @@ state.conversation.request_approval(...)
 state.db_factory                       # SQLAlchemy async session factory
 state.llm_registry                     # LLMProviderRegistry 实例
 state.memory_extractor                 # MemoryExtractor 实例（memory_save 后台任务使用；None 表示未初始化）
+state.resident_snapshot_refresher      # ResidentMemorySnapshotRefresher 单例（startup 重建快照，shutdown 时清理）
 state.get_owner_store()                # OwnerStore（需要 DB session）
 # 注：state.todo_store 和 state.index_store 已从运行时移除
 
@@ -116,6 +117,7 @@ async def foo(_auth: dict = Depends(require_auth)): ...
 - `state.py` 中的变量名**不可随意重命名**——全项目通过模块导入直接访问，重命名会导致全局 `NameError`
 - `app.py` 的 `lifespan` 初始化顺序有严格要求，不可调换：`DB → Store → EventBus → Agent → SSE`
 - `state.context_compaction_worker` 在 lifespan 初始化时赋值，在路由中通过 `state.context_compaction_worker.compact_session(...)` 调用
+- `state.resident_snapshot_refresher` 在 lifespan startup 时调用 `rebuild()` 触发初始快照重建；shutdown 时调用 `cleanup()` 释放资源
 
 ---
 

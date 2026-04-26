@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-04-19
+version: "1.1"
+last_updated: 2026-04-26
 status: in-progress
 ---
 
@@ -102,11 +102,20 @@ Sebastian 的长期记忆采用三层逻辑模型：
 
 ### 5.3 BaseAgent Memory 入口
 
-当前实现不把 memory planner、assembler 和 prompt 注入拆成多个 BaseAgent hook。BaseAgent 只保留一个长期记忆入口：
+BaseAgent 的长期记忆注入分为两个阶段，按固定顺序拼入 system prompt：
 
-- `_memory_section()`：在构造 system prompt 前调用，内部完成 retrieval plan（检索规划）→ lane fetch（分通道检索）→ assemble（装配）→ 返回可注入文本。
+```
+base system prompt
+→ [resident] 常驻记忆快照（_resident_memory_section）
+→ [dynamic]  动态检索记忆（_memory_section）
+→ [todos]    当前待办
+```
 
-这个边界让 BaseAgent 主链路只关心“本轮需要注入什么长期记忆”，不感知 Memory 系统内部的 lane 细节。短期不拆出独立的 BaseAgent planner hook 或 assembler hook，避免把 Memory 内部策略泄漏到 Agent 运行时。
+**常驻记忆快照**（`_resident_memory_section()`）：从预渲染的 Markdown 快照文件中读取高置信用户画像，每轮固定注入。快照由 `ResidentMemorySnapshotRefresher` 维护，在记忆沉淀完成后异步重建，gateway startup 时触发一次全量重建。优点：零 DB 查询延迟；缺点：最多落后一个沉淀周期。
+
+**动态检索记忆**（`_memory_section()`）：通过 `MemoryRetrievalPlanner` + 四条 lane 按轮次检索，内容更及时但增加 DB IO。`MemorySectionAssembler` 在装配时会过滤掉已出现在常驻快照中的记录（通过 `RetrievalContext` 中的三个去重字段），避免重复注入。
+
+两者均不感知对方内部实现；`BaseAgent._stream_inner()` 负责拼接顺序。短期不拆出独立的 BaseAgent planner hook 或 assembler hook，避免把 Memory 内部策略泄漏到 Agent 运行时。
 
 后台沉淀也不由 BaseAgent 的 turn end / idle hook 直接触发。当前会话沉淀由 `SESSION_COMPLETED` 事件和 startup catch-up sweep 驱动；如果未来需要 `idle` / `stalled` 触发，应先补独立 spec，明确触发条件、幂等标记和与未完成 session 的边界。
 
@@ -142,6 +151,7 @@ Sebastian 的长期记忆采用三层逻辑模型：
 | B | 已实现，审查修复中 | Profile + Episode 可用版 | fact/preference（事实/偏好）写入更新注入、episode/summary（经历/摘要）存储检索、基础 lane、decision log（决策日志）落盘已可用；当前修复聚焦 current truth 过滤、Episode Lane summary-first、审计字段补齐 |
 | C | 部分实现 | Consolidation 成熟版 | session consolidation（会话沉淀）、startup catch-up sweep 与 EXPIRE 生命周期处理已实现；cross-session preference strengthening（跨会话偏好强化）、maintenance worker（维护任务）、降权、重复压缩、索引修复需单独 spec |
 | D | 部分实现 | Relation / Graph 增强 | entity normalization（实体规范化）、relation candidate 入库、relation lane（关系检索通道）与时间区间检索已实现；exclusive relation 边界覆盖、正式 relation facts / graph 查询语义需单独 spec |
+| E | 已实现 | 常驻记忆快照 | `ResidentMemorySnapshotRefresher` + `resident_dedupe.py` 已实现；快照文件按高置信画像预渲染，每轮固定注入，动态检索去重；详见 [设计文档](../../../../superpowers/specs/2026-04-26-resident-memory-snapshot-design.md) |
 
 需要单独讨论 spec 的事项：
 

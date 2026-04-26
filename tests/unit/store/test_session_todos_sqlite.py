@@ -81,3 +81,53 @@ async def test_no_filesystem_directories_created(db_todo_store, tmp_path):
     # 确认没有创建文件
     for p in tmp_path.rglob("todos.json"):
         raise AssertionError(f"Found unexpected todos.json: {p}")
+
+
+@pytest.mark.asyncio
+async def test_rebuild_fk_drops_orphaned_rows() -> None:
+    """_rebuild_if_missing_fk 应删除孤儿 todo（对应 session 不存在），迁移不应抛 FK violation。"""
+    import asyncio
+
+    import sebastian.store.models  # noqa: F401
+    from sebastian.store.database import Base, _rebuild_if_missing_fk
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    try:
+        async with engine.begin() as conn:
+            # 建一张没有 FK 约束的老版 session_todos（模拟旧 schema）
+            await conn.exec_driver_sql(
+                "CREATE TABLE session_todos ("
+                "  agent_type VARCHAR NOT NULL,"
+                "  session_id VARCHAR NOT NULL,"
+                "  todos JSON NOT NULL,"
+                "  updated_at DATETIME NOT NULL,"
+                "  PRIMARY KEY (agent_type, session_id)"
+                ")"
+            )
+            # 同时建一张空的 sessions 表（供 FK 引用目标）
+            await conn.run_sync(
+                lambda sync_conn: Base.metadata.tables["sessions"].create(
+                    sync_conn, checkfirst=True
+                )
+            )
+            # 写入一条孤儿记录（sessions 表里没有对应行）
+            await conn.exec_driver_sql(
+                "INSERT INTO session_todos VALUES"
+                " ('sebastian', 'orphan-session', '[]', '2024-01-01 00:00:00')"
+            )
+
+        # 运行迁移 —— 不应抛异常
+        async with engine.begin() as conn:
+            await _rebuild_if_missing_fk(conn, "session_todos")
+
+        # 迁移后孤儿记录应被删除
+        async with engine.begin() as conn:
+            result = await conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM session_todos WHERE session_id='orphan-session'"
+            )
+            assert result.fetchone()[0] == 0, (
+                "orphaned todo should have been deleted during migration"
+            )
+    finally:
+        await engine.dispose()
+        await asyncio.sleep(0)

@@ -66,7 +66,15 @@ class TestBuiltinSlots:
         ]
         for slot_id in expected:
             assert registry.get(slot_id) is not None, f"Missing slot: {slot_id}"
-        assert len(registry._slots) == 9  # no accidental extra slots
+
+    def test_builtin_addressing_slot_exists(self) -> None:
+        registry = SlotRegistry()
+        slot = registry.get("user.preference.addressing")
+        assert slot is not None
+        assert slot.scope == MemoryScope.USER
+        assert slot.cardinality == Cardinality.SINGLE
+        assert slot.resolution_policy == ResolutionPolicy.SUPERSEDE
+        assert MemoryKind.PREFERENCE in slot.kind_constraints
 
 
 class TestRegistryLookup:
@@ -99,11 +107,12 @@ class TestListAll:
     def test_list_all_returns_all_registered_slots(self) -> None:
         registry = SlotRegistry()
         slots = registry.list_all()
-        assert len(slots) == 9
+        assert len(slots) == 10
         slot_ids = {s.slot_id for s in slots}
         assert slot_ids == {
             "user.preference.response_style",
             "user.preference.language",
+            "user.preference.addressing",
             "user.current_project_focus",
             "user.profile.timezone",
             "project.current_phase",

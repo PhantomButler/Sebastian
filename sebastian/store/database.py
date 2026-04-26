@@ -119,6 +119,8 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
     await _rebuild_pk_if_needed(conn, "sessions", wrong_first_col="id")
     await _rebuild_pk_if_needed(conn, "session_consolidations", wrong_first_col="session_id")
     await _rebuild_pk_if_needed(conn, "session_todos", wrong_first_col="session_id")
+    # session_todos FK 迁移：无 FOREIGN KEY 约束时重建以加入 CASCADE DELETE
+    await _rebuild_if_missing_fk(conn, "session_todos")
 
     await _apply_idempotent_indexes(conn)
     await _drop_obsolete_columns(conn)
@@ -244,6 +246,52 @@ async def _rebuild_pk_if_needed(
     )
     await conn.exec_driver_sql(f"DROP TABLE {tmp}")
     logger.info("Rebuilt %s with correct PRIMARY KEY", table)
+
+
+async def _rebuild_if_missing_fk(conn: Any, table: str) -> None:
+    """若 table 缺少 FOREIGN KEY 约束，重建以加入约束（含 CASCADE DELETE）。幂等。"""
+    row = await conn.execute(
+        text(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table}'")
+    )
+    sql = (row.scalar() or "").lower()
+    if not sql or "foreign key" in sql or "references" in sql:
+        return
+
+    logger.info("Rebuilding %s to add FOREIGN KEY constraint", table)
+    tmp = f"__{table}_fk_rebuild_tmp"
+    index_result = await conn.execute(
+        text(
+            "SELECT name FROM sqlite_master"
+            " WHERE type='index' AND tbl_name=:table"
+            " AND name NOT LIKE 'sqlite_autoindex_%'"
+        ),
+        {"table": table},
+    )
+    index_names = [row[0] for row in index_result.fetchall()]
+    await conn.exec_driver_sql(f"ALTER TABLE {table} RENAME TO {tmp}")
+    for index_name in index_names:
+        await conn.exec_driver_sql(f'DROP INDEX IF EXISTS "{index_name}"')
+    await conn.run_sync(lambda sync_conn: Base.metadata.tables[table].create(sync_conn))
+    pragma = await conn.exec_driver_sql(f"PRAGMA table_info({tmp})")
+    cols_info = pragma.fetchall()
+    old_cols = {row[1] for row in cols_info}
+    new_cols = [col.name for col in Base.metadata.tables[table].columns]
+    common_cols = [col for col in new_cols if col in old_cols]
+    quoted_cols = ", ".join(f'"{col}"' for col in common_cols)
+    # 删除孤儿行：对应 session 不存在的 todo 无意义，迁移时清理
+    await conn.exec_driver_sql(
+        f"DELETE FROM {tmp}"
+        f" WHERE NOT EXISTS ("
+        f"   SELECT 1 FROM sessions"
+        f"   WHERE sessions.agent_type = {tmp}.agent_type"
+        f"   AND sessions.id = {tmp}.session_id"
+        f" )"
+    )
+    await conn.exec_driver_sql(
+        f"INSERT INTO {table} ({quoted_cols}) SELECT {quoted_cols} FROM {tmp}"
+    )
+    await conn.exec_driver_sql(f"DROP TABLE {tmp}")
+    logger.info("Rebuilt %s with FOREIGN KEY CASCADE DELETE", table)
 
 
 async def _verify_schema_invariants(conn: Any) -> None:

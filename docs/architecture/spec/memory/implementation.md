@@ -1,6 +1,6 @@
 ---
-version: "1.2"
-last_updated: 2026-04-23
+version: "1.3"
+last_updated: 2026-04-26
 status: in-progress
 ---
 
@@ -549,9 +549,33 @@ Agent 继续执行，本轮无记忆注入。`warning` 级日志包含完整 tra
 
 ---
 
-## 13. 记忆功能设置持久化
+## 13. 常驻记忆快照（Resident Memory Snapshot）
 
-### 13.1 `app_settings` KV 表
+### 13.0 实现状态
+
+已实现。关键文件：
+
+| 文件 | 职责 |
+|------|------|
+| `sebastian/memory/resident_snapshot.py` | `ResidentMemorySnapshotRefresher`：快照读写、脏标记、重建触发 |
+| `sebastian/memory/resident_dedupe.py` | `canonical_bullet`、`slot_value_dedupe_key` 等去重纯函数 |
+| `sebastian/memory/retrieval.py` | `RetrievalContext` 新增 `resident_record_ids` / `resident_dedupe_keys` / `resident_canonical_bullets` 三字段；`MemorySectionAssembler` 在 `_keep()` 中过滤已注入记录 |
+| `sebastian/memory/consolidation.py` | `dirty scope` wrapping：会话沉淀 commit 后标记快照为脏，触发重建 |
+| `sebastian/core/base_agent.py` | `_resident_memory_section()` 读取快照；`_memory_section()` 传入去重字段；`_stream_inner()` 按 base → resident → dynamic → todos 顺序拼接 system prompt |
+| `sebastian/gateway/state.py` | `resident_snapshot_refresher` 单例 |
+| `sebastian/gateway/app.py` | startup 调用 `rebuild()`，shutdown 调用 `cleanup()` |
+| `sebastian/capabilities/tools/memory_save/__init__.py` | 工具 commit 后标记快照脏 |
+| `sebastian/config/__init__.py` | `ensure_data_dir()` 中创建 `memory/` 子目录 |
+
+快照文件路径：`settings.user_data_dir / "memory" / resident_snapshot.md`（内容）和 `resident_snapshot.meta.json`（元数据，含 `last_rebuilt_at`、`record_count` 等）。
+
+详细设计见 [常驻记忆快照设计文档](../../../../superpowers/specs/2026-04-26-resident-memory-snapshot-design.md)。
+
+---
+
+## 14. 记忆功能设置持久化
+
+### 14.1 `app_settings` KV 表
 
 通用全局配置存储，不限于记忆功能。
 
@@ -574,7 +598,7 @@ class AppSettingsRecord(Base):
 APP_SETTING_MEMORY_ENABLED = "memory_enabled"
 ```
 
-### 13.2 `AppSettingsStore`
+### 14.2 `AppSettingsStore`
 
 封装 KV 读写（`sebastian/store/app_settings_store.py`）：
 
@@ -589,7 +613,7 @@ class AppSettingsStore:
         """Upsert：存在则更新 value + updated_at，不存在则插入。"""
 ```
 
-### 13.3 Gateway 启动加载
+### 14.3 Gateway 启动加载
 
 `gateway/app.py` lifespan startup 中从 DB 加载记忆设置，覆盖环境变量默认值：
 
@@ -606,7 +630,7 @@ state.memory_settings = MemoryRuntimeSettings(enabled=mem_enabled)
 
 **优先级**：DB 有值 → 用 DB 值；DB 无值 → fallback 到环境变量 `SEBASTIAN_MEMORY_ENABLED`。
 
-### 13.4 `PUT /api/v1/memory/settings` 持久化
+### 14.4 `PUT /api/v1/memory/settings` 持久化
 
 `gateway/routes/memory_settings.py` 的 PUT 端点在更新内存状态的同时写入 DB：
 
@@ -623,7 +647,7 @@ async def put_memory_settings(body: MemoryRuntimeSettings, ...) -> MemoryRuntime
 
 功能开关为运行时热切换；关闭后不影响已有数据，重新开启后下一轮会话正常触发沉淀。
 
-### 13.5 Android 记忆设置页面
+### 14.5 Android 记忆设置页面
 
 - **路由**：`Route.SettingsMemory`（`Route.kt` 中注册）
 - **页面**：`MemorySettingsPage`（`ui/settings/`），使用 `SebastianSwitch` 组件
@@ -631,7 +655,7 @@ async def put_memory_settings(body: MemoryRuntimeSettings, ...) -> MemoryRuntime
 - **DTO**：`MemorySettingsDto(enabled: Boolean)`
 - **入口**：`SettingsScreen` 第一个分组 Card 中，`Agent LLM Bindings` 行下方，icon `Icons.Outlined.Psychology`，标题"记忆功能"，副标题"长期记忆开关"
 
-### 13.6 数据库 Migration
+### 14.6 数据库 Migration
 
 项目使用 `Base.metadata.create_all` 自动建表，新增 `AppSettingsRecord` model 后在 `create_all` 前 import 即可，无需 Alembic migration。
 

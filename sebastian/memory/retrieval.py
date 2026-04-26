@@ -4,8 +4,14 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import jieba  # type: ignore[import-untyped]
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from sebastian.memory.resident_dedupe import (
+    canonical_bullet as _canonical_bullet,
+)
+from sebastian.memory.resident_dedupe import (
+    slot_value_dedupe_key as _slot_value_dedupe_key,
+)
 from sebastian.memory.retrieval_lexicon import (
     CONTEXT_LANE_WORDS,
     EPISODE_LANE_WORDS,
@@ -105,6 +111,11 @@ class RetrievalContext(BaseModel):
     user_message: str
     access_purpose: str = "context_injection"
     active_project_or_agent_context: dict[str, Any] | None = None
+    # Resident memory dedup sets — populated by the resident snapshot injector so that
+    # MemorySectionAssembler can skip records already present in the system prompt.
+    resident_record_ids: set[str] = Field(default_factory=set)
+    resident_dedupe_keys: set[str] = Field(default_factory=set)
+    resident_canonical_bullets: set[str] = Field(default_factory=set)
 
 
 class RetrievalPlan(BaseModel):
@@ -302,7 +313,30 @@ class MemorySectionAssembler:
 
             return True
 
-        profiles = [r for r in profile_records if _keep(r)][: plan.profile_limit]
+        def _not_resident_duplicate(record: Any) -> bool:
+            """Return False if *record* is already injected by resident memory snapshot.
+
+            Dedup order per spec §11: record id → canonical bullet → slot_value key.
+            """
+            record_id = getattr(record, "id", None)
+            if record_id and record_id in effective_context.resident_record_ids:
+                return False
+            # canonical bullet check comes before slot_value per spec §11
+            bullet = _canonical_bullet(getattr(record, "content", "") or "")
+            if bullet and bullet in effective_context.resident_canonical_bullets:
+                return False
+            key = _slot_value_dedupe_key(
+                subject_id=getattr(record, "subject_id", None) or effective_context.subject_id,
+                slot_id=getattr(record, "slot_id", None),
+                structured_payload=getattr(record, "structured_payload", None) or {},
+            )
+            if key and key in effective_context.resident_dedupe_keys:
+                return False
+            return True
+
+        profiles = [r for r in profile_records if _keep(r) and _not_resident_duplicate(r)][
+            : plan.profile_limit
+        ]
         contexts = [r for r in context_records if _keep(r)][: plan.context_limit]
         relations = [r for r in relation_records if _keep(r)][: plan.relation_limit]
         episodes = [r for r in episode_records if _keep(r)][: plan.episode_limit]
