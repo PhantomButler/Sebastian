@@ -9,7 +9,9 @@ from sebastian.llm.crypto import encrypt
 
 @pytest_asyncio.fixture
 async def registry(tmp_path, monkeypatch):
-    key_file = tmp_path / "secret.key"
+    user_data_dir = tmp_path / "data"
+    user_data_dir.mkdir(parents=True, exist_ok=True)
+    key_file = user_data_dir / "secret.key"
     key_file.write_text("test-secret")
     monkeypatch.setattr("sebastian.config.settings.sebastian_data_dir", str(tmp_path))
 

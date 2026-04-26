@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-SYSTEMD_UNIT_TEMPLATE = """\
+_SYSTEMD_UNIT_TEMPLATE = """\
 [Unit]
 Description=Sebastian personal AI butler
 After=network-online.target
@@ -46,8 +46,8 @@ _LAUNCHD_PLIST_TEMPLATE = """\
 
 
 def render_systemd_unit() -> str:
-    return SYSTEMD_UNIT_TEMPLATE
+    return _SYSTEMD_UNIT_TEMPLATE
 
 
 def render_launchd_plist(*, home: Path) -> str:
-    return _LAUNCHD_PLIST_TEMPLATE.format(home=str(home))
+    return _LAUNCHD_PLIST_TEMPLATE.replace("{home}", str(home))

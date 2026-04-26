@@ -36,8 +36,9 @@ async def db_session():
 def _patch_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """确保每个测试都有临时 secret.key，防止 config/auth 加载失败。"""
     data_dir = tmp_path / "_sebastian_test_data"
-    data_dir.mkdir()
-    key_file = data_dir / "secret.key"
+    user_data_dir = data_dir / "data"
+    user_data_dir.mkdir(parents=True)
+    key_file = user_data_dir / "secret.key"
     key_file.write_text("test-secret-key")
     monkeypatch.setattr("sebastian.config.settings.sebastian_data_dir", str(data_dir))
 

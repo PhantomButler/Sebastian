@@ -6,7 +6,9 @@ import pytest
 @pytest.fixture
 def _secret_key_file(tmp_path, monkeypatch):
     """Write a temporary secret.key and point settings.data_dir to it."""
-    key_file = tmp_path / "secret.key"
+    user_data_dir = tmp_path / "data"
+    user_data_dir.mkdir(parents=True, exist_ok=True)
+    key_file = user_data_dir / "secret.key"
     key_file.write_text("test-secret-abc")
     monkeypatch.setattr(
         "sebastian.config.settings.sebastian_data_dir",
