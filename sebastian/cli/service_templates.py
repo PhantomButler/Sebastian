@@ -37,7 +37,10 @@ _LAUNCHD_PLIST_TEMPLATE = """\
     <string>serve</string>
   </array>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key><false/>
+  </dict>
   <key>StandardOutPath</key><string>{home}/.sebastian/logs/service.out.log</string>
   <key>StandardErrorPath</key><string>{home}/.sebastian/logs/service.err.log</string>
 </dict>

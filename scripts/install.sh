@@ -60,10 +60,16 @@ USER_DATA_DIR="${DATA_ROOT}/data"
 if [[ ! -f "${USER_DATA_DIR}/sebastian.db" ]]; then
   color_ylw "→ 进入初始化向导..."
   if [[ "$OS" == "Linux" && -z "${DISPLAY:-}" ]]; then
-    sebastian init --headless
+    if ! sebastian init --headless; then
+      color_red "❌ 初始化向导未完成，安装已中止"
+      exit 1
+    fi
   else
     # serve 启动时会唤起 web wizard 并在向导完成后自动退出
-    sebastian serve
+    if ! sebastian serve; then
+      color_red "❌ 初始化向导未完成，安装已中止"
+      exit 1
+    fi
   fi
 else
   color_grn "✓ 检测到已初始化数据，跳过向导"

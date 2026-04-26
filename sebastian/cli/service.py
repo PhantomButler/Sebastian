@@ -5,6 +5,7 @@ User-level systemd units (Linux) and launchd LaunchAgents (macOS). No sudo.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -120,15 +121,19 @@ def _status_systemd() -> str:
         text=True,
         check=False,
     )
-    state = proc.stdout.strip() or proc.stderr.strip()
+    state = proc.stdout.strip()
+    if not state:
+        state = proc.stderr.strip()
+    if state == "not-found":
+        return "systemd user service: not installed"
     return f"systemd user service: {state}"
 
 
 def _check_linger() -> None:
     """Warn user if user-level linger is disabled (service won't survive logout)."""
-    import os
-
-    user = os.environ.get("USER", "")
+    user = os.environ.get("USER") or ""
+    if not user:
+        return
     proc = subprocess.run(
         ["loginctl", "show-user", user, "-P", "Linger"],
         capture_output=True,

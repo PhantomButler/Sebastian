@@ -27,7 +27,8 @@ def test_launchd_plist_renders_home(tmp_path: Path) -> None:
     assert "<string>/Users/eric/.sebastian/app/.venv/bin/sebastian</string>" in plist
     assert "<string>/Users/eric/.sebastian/logs/service.out.log</string>" in plist
     assert "<key>RunAtLoad</key><true/>" in plist
-    assert "<key>KeepAlive</key><true/>" in plist
+    assert "<key>KeepAlive</key>" in plist
+    assert "<key>SuccessfulExit</key><false/>" in plist
 
 
 @pytest.fixture
