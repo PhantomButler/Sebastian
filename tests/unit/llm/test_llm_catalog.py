@@ -215,10 +215,10 @@ class TestLoadBuiltinCatalog:
         assert isinstance(self.catalog, LLMCatalog)
         assert self.catalog.version == 1
 
-    def test_has_exactly_four_providers(self) -> None:
-        assert len(self.catalog.providers) == 4
+    def test_has_exactly_five_providers(self) -> None:
+        assert len(self.catalog.providers) == 5
         ids = {p.id for p in self.catalog.providers}
-        assert ids == {"anthropic", "openai", "deepseek", "zhipu"}
+        assert ids == {"anthropic", "openai", "deepseek", "deepseek_anthropic", "zhipu"}
 
     # -- Anthropic --
 
@@ -273,7 +273,7 @@ class TestLoadBuiltinCatalog:
 
     def test_deepseek_provider(self) -> None:
         p = self.catalog.get_provider("deepseek")
-        assert p.display_name == "DeepSeek"
+        assert p.display_name == "DeepSeek (OpenAI format)"
         assert p.provider_type == "openai"
         assert p.base_url == "https://api.deepseek.com"
         assert len(p.models) == 2
@@ -282,13 +282,13 @@ class TestLoadBuiltinCatalog:
         m = self.catalog.get_model("deepseek", "deepseek-v4-pro")
         assert m.display_name == "DeepSeek V4 Pro"
         assert m.context_window_tokens == 1_000_000
-        assert m.thinking_capability == "toggle"
+        assert m.thinking_capability == "effort"
         assert m.thinking_format == "reasoning_content"
 
     def test_deepseek_v4_flash(self) -> None:
         m = self.catalog.get_model("deepseek", "deepseek-v4-flash")
         assert m.display_name == "DeepSeek V4 Flash"
-        assert m.thinking_capability == "toggle"
+        assert m.thinking_capability == "effort"
         assert m.thinking_format == "reasoning_content"
 
     # -- Zhipu --

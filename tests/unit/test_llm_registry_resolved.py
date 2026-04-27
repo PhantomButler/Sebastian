@@ -24,8 +24,8 @@ def test_coerce_capability_always_on_clears_effort():
     assert _coerce_thinking("high", "always_on") is None
 
 
-def test_coerce_effort_drops_max():
-    assert _coerce_thinking("max", "effort") == "high"
+def test_coerce_effort_passes_max():
+    assert _coerce_thinking("max", "effort") == "max"
 
 
 def test_coerce_toggle_normalizes_values():
@@ -118,8 +118,8 @@ async def test_fallback_to_default_binding(registry, default_account_id: str) ->
 
 
 @pytest.mark.asyncio
-async def test_effort_coerced_max_to_high(registry, default_account_id: str) -> None:
-    """capability='effort' (openai/gpt-5.5), effort='max' → coerced to 'high'."""
+async def test_effort_passes_max_through(registry, default_account_id: str) -> None:
+    """capability='effort' (openai/gpt-5.5), effort='max' → passed through as-is."""
     from sebastian.store.models import LLMAccountRecord
 
     record = LLMAccountRecord(
@@ -133,7 +133,7 @@ async def test_effort_coerced_max_to_high(registry, default_account_id: str) -> 
     await registry.set_binding("forge", record.id, "gpt-5.5", thinking_effort="max")
     resolved = await registry.get_provider("forge")
 
-    assert resolved.thinking_effort == "high"
+    assert resolved.thinking_effort == "max"
     assert resolved.capability == "effort"
 
 
@@ -152,5 +152,5 @@ async def test_deepseek_thinking_format(registry) -> None:
 
     resolved = await registry.get_provider("forge")
     assert resolved.thinking_format == "reasoning_content"
-    assert resolved.capability == "toggle"
+    assert resolved.capability == "effort"
     assert resolved.model_display_name == "DeepSeek V4 Pro"
