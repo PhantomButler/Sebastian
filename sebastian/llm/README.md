@@ -54,8 +54,9 @@ llm/
 |---|---|---|---|
 | `none` | 不支持思考控制 | — | 不传任何 thinking 参数 |
 | `toggle` | 只支持开关二态 | off / on | `thinking={"type":"enabled"}`（Anthropic 路径）；OpenAI 路径 no-op |
-| `effort` | 4 档 | off / low / medium / high | Anthropic 旧版 `thinking={"type":"enabled","budget_tokens":N}`；OpenAI `reasoning_effort=...` |
+| `effort` | 4 档 | off / low / medium / high / max | Anthropic 旧版 `thinking={"type":"enabled","budget_tokens":N}`；OpenAI `reasoning_effort=...` |
 | `adaptive` | Anthropic Adaptive Thinking | off / low / medium / high / max | `thinking={"type":"adaptive"}` + `output_config={"effort":...}` |
+| `output_effort` | 第三方 Anthropic 兼容 API（如 DeepSeek Anthropic 格式） | off / high / max | `thinking={"type":"enabled"}` + `output_config={"effort":...}`；low/medium 自动提升为 high |
 | `always_on` | 模型必然思考 | —（UI 固定）| 不传参数，解析侧由 `thinking_format` 决定 |
 
 典型组合：
@@ -68,7 +69,8 @@ llm/
 | OpenAI o3 / o4 | openai | effort | None |
 | GPT-5.5 / GPT-5.4 | openai | effort | None |
 | GPT-4o | openai | none | None |
-| DeepSeek V4 Pro / Flash | openai | toggle | reasoning_content |
+| DeepSeek V4 Pro / Flash (OpenAI format) | openai | effort | reasoning_content |
+| DeepSeek V4 Pro / Flash (Anthropic format) | anthropic | output_effort | None |
 | DeepSeek-R1 | openai | always_on | reasoning_content |
 | GLM-5.1 / GLM-5v-Turbo | anthropic | toggle | None |
 | llama.cpp Qwen `<think>` | openai | always_on | think_tags |
@@ -85,7 +87,7 @@ UI 层需在 clamp 规则中保证传入 Provider 的 effort 始终合法（见 
 
 **API 层校验**：`POST/PUT /llm/accounts` 和 `POST/PUT /llm/custom-models` 会对以下字段执行枚举验证，非法值返回 HTTP 400：
 - `provider_type`：必须是 `SUPPORTED_PROVIDER_TYPES` 中的值（`anthropic` / `openai`）
-- `thinking_capability`：必须是 `SUPPORTED_THINKING_CAPABILITIES` 中的值（`none` / `toggle` / `effort` / `adaptive` / `always_on`）
+- `thinking_capability`：必须是 `SUPPORTED_THINKING_CAPABILITIES` 中的值（`none` / `toggle` / `effort` / `adaptive` / `output_effort` / `always_on`）
 - `thinking_format`：必须是 `SUPPORTED_THINKING_FORMATS` 中的值（`reasoning_content` / `think_tags`，或留空）
 - 自定义 Account（`catalog_provider_id="custom"`）的 `base_url_override` 不可在 PUT 时清空（会被拒绝返回 400）
 

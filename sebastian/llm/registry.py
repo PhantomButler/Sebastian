@@ -37,9 +37,9 @@ def _coerce_thinking(
     if capability == "effort":
         if effort in (None, "off"):
             return None
-        if effort in ("max", "on"):
+        if effort == "on":
             return "high"
-        if effort in {"low", "medium", "high"}:
+        if effort in {"low", "medium", "high", "max"}:
             return effort
         return None
     if capability == "adaptive":
@@ -47,6 +47,14 @@ def _coerce_thinking(
             return None
         if effort in {"low", "medium", "high", "max"}:
             return effort
+        return None
+    if capability == "output_effort":
+        if effort in (None, "off"):
+            return None
+        if effort in {"low", "medium", "high"}:
+            return "high"
+        if effort == "max":
+            return "max"
         return None
     return None
 

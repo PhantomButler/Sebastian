@@ -86,6 +86,7 @@ class OpenAICompatProvider(LLMProvider):
             "low",
             "medium",
             "high",
+            "max",
         ):
             kwargs["reasoning_effort"] = thinking_effort
 

@@ -156,6 +156,7 @@ class CustomModelsViewModel @Inject constructor(
                     ThinkingCapability.TOGGLE -> "toggle"
                     ThinkingCapability.EFFORT -> "effort"
                     ThinkingCapability.ADAPTIVE -> "adaptive"
+                    ThinkingCapability.OUTPUT_EFFORT -> "output_effort"
                     ThinkingCapability.ALWAYS_ON -> "always_on"
                 },
                 thinkingFormat = model.thinkingFormat ?: "",

@@ -1,7 +1,7 @@
 package com.sebastian.android.data.model
 
 enum class ThinkingCapability {
-    NONE, ALWAYS_ON, TOGGLE, EFFORT, ADAPTIVE;
+    NONE, ALWAYS_ON, TOGGLE, EFFORT, ADAPTIVE, OUTPUT_EFFORT;
 
     companion object {
         fun fromString(value: String?): ThinkingCapability = when (value) {
@@ -10,6 +10,7 @@ enum class ThinkingCapability {
             "toggle" -> TOGGLE
             "effort" -> EFFORT
             "adaptive" -> ADAPTIVE
+            "output_effort" -> OUTPUT_EFFORT
             else -> NONE
         }
     }

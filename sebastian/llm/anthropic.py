@@ -92,6 +92,19 @@ class AnthropicProvider(LLMProvider):
                 )
             return {"thinking": {"type": "enabled", "budget_tokens": budget}}
 
+        if capability == "output_effort":
+            # Third-party Anthropic-compat APIs (e.g. DeepSeek Anthropic format):
+            # enable thinking via type=enabled and control intensity via output_config.effort.
+            if thinking_effort not in ("high", "max"):
+                raise ValueError(
+                    f"thinking_effort={thinking_effort!r} not allowed for "
+                    f"thinking_capability='output_effort' (allowed: high/max)"
+                )
+            return {
+                "thinking": {"type": "enabled"},
+                "output_config": {"effort": thinking_effort},
+            }
+
         return {}
 
     async def stream(

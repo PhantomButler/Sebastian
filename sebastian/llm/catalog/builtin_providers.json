@@ -54,7 +54,7 @@
     },
     {
       "id": "deepseek",
-      "display_name": "DeepSeek",
+      "display_name": "DeepSeek (OpenAI format)",
       "provider_type": "openai",
       "base_url": "https://api.deepseek.com",
       "models": [
@@ -62,15 +62,37 @@
           "id": "deepseek-v4-pro",
           "display_name": "DeepSeek V4 Pro",
           "context_window_tokens": 1000000,
-          "thinking_capability": "toggle",
+          "thinking_capability": "effort",
           "thinking_format": "reasoning_content"
         },
         {
           "id": "deepseek-v4-flash",
           "display_name": "DeepSeek V4 Flash",
           "context_window_tokens": 1000000,
-          "thinking_capability": "toggle",
+          "thinking_capability": "effort",
           "thinking_format": "reasoning_content"
+        }
+      ]
+    },
+    {
+      "id": "deepseek_anthropic",
+      "display_name": "DeepSeek (Anthropic format)",
+      "provider_type": "anthropic",
+      "base_url": "https://api.deepseek.com/anthropic",
+      "models": [
+        {
+          "id": "deepseek-v4-pro",
+          "display_name": "DeepSeek V4 Pro",
+          "context_window_tokens": 1000000,
+          "thinking_capability": "output_effort",
+          "thinking_format": null
+        },
+        {
+          "id": "deepseek-v4-flash",
+          "display_name": "DeepSeek V4 Flash",
+          "context_window_tokens": 1000000,
+          "thinking_capability": "output_effort",
+          "thinking_format": null
         }
       ]
     },

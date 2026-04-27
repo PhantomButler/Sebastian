@@ -12,6 +12,7 @@ SUPPORTED_THINKING_CAPABILITIES = {
     "toggle",
     "effort",
     "adaptive",
+    "output_effort",
     "always_on",
     None,
 }
