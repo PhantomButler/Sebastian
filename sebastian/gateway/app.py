@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -315,6 +316,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from sebastian.store.database import get_engine
 
         await get_engine().dispose()
+        await asyncio.sleep(0)
     logger.info("Sebastian gateway shutdown")
 
 
