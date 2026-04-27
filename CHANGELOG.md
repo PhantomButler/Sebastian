@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Android App 切换到 subagent 会话时，能实时看到 subagent 的执行过程（思考、工具调用、流式文本），不再需要等会话结束后重新进入才能看到完整历史
+
 ## [0.5.1] - 2026-04-26
 
 ### Breaking Changes
