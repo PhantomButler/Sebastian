@@ -212,6 +212,7 @@ App 有两条 SSE 连接：
 | 改消息渲染（文本/思考/工具块） | `ui/chat/StreamingMessage.kt`、`ThinkingCard.kt`、`ToolCallCard.kt` |
 | 改输入框（Composer） | `ui/composer/Composer.kt`、`SendButton.kt` |
 | 改附件选择与预览 | `ui/composer/AttachmentSlot.kt`、`ui/composer/AttachmentPreviewBar.kt` |
+| 改模型输入能力加载（支持图片/文本附件判断） | `viewmodel/ChatViewModel.refreshInputCapabilities(agentId)`，主对话从 default binding 读取，Sub-Agent 从各自 binding 读取 |
 | 改消息中附件渲染块 | `ui/chat/AttachmentBlocks.kt` |
 | 改 Agent LLM 绑定次级页 | `ui/settings/AgentBindingEditorPage.kt`、`viewmodel/AgentBindingEditorViewModel.kt`、`ui/settings/components/EffortSlider.kt`、`ui/settings/components/ProviderPickerDialog.kt` |
 | 改 Session 列表面板 | `ui/chat/SessionPanel.kt`（UI）+ `ui/chat/SessionGrouping.kt`（按日期分桶纯逻辑，有单测） |

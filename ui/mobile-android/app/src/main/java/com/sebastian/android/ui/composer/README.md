@@ -54,7 +54,7 @@ fun Composer(
 | 改输入框整体布局/悬浮样式 | `Composer.kt` |
 | 改发送/停止按钮状态逻辑 | `SendButton.kt` |
 | 改附件选择按钮 / 文件选择器 | `AttachmentSlot.kt` |
-| 改附件预览栏（缩略图/删除） | `AttachmentPreviewBar.kt` |
+| 改附件预览栏（缩略图/删除） | `AttachmentPreviewBar.kt`：图片附件（`kind == IMAGE`）使用 Coil `AsyncImage` 渲染本地缩略图，其他类型（文本文件等）渲染文字 chip |
 | 改 `ComposerState` 枚举定义 | `viewmodel/ChatViewModel.kt` |
 | 改每个 Agent 的思考档位（Provider + Effort） | `ui/settings/AgentBindingEditorPage.kt` → [settings/README.md](../settings/README.md) |
 

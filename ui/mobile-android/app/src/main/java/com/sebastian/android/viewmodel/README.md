@@ -140,6 +140,7 @@ ViewModel (sendMessage / switchSession / ...)
 | 改 SSE 回放游标逻辑 | `ChatViewModel`（`lastDeliveredSseEventIds` 字段） |
 | 改发送失败回滚/提示 | `ChatViewModel.handleNewSessionSendFailure()` / `handleExistingSessionSendFailure()` |
 | 改附件选择/上传逻辑 | `ChatViewModel.onAttachmentImagePicked()` / `onAttachmentFilePicked()` / `uploadPendingAttachments()` |
+| 改模型输入能力加载 | `ChatViewModel.refreshInputCapabilities(agentId)`，从 binding DTO 读取 `supportsImageInput` / `supportsTextFileInput`；主对话用 default binding，Sub-Agent 用各自 agent binding；调用方为 `ChatScreen` 的 `LaunchedEffect(agentId)` |
 | 改全局审批处理 | `GlobalApprovalViewModel.grantApproval()` / `denyApproval()` |
 | 改 Agent LLM 绑定主列表加载 | `AgentBindingsViewModel.load()` |
 | 改单个 Agent 绑定编辑（Provider + Thinking） | `AgentBindingEditorViewModel.selectProvider()` / `setEffort()` |
