@@ -97,6 +97,7 @@ class AttachmentStore:
             text_excerpt=text_excerpt,
             status="uploaded",
             created_at=datetime.now(UTC),
+            owner_user_id=None,  # TODO: 多用户前补充 owner_user_id
         )
         try:
             async with self._db_factory() as session:
@@ -133,6 +134,8 @@ class AttachmentStore:
 
     # --- 状态流转 ---
 
+    # NOTE: 单用户假设 — 不校验 owner_user_id。
+    # 多用户场景（家人/访客）上线前必须加 ownership 检查以防 IDOR。
     async def validate_attachable(self, attachment_ids: list[str]) -> list[AttachmentRecord]:
         async with self._db_factory() as session:
             result = await session.execute(
