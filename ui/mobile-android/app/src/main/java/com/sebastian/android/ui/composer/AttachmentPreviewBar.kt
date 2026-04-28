@@ -10,10 +10,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -57,43 +59,45 @@ private fun AttachmentChip(
     ElevatedAssistChip(
         onClick = {},
         label = { Text(att.filename, maxLines = 1) },
-        leadingIcon = {
-            when (state) {
-                is AttachmentUploadState.Uploading -> CircularProgressIndicator(
-                    progress = { state.progress },
+        leadingIcon = when (state) {
+            is AttachmentUploadState.Uploading -> ({
+                CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
                 )
-                is AttachmentUploadState.Failed -> Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "重试",
+            })
+            is AttachmentUploadState.Failed -> ({
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = "上传失败",
                     modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.error,
                 )
-                else -> null
-            }
+            })
+            else -> null
         },
         trailingIcon = {
             Row {
                 if (state is AttachmentUploadState.Failed) {
                     IconButton(
                         onClick = onRetry,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(36.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "重试",
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(16.dp),
                         )
                     }
                 }
                 IconButton(
                     onClick = onRemove,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "移除",
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }

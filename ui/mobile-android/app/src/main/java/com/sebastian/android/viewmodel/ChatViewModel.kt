@@ -368,23 +368,7 @@ class ChatViewModel @Inject constructor(
                 sessionId = clientSessionId,
                 role = MessageRole.USER,
                 text = text,
-                blocks = attachments.map { att ->
-                    when (att.kind) {
-                        AttachmentKind.IMAGE -> ContentBlock.ImageBlock(
-                            blockId = att.localId,
-                            downloadUrl = att.uri.toString(),
-                            mimeType = att.mimeType,
-                            filename = att.filename,
-                        )
-                        AttachmentKind.TEXT_FILE -> ContentBlock.FileBlock(
-                            blockId = att.localId,
-                            filename = att.filename,
-                            downloadUrl = att.uri.toString(),
-                            mimeType = att.mimeType,
-                            sizeBytes = att.sizeBytes,
-                        )
-                    }
-                },
+                blocks = attachments.map { it.toContentBlock() },
             )
             isProvisionalSession = true
             _uiState.update { state ->
@@ -435,23 +419,7 @@ class ChatViewModel @Inject constructor(
                 sessionId = currentSessionId,
                 role = MessageRole.USER,
                 text = text,
-                blocks = attachments.map { att ->
-                    when (att.kind) {
-                        AttachmentKind.IMAGE -> ContentBlock.ImageBlock(
-                            blockId = att.localId,
-                            downloadUrl = att.uri.toString(),
-                            mimeType = att.mimeType,
-                            filename = att.filename,
-                        )
-                        AttachmentKind.TEXT_FILE -> ContentBlock.FileBlock(
-                            blockId = att.localId,
-                            filename = att.filename,
-                            downloadUrl = att.uri.toString(),
-                            mimeType = att.mimeType,
-                            sizeBytes = att.sizeBytes,
-                        )
-                    }
-                },
+                blocks = attachments.map { it.toContentBlock() },
             )
             _uiState.update { state ->
                 state.copy(
@@ -511,23 +479,7 @@ class ChatViewModel @Inject constructor(
                 sessionId = clientSessionId,
                 role = MessageRole.USER,
                 text = text,
-                blocks = attachments.map { att ->
-                    when (att.kind) {
-                        AttachmentKind.IMAGE -> ContentBlock.ImageBlock(
-                            blockId = att.localId,
-                            downloadUrl = att.uri.toString(),
-                            mimeType = att.mimeType,
-                            filename = att.filename,
-                        )
-                        AttachmentKind.TEXT_FILE -> ContentBlock.FileBlock(
-                            blockId = att.localId,
-                            filename = att.filename,
-                            downloadUrl = att.uri.toString(),
-                            mimeType = att.mimeType,
-                            sizeBytes = att.sizeBytes,
-                        )
-                    }
-                },
+                blocks = attachments.map { it.toContentBlock() },
             )
             isProvisionalSession = true
             _uiState.update { state ->
@@ -577,23 +529,7 @@ class ChatViewModel @Inject constructor(
                 sessionId = currentSessionId,
                 role = MessageRole.USER,
                 text = text,
-                blocks = attachments.map { att ->
-                    when (att.kind) {
-                        AttachmentKind.IMAGE -> ContentBlock.ImageBlock(
-                            blockId = att.localId,
-                            downloadUrl = att.uri.toString(),
-                            mimeType = att.mimeType,
-                            filename = att.filename,
-                        )
-                        AttachmentKind.TEXT_FILE -> ContentBlock.FileBlock(
-                            blockId = att.localId,
-                            filename = att.filename,
-                            downloadUrl = att.uri.toString(),
-                            mimeType = att.mimeType,
-                            sizeBytes = att.sizeBytes,
-                        )
-                    }
-                },
+                blocks = attachments.map { it.toContentBlock() },
             )
             _uiState.update { state ->
                 state.copy(
@@ -980,6 +916,24 @@ class ChatViewModel @Inject constructor(
         pendingTimeoutJob?.cancel()
         pendingTimeoutJob = null
         pendingTimeoutElapsedMs = 0L
+    }
+
+    // ── Extension helpers ────────────────────────────────────────────────────
+
+    private fun PendingAttachment.toContentBlock(): ContentBlock = when (kind) {
+        AttachmentKind.IMAGE -> ContentBlock.ImageBlock(
+            blockId = localId,
+            downloadUrl = uri.toString(),
+            mimeType = mimeType,
+            filename = filename,
+        )
+        AttachmentKind.TEXT_FILE -> ContentBlock.FileBlock(
+            blockId = localId,
+            filename = filename,
+            downloadUrl = uri.toString(),
+            mimeType = mimeType,
+            sizeBytes = sizeBytes,
+        )
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────

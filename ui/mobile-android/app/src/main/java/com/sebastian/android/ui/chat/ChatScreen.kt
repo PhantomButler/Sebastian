@@ -1,6 +1,7 @@
 // com/sebastian/android/ui/chat/ChatScreen.kt
 package com.sebastian.android.ui.chat
 
+import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -64,6 +65,19 @@ import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.viewmodel.ChatUiEffect
 import com.sebastian.android.viewmodel.ChatViewModel
 import com.sebastian.android.viewmodel.SessionViewModel
+
+private fun resolveUriMeta(contentResolver: ContentResolver, uri: Uri): Triple<String, String, Long> {
+    var filename = uri.lastPathSegment ?: "attachment"
+    var mimeType = "application/octet-stream"
+    var sizeBytes = 0L
+    contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            sizeBytes = cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE))
+        }
+    }
+    mimeType = contentResolver.getType(uri) ?: mimeType
+    return Triple(filename, mimeType, sizeBytes)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,12 +147,7 @@ fun ChatScreen(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? ->
         if (uri != null) {
-            val cr = toastContext.contentResolver
-            val mimeType = cr.getType(uri) ?: "image/*"
-            val filename = uri.lastPathSegment ?: "image"
-            val sizeBytes = cr.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE)) else 0L
-            } ?: 0L
+            val (filename, mimeType, sizeBytes) = resolveUriMeta(toastContext.contentResolver, uri)
             chatViewModel.onAttachmentImagePicked(uri, filename, mimeType, sizeBytes)
         }
     }
@@ -147,12 +156,7 @@ fun ChatScreen(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
         if (uri != null) {
-            val cr = toastContext.contentResolver
-            val mimeType = cr.getType(uri) ?: "application/octet-stream"
-            val filename = uri.lastPathSegment ?: "file"
-            val sizeBytes = cr.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE)) else 0L
-            } ?: 0L
+            val (filename, mimeType, sizeBytes) = resolveUriMeta(toastContext.contentResolver, uri)
             chatViewModel.onAttachmentFilePicked(uri, filename, mimeType, sizeBytes)
         }
     }
@@ -362,7 +366,7 @@ fun ChatScreen(
                 Composer(
                     state = chatState.composerState,
                     glassState = glassState,
-                    onSend = { text, _ ->
+                    onSend = { text ->
                         if (agentId != null) {
                             chatViewModel.sendAgentMessage(agentId, text)
                         } else {

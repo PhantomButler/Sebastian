@@ -37,7 +37,7 @@ import com.sebastian.android.viewmodel.ComposerState
 fun Composer(
     state: ComposerState,
     glassState: GlassState,
-    onSend: (String, List<PendingAttachment>) -> Unit,
+    onSend: (String) -> Unit,
     onStop: () -> Unit,
     pendingAttachments: List<PendingAttachment> = emptyList(),
     // Phase 2 插槽
@@ -111,7 +111,7 @@ fun Composer(
                         val msg = text.trim()
                         if (msg.isNotEmpty() || pendingAttachments.isNotEmpty()) {
                             text = ""
-                            onSend(msg, pendingAttachments)
+                            onSend(msg)
                         }
                     },
                     onStop = onStop,
