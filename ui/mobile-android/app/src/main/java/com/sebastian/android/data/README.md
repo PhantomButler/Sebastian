@@ -15,6 +15,7 @@ data/
 ├── model/
 │   ├── AgentInfo.kt                # Sub-Agent 信息模型（含 boundProviderId）
 │   ├── ApprovalSnapshot.kt         # 待审批条目快照（GET /approvals 响应领域模型）
+│   ├── AttachmentModels.kt         # 附件领域模型（PendingAttachment / AttachedFile 等）
 │   ├── ContentBlock.kt             # 消息内容块（TextBlock / ThinkingBlock / ToolBlock）
 │   ├── MemoryComponentInfo.kt      # 记忆组件信息模型（componentType / displayName / boundProviderId / thinkingEffort）
 │   ├── Message.kt                  # 消息模型（含 blocks 列表）
@@ -29,6 +30,7 @@ data/
 │   └── dto/
 │       ├── AgentBindingDto.kt      # Agent LLM 绑定 DTO（SetBindingRequest / AgentBindingDto）
 │       ├── AgentDto.kt             # Agent 列表 DTO（AgentListResponse / AgentDto）
+│       ├── AttachmentDto.kt        # 附件上传响应 DTO（UploadedAttachmentDto，映射 POST /attachments 响应）
 │       ├── LogStateDto.kt          # 日志状态 DTO（LogStateDto / LogConfigPatchDto）
 │       ├── MemoryComponentDto.kt   # 记忆组件 DTO（MemoryComponentDto / MemoryComponentsResponse，含 toDomain()）
 │       ├── MemorySettingsDto.kt    # 记忆设置 DTO（MemorySettingsDto，含 enabled 字段）

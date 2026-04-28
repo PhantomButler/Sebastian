@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from sebastian.config import Settings
 from sebastian.store.attachments import AttachmentStore, AttachmentValidationError
+from sebastian.store.models import AttachmentRecord
 
 
 def test_attachments_dir_lives_under_user_data_dir(tmp_path: Path) -> None:
@@ -160,3 +162,137 @@ async def test_read_text_content_returns_full_not_excerpt(attachment_store):
     assert record is not None
     full = attachment_store.read_text_content(record)
     assert full == long_text
+
+
+# Step 6：cleanup 只删过期的 uploaded 和 orphaned，不动 attached
+async def test_cleanup_deletes_expired_uploaded_and_orphaned_but_not_attached(
+    sqlite_session_factory, tmp_path
+):
+    root = tmp_path / "attachments"
+    for sub in ("blobs", "thumbs", "tmp"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+    store = AttachmentStore(root_dir=root, db_factory=sqlite_session_factory)
+
+    now = datetime.now(UTC)
+    expired = now - timedelta(hours=25)
+    recent = now - timedelta(hours=1)
+
+    # 为每条记录创建假 blob 文件
+    def _make_blob(sha: str) -> str:
+        blob_dir = root / "blobs" / sha[:2]
+        blob_dir.mkdir(parents=True, exist_ok=True)
+        (blob_dir / sha).write_bytes(b"x")
+        return f"blobs/{sha[:2]}/{sha}"
+
+    async with sqlite_session_factory() as session:
+        r_uploaded = AttachmentRecord(
+            id="att-upload-expired",
+            kind="text_file",
+            original_filename="a.txt",
+            mime_type="text/plain",
+            size_bytes=1,
+            sha256="a" * 64,
+            blob_path=_make_blob("a" * 64),
+            status="uploaded",
+            created_at=expired,
+        )
+        r_orphaned = AttachmentRecord(
+            id="att-orphaned-expired",
+            kind="text_file",
+            original_filename="b.txt",
+            mime_type="text/plain",
+            size_bytes=1,
+            sha256="b" * 64,
+            blob_path=_make_blob("b" * 64),
+            status="orphaned",
+            created_at=expired,
+            orphaned_at=expired,
+        )
+        r_attached = AttachmentRecord(
+            id="att-attached-recent",
+            kind="text_file",
+            original_filename="c.txt",
+            mime_type="text/plain",
+            size_bytes=1,
+            sha256="c" * 64,
+            blob_path=_make_blob("c" * 64),
+            status="attached",
+            created_at=recent,
+            attached_at=recent,
+            agent_type="chat",
+            session_id="s-keep",
+        )
+        session.add_all([r_uploaded, r_orphaned, r_attached])
+        await session.commit()
+
+    deleted = await store.cleanup(now=now)
+
+    assert deleted == 2
+    remaining = await store.get("att-attached-recent")
+    assert remaining is not None
+    assert await store.get("att-upload-expired") is None
+    assert await store.get("att-orphaned-expired") is None
+
+
+# Step 7：mark_session_orphaned 只流转指定 session 的 attached 记录
+async def test_mark_session_orphaned_transitions_attached_only(
+    sqlite_session_factory, tmp_path
+):
+    root = tmp_path / "attachments"
+    for sub in ("blobs", "thumbs", "tmp"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+    store = AttachmentStore(root_dir=root, db_factory=sqlite_session_factory)
+
+    now = datetime.now(UTC)
+
+    def _make_blob(sha: str) -> str:
+        blob_dir = root / "blobs" / sha[:2]
+        blob_dir.mkdir(parents=True, exist_ok=True)
+        (blob_dir / sha).write_bytes(b"x")
+        return f"blobs/{sha[:2]}/{sha}"
+
+    async with sqlite_session_factory() as session:
+        for i, att_id in enumerate(["att-s1-1", "att-s1-2"]):
+            sha = str(i) * 64
+            session.add(AttachmentRecord(
+                id=att_id,
+                kind="text_file",
+                original_filename=f"{i}.txt",
+                mime_type="text/plain",
+                size_bytes=1,
+                sha256=sha,
+                blob_path=_make_blob(sha),
+                status="attached",
+                created_at=now,
+                attached_at=now,
+                agent_type="chat",
+                session_id="s1",
+            ))
+        sha_s2 = "9" * 64
+        session.add(AttachmentRecord(
+            id="att-s2-1",
+            kind="text_file",
+            original_filename="s2.txt",
+            mime_type="text/plain",
+            size_bytes=1,
+            sha256=sha_s2,
+            blob_path=_make_blob(sha_s2),
+            status="attached",
+            created_at=now,
+            attached_at=now,
+            agent_type="chat",
+            session_id="s2",
+        ))
+        await session.commit()
+
+    count = await store.mark_session_orphaned(agent_type="chat", session_id="s1")
+
+    assert count == 2
+
+    r1 = await store.get("att-s1-1")
+    r2 = await store.get("att-s1-2")
+    r_s2 = await store.get("att-s2-1")
+
+    assert r1 is not None and r1.status == "orphaned"
+    assert r2 is not None and r2.status == "orphaned"
+    assert r_s2 is not None and r_s2.status == "attached"

@@ -211,6 +211,8 @@ App 有两条 SSE 连接：
 | 改主对话三栏布局 | `ui/chat/ChatScreen.kt` |
 | 改消息渲染（文本/思考/工具块） | `ui/chat/StreamingMessage.kt`、`ThinkingCard.kt`、`ToolCallCard.kt` |
 | 改输入框（Composer） | `ui/composer/Composer.kt`、`SendButton.kt` |
+| 改附件选择与预览 | `ui/composer/AttachmentSlot.kt`、`ui/composer/AttachmentPreviewBar.kt` |
+| 改消息中附件渲染块 | `ui/chat/AttachmentBlocks.kt` |
 | 改 Agent LLM 绑定次级页 | `ui/settings/AgentBindingEditorPage.kt`、`viewmodel/AgentBindingEditorViewModel.kt`、`ui/settings/components/EffortSlider.kt`、`ui/settings/components/ProviderPickerDialog.kt` |
 | 改 Session 列表面板 | `ui/chat/SessionPanel.kt`（UI）+ `ui/chat/SessionGrouping.kt`（按日期分桶纯逻辑，有单测） |
 | 改 Todo 面板 | `ui/chat/TodoPanel.kt` |

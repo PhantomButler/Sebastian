@@ -310,6 +310,9 @@ async def delete_session(
     import sebastian.gateway.state as state
 
     session = await _resolve_session(state, session_id)
+    await state.attachment_store.mark_session_orphaned(
+        agent_type=session.agent_type, session_id=session.id
+    )
     await state.session_store.delete_session(session)
     return {"session_id": session_id, "deleted": True}
 
