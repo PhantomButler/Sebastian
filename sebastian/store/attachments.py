@@ -186,16 +186,21 @@ class AttachmentStore:
         async with self._db_factory() as session:
             result = await session.execute(
                 select(AttachmentRecord).where(
-                    AttachmentRecord.status.in_(["uploaded", "orphaned"]),
-                    AttachmentRecord.created_at < cutoff,
+                    (
+                        (AttachmentRecord.status == "uploaded")
+                        & (AttachmentRecord.created_at < cutoff)
+                    )
+                    | (
+                        (AttachmentRecord.status == "orphaned")
+                        & (AttachmentRecord.orphaned_at < cutoff)
+                    )
                 )
             )
             records = list(result.scalars().all())
             count = 0
             for r in records:
                 blob = self.blob_absolute_path(r)
-                if blob.exists():
-                    blob.unlink(missing_ok=True)
+                blob.unlink(missing_ok=True)
                 thumb = self._root_dir / "thumbs" / f"{r.id}.jpg"
                 thumb.unlink(missing_ok=True)
                 await session.delete(r)
