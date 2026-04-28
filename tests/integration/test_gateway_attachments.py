@@ -541,3 +541,39 @@ def test_existing_agent_session_turn_with_attachment_writes_timeline(client) -> 
         f"Expected 1 user_message with exchange_id={attachment_exchange_id!r}, "
         f"got {len(user_message_items)}"
     )
+
+
+def test_orphaned_attachment_cannot_be_reused_in_new_turn(client) -> None:
+    """After a session is deleted (orphaning its attachment), reusing the attachment must return 409."""
+    http_client, token = client
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Step 1: upload a text file
+    att_id = _upload_text_file(http_client, token)
+
+    # Step 2: attach it to a session by sending a turn (LLM call is mocked)
+    with patch("sebastian.gateway.state.sebastian.run_streaming", new_callable=AsyncMock):
+        turn_resp = http_client.post(
+            "/api/v1/turns",
+            json={"content": "check this file", "attachment_ids": [att_id]},
+            headers=headers,
+        )
+    assert turn_resp.status_code == 200, turn_resp.text
+    session_id = turn_resp.json()["session_id"]
+
+    # Step 3: delete the session — backend calls mark_session_orphaned → attachment.status="orphaned"
+    del_resp = http_client.delete(
+        f"/api/v1/sessions/{session_id}",
+        headers=headers,
+    )
+    assert del_resp.status_code == 200, del_resp.text
+
+    # Step 4: try to reuse the same attachment_id in a new turn — must be rejected
+    resp = http_client.post(
+        "/api/v1/turns",
+        json={"content": "reuse orphaned", "attachment_ids": [att_id]},
+        headers=headers,
+    )
+    assert resp.status_code == 409, (
+        f"Expected 409 for orphaned attachment, got {resp.status_code}: {resp.text}"
+    )
