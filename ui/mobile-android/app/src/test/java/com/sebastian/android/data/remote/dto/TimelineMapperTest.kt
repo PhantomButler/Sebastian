@@ -263,6 +263,23 @@ class TimelineMapperTest {
     }
 
     @Test
+    fun `context_summary with same exchangeId as user message must produce separate entry`() {
+        val items = listOf(
+            item(
+                seq = 1, kind = "user_message", role = "user",
+                content = "hello", exchangeId = "exc-1",
+            ),
+            item(
+                seq = 2, kind = "context_summary", role = "user",
+                content = "Summary text", exchangeId = "exc-1",  // same exchangeId as user_message
+            ),
+        )
+        val messages = items.toMessagesFromTimeline(baseUrl = "")
+        // Must produce two separate messages (user bubble + standalone summary)
+        assertEquals(2, messages.size)
+    }
+
+    @Test
     fun `attachment without user_message in exchange is skipped`() {
         val items = listOf(
             item(

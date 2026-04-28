@@ -11,7 +11,9 @@ fun List<TimelineItemDto>.toMessagesFromTimeline(baseUrl: String = ""): List<Mes
 
     // ── User-side: group by exchangeId ──────────────────────────────────────
     // Collect user-side item kinds; assistant-side kinds handled separately below.
-    val userSideKinds = setOf("user_message", "attachment", "context_summary")
+    // context_summary is intentionally excluded: it is always standalone, never merged
+    // into a user exchange (even if it shares the same exchangeId).
+    val userSideKinds = setOf("user_message", "attachment")
     val userSideByExchange: Map<String, List<TimelineItemDto>> = sorted
         .filter { it.kind in userSideKinds }
         .groupBy { it.exchangeId ?: "seq-${it.seq}" }
@@ -60,14 +62,17 @@ fun List<TimelineItemDto>.toMessagesFromTimeline(baseUrl: String = ""): List<Mes
         entries += Entry(minSeq) {
             val userMsg = items.firstOrNull { it.kind == "user_message" }
             val attachments = items.filter { it.kind == "attachment" }
-            val summary = items.firstOrNull { it.kind == "context_summary" }
 
             when {
                 userMsg != null -> userMsg.toUserMessage(attachments, baseUrl)
-                summary != null -> summary.toSummaryMessage()
                 else -> null  // orphan attachment-only exchange: skip
             }
         }
+    }
+
+    // context_summary items are standalone — not grouped with user exchanges
+    for (item in sorted.filter { it.kind == "context_summary" }) {
+        entries += Entry(item.seq) { item.toSummaryMessage() }
     }
 
     for ((seq, group) in assistantGroups) {
