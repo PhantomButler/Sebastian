@@ -71,6 +71,7 @@ class AttachmentStore:
         blob_rel = f"blobs/{sha[:2]}/{sha}"
         blob_abs = self._root_dir / blob_rel
         blob_abs.parent.mkdir(parents=True, exist_ok=True)
+        (self._root_dir / "tmp").mkdir(parents=True, exist_ok=True)
         tmp_path = self._root_dir / "tmp" / str(uuid4())
         try:
             tmp_path.write_bytes(data)
@@ -122,7 +123,10 @@ class AttachmentStore:
             return await session.get(AttachmentRecord, attachment_id)
 
     def blob_absolute_path(self, record: AttachmentRecord) -> Path:
-        return self._root_dir / record.blob_path
+        resolved = (self._root_dir / record.blob_path).resolve()
+        if not resolved.is_relative_to(self._root_dir.resolve()):
+            raise ValueError(f"Blob path escapes root: {record.blob_path!r}")
+        return resolved
 
     def read_text_content(self, record: AttachmentRecord) -> str:
         return self.blob_absolute_path(record).read_text(encoding="utf-8")

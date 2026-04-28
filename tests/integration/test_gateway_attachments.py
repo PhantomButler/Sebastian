@@ -82,7 +82,7 @@ def test_upload_text_file_returns_metadata(client) -> None:
         data={"kind": "text_file"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == 200, response.text
+    assert response.status_code == 201, response.text
     body = response.json()
     assert body["kind"] == "text_file"
     assert body["status"] == "uploaded"
@@ -101,7 +101,7 @@ def test_download_attachment_returns_original_bytes(client) -> None:
         data={"kind": "text_file"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert upload_resp.status_code == 200, upload_resp.text
+    assert upload_resp.status_code == 201, upload_resp.text
     att_id = upload_resp.json()["id"]
 
     # Download
@@ -151,7 +151,7 @@ def test_upload_image_returns_metadata(client) -> None:
         data={"kind": "image"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == 200, response.text
+    assert response.status_code == 201, response.text
     body = response.json()
     assert body["kind"] == "image"
     assert body["status"] == "uploaded"
@@ -167,3 +167,15 @@ def test_upload_requires_auth(client) -> None:
         data={"kind": "text_file"},
     )
     assert response.status_code == 401
+
+
+def test_download_attachment_requires_auth(client) -> None:
+    http_client, _ = client
+    resp = http_client.get("/api/v1/attachments/nonexistent-id")
+    assert resp.status_code == 401
+
+
+def test_download_thumbnail_requires_auth(client) -> None:
+    http_client, _ = client
+    resp = http_client.get("/api/v1/attachments/nonexistent-id/thumbnail")
+    assert resp.status_code == 401

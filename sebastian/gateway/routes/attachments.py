@@ -13,7 +13,7 @@ AuthPayload = dict[str, Any]
 JSONDict = dict[str, Any]
 
 
-@router.post("/attachments")
+@router.post("/attachments", status_code=201)
 async def upload_attachment(
     kind: Literal["image", "text_file"] = Form(...),
     file: UploadFile = File(...),
@@ -21,9 +21,12 @@ async def upload_attachment(
 ) -> JSONDict:
     import sebastian.gateway.state as state
 
+    store = state.attachment_store
+    if store is None:
+        raise HTTPException(status_code=503, detail="Attachment store not initialized")
     data = await file.read()
     try:
-        uploaded = await state.attachment_store.upload_bytes(
+        uploaded = await store.upload_bytes(
             filename=file.filename or "upload",
             content_type=file.content_type or "application/octet-stream",
             kind=kind,
@@ -50,10 +53,13 @@ async def download_attachment(
 ) -> Response:
     import sebastian.gateway.state as state
 
-    record = await state.attachment_store.get(attachment_id)
+    store = state.attachment_store
+    if store is None:
+        raise HTTPException(status_code=503, detail="Attachment store not initialized")
+    record = await store.get(attachment_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    blob_path = state.attachment_store.blob_absolute_path(record)
+    blob_path = store.blob_absolute_path(record)
     if not blob_path.exists():
         raise HTTPException(status_code=404, detail="Attachment blob not found")
     data = blob_path.read_bytes()
@@ -67,13 +73,16 @@ async def download_thumbnail(
 ) -> Response:
     import sebastian.gateway.state as state
 
-    record = await state.attachment_store.get(attachment_id)
+    store = state.attachment_store
+    if store is None:
+        raise HTTPException(status_code=503, detail="Attachment store not initialized")
+    record = await store.get(attachment_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
     # P0: return the original image as-is (no thumbnail generation yet)
     if record.kind != "image":
         raise HTTPException(status_code=400, detail="Thumbnail only available for images")
-    blob_path = state.attachment_store.blob_absolute_path(record)
+    blob_path = store.blob_absolute_path(record)
     if not blob_path.exists():
         raise HTTPException(status_code=404, detail="Attachment blob not found")
     data = blob_path.read_bytes()
