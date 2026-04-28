@@ -11,8 +11,10 @@ import com.sebastian.android.data.remote.SseClient
 import com.sebastian.android.data.remote.SseEnvelope
 import com.sebastian.android.data.remote.dto.SendTurnRequest
 import com.sebastian.android.data.remote.dto.toMessagesFromTimeline
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -96,8 +98,10 @@ class ChatRepositoryImpl @Inject constructor(
         pending: PendingAttachment,
         contentResolver: android.content.ContentResolver,
     ): Result<PendingAttachment> = runCatching {
-        val bytes = contentResolver.openInputStream(pending.uri)?.use { it.readBytes() }
-            ?: error("Cannot open URI: ${pending.uri}")
+        val bytes = withContext(Dispatchers.IO) {
+            contentResolver.openInputStream(pending.uri)?.use { it.readBytes() }
+                ?: error("Cannot open attachment: file not accessible")
+        }
         val mediaType = pending.mimeType.toMediaTypeOrNull()
         val requestBody = bytes.toRequestBody(mediaType)
         val filePart = MultipartBody.Part.createFormData("file", pending.filename, requestBody)

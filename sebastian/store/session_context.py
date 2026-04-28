@@ -199,10 +199,6 @@ async def _build_anthropic(
             else:
                 # Attachment with no matching pending user context: flush then skip.
                 await _flush_pending_user()
-                if attachment_store is None and require_attachments:
-                    raise ValueError(
-                        "attachment_store is required for attachment timeline items"
-                    )
             continue
 
         # Flush any pending user turn before processing a non-attachment group
@@ -347,9 +343,7 @@ def _flush_tool_results_into_user_list(
         messages.append({"role": "user", "content": content_list[0]["text"]})
     elif content_list:
         messages.append({"role": "user", "content": content_list})
-    else:
-        # Empty content: emit an empty string user message
-        messages.append({"role": "user", "content": ""})
+    # else: content_list is empty and no pending tool results → nothing to emit
 
 
 def _flush_tool_results_into_user(
