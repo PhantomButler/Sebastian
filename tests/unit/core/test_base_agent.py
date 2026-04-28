@@ -592,6 +592,60 @@ async def test_cancel_session_no_memory_leak_in_buffers(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_streaming_persist_false_without_preallocated_skips_allocate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """persist_user_message=False with preallocated_exchange=None must not call allocate_exchange_for_turn."""
+    import sebastian.core.base_agent as ba_module
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    allocated: list[str] = []
+
+    async def fake_allocate(
+        session_store: object, session_id: str, agent_type: str
+    ) -> tuple[str, int]:
+        allocated.append(session_id)
+        return ("exc-fake", 0)
+
+    monkeypatch.setattr(ba_module, "allocate_exchange_for_turn", fake_allocate)
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="persist-false", agent_type="sebastian", title="t"))
+
+    # Pass a non-None db_factory so the elif branch is structurally reachable.
+    agent = TestAgent(MagicMock(), store, db_factory=MagicMock())
+
+    # get_context_messages is only available when SessionStore has a timeline (db_factory).
+    # Patch it to return an empty list so execution reaches the exchange-allocation block.
+    agent._session_store.get_context_messages = AsyncMock(return_value=[])  # type: ignore[method-assign]
+
+    # run_streaming will fail after the allocation block (no LLM), but we only care that
+    # allocate_exchange_for_turn was NOT called when persist_user_message=False.
+    try:
+        await agent.run_streaming(
+            "hello",
+            "persist-false",
+            persist_user_message=False,
+            preallocated_exchange=None,
+        )
+    except Exception:
+        pass  # expected — no LLM configured
+
+    assert allocated == [], (
+        f"allocate_exchange_for_turn must not be called when persist_user_message=False, "
+        f"but was called with sessions: {allocated}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_base_agent_progress_cb_calls_publish(tmp_path: Path) -> None:
     """progress_cb 被调用时应该触发 _publish(session_id, TOOL_RUNNING, data)."""
     from sebastian.core.base_agent import BaseAgent

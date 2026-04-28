@@ -429,7 +429,7 @@ class BaseAgent(ABC):
         exchange_index: int | None = None
         if preallocated_exchange is not None:
             exchange_id, exchange_index = preallocated_exchange
-        elif self._db_factory is not None:
+        elif self._db_factory is not None and persist_user_message:
             exchange_id, exchange_index = await allocate_exchange_for_turn(
                 self._session_store, session_id, agent_context
             )
