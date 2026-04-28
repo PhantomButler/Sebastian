@@ -110,6 +110,9 @@ async def create_agent_session(
 
     agent = state.agent_instances[agent_type]
 
+    persist_user_message = True
+    preallocated_exchange: tuple[str, int] | None = None
+
     if body.attachment_ids:
         from sebastian.gateway.routes._attachment_helpers import (
             validate_and_write_attachment_turn,
@@ -121,9 +124,10 @@ async def create_agent_session(
             session_id=session.id,
             agent_type=agent_type,
         )
-        run_goal = content
-    else:
-        run_goal = content
+        persist_user_message = False
+        preallocated_exchange = (exchange_id, exchange_index)
+
+    run_goal = content
 
     from sebastian.core.session_runner import run_agent_session
 
@@ -134,6 +138,8 @@ async def create_agent_session(
             goal=run_goal,
             session_store=state.session_store,
             event_bus=state.event_bus,
+            persist_user_message=persist_user_message,
+            preallocated_exchange=preallocated_exchange,
         )
     )
     _background_tasks.add(_task)

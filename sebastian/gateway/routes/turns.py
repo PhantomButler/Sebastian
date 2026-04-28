@@ -84,9 +84,6 @@ async def send_turn(
 
     if body.attachment_ids:
         # Attachment path: validate first, then create/get session, then write atomically
-        if not body.content.strip() and not body.attachment_ids:
-            raise HTTPException(400, "content or attachment_ids required")
-
         # Use first attachment filename as session goal hint if content is empty
         session_goal = body.content or "(attachment)"
         session = await state.sebastian.get_or_create_session(body.session_id, session_goal)

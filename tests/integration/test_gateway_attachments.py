@@ -314,3 +314,81 @@ def test_send_turn_with_attachment_writes_timeline(client) -> None:
     )
     # After attachment the blob is readable (200 OK)
     assert get_att_resp.status_code == 200
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sub-agent session + attachment tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_create_agent_session_with_attachment_no_duplicate_user_message(client) -> None:
+    """Sub-agent session creation with attachments should write user_message exactly once."""
+    import asyncio as _asyncio
+    import inspect as _inspect
+    import sys as _sys
+    from unittest.mock import MagicMock
+
+    import sebastian.gateway.state as state
+
+    http_client, token = client
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Use the first registered sub-agent type (not the main sebastian orchestrator)
+    agent_type = next(iter(state.agent_instances.keys()))
+
+    # Upload attachment
+    upload_resp = http_client.post(
+        "/api/v1/attachments",
+        files={"file": ("notes.md", b"# sub-agent test", "text/markdown")},
+        data={"kind": "text_file"},
+        headers=headers,
+    )
+    assert upload_resp.status_code == 201
+    att_id = upload_resp.json()["id"]
+
+    # Capture and discard the background agent task (suppress actual LLM call).
+    # Only suppress coroutines dispatched from the sessions route file; let all
+    # other asyncio.create_task calls (e.g. SQLAlchemy internals) pass through.
+    from unittest.mock import MagicMock
+
+    _real_create_task = _asyncio.create_task
+    _SESSIONS_ROUTE = "gateway/routes/sessions.py"
+
+    def _suppress_route_task(coroutine, **kwargs):
+        frame = _sys._getframe(1)
+        filename = frame.f_code.co_filename or ""
+        if _SESSIONS_ROUTE in filename and _inspect.iscoroutine(coroutine):
+            coroutine.close()
+            mock_task = MagicMock()
+            mock_task.done.return_value = True
+            return mock_task
+        return _real_create_task(coroutine, **kwargs)
+
+    with patch(
+        "sebastian.gateway.routes.sessions.asyncio.create_task",
+        side_effect=_suppress_route_task,
+    ):
+        resp = http_client.post(
+            f"/api/v1/agents/{agent_type}/sessions",
+            json={"content": "", "attachment_ids": [att_id]},
+            headers=headers,
+        )
+
+    # Should succeed
+    assert resp.status_code == 200, resp.text
+    session_id = resp.json()["session_id"]
+
+    # Get timeline
+    detail_resp = http_client.get(
+        f"/api/v1/sessions/{session_id}",
+        headers=headers,
+    )
+    assert detail_resp.status_code == 200
+    timeline = detail_resp.json()["timeline_items"]
+
+    # Should have exactly one user_message and one attachment, both with same exchange_id
+    user_items = [i for i in timeline if i["kind"] == "user_message"]
+    att_items = [i for i in timeline if i["kind"] == "attachment"]
+    assert len(user_items) == 1, f"expected 1 user_message, got {len(user_items)}"
+    assert len(att_items) == 1, f"expected 1 attachment, got {len(att_items)}"
+    assert user_items[0]["exchange_id"] == att_items[0]["exchange_id"]
