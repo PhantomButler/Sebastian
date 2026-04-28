@@ -8,6 +8,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -214,6 +217,11 @@ fun ChatScreen(
         mainPane = {
             val glassState = rememberGlassState(MaterialTheme.colorScheme.background)
             val context = LocalContext.current
+            val messageListAlpha by animateFloatAsState(
+                targetValue = if (chatState.isSessionSwitching) 0f else 1f,
+                animationSpec = tween(durationMillis = if (chatState.isSessionSwitching) 120 else 260),
+                label = "messageListAlpha",
+            )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -230,7 +238,9 @@ fun ChatScreen(
                     glassState = glassState,
                     contentPadding = PaddingValues(top = 88.dp, bottom = 112.dp),
                     fabBottomOffset = 128.dp,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = messageListAlpha },
                 )
 
                 // Error banners：显示在悬浮顶部栏下方

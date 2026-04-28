@@ -637,6 +637,7 @@ class ChatViewModel @Inject constructor(
                 todos = emptyList(),
                 composerState = ComposerState.IDLE_EMPTY,
                 agentAnimState = AgentAnimState.IDLE,
+                isSessionSwitching = true,
             )
         }
         viewModelScope.launch(dispatcher) {
@@ -644,7 +645,7 @@ class ChatViewModel @Inject constructor(
             var lastEventId: String? = lastDeliveredSseEventIds[sessionId]
             chatRepository.getMessages(sessionId)
                 .onSuccess { history ->
-                    _uiState.update { it.copy(messages = history) }
+                    _uiState.update { it.copy(messages = history, isSessionSwitching = false) }
                     // First visit to a session whose last message is USER means a turn is still
                     // in progress. Replay from ring buffer start ("0") so that TurnReceived is
                     // delivered and in-progress streaming events are visible immediately.
@@ -652,6 +653,11 @@ class ChatViewModel @Inject constructor(
                         // Skip TurnReceived for turns already loaded via REST to avoid duplicates.
                         sseReplayTurnSkipCount = history.count { it.role == MessageRole.ASSISTANT }
                         lastEventId = "0"
+                    }
+                }
+                .onFailure {
+                    _uiState.update { state ->
+                        if (state.activeSessionId == sessionId) state.copy(isSessionSwitching = false) else state
                     }
                 }
             chatRepository.getTodos(sessionId).onSuccess { todos ->

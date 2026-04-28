@@ -27,4 +27,5 @@ data class ChatUiState(
     val todos: List<TodoItem> = emptyList(),
     val pendingAttachments: List<PendingAttachment> = emptyList(),
     val inputCapabilities: ModelInputCapabilities = ModelInputCapabilities(),
+    val isSessionSwitching: Boolean = false,
 )
