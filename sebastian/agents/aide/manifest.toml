@@ -3,5 +3,5 @@ class_name = "AideAgent"
 description = "通用执行随从：运行命令、管理文件、系统操作等非工程类执行任务"
 max_children = 3
 stalled_threshold_minutes = 10
-allowed_tools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]
+allowed_tools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "todo_read"]
 allowed_skills = []
