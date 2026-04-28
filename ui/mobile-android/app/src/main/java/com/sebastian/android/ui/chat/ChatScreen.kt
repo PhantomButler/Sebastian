@@ -71,6 +71,7 @@ import com.sebastian.android.viewmodel.ChatViewModel
 import com.sebastian.android.viewmodel.ComposerState
 import com.sebastian.android.viewmodel.SessionViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private fun resolveUriMeta(contentResolver: ContentResolver, uri: Uri): Triple<String, String, Long> {
     var filename = uri.lastPathSegment ?: "attachment"
