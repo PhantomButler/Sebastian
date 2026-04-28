@@ -782,8 +782,6 @@ async def test_run_streaming_require_attachments_false_when_store_none(
     tmp_path: Path,
 ) -> None:
     """run_streaming must call get_context_messages with require_attachments=False when attachment_store is None."""
-    from unittest.mock import MagicMock
-
     from sebastian.core.base_agent import BaseAgent
     from sebastian.core.types import Session
     from sebastian.store.session_store import SessionStore
