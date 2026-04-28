@@ -2,6 +2,7 @@
 package com.sebastian.android.ui.chat
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -135,7 +136,10 @@ fun ChatScreen(
             val cr = toastContext.contentResolver
             val mimeType = cr.getType(uri) ?: "image/*"
             val filename = uri.lastPathSegment ?: "image"
-            chatViewModel.onAttachmentImagePicked(uri, filename, mimeType, 0L)
+            val sizeBytes = cr.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE)) else 0L
+            } ?: 0L
+            chatViewModel.onAttachmentImagePicked(uri, filename, mimeType, sizeBytes)
         }
     }
 
@@ -146,7 +150,10 @@ fun ChatScreen(
             val cr = toastContext.contentResolver
             val mimeType = cr.getType(uri) ?: "application/octet-stream"
             val filename = uri.lastPathSegment ?: "file"
-            chatViewModel.onAttachmentFilePicked(uri, filename, mimeType, 0L)
+            val sizeBytes = cr.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE)) else 0L
+            } ?: 0L
+            chatViewModel.onAttachmentFilePicked(uri, filename, mimeType, sizeBytes)
         }
     }
 
@@ -355,7 +362,7 @@ fun ChatScreen(
                 Composer(
                     state = chatState.composerState,
                     glassState = glassState,
-                    onSend = { text ->
+                    onSend = { text, _ ->
                         if (agentId != null) {
                             chatViewModel.sendAgentMessage(agentId, text)
                         } else {

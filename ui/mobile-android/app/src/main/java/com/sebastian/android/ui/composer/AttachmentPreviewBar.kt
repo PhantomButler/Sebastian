@@ -73,16 +73,29 @@ private fun AttachmentChip(
             }
         },
         trailingIcon = {
-            val isFailed = state is AttachmentUploadState.Failed
-            IconButton(
-                onClick = if (isFailed) onRetry else onRemove,
-                modifier = Modifier.size(18.dp),
-            ) {
-                Icon(
-                    imageVector = if (isFailed) Icons.Default.Refresh else Icons.Default.Close,
-                    contentDescription = if (isFailed) "重试" else "移除",
-                    modifier = Modifier.size(14.dp),
-                )
+            Row {
+                if (state is AttachmentUploadState.Failed) {
+                    IconButton(
+                        onClick = onRetry,
+                        modifier = Modifier.size(18.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "重试",
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier.size(18.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "移除",
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
         },
     )

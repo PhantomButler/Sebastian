@@ -511,6 +511,23 @@ class ChatViewModel @Inject constructor(
                 sessionId = clientSessionId,
                 role = MessageRole.USER,
                 text = text,
+                blocks = attachments.map { att ->
+                    when (att.kind) {
+                        AttachmentKind.IMAGE -> ContentBlock.ImageBlock(
+                            blockId = att.localId,
+                            downloadUrl = att.uri.toString(),
+                            mimeType = att.mimeType,
+                            filename = att.filename,
+                        )
+                        AttachmentKind.TEXT_FILE -> ContentBlock.FileBlock(
+                            blockId = att.localId,
+                            filename = att.filename,
+                            downloadUrl = att.uri.toString(),
+                            mimeType = att.mimeType,
+                            sizeBytes = att.sizeBytes,
+                        )
+                    }
+                },
             )
             isProvisionalSession = true
             _uiState.update { state ->
@@ -560,6 +577,23 @@ class ChatViewModel @Inject constructor(
                 sessionId = currentSessionId,
                 role = MessageRole.USER,
                 text = text,
+                blocks = attachments.map { att ->
+                    when (att.kind) {
+                        AttachmentKind.IMAGE -> ContentBlock.ImageBlock(
+                            blockId = att.localId,
+                            downloadUrl = att.uri.toString(),
+                            mimeType = att.mimeType,
+                            filename = att.filename,
+                        )
+                        AttachmentKind.TEXT_FILE -> ContentBlock.FileBlock(
+                            blockId = att.localId,
+                            filename = att.filename,
+                            downloadUrl = att.uri.toString(),
+                            mimeType = att.mimeType,
+                            sizeBytes = att.sizeBytes,
+                        )
+                    }
+                },
             )
             _uiState.update { state ->
                 state.copy(
