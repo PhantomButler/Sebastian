@@ -378,7 +378,7 @@ class ChatViewModel @Inject constructor(
                         state.copy(
                             messages = state.messages.filter { it.id != userMsgId },
                             activeSessionId = null,
-                            composerState = ComposerState.IDLE_EMPTY,
+                            composerState = ComposerState.IDLE_READY,
                             agentAnimState = AgentAnimState.IDLE,
                         )
                     }
@@ -478,7 +478,7 @@ class ChatViewModel @Inject constructor(
                         state.copy(
                             messages = state.messages.filter { it.id != userMsgId },
                             activeSessionId = null,
-                            composerState = ComposerState.IDLE_EMPTY,
+                            composerState = ComposerState.IDLE_READY,
                             agentAnimState = AgentAnimState.IDLE,
                         )
                     }
