@@ -246,6 +246,8 @@ class AttachmentStore:
 
     def _validate_image(self, filename: str, content_type: str, data: bytes) -> None:
         suffix = Path(filename).suffix.lower()
+        if not suffix:
+            raise AttachmentValidationError("Image filename must include a file extension")
         if suffix not in ALLOWED_IMAGE_EXTENSIONS:
             raise AttachmentValidationError(f"Unsupported image extension: {suffix!r}")
         if content_type not in ALLOWED_IMAGE_MIME_TYPES:

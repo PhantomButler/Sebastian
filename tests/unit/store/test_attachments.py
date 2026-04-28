@@ -132,6 +132,17 @@ async def test_image_upload_jpeg_success(attachment_store):
     assert result.kind == "image"
 
 
+@pytest.mark.asyncio
+async def test_image_rejects_extensionless_filename(attachment_store):
+    with pytest.raises(AttachmentValidationError, match="extension"):
+        await attachment_store.upload_bytes(
+            filename="photo",
+            content_type="image/jpeg",
+            kind="image",
+            data=b"jpeg-bytes",
+        )
+
+
 async def test_image_rejects_svg(attachment_store):
     with pytest.raises(AttachmentValidationError):
         await attachment_store.upload_bytes(

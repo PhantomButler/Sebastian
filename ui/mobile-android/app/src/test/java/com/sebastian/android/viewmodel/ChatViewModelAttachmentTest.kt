@@ -280,6 +280,33 @@ class ChatViewModelAttachmentTest {
         }
     }
 
+    // ── Test 6b ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `sendAgentMessage uses explicit attachments argument`() = vmTest {
+        val explicit = PendingAttachment(
+            localId = UUID.randomUUID().toString(),
+            kind = AttachmentKind.TEXT_FILE,
+            uri = makeUri(),
+            filename = "notes.md",
+            mimeType = "text/markdown",
+            sizeBytes = 12L,
+            uploadState = AttachmentUploadState.Uploaded("att-agent-explicit"),
+        )
+        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull(), any()))
+            .thenReturn(Result.success(com.sebastian.android.data.model.Session(id = "s1", title = "", agentType = "forge")))
+
+        viewModel.sendAgentMessage("forge", "", attachments = listOf(explicit))
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        verify(sessionRepository).createAgentSession(
+            org.mockito.kotlin.eq("forge"),
+            org.mockito.kotlin.eq(""),
+            any(),
+            org.mockito.kotlin.eq(listOf("att-agent-explicit")),
+        )
+    }
+
     // ── Test 7 ─────────────────────────────────────────────────────────────────
 
     @Test
