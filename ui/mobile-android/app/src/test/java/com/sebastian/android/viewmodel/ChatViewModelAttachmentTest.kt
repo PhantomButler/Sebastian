@@ -246,6 +246,8 @@ class ChatViewModelAttachmentTest {
         )
 
         viewModel.sendAgentMessage("forge", "")
+        // 200 ms covers the upload step (already-Uploaded attachment returns synchronously) plus
+        // the createAgentSession call; matches the pattern used in sendMessage Test 3.
         dispatcher.scheduler.advanceTimeBy(200)
 
         verify(sessionRepository).createAgentSession(
@@ -281,6 +283,9 @@ class ChatViewModelAttachmentTest {
         )
 
         viewModel.refreshInputCapabilities(agentId = null)
+        // runCurrent() not advanceUntilIdle(): startDeltaFlusher has an infinite while(true)+delay loop;
+        // advanceUntilIdle() would never terminate. runCurrent() flushes only tasks queued at the
+        // current virtual time, which is enough for this single-step coroutine body.
         dispatcher.scheduler.runCurrent()
 
         assertTrue(viewModel.uiState.value.inputCapabilities.supportsImageInput)
@@ -312,6 +317,7 @@ class ChatViewModelAttachmentTest {
         )
 
         viewModel.refreshInputCapabilities(agentId = "forge")
+        // Same reasoning: runCurrent() avoids the advanceUntilIdle() infinite-loop issue.
         dispatcher.scheduler.runCurrent()
 
         assertTrue(viewModel.uiState.value.inputCapabilities.supportsImageInput)
