@@ -89,7 +89,7 @@ fun Composer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
+                    .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // 原 ThinkButton 位置空出，用与 ThinkButton 等高的 Spacer 占位（48dp 高度）
@@ -99,7 +99,6 @@ fun Composer(
                     it()
                 }
                 attachmentSlot?.let {
-                    Spacer(Modifier.width(4.dp))
                     it()
                 }
 

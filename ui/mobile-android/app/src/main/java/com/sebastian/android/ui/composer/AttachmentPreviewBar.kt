@@ -4,12 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImagePainter
@@ -135,88 +132,78 @@ private fun ImageAttachmentPreview(
 ) {
     val state = att.uploadState
     val shape = RoundedCornerShape(8.dp)
-    Column(
-        modifier = Modifier.width(104.dp),
+    Box(
+        modifier = Modifier
+            .size(width = 104.dp, height = 78.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Box(
-            modifier = Modifier
-                .size(width = 104.dp, height = 78.dp)
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+        SubcomposeAsyncImage(
+            model = att.uri,
+            contentDescription = att.filename,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize(),
         ) {
-            SubcomposeAsyncImage(
-                model = att.uri,
-                contentDescription = att.filename,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-            ) {
-                when (painter.state) {
-                    is AsyncImagePainter.State.Error -> {
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                        )
-                    }
-                    else -> SubcomposeAsyncImageContent()
+            when (painter.state) {
+                is AsyncImagePainter.State.Error -> {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(MaterialTheme.colorScheme.errorContainer),
+                    )
                 }
+                else -> SubcomposeAsyncImageContent()
             }
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .background(
-                        Color.Black.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(bottomStart = 8.dp),
-                    ),
-            ) {
-                if (state is AttachmentUploadState.Failed) {
-                    IconButton(
-                        onClick = onRetry,
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "重试",
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .background(
+                    Color.Black.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(bottomStart = 8.dp),
+                ),
+        ) {
+            if (state is AttachmentUploadState.Failed) {
                 IconButton(
-                    onClick = onRemove,
+                    onClick = onRetry,
                     modifier = Modifier.size(32.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "移除",
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "重试",
                         modifier = Modifier.size(16.dp),
                     )
                 }
             }
-            if (state is AttachmentUploadState.Uploading || state is AttachmentUploadState.Local) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .align(Alignment.Center),
-                    strokeWidth = 2.dp,
-                )
-            }
-            if (state is AttachmentUploadState.Failed) {
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(32.dp),
+            ) {
                 Icon(
-                    Icons.Default.Warning,
-                    contentDescription = "上传失败",
-                    modifier = Modifier
-                        .padding(2.dp)
-                        .size(20.dp)
-                        .align(Alignment.BottomStart),
-                    tint = MaterialTheme.colorScheme.error,
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "移除",
+                    modifier = Modifier.size(16.dp),
                 )
             }
         }
-        Text(
-            text = att.filename,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelSmall,
-        )
+        if (state is AttachmentUploadState.Uploading || state is AttachmentUploadState.Local) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(20.dp)
+                    .align(Alignment.Center),
+                strokeWidth = 2.dp,
+            )
+        }
+        if (state is AttachmentUploadState.Failed) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = "上传失败",
+                modifier = Modifier
+                    .padding(2.dp)
+                    .size(20.dp)
+                    .align(Alignment.BottomStart),
+                tint = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
