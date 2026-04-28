@@ -58,6 +58,7 @@ Agent LLM 绑定主列表页的 ViewModel，仅负责数据加载：
 3. **消息状态机**：处理全部 `StreamEvent` 类型，按 blockId 精确更新对应 `ContentBlock`
 4. **三态连接错误**：`isServerNotConfigured` / `isOffline` / `connectionFailed`，优先级从高到低
 5. **全局审批**：审批事件由 `GlobalApprovalViewModel` 统一处理，不再由 `ChatViewModel` 管理
+6. **附件状态机**：`ChatUiState.pendingAttachments` + `inputCapabilities`；`onAttachmentImagePicked` / `onAttachmentFilePicked` / `onRemoveAttachment` / `onRetryAttachment` 管理发送前附件列表；`sendMessage` / `sendAgentMessage` 在发送前串行上传所有附件，上传失败时保留 Composer 状态，全部成功后携带 `attachmentIds` 发送 turn；失败回滚逻辑集中在 `handleNewSessionSendFailure` / `handleExistingSessionSendFailure` 私有函数中
 
 **Timeline Hydration 相关行为**：
 
@@ -137,7 +138,8 @@ ViewModel (sendMessage / switchSession / ...)
 | 改主对话消息处理逻辑 | `ChatViewModel.handleEvent()` |
 | 改 SSE 重连/断线逻辑 | `ChatViewModel.startSseCollection()` / `observeNetwork()` |
 | 改 SSE 回放游标逻辑 | `ChatViewModel`（`lastDeliveredSseEventIds` 字段） |
-| 改发送失败回滚/提示 | `ChatViewModel`（`ChatUiEffect.RestoreComposerText` / `ShowToast`） |
+| 改发送失败回滚/提示 | `ChatViewModel.handleNewSessionSendFailure()` / `handleExistingSessionSendFailure()` |
+| 改附件选择/上传逻辑 | `ChatViewModel.onAttachmentImagePicked()` / `onAttachmentFilePicked()` / `uploadPendingAttachments()` |
 | 改全局审批处理 | `GlobalApprovalViewModel.grantApproval()` / `denyApproval()` |
 | 改 Agent LLM 绑定主列表加载 | `AgentBindingsViewModel.load()` |
 | 改单个 Agent 绑定编辑（Provider + Thinking） | `AgentBindingEditorViewModel.selectProvider()` / `setEffort()` |

@@ -18,12 +18,12 @@ store/
 ├── session_store.py         # 主 facade：SessionStore，委托给下方四个 SQLite helper
 ├── session_records.py       # SessionRecordsStore：sessions 表 CRUD（create / get / list / update）
 ├── session_timeline.py      # SessionTimelineStore：timeline_items 表追加与查询（append_message / get_context）
-├── session_context.py       # build_legacy_messages()：将 timeline_items 投影为旧 messages 格式
+├── session_context.py       # build_context_messages()（async）：将 timeline_items 投影为 provider messages；支持附件 blob 注入；OpenAI 路径暂不支持附件（会记录 warning）
 ├── session_tasks.py         # SessionTaskStore：tasks / checkpoints 表 CRUD
 ├── session_todos.py         # SessionTodoStore：per-session todos 的 SQLite 读写
 ├── event_log.py             # EventLog：将 Event 对象追加写入 SQLite events 表，用于历史查询
 ├── task_store.py            # [DEPRECATED] TaskStore：原文件系统 task 写入辅助，已由 session_tasks.py 替代
-├── attachments.py           # AttachmentStore：附件 blob 存储与状态管理（upload / mark_attached / mark_session_orphaned / cleanup）
+├── attachments.py           # AttachmentStore：附件 blob 存储与状态管理（upload / mark_attached / mark_session_orphaned / cleanup，含 tmp/ 孤文件 GC）
 ├── todo_store.py            # TodoStore：per-session todos，委托给 SessionTodoStore（SQLite-only）
 └── migrations/
     └── __init__.py          # Alembic 迁移脚本目录（schema 变更在此新增 migration）
@@ -35,7 +35,7 @@ store/
 |------------|--------|
 | Session 元数据读写（create / get / list） | [session_records.py](session_records.py) |
 | 消息历史读写（append / get_context） | [session_timeline.py](session_timeline.py) |
-| timeline → messages 向后兼容投影 | [session_context.py](session_context.py) 的 `build_legacy_messages()` |
+| timeline → provider messages 投影（含附件） | [session_context.py](session_context.py) 的 `build_context_messages()`（async，需传 `attachment_store`） |
 | Task / Checkpoint SQLite 读写 | [session_tasks.py](session_tasks.py) |
 | Per-session todos SQLite 读写 | [session_todos.py](session_todos.py) |
 | SessionStore facade 统一入口 | [session_store.py](session_store.py) |
