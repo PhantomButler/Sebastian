@@ -69,6 +69,8 @@ class ResolvedProvider:
     thinking_format: str | None
     account_id: str
     model_display_name: str
+    supports_image_input: bool = False
+    supports_text_file_input: bool = True
 
 
 def _get_catalog() -> LLMCatalog:
@@ -141,6 +143,8 @@ class LLMProviderRegistry:
             thinking_format=model_spec.thinking_format,
             account_id=account.id,
             model_display_name=model_spec.display_name,
+            supports_image_input=model_spec.supports_image_input,
+            supports_text_file_input=model_spec.supports_text_file_input,
         )
 
     # ------------------------------------------------------------------
@@ -298,6 +302,8 @@ class LLMProviderRegistry:
             context_window_tokens=record.context_window_tokens,
             thinking_capability=record.thinking_capability,
             thinking_format=record.thinking_format,
+            supports_image_input=record.supports_image_input,
+            supports_text_file_input=record.supports_text_file_input,
         )
 
     # ------------------------------------------------------------------

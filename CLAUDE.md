@@ -325,6 +325,28 @@ await get_engine().dispose()
 **规则 4 — 不要在 async 测试中使用 `asyncio.create_subprocess_exec`**：
 Linux 上该调用注册 `PidfdChildWatcher`，function-scoped event loop 关闭时 watcher cleanup 会挂住。改用 `asyncio.to_thread(subprocess.run, ...)` 代替。
 
+### Android ViewModel 协程测试规范（避免挂起）
+
+**问题根源**：ChatViewModel 等 ViewModel 的 `init` 块会启动含 `while(true) { delay(N) ... }` 的无限后台协程（如 `startDeltaFlusher`）。在单元测试中调用 `dispatcher.scheduler.advanceUntilIdle()` 时，该循环每次 delay 结束后又立刻调度下一个 delay，队列永远不为空，导致 `advanceUntilIdle()` 死循环，测试永远挂起（Gradle 停在 97% EXECUTING，只完成了 1 个 test）。
+
+**规则 1 — 禁止在 ViewModel 测试体内调用 `advanceUntilIdle()`**：
+```kotlin
+// ❌ 会死循环，测试永远挂起
+viewModel.refreshInputCapabilities(null)
+dispatcher.scheduler.advanceUntilIdle()
+
+// ✅ 只执行当前时间点已排队的任务，不推进虚拟时间
+viewModel.refreshInputCapabilities(null)
+dispatcher.scheduler.runCurrent()
+```
+
+**规则 2 — `advanceTimeBy(N)` 可以用（有界），但要注意 N 足够大让目标协程体执行完**：
+```kotlin
+dispatcher.scheduler.advanceTimeBy(100)  // OK：有界，最多跑几次 flusher 迭代
+```
+
+**规则 3 — `runTest` 会在测试体结束后自动调 `advanceUntilIdle()`，因此 `vmTest` 的 `finally { viewModelScope.cancel() }` 必须在 `runTest` 结束前执行**（已有保障，不要把 cancel 移到 `runTest` 外面）。
+
 ## 项目级工作规则
 
 ### 第一性原理

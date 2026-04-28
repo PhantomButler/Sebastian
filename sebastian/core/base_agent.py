@@ -95,9 +95,11 @@ class BaseAgent(ABC):
         llm_registry: LLMProviderRegistry | None = None,
         db_factory: async_sessionmaker[AsyncSession] | None = None,
         compaction_scheduler: CompactionScheduler | None = None,
+        attachment_store: Any | None = None,
     ) -> None:
         self._gate = gate
         self._db_factory = db_factory
+        self._attachment_store = attachment_store
         self._compaction_scheduler = compaction_scheduler
         self._current_task_goals: dict[str, str] = {}  # session_id → goal
         self._current_depth: dict[str, int] = {}  # session_id → depth
@@ -352,6 +354,9 @@ class BaseAgent(ABC):
         session_id: str,
         task_id: str | None = None,
         agent_name: str | None = None,
+        *,
+        persist_user_message: bool = True,
+        preallocated_exchange: tuple[str, int] | None = None,
     ) -> str:
         self._completed_cancel_intents.pop(session_id, None)
         self._current_task_goals[session_id] = user_message
@@ -410,29 +415,37 @@ class BaseAgent(ABC):
 
         if self._db_factory is not None:
             messages = await self._session_store.get_context_messages(
-                session_id, agent_context, provider_format
+                session_id,
+                agent_context,
+                provider_format,
+                attachment_store=self._attachment_store,
+                require_attachments=self._attachment_store is not None,
             )
         else:
             raw = await self._session_store.get_messages(session_id, agent_context, limit=50)
             messages = [{"role": m["role"], "content": m["content"]} for m in raw]
 
-        messages.append({"role": "user", "content": user_message})
+        if persist_user_message:
+            messages.append({"role": "user", "content": user_message})
 
         exchange_id: str | None = None
         exchange_index: int | None = None
-        if self._db_factory is not None:
+        if preallocated_exchange is not None:
+            exchange_id, exchange_index = preallocated_exchange
+        elif self._db_factory is not None and persist_user_message:
             exchange_id, exchange_index = await allocate_exchange_for_turn(
                 self._session_store, session_id, agent_context
             )
 
-        await self._session_store.append_message(
-            session_id,
-            "user",
-            user_message,
-            agent_type=agent_context,
-            exchange_id=exchange_id,
-            exchange_index=exchange_index,
-        )
+        if persist_user_message:
+            await self._session_store.append_message(
+                session_id,
+                "user",
+                user_message,
+                agent_type=agent_context,
+                exchange_id=exchange_id,
+                exchange_index=exchange_index,
+            )
 
         current_stream = asyncio.create_task(
             self._stream_inner(

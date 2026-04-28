@@ -60,7 +60,7 @@ fun MessageBubble(
     modifier: Modifier = Modifier,
 ) {
     if (message.role == MessageRole.USER) {
-        UserMessageBubble(text = message.text, modifier = modifier)
+        UserMessageBubble(text = message.text, blocks = message.blocks, modifier = modifier)
     } else {
         AssistantMessageBlocks(
             msgId = message.id,
@@ -74,14 +74,18 @@ fun MessageBubble(
 }
 
 @Composable
-private fun UserMessageBubble(text: String, modifier: Modifier = Modifier) {
+private fun UserMessageBubble(
+    text: String,
+    blocks: List<ContentBlock> = emptyList(),
+    modifier: Modifier = Modifier,
+) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val bubbleShape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 48.dp, end = 16.dp),
-        contentAlignment = Alignment.CenterEnd,
+        horizontalAlignment = Alignment.End,
     ) {
         Text(
             text = text,
@@ -101,6 +105,19 @@ private fun UserMessageBubble(text: String, modifier: Modifier = Modifier) {
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         )
+        blocks.forEach { block ->
+            when (block) {
+                is ContentBlock.ImageBlock -> ImageAttachmentBlock(
+                    block = block,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                is ContentBlock.FileBlock -> FileAttachmentBlock(
+                    block = block,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+                else -> {}
+            }
+        }
     }
 }
 
@@ -170,6 +187,14 @@ private fun AssistantMessageBlocks(
                         modifier = Modifier
                             .fillMaxWidth()
                             .alpha(alpha),
+                    )
+                    is ContentBlock.ImageBlock -> ImageAttachmentBlock(
+                        block = block,
+                        modifier = Modifier.fillMaxWidth().alpha(alpha),
+                    )
+                    is ContentBlock.FileBlock -> FileAttachmentBlock(
+                        block = block,
+                        modifier = Modifier.fillMaxWidth().alpha(alpha),
                     )
                 }
                 Spacer(Modifier.height(8.dp))

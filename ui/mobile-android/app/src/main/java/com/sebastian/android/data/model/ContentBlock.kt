@@ -8,6 +8,8 @@ sealed class ContentBlock {
         is ThinkingBlock -> done
         is ToolBlock     -> status == ToolStatus.DONE || status == ToolStatus.FAILED
         is SummaryBlock  -> true
+        is ImageBlock    -> true
+        is FileBlock     -> true
     }
 
     data class TextBlock(
@@ -41,6 +43,26 @@ sealed class ContentBlock {
         val expanded: Boolean = false,
         val sourceSeqStart: Long? = null,
         val sourceSeqEnd: Long? = null,
+    ) : ContentBlock()
+
+    data class ImageBlock(
+        override val blockId: String,
+        val attachmentId: String,
+        val filename: String,
+        val mimeType: String,
+        val sizeBytes: Long,
+        val downloadUrl: String,
+        val thumbnailUrl: String? = null,
+    ) : ContentBlock()
+
+    data class FileBlock(
+        override val blockId: String,
+        val attachmentId: String,
+        val filename: String,
+        val mimeType: String,
+        val sizeBytes: Long,
+        val downloadUrl: String,
+        val textExcerpt: String? = null,
     ) : ContentBlock()
 }
 

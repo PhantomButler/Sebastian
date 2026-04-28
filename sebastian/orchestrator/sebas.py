@@ -120,6 +120,7 @@ class Sebastian(BaseAgent):
         agent_registry: dict[str, AgentConfig] | None = None,
         db_factory: async_sessionmaker[AsyncSession] | None = None,
         compaction_scheduler: CompactionScheduler | None = None,
+        attachment_store: Any | None = None,
     ) -> None:
         self._agent_registry: dict[str, AgentConfig] = agent_registry or {}
         super().__init__(
@@ -129,6 +130,7 @@ class Sebastian(BaseAgent):
             llm_registry=llm_registry,
             db_factory=db_factory,
             compaction_scheduler=compaction_scheduler,
+            attachment_store=attachment_store,
         )
         self._task_manager = task_manager
         self._conversation = conversation

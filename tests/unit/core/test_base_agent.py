@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -592,6 +592,61 @@ async def test_cancel_session_no_memory_leak_in_buffers(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_streaming_persist_false_without_preallocated_skips_allocate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """persist_user_message=False with preallocated_exchange=None must not call
+    allocate_exchange_for_turn."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    import sebastian.core.base_agent as ba_module
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    allocated: list[str] = []
+
+    async def fake_allocate(
+        session_store: object, session_id: str, agent_type: str
+    ) -> tuple[str, int]:
+        allocated.append(session_id)
+        return ("exc-fake", 0)
+
+    monkeypatch.setattr(ba_module, "allocate_exchange_for_turn", fake_allocate)
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="persist-false", agent_type="sebastian", title="t"))
+
+    # Pass a non-None db_factory so the elif branch is structurally reachable.
+    agent = TestAgent(MagicMock(), store, db_factory=MagicMock())
+
+    # get_context_messages is only available when SessionStore has a timeline (db_factory).
+    # Patch it to return an empty list so execution reaches the exchange-allocation block.
+    agent._session_store.get_context_messages = AsyncMock(return_value=[])  # type: ignore[method-assign]
+
+    # run_streaming will fail after the allocation block (no LLM), but we only care that
+    # allocate_exchange_for_turn was NOT called when persist_user_message=False.
+    try:
+        await agent.run_streaming(
+            "hello",
+            "persist-false",
+            persist_user_message=False,
+            preallocated_exchange=None,
+        )
+    except Exception:
+        pass  # expected — no LLM configured
+
+    assert allocated == [], (
+        f"allocate_exchange_for_turn must not be called when persist_user_message=False, "
+        f"but was called with sessions: {allocated}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_base_agent_progress_cb_calls_publish(tmp_path: Path) -> None:
     """progress_cb 被调用时应该触发 _publish(session_id, TOOL_RUNNING, data)."""
     from sebastian.core.base_agent import BaseAgent
@@ -644,3 +699,115 @@ async def test_base_agent_progress_cb_calls_publish(tmp_path: Path) -> None:
     progress_calls = [c for c in tool_running_calls if "elapsed_seconds" in c[2]]
     assert len(progress_calls) == 1
     assert progress_calls[0][2]["elapsed_seconds"] == 5
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# persist_user_message / preallocated_exchange tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_run_streaming_persist_false_skips_user_message_write(tmp_path: Path) -> None:
+    """persist_user_message=False must skip appending the user message to the store."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TurnDone
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="no-persist-session", agent_type="sebastian", title="t"))
+
+    agent = TestAgent(MagicMock(), store)
+
+    async def fake_stream(*args, **kwargs):
+        yield TurnDone(full_text="response")
+
+    agent._loop.stream = fake_stream  # type: ignore[attr-defined]
+
+    await agent.run_streaming("Hello", "no-persist-session", persist_user_message=False)
+
+    messages = await store.get_messages("no-persist-session", "sebastian")
+    # Only the assistant message should be written; no user message.
+    user_messages = [m for m in messages if m.get("role") == "user"]
+    assert len(user_messages) == 0
+
+
+@pytest.mark.asyncio
+async def test_run_streaming_persist_false_uses_preallocated_exchange(tmp_path: Path) -> None:
+    """persist_user_message=False with preallocated_exchange must NOT call
+    allocate_exchange_for_turn."""
+    from unittest.mock import patch
+
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TurnDone
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="prealloc-session", agent_type="sebastian", title="t"))
+
+    agent = TestAgent(MagicMock(), store)
+
+    async def fake_stream(*args, **kwargs):
+        yield TurnDone(full_text="done")
+
+    agent._loop.stream = fake_stream  # type: ignore[attr-defined]
+
+    mock_allocate = AsyncMock(return_value=("should-not-be-called", 99))
+
+    with patch("sebastian.core.base_agent.allocate_exchange_for_turn", mock_allocate):
+        await agent.run_streaming(
+            "Hello",
+            "prealloc-session",
+            persist_user_message=False,
+            preallocated_exchange=("preallocated-id", 7),
+        )
+
+    # allocate_exchange_for_turn must NOT have been called
+    mock_allocate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_streaming_require_attachments_false_when_store_none(
+    tmp_path: Path,
+) -> None:
+    """run_streaming must call get_context_messages with require_attachments=False when
+    attachment_store is None."""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="req-att-test", agent_type="sebastian", title="t"))
+
+    # db_factory non-None → get_context_messages branch is taken; attachment_store=None (default)
+    agent = TestAgent(MagicMock(), store, db_factory=MagicMock())
+
+    captured_kwargs: dict = {}
+
+    async def spy_get_context_messages(session_id, agent_ctx, provider_format, **kwargs):
+        captured_kwargs.update(kwargs)
+        return []
+
+    agent._session_store.get_context_messages = spy_get_context_messages  # type: ignore[method-assign]
+
+    try:
+        await agent.run_streaming("hello", "req-att-test")
+    except Exception:
+        pass  # no LLM wired — expected
+
+    assert captured_kwargs, "get_context_messages must have been called"
+    assert captured_kwargs.get("attachment_store") is None
+    assert captured_kwargs.get("require_attachments") is False, (
+        f"require_attachments must be False when attachment_store is None; "
+        f"got: {captured_kwargs.get('require_attachments')!r}"
+    )

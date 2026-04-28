@@ -32,6 +32,7 @@ data class CreateSessionRequest(
     @param:Json(name ="content") val content: String,
     @param:Json(name ="thinking_effort") val thinkingEffort: String? = null,
     @param:Json(name ="session_id") val sessionId: String? = null,
+    @param:Json(name ="attachment_ids") val attachmentIds: List<String> = emptyList(),
 )
 
 @JsonClass(generateAdapter = true)

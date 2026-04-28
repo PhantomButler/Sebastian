@@ -343,7 +343,7 @@ async def test_legacy_messages_role_content_only(store, session_in_db):
         assert "tool_calls" not in msg
 
 
-def test_openai_mixed_tool_and_text_single_assistant_message():
+async def test_openai_mixed_tool_and_text_single_assistant_message():
     """同一 turn 含 tool_calls 和文本时，OpenAI 投影只产生一条 assistant 消息。"""
     from sebastian.store.session_context import build_context_messages
 
@@ -377,7 +377,7 @@ def test_openai_mixed_tool_and_text_single_assistant_message():
             },
         },
     ]
-    messages = build_context_messages(items, provider_format="openai")
+    messages = await build_context_messages(items, provider_format="openai")
 
     assistant_msgs = [m for m in messages if m.get("role") == "assistant"]
     assert len(assistant_msgs) == 1, (

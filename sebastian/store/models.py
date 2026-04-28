@@ -115,6 +115,8 @@ class LLMCustomModelRecord(Base):
     context_window_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     thinking_capability: Mapped[str | None] = mapped_column(String(20), nullable=True)
     thinking_format: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    supports_image_input: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    supports_text_file_input: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
@@ -373,4 +375,30 @@ class SessionTodoRecord(Base):
             ["sessions.agent_type", "sessions.id"],
             ondelete="CASCADE",
         ),
+    )
+
+
+class AttachmentRecord(Base):
+    __tablename__ = "attachments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    owner_user_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    agent_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    original_filename: Mapped[str] = mapped_column(String)
+    mime_type: Mapped[str] = mapped_column(String)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    blob_path: Mapped[str] = mapped_column(String)
+    text_excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="uploaded")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    attached_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    orphaned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_attachments_status_created", "status", "created_at"),
+        Index("ix_attachments_session", "agent_type", "session_id"),
+        Index("ix_attachments_sha256", "sha256"),
     )

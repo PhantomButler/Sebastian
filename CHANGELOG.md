@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- Android App 支持在对话中发送图片和 `.txt/.md/.csv/.json/.log` 文本文件附件。
+
 ## [0.5.2] - 2026-04-27
 
 ### Fixed

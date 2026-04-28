@@ -40,6 +40,8 @@ def _make_custom_model(**overrides: Any) -> SimpleNamespace:
         "context_window_tokens": 128000,
         "thinking_capability": None,
         "thinking_format": None,
+        "supports_image_input": False,
+        "supports_text_file_input": True,
         "created_at": now,
         "updated_at": now,
     }

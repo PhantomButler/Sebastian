@@ -42,4 +42,24 @@ class SessionRepositoryImplTest {
         org.mockito.kotlin.verify(apiService).createAgentSession(any(), captor.capture())
         assertEquals(null, captor.firstValue.sessionId)
     }
+
+    @Test
+    fun `createAgentSession sends attachment ids`() = runTest {
+        whenever(apiService.createAgentSession(any(), any())).thenReturn(
+            TurnDto(sessionId = "s1", ts = "2026-04-28T00:00:00Z")
+        )
+
+        repository.createAgentSession(
+            agentType = "forge",
+            title = "",
+            sessionId = "client-session",
+            attachmentIds = listOf("att-1", "att-2"),
+        )
+
+        val captor = argumentCaptor<CreateSessionRequest>()
+        org.mockito.kotlin.verify(apiService).createAgentSession(org.mockito.kotlin.eq("forge"), captor.capture())
+        assertEquals("", captor.firstValue.content)
+        assertEquals("client-session", captor.firstValue.sessionId)
+        assertEquals(listOf("att-1", "att-2"), captor.firstValue.attachmentIds)
+    }
 }

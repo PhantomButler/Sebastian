@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     def workspace_dir(self) -> Path:
         return self.user_data_dir / "workspace"
 
+    @property
+    def attachments_dir(self) -> Path:
+        return self.user_data_dir / "attachments"
+
     def resolved_secret_key_path(self) -> Path:
         if self.sebastian_secret_key_path:
             return Path(self.sebastian_secret_key_path).expanduser()
@@ -99,6 +103,9 @@ def ensure_data_dir() -> None:
         settings.user_data_dir / "memory",
         settings.logs_dir,
         settings.run_dir,
+        settings.attachments_dir / "blobs",
+        settings.attachments_dir / "thumbs",
+        settings.attachments_dir / "tmp",
     ):
         sub.mkdir(parents=True, exist_ok=True)
 

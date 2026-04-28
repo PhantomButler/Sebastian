@@ -75,7 +75,14 @@ data class ResolvedBinding(
     val modelDisplayName: String?,
     val contextWindowTokens: Long?,
     val thinkingCapability: ThinkingCapability?,
-)
+    val supportsImageInput: Boolean = false,
+    val supportsTextFileInput: Boolean = true,
+) {
+    fun toInputCapabilities() = ModelInputCapabilities(
+        supportsImageInput = supportsImageInput,
+        supportsTextFileInput = supportsTextFileInput,
+    )
+}
 
 data class AgentBinding(
     val agentType: String,

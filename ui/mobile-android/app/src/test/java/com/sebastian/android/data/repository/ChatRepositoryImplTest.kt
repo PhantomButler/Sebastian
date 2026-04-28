@@ -6,6 +6,7 @@ import com.sebastian.android.data.remote.dto.MessageDto
 import com.sebastian.android.data.remote.dto.SessionDetailResponse
 import com.sebastian.android.data.remote.dto.SessionDto
 import com.sebastian.android.data.remote.dto.TimelineItemDto
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,6 +19,9 @@ import org.mockito.kotlin.eq
 class ChatRepositoryImplTest {
 
     private val sseClient = mock(SseClient::class.java)
+    private val settingsRepository = mock(SettingsRepository::class.java).also {
+        `when`(it.serverUrl).thenReturn(flowOf("http://10.0.2.2:8823"))
+    }
 
     private fun makeSessionDto(id: String = "sess-1") = SessionDto(
         id = id,
@@ -53,7 +57,7 @@ class ChatRepositoryImplTest {
                 timelineItems = emptyList(),
             )
         )
-        val repo = ChatRepositoryImpl(api, sseClient)
+        val repo = ChatRepositoryImpl(api, sseClient, settingsRepository)
 
         repo.getMessages("sess-1")
 
@@ -73,7 +77,7 @@ class ChatRepositoryImplTest {
                 timelineItems = listOf(timelineItem),
             )
         )
-        val repo = ChatRepositoryImpl(api, sseClient)
+        val repo = ChatRepositoryImpl(api, sseClient, settingsRepository)
 
         val result = repo.getMessages("sess-2")
 
@@ -96,7 +100,7 @@ class ChatRepositoryImplTest {
                 timelineItems = emptyList(),
             )
         )
-        val repo = ChatRepositoryImpl(api, sseClient)
+        val repo = ChatRepositoryImpl(api, sseClient, settingsRepository)
 
         val result = repo.getMessages("sess-3")
 

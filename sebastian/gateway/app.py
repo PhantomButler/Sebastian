@@ -26,6 +26,7 @@ def _initialize_agent_instances(
     llm_registry: LLMProviderRegistry,
     db_factory: Any = None,
     compaction_scheduler: Any = None,
+    attachment_store: Any = None,
 ) -> dict[str, BaseAgent]:
     """Create a singleton instance for each registered agent type."""
     instances: dict[str, BaseAgent] = {}
@@ -39,6 +40,7 @@ def _initialize_agent_instances(
             allowed_skills=cfg.allowed_skills,
             db_factory=db_factory,
             compaction_scheduler=compaction_scheduler,
+            attachment_store=attachment_store,
         )
         agent.name = cfg.agent_type
         instances[cfg.agent_type] = agent
@@ -109,6 +111,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     async with db_factory() as _bootstrap_session:
         await bootstrap_slot_registry(_bootstrap_session, DEFAULT_SLOT_REGISTRY)
+
+    from sebastian.store.attachments import AttachmentStore
+
+    attachment_store = AttachmentStore(settings.attachments_dir, db_factory)
+    state.attachment_store = attachment_store
 
     session_store = SessionStore(db_factory=db_factory)
     todo_store = TodoStore(db_factory=db_factory)
@@ -230,6 +237,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         agent_registry={cfg.agent_type: cfg for cfg in agent_configs},
         db_factory=db_factory,
         compaction_scheduler=state.context_compaction_scheduler,
+        attachment_store=attachment_store,
     )
 
     state.sebastian = sebastian_agent
@@ -249,6 +257,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         llm_registry=llm_registry,
         db_factory=state.db_factory,
         compaction_scheduler=state.context_compaction_scheduler,
+        attachment_store=attachment_store,
     )
 
     watchdog_task = start_watchdog(
@@ -327,6 +336,7 @@ def create_app() -> FastAPI:
     from sebastian.gateway.routes import (
         agents,
         approvals,
+        attachments,
         debug,
         llm_accounts,
         memory_components,
@@ -349,6 +359,7 @@ def create_app() -> FastAPI:
 
     app.include_router(turns.router, prefix="/api/v1")
     app.include_router(sessions.router, prefix="/api/v1")
+    app.include_router(attachments.router, prefix="/api/v1")
     app.include_router(approvals.router, prefix="/api/v1")
     app.include_router(stream.router, prefix="/api/v1")
     app.include_router(agents.router, prefix="/api/v1")

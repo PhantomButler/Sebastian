@@ -29,16 +29,28 @@ async def run_agent_session(
     goal: str,
     session_store: SessionStore,
     event_bus: EventBus | None = None,
+    *,
+    persist_user_message: bool = True,
+    preallocated_exchange: tuple[str, int] | None = None,
 ) -> None:
     """Run an agent on a session asynchronously. Sets status on completion/failure.
 
     当 cancel_intent == "stop" 时，run_agent_session 不接管状态机与落库，
     完全交由 stop_agent 工具负责 status=IDLE、update_session、事件发布，
     避免两处都写导致的状态双写。
+
+    persist_user_message / preallocated_exchange 用于附件场景：attachment helper
+    已将 user_message + attachment timeline item 写入，此时传 persist_user_message=False
+    并传入已分配的 (exchange_id, exchange_index)，避免重复写入。
     """
     stopped_by_tool = False
     try:
-        await agent.run_streaming(goal, session.id)
+        await agent.run_streaming(
+            goal,
+            session.id,
+            persist_user_message=persist_user_message,
+            preallocated_exchange=preallocated_exchange,
+        )
         # ask_parent 工具会把 session.status 设为 WAITING；此时不覆盖为 COMPLETED
         if session.status != SessionStatus.WAITING:
             session.status = SessionStatus.COMPLETED

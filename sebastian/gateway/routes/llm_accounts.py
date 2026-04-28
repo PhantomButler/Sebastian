@@ -46,6 +46,8 @@ class CustomModelCreate(BaseModel):
     context_window_tokens: int
     thinking_capability: str | None = None
     thinking_format: str | None = None
+    supports_image_input: bool = False
+    supports_text_file_input: bool = True
 
 
 class CustomModelUpdate(BaseModel):
@@ -54,6 +56,8 @@ class CustomModelUpdate(BaseModel):
     context_window_tokens: int | None = None
     thinking_capability: str | None = None
     thinking_format: str | None = None
+    supports_image_input: bool | None = None
+    supports_text_file_input: bool | None = None
 
 
 class DefaultBindingUpdate(BaseModel):
@@ -89,6 +93,8 @@ def _custom_model_to_dict(record: Any) -> JSONDict:
         "context_window_tokens": record.context_window_tokens,
         "thinking_capability": record.thinking_capability,
         "thinking_format": record.thinking_format,
+        "supports_image_input": record.supports_image_input,
+        "supports_text_file_input": record.supports_text_file_input,
         "created_at": record.created_at.isoformat(),
         "updated_at": record.updated_at.isoformat(),
     }
@@ -117,6 +123,8 @@ async def _build_resolved_metadata(registry: Any, account_id: str, model_id: str
         "model_display_name": model_spec.display_name,
         "context_window_tokens": model_spec.context_window_tokens,
         "thinking_capability": model_spec.thinking_capability,
+        "supports_image_input": model_spec.supports_image_input,
+        "supports_text_file_input": model_spec.supports_text_file_input,
     }
 
 
@@ -415,6 +423,8 @@ async def create_custom_model(
             context_window_tokens=body.context_window_tokens,
             thinking_capability=thinking_capability,
             thinking_format=thinking_format,
+            supports_image_input=body.supports_image_input,
+            supports_text_file_input=body.supports_text_file_input,
         )
         session.add(record)
         await session.commit()

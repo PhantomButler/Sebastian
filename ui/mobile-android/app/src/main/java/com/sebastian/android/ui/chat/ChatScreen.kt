@@ -1,7 +1,15 @@
 // com/sebastian/android/ui/chat/ChatScreen.kt
 package com.sebastian.android.ui.chat
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -33,11 +41,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,10 +62,40 @@ import com.sebastian.android.ui.common.ToastCenter
 import com.sebastian.android.ui.common.glass.GlassSurface
 import com.sebastian.android.ui.common.glass.pressScale
 import com.sebastian.android.ui.common.glass.rememberGlassState
+import com.sebastian.android.ui.composer.AttachmentPreviewBar
+import com.sebastian.android.ui.composer.AttachmentSlot
 import com.sebastian.android.ui.composer.Composer
 import com.sebastian.android.ui.navigation.Route
+import com.sebastian.android.viewmodel.ChatUiEffect
 import com.sebastian.android.viewmodel.ChatViewModel
+import com.sebastian.android.viewmodel.ComposerState
 import com.sebastian.android.viewmodel.SessionViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private fun resolveUriMeta(contentResolver: ContentResolver, uri: Uri): Triple<String, String, Long> {
+    var filename = uri.lastPathSegment ?: "attachment"
+    var mimeType = "application/octet-stream"
+    var sizeBytes = 0L
+    contentResolver.query(
+        uri,
+        arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+        null, null, null,
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val nameCol = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameCol >= 0) {
+                cursor.getString(nameCol)?.let { filename = it }
+            }
+            val sizeCol = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (sizeCol >= 0) {
+                sizeBytes = cursor.getLong(sizeCol)
+            }
+        }
+    }
+    mimeType = contentResolver.getType(uri) ?: mimeType
+    return Triple(filename, mimeType, sizeBytes)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,8 +131,22 @@ fun ChatScreen(
     )
     var deleteTarget by remember { mutableStateOf<Session?>(null) }
 
-    // Load appropriate sessions based on mode
+    // Session 切换淡出：点击 session 时立即开始淡出，等面板动画结束后再做实际切换
+    var messagesFading by remember { mutableStateOf(false) }
+    val switchScope = rememberCoroutineScope()
+    // ViewModel 接管后（isSessionSwitching=true）清除本地淡出标志，避免双重控制
+    LaunchedEffect(chatState.isSessionSwitching) {
+        if (chatState.isSessionSwitching) messagesFading = false
+    }
+    val messageListAlpha by animateFloatAsState(
+        targetValue = if (chatState.isSessionSwitching || messagesFading) 0f else 1f,
+        animationSpec = tween(durationMillis = if (chatState.isSessionSwitching || messagesFading) 120 else 260),
+        label = "messageListAlpha",
+    )
+
+    // Load appropriate sessions based on mode, and refresh model input capabilities
     LaunchedEffect(agentId) {
+        chatViewModel.refreshInputCapabilities(agentId)
         if (agentId != null) {
             sessionViewModel.loadAgentSessions(agentId)
         } else {
@@ -120,6 +174,38 @@ fun ChatScreen(
         }
     }
 
+    // ── Attachment pickers ────────────────────────────────────────────────────
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val (filename, mimeType, sizeBytes) = resolveUriMeta(toastContext.contentResolver, uri)
+            chatViewModel.onAttachmentImagePicked(uri, filename, mimeType, sizeBytes)
+        }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val (filename, mimeType, sizeBytes) = resolveUriMeta(toastContext.contentResolver, uri)
+            chatViewModel.onAttachmentFilePicked(uri, filename, mimeType, sizeBytes)
+        }
+    }
+
+    // Observe effects for RequestImagePicker and toasts from ViewModel
+    LaunchedEffect(chatViewModel) {
+        chatViewModel.uiEffects.collect { effect ->
+            when (effect) {
+                is ChatUiEffect.RequestImagePicker ->
+                    imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                is ChatUiEffect.ShowToast ->
+                    ToastCenter.show(toastContext, effect.message)
+                is ChatUiEffect.RestoreComposerText -> { /* handled elsewhere */ }
+            }
+        }
+    }
+
     SlidingThreePaneLayout(
         activePane = activePane,
         onPaneChange = { activePane = it },
@@ -129,8 +215,12 @@ fun ChatScreen(
                 activeSessionId = chatState.activeSessionId,
                 agentName = agentName,
                 onSessionClick = { session ->
-                    chatViewModel.switchSession(session.id)
+                    messagesFading = true
                     activePane = SidePane.NONE
+                    switchScope.launch {
+                        delay(350) // 等 spring 动画视觉完成后再做重布局
+                        chatViewModel.switchSession(session.id)
+                    }
                 },
                 onDeleteSession = { deleteTarget = it },
                 onNavigateToSettings = {
@@ -163,7 +253,9 @@ fun ChatScreen(
                     glassState = glassState,
                     contentPadding = PaddingValues(top = 88.dp, bottom = 112.dp),
                     fabBottomOffset = 128.dp,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = messageListAlpha },
                 )
 
                 // Error banners：显示在悬浮顶部栏下方
@@ -312,14 +404,36 @@ fun ChatScreen(
                 Composer(
                     state = chatState.composerState,
                     glassState = glassState,
-                    onSend = { text ->
+                    onSend = { text, attachments ->
                         if (agentId != null) {
-                            chatViewModel.sendAgentMessage(agentId, text)
+                            chatViewModel.sendAgentMessage(agentId, text, attachments)
                         } else {
-                            chatViewModel.sendMessage(text)
+                            chatViewModel.sendMessage(text, attachments)
                         }
                     },
                     onStop = chatViewModel::cancelTurn,
+                    pendingAttachments = chatState.pendingAttachments,
+                    attachmentSlot = {
+                        AttachmentSlot(
+                            onImageClick = chatViewModel::onAttachmentMenuImageSelected,
+                            onFileClick = {
+                                filePickerLauncher.launch(
+                                    arrayOf("text/plain", "text/markdown", "text/csv", "application/json", "text/x-log")
+                                )
+                            },
+                            enabled = chatState.composerState == ComposerState.IDLE_EMPTY
+                                || chatState.composerState == ComposerState.IDLE_READY,
+                        )
+                    },
+                    attachmentPreviewSlot = if (chatState.pendingAttachments.isNotEmpty()) {
+                        {
+                            AttachmentPreviewBar(
+                                attachments = chatState.pendingAttachments,
+                                onRemove = chatViewModel::onRemoveAttachment,
+                                onRetry = chatViewModel::onRetryAttachment,
+                            )
+                        }
+                    } else null,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 16.dp, vertical = 4.dp),

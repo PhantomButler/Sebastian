@@ -103,6 +103,9 @@ async def _apply_idempotent_migrations(conn: Any) -> None:
         # session_items：exchange 边界字段
         ("session_items", "exchange_id", "VARCHAR"),
         ("session_items", "exchange_index", "INTEGER"),
+        # llm_custom_models：图片/文本能力字段
+        ("llm_custom_models", "supports_image_input", "INTEGER NOT NULL DEFAULT 0"),
+        ("llm_custom_models", "supports_text_file_input", "INTEGER NOT NULL DEFAULT 1"),
     ]
     for table, column, ddl in patches:
         result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")

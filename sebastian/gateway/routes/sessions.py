@@ -24,8 +24,9 @@ JSONDict = dict[str, Any]
 
 
 class CreateAgentSessionBody(BaseModel):
-    content: str = Field(min_length=1)
+    content: str = ""
     session_id: str | None = None
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 @router.get("/sessions")
@@ -76,8 +77,8 @@ async def create_agent_session(
         raise HTTPException(404, f"Agent type not found: {agent_type}")
 
     content = body.content.strip()
-    if not content:
-        raise HTTPException(400, "content is required")
+    if not content and not body.attachment_ids:
+        raise HTTPException(400, "content or attachment_ids required")
 
     if body.session_id is not None:
         entries = await state.session_store.list_sessions()
@@ -95,10 +96,11 @@ async def create_agent_session(
                 "ts": existing.created_at.isoformat(),
             }
 
+    session_goal = content or "(attachment)"
     session_kwargs: dict[str, Any] = {
         "agent_type": agent_type,
-        "title": content[:40],
-        "goal": content,
+        "title": session_goal[:40],
+        "goal": session_goal,
         "depth": 2,
     }
     if body.session_id is not None:
@@ -108,15 +110,40 @@ async def create_agent_session(
 
     agent = state.agent_instances[agent_type]
 
+    persist_user_message = True
+    preallocated_exchange: tuple[str, int] | None = None
+
+    if body.attachment_ids:
+        from sebastian.gateway.routes._attachment_helpers import (
+            validate_and_write_attachment_turn,
+        )
+
+        try:
+            _att_records, exchange_id, exchange_index = await validate_and_write_attachment_turn(
+                content=content,
+                attachment_ids=body.attachment_ids,
+                session_id=session.id,
+                agent_type=agent_type,
+            )
+        except HTTPException:
+            await state.session_store.delete_session(session)
+            raise
+        persist_user_message = False
+        preallocated_exchange = (exchange_id, exchange_index)
+
+    run_goal = content
+
     from sebastian.core.session_runner import run_agent_session
 
     _task = asyncio.create_task(
         run_agent_session(
             agent=agent,
             session=session,
-            goal=content,
+            goal=run_goal,
             session_store=state.session_store,
             event_bus=state.event_bus,
+            persist_user_message=persist_user_message,
+            preallocated_exchange=preallocated_exchange,
         )
     )
     _background_tasks.add(_task)
@@ -156,7 +183,8 @@ async def get_session(
 
 
 class SendTurnBody(BaseModel):
-    content: str
+    content: str = ""
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 def _log_background_turn_failure(task: asyncio.Task[object]) -> None:
@@ -258,17 +286,34 @@ async def _resolve_session_task(
 async def _schedule_session_turn(
     session: Session,
     content: str,
+    *,
+    persist_user_message: bool = True,
+    preallocated_exchange: tuple[str, int] | None = None,
 ) -> None:
     """Route a turn to the correct agent instance."""
     import sebastian.gateway.state as state
 
     if session.agent_type == "sebastian":
-        task = asyncio.create_task(state.sebastian.run_streaming(content, session.id))
+        task = asyncio.create_task(
+            state.sebastian.run_streaming(
+                content,
+                session.id,
+                persist_user_message=persist_user_message,
+                preallocated_exchange=preallocated_exchange,
+            )
+        )
     else:
         agent = state.agent_instances.get(session.agent_type)
         if agent is None:
             raise ValueError(f"No agent instance for type: {session.agent_type}")
-        task = asyncio.create_task(agent.run_streaming(content, session.id))
+        task = asyncio.create_task(
+            agent.run_streaming(
+                content,
+                session.id,
+                persist_user_message=persist_user_message,
+                preallocated_exchange=preallocated_exchange,
+            )
+        )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     task.add_done_callback(_log_background_turn_failure)
@@ -283,6 +328,10 @@ async def delete_session(
     import sebastian.gateway.state as state
 
     session = await _resolve_session(state, session_id)
+    if state.attachment_store is not None:
+        await state.attachment_store.mark_session_orphaned(
+            agent_type=session.agent_type, session_id=session.id
+        )
     await state.session_store.delete_session(session)
     return {"session_id": session_id, "deleted": True}
 
@@ -298,8 +347,37 @@ async def send_turn_to_session(
 
     session = await _resolve_session(state, session_id)
     await _ensure_llm_ready(session.agent_type)
+
+    content = body.content.strip()
+
+    persist_user_message = True
+    preallocated_exchange: tuple[str, int] | None = None
+
+    if body.attachment_ids:
+        if state.attachment_store is None:
+            raise HTTPException(503, "attachment store not configured")
+        from sebastian.gateway.routes._attachment_helpers import (
+            validate_and_write_attachment_turn,
+        )
+
+        _att_records, exchange_id, exchange_index = await validate_and_write_attachment_turn(
+            content=content,
+            attachment_ids=body.attachment_ids,
+            session_id=session.id,
+            agent_type=session.agent_type,
+        )
+        persist_user_message = False
+        preallocated_exchange = (exchange_id, exchange_index)
+    elif not content:
+        raise HTTPException(400, "content or attachment_ids required")
+
     now = await _touch_session(state, session)
-    await _schedule_session_turn(session, body.content)
+    await _schedule_session_turn(
+        session,
+        content,
+        persist_user_message=persist_user_message,
+        preallocated_exchange=preallocated_exchange,
+    )
 
     return {
         "session_id": session_id,

@@ -1,6 +1,8 @@
 package com.sebastian.android.data.remote
 
 import com.sebastian.android.data.remote.dto.*
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.*
 
 interface ApiService {
@@ -156,6 +158,14 @@ interface ApiService {
 
     @PUT("api/v1/llm-bindings/default")
     suspend fun setDefaultBinding(@Body body: SetBindingRequest): AgentBindingDto
+
+    // Attachments
+    @Multipart
+    @POST("api/v1/attachments")
+    suspend fun uploadAttachment(
+        @Part("kind") kind: RequestBody,
+        @Part file: MultipartBody.Part,
+    ): AttachmentUploadResponseDto
 
     // Health
     @GET("api/v1/health")

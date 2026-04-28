@@ -357,6 +357,8 @@ class SessionStore:
         agent_type: str,
         provider_format: str,
         include_thinking: bool = False,
+        attachment_store: Any | None = None,
+        require_attachments: bool = True,
     ) -> list[dict[str, Any]]:
         """Project timeline items into provider-specific message dicts.
 
@@ -365,6 +367,9 @@ class SessionStore:
             agent_type: Agent type (e.g. "sebastian").
             provider_format: "anthropic" or "openai".
             include_thinking: Include thinking blocks (Anthropic only).
+            attachment_store: AttachmentStore for resolving attachment content.
+            require_attachments: If False, messages with missing attachments are
+                silently skipped rather than raising an error.
 
         Requires db_factory.
         """
@@ -376,7 +381,146 @@ class SessionStore:
             items = await self._timeline.get_context_items(session_id, agent_type)
         from sebastian.store.session_context import build_context_messages
 
-        return build_context_messages(items, provider_format, include_thinking=include_thinking)
+        return await build_context_messages(
+            items,
+            provider_format,
+            include_thinking=include_thinking,
+            attachment_store=attachment_store,
+            require_attachments=require_attachments,
+        )
+
+    async def append_user_turn_with_attachments(
+        self,
+        *,
+        session_id: str,
+        agent_type: str,
+        content: str,
+        attachment_records: list[Any],
+    ) -> tuple[str, int]:
+        """Atomically allocate exchange, write user_message + attachment items,
+        and transition attachment status to 'attached' in ONE DB transaction.
+
+        Returns (exchange_id, exchange_index).
+        Raises ValueError if session not found.
+        """
+        if self._db_factory is None:
+            raise RuntimeError("append_user_turn_with_attachments requires db_factory")
+
+        from sqlalchemy import text, update
+        from ulid import ULID
+
+        from sebastian.store.models import AttachmentRecord, SessionItemRecord
+        from sebastian.store.session_timeline import _get_session_lock
+
+        n_items = 1 + len(attachment_records)
+        lock = _get_session_lock(session_id, agent_type)
+        async with lock:
+            async with self._db_factory() as db:
+                async with db.begin():
+                    # Step 1a: bump exchange index
+                    result = await db.execute(
+                        text(
+                            "UPDATE sessions"
+                            " SET next_exchange_index = next_exchange_index + 1"
+                            " WHERE id = :sid AND agent_type = :at"
+                            " RETURNING next_exchange_index - 1"
+                        ),
+                        {"sid": session_id, "at": agent_type},
+                    )
+                    row = result.first()
+                    if row is None:
+                        raise ValueError(f"Session {session_id!r} (agent={agent_type!r}) not found")
+                    exchange_index: int = row[0]
+                    exchange_id = str(ULID())
+
+                    # Step 1b: bump seq by N items
+                    result2 = await db.execute(
+                        text(
+                            "UPDATE sessions"
+                            " SET next_item_seq = next_item_seq + :n"
+                            " WHERE id = :sid AND agent_type = :at"
+                            " RETURNING next_item_seq - :n"
+                        ),
+                        {"n": n_items, "sid": session_id, "at": agent_type},
+                    )
+                    row2 = result2.first()
+                    if row2 is None:
+                        raise ValueError(f"Session {session_id!r} (agent={agent_type!r}) not found")
+                    start_seq: int = row2[0]
+
+                    now = datetime.now(UTC)
+
+                    # Step 2: INSERT user_message
+                    user_item = SessionItemRecord(
+                        id=str(uuid4()),
+                        session_id=session_id,
+                        agent_type=agent_type,
+                        seq=start_seq,
+                        kind="user_message",
+                        role="user",
+                        content=content,
+                        payload={},
+                        archived=False,
+                        effective_seq=start_seq,
+                        exchange_id=exchange_id,
+                        exchange_index=exchange_index,
+                        created_at=now,
+                    )
+                    db.add(user_item)
+
+                    # Step 3: INSERT attachment items
+                    for i, record in enumerate(attachment_records):
+                        att_payload = {
+                            "attachment_id": record.id,
+                            "kind": record.kind,
+                            "mime_type": record.mime_type,
+                            "size_bytes": record.size_bytes,
+                            "sha256": record.sha256,
+                            "original_filename": record.original_filename,
+                            "text_excerpt": record.text_excerpt,
+                        }
+                        att_item = SessionItemRecord(
+                            id=str(uuid4()),
+                            session_id=session_id,
+                            agent_type=agent_type,
+                            seq=start_seq + 1 + i,
+                            kind="attachment",
+                            role="user",
+                            content=record.original_filename,
+                            payload=att_payload,
+                            archived=False,
+                            effective_seq=start_seq + 1 + i,
+                            exchange_id=exchange_id,
+                            exchange_index=exchange_index,
+                            created_at=now,
+                        )
+                        db.add(att_item)
+
+                    # Step 4: UPDATE attachments status → 'attached'
+                    # WHERE guards prevent TOCTOU: only update if still uploaded and unbound.
+                    if attachment_records:
+                        attachment_ids = [r.id for r in attachment_records]
+                        result = await db.execute(
+                            update(AttachmentRecord)
+                            .where(
+                                AttachmentRecord.id.in_(attachment_ids),
+                                AttachmentRecord.status == "uploaded",
+                                AttachmentRecord.session_id.is_(None),
+                            )
+                            .values(
+                                status="attached",
+                                agent_type=agent_type,
+                                session_id=session_id,
+                                attached_at=now,
+                            )
+                        )
+                        if int(result.rowcount) != len(attachment_ids):  # type: ignore[attr-defined]
+                            raise ValueError(
+                                "One or more attachments are no longer available"
+                                " (concurrent request)"
+                            )
+
+        return exchange_id, exchange_index
 
     async def compact_range(
         self,

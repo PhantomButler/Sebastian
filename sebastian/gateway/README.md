@@ -47,6 +47,8 @@ gateway/
 | 手动触发上下文压缩 | `POST /api/v1/sessions/{id}/compact`（routes/sessions.py） |
 | 查询 session 压缩状态 | `GET /api/v1/sessions/{id}/compaction/status`（routes/sessions.py） |
 | LLM Account / Catalog / Custom Model / Binding 管理 | [routes/llm_accounts.py](routes/llm_accounts.py) |
+| 附件上传/下载（`POST /attachments`、`GET /attachments/{id}/content`） | [routes/attachments.py](routes/attachments.py) |
+| Session turn 附件（`POST /sessions/{id}/turns` 接受 `attachment_ids`，复用与 `POST /turns` 相同的校验与写入路径） | [routes/sessions.py](routes/sessions.py) |
 
 ## 子模块
 

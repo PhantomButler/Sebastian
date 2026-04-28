@@ -33,6 +33,8 @@ class LLMModelSpec:
     context_window_tokens: int
     thinking_capability: str | None
     thinking_format: str | None
+    supports_image_input: bool = False
+    supports_text_file_input: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +72,8 @@ def _parse_model(raw: dict[str, Any]) -> LLMModelSpec:
         context_window_tokens=raw["context_window_tokens"],
         thinking_capability=raw.get("thinking_capability"),
         thinking_format=raw.get("thinking_format"),
+        supports_image_input=raw.get("supports_image_input", False),
+        supports_text_file_input=raw.get("supports_text_file_input", True),
     )
 
 

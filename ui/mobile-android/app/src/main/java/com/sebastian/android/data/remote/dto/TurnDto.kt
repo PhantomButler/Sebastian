@@ -5,8 +5,9 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class SendTurnRequest(
-    @param:Json(name ="content") val content: String,
-    @param:Json(name ="session_id") val sessionId: String? = null,
+    @param:Json(name = "content") val content: String,
+    @param:Json(name = "session_id") val sessionId: String? = null,
+    @param:Json(name = "attachment_ids") val attachmentIds: List<String> = emptyList(),
 )
 
 @JsonClass(generateAdapter = true)

@@ -4,6 +4,7 @@ import com.sebastian.android.data.model.ContentBlock
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.ToolStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -195,6 +196,129 @@ class TimelineMapperTest {
     }
 
     // ---------------------------------------------------------------------------
+    // Attachment tests
+    // ---------------------------------------------------------------------------
+
+    @Test
+    fun `user_message and attachment with same exchangeId merge into one message`() {
+        val items = listOf(
+            item(
+                seq = 1, kind = "user_message", content = "hello",
+                exchangeId = "exch-1",
+            ),
+            item(
+                seq = 2, kind = "attachment", content = "photo.png",
+                exchangeId = "exch-1",
+                payload = mapOf(
+                    "attachment_id" to "att-abc",
+                    "kind" to "image",
+                    "mime_type" to "image/png",
+                    "size_bytes" to 12345.0,
+                ),
+            ),
+        )
+        val messages = items.toMessagesFromTimeline()
+        assertEquals(1, messages.size)
+        assertEquals(MessageRole.USER, messages[0].role)
+        val imageBlocks = messages[0].blocks.filterIsInstance<ContentBlock.ImageBlock>()
+        assertEquals(1, imageBlocks.size)
+        assertTrue(imageBlocks[0].downloadUrl.contains("att-abc"))
+    }
+
+    @Test
+    fun `text_file attachment produces FileBlock`() {
+        val items = listOf(
+            item(
+                seq = 1, kind = "user_message", content = "check this",
+                exchangeId = "exch-2",
+            ),
+            item(
+                seq = 2, kind = "attachment", content = "notes.md",
+                exchangeId = "exch-2",
+                payload = mapOf(
+                    "attachment_id" to "att-xyz",
+                    "kind" to "text_file",
+                    "mime_type" to "text/markdown",
+                    "size_bytes" to 500.0,
+                    "text_excerpt" to "# Hello",
+                ),
+            ),
+        )
+        val messages = items.toMessagesFromTimeline()
+        assertEquals(1, messages.size)
+        val fileBlocks = messages[0].blocks.filterIsInstance<ContentBlock.FileBlock>()
+        assertEquals(1, fileBlocks.size)
+        assertEquals("notes.md", fileBlocks[0].filename)
+        assertEquals("# Hello", fileBlocks[0].textExcerpt)
+    }
+
+    @Test
+    fun `user_message without attachment emits message with no blocks`() {
+        val items = listOf(
+            item(seq = 1, kind = "user_message", content = "hi"),
+        )
+        val messages = items.toMessagesFromTimeline()
+        assertEquals(1, messages.size)
+        assertTrue(messages[0].blocks.isEmpty())
+    }
+
+    @Test
+    fun `context_summary with same exchangeId as user message must produce separate entry`() {
+        val items = listOf(
+            item(
+                seq = 1, kind = "user_message", role = "user",
+                content = "hello", exchangeId = "exc-1",
+            ),
+            item(
+                seq = 2, kind = "context_summary", role = "user",
+                content = "Summary text", exchangeId = "exc-1",  // same exchangeId as user_message
+            ),
+        )
+        val messages = items.toMessagesFromTimeline(baseUrl = "")
+        // Must produce two separate messages (user bubble + standalone summary)
+        assertEquals(2, messages.size)
+    }
+
+    @Test
+    fun `attachment without user_message in exchange is skipped`() {
+        val items = listOf(
+            item(
+                seq = 1, kind = "attachment", content = "photo.png",
+                exchangeId = "exch-orphan",
+                payload = mapOf("attachment_id" to "att-orphan", "kind" to "image", "mime_type" to "image/png"),
+            ),
+        )
+        val messages = items.toMessagesFromTimeline()
+        assertEquals(0, messages.size)
+    }
+
+    @Test
+    fun `provider capability fields map to ModelInputCapabilities`() {
+        val dto = ResolvedBindingDto(
+            accountName = null, providerDisplayName = null,
+            modelDisplayName = null, contextWindowTokens = null,
+            thinkingCapability = null,
+            supportsImageInput = true, supportsTextFileInput = true,
+        )
+        val domain = dto.toDomain()
+        val caps = domain.toInputCapabilities()
+        assertTrue(caps.supportsImageInput)
+        assertTrue(caps.supportsTextFileInput)
+    }
+
+    @Test
+    fun `provider capability fields default to false true when missing`() {
+        val dto = ResolvedBindingDto(
+            accountName = null, providerDisplayName = null,
+            modelDisplayName = null, contextWindowTokens = null,
+            thinkingCapability = null,
+        )
+        val caps = dto.toDomain().toInputCapabilities()
+        assertFalse(caps.supportsImageInput)
+        assertTrue(caps.supportsTextFileInput)
+    }
+
+    // ---------------------------------------------------------------------------
     // Helper
     // ---------------------------------------------------------------------------
 
@@ -208,6 +332,7 @@ class TimelineMapperTest {
         blockIndex: Int? = null,
         payload: Map<String, Any?>? = null,
         createdAt: String = "2026-01-01T00:00:00Z",
+        exchangeId: String? = null,
     ) = TimelineItemDto(
         id = "item-$seq",
         sessionId = "s1",
@@ -221,5 +346,6 @@ class TimelineMapperTest {
         providerCallIndex = providerCallIndex,
         blockIndex = blockIndex,
         createdAt = createdAt,
+        exchangeId = exchangeId,
     )
 }

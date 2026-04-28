@@ -5,41 +5,85 @@ import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.ToolStatus
 
-fun List<TimelineItemDto>.toMessagesFromTimeline(): List<Message> {
+fun List<TimelineItemDto>.toMessagesFromTimeline(baseUrl: String = ""): List<Message> {
+    val sorted = sortedBy { it.seq }
     val output = mutableListOf<Message>()
-    var currentGroupKey: Pair<String?, Int?>? = null
-    var currentGroupItems = mutableListOf<TimelineItemDto>()
+
+    // ── User-side: group by exchangeId ──────────────────────────────────────
+    // Collect user-side item kinds; assistant-side kinds handled separately below.
+    // context_summary is intentionally excluded: it is always standalone, never merged
+    // into a user exchange (even if it shares the same exchangeId).
+    val userSideKinds = setOf("user_message", "attachment")
+    val userSideByExchange: Map<String, List<TimelineItemDto>> = sorted
+        .filter { it.kind in userSideKinds }
+        .groupBy { it.exchangeId ?: "seq-${it.seq}" }
+
+    // Determine the "representative seq" for each user-side exchange group
+    // (used to interleave with assistant groups in seq order)
+    val exchangeMinSeq: Map<String, Long> = userSideByExchange.mapValues { (_, items) ->
+        items.minOf { it.seq }
+    }
+
+    // ── Assistant-side: group by (assistantTurnId, providerCallIndex) ────────
+    data class AssistantGroupKey(val turnId: String?, val pci: Int?)
+
+    val assistantSideItems = sorted.filter {
+        it.kind in setOf("assistant_message", "thinking", "tool_call", "tool_result")
+    }
+
+    // Build ordered assistant groups preserving seq order of first occurrence
+    val assistantGroups = mutableListOf<Pair<Long, List<TimelineItemDto>>>()
+    var currentKey: AssistantGroupKey? = null
+    var currentGroup = mutableListOf<TimelineItemDto>()
 
     fun flushAssistantGroup() {
-        if (currentGroupItems.isEmpty()) return
-        val msg = currentGroupItems.toAssistantMessage()
-        if (msg != null) output += msg
-        currentGroupItems = mutableListOf()
-        currentGroupKey = null
+        if (currentGroup.isEmpty()) return
+        assistantGroups += currentGroup.first().seq to currentGroup.toList()
+        currentGroup = mutableListOf()
+        currentKey = null
     }
 
-    sortedBy { it.seq }.forEach { item ->
-        when (item.kind) {
-            "user_message" -> {
-                flushAssistantGroup()
-                output += item.toUserMessage()
-            }
-            "context_summary" -> {
-                flushAssistantGroup()
-                output += item.toSummaryMessage()
-            }
-            "assistant_message", "thinking", "tool_call", "tool_result" -> {
-                val key = item.assistantTurnId to item.providerCallIndex
-                if (currentGroupKey != null && currentGroupKey != key) {
-                    flushAssistantGroup()
-                }
-                currentGroupKey = key
-                currentGroupItems += item
-            }
-            // system_event, raw_block → skip
-        }
+    for (item in assistantSideItems) {
+        val key = AssistantGroupKey(item.assistantTurnId, item.providerCallIndex)
+        if (currentKey != null && currentKey != key) flushAssistantGroup()
+        currentKey = key
+        currentGroup += item
     }
     flushAssistantGroup()
+
+    // ── Merge in seq order ──────────────────────────────────────────────────
+    // Build a combined list of (minSeq, producer) and sort by seq
+    data class Entry(val seq: Long, val produce: () -> Message?)
+
+    val entries = mutableListOf<Entry>()
+
+    for ((exchangeKey, items) in userSideByExchange) {
+        val minSeq = exchangeMinSeq[exchangeKey]!!
+        entries += Entry(minSeq) {
+            val userMsg = items.firstOrNull { it.kind == "user_message" }
+            val attachments = items.filter { it.kind == "attachment" }
+
+            when {
+                userMsg != null -> userMsg.toUserMessage(attachments, baseUrl)
+                else -> null  // orphan attachment-only exchange: skip
+            }
+        }
+    }
+
+    // context_summary items are standalone — not grouped with user exchanges
+    for (item in sorted.filter { it.kind == "context_summary" }) {
+        entries += Entry(item.seq) { item.toSummaryMessage() }
+    }
+
+    for ((seq, group) in assistantGroups) {
+        entries += Entry(seq) { group.toAssistantMessage() }
+    }
+
+    entries.sortedBy { it.seq }.forEach { entry ->
+        val msg = entry.produce()
+        if (msg != null) output += msg
+    }
+
     return output
 }
 
@@ -55,14 +99,46 @@ private fun TimelineItemDto.stableBlockId(): String {
     }
 }
 
-private fun TimelineItemDto.toUserMessage(): Message = Message(
-    id = "timeline-$sessionId-$seq",
-    sessionId = sessionId,
-    role = MessageRole.USER,
-    blocks = emptyList(),
-    text = content ?: "",
-    createdAt = createdAt ?: "",
-)
+private fun TimelineItemDto.toUserMessage(
+    attachments: List<TimelineItemDto>,
+    baseUrl: String,
+): Message {
+    val blocks = mutableListOf<ContentBlock>()
+    for (att in attachments.sortedBy { it.seq }) {
+        val attId = att.payloadString("attachment_id") ?: continue
+        val kind = att.payloadString("kind")
+        val block: ContentBlock = if (kind == "image") {
+            ContentBlock.ImageBlock(
+                blockId = "timeline-${att.sessionId}-att-$attId",
+                attachmentId = attId,
+                filename = att.content ?: "",
+                mimeType = att.payloadString("mime_type") ?: "",
+                sizeBytes = att.payloadLong("size_bytes") ?: 0L,
+                downloadUrl = "$baseUrl/api/v1/attachments/$attId",
+                thumbnailUrl = "$baseUrl/api/v1/attachments/$attId/thumbnail",
+            )
+        } else {
+            ContentBlock.FileBlock(
+                blockId = "timeline-${att.sessionId}-att-$attId",
+                attachmentId = attId,
+                filename = att.content ?: "",
+                mimeType = att.payloadString("mime_type") ?: "",
+                sizeBytes = att.payloadLong("size_bytes") ?: 0L,
+                downloadUrl = "$baseUrl/api/v1/attachments/$attId",
+                textExcerpt = att.payloadString("text_excerpt"),
+            )
+        }
+        blocks += block
+    }
+    return Message(
+        id = "timeline-$sessionId-$seq",
+        sessionId = sessionId,
+        role = MessageRole.USER,
+        blocks = blocks,
+        text = content ?: "",
+        createdAt = createdAt ?: "",
+    )
+}
 
 private fun TimelineItemDto.toSummaryMessage(): Message {
     val blockId = "timeline-$sessionId-summary-block-$seq"

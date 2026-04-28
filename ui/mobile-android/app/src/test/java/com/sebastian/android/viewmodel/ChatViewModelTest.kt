@@ -1,5 +1,7 @@
 package com.sebastian.android.viewmodel
 
+import android.content.ContentResolver
+import android.content.Context
 import app.cash.turbine.test
 import com.sebastian.android.data.local.NetworkMonitor
 import com.sebastian.android.data.model.ApprovalSnapshot
@@ -8,6 +10,7 @@ import com.sebastian.android.data.model.Message
 import com.sebastian.android.data.model.MessageRole
 import com.sebastian.android.data.model.StreamEvent
 import com.sebastian.android.data.remote.SseEnvelope
+import com.sebastian.android.data.repository.AgentRepository
 import com.sebastian.android.data.repository.ChatRepository
 import com.sebastian.android.data.repository.SessionRepository
 import com.sebastian.android.data.repository.SettingsRepository
@@ -50,8 +53,10 @@ class ChatViewModelTest {
     private lateinit var chatRepository: ChatRepository
     private lateinit var sessionRepository: SessionRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var agentRepository: AgentRepository
     private lateinit var networkMonitor: NetworkMonitor
     private lateinit var viewModel: ChatViewModel
+    private lateinit var appContext: Context
     private val dispatcher = StandardTestDispatcher()
     private val sseFlow = MutableSharedFlow<SseEnvelope>(extraBufferCapacity = 64)
     private val serverUrlFlow = MutableStateFlow("http://test.local:8823")
@@ -63,20 +68,24 @@ class ChatViewModelTest {
         chatRepository = mock()
         sessionRepository = mock()
         settingsRepository = mock()
+        agentRepository = mock()
         networkMonitor = mock()
+        appContext = mock()
+        val contentResolver: ContentResolver = mock()
+        whenever(appContext.contentResolver).thenReturn(contentResolver)
         whenever(networkMonitor.isOnline).thenReturn(onlineFlow)
         whenever(settingsRepository.serverUrl).thenReturn(serverUrlFlow)
         whenever(chatRepository.sessionStream(any(), any(), anyOrNull())).thenReturn(sseFlow)
         whenever(chatRepository.globalStream(any(), any())).thenReturn(flowOf())
         runBlocking {
-            whenever(chatRepository.sendTurn(any(), any())).thenReturn(Result.success("s1"))
+            whenever(chatRepository.sendTurn(any(), any(), any())).thenReturn(Result.success("s1"))
             whenever(chatRepository.grantApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.denyApproval(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.cancelTurn(any())).thenReturn(Result.success(Unit))
             whenever(chatRepository.getMessages(any())).thenReturn(Result.success(emptyList()))
             whenever(chatRepository.getTodos(any())).thenReturn(Result.success(emptyList()))
         }
-        viewModel = ChatViewModel(chatRepository, sessionRepository, settingsRepository, networkMonitor, dispatcher)
+        viewModel = ChatViewModel(appContext, chatRepository, sessionRepository, settingsRepository, agentRepository, networkMonitor, dispatcher)
         viewModel.clock = { dispatcher.scheduler.currentTime }
         dispatcher.scheduler.advanceTimeBy(200)
     }
@@ -269,17 +278,19 @@ class ChatViewModelTest {
             override fun sessionStream(baseUrl: String, sessionId: String, lastEventId: String?) = sseFlow
             override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<SseEnvelope>()
             override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
-            override suspend fun sendTurn(sessionId: String?, content: String) =
+            override suspend fun sendTurn(sessionId: String?, content: String, attachmentIds: List<String>) =
                 Result.failure<String>(RuntimeException("网络错误"))
-            override suspend fun sendSessionTurn(sessionId: String, content: String) =
+            override suspend fun sendSessionTurn(sessionId: String, content: String, attachmentIds: List<String>) =
                 Result.success(Unit)
             override suspend fun cancelTurn(sessionId: String) = Result.success(Unit)
             override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
             override suspend fun denyApproval(approvalId: String) = Result.success(Unit)
             override suspend fun getPendingApprovals() = Result.success(emptyList<ApprovalSnapshot>())
             override suspend fun getTodos(sessionId: String) = Result.success(emptyList<com.sebastian.android.data.model.TodoItem>())
+            override suspend fun uploadAttachment(pending: com.sebastian.android.data.model.PendingAttachment, contentResolver: android.content.ContentResolver): Result<com.sebastian.android.data.model.PendingAttachment> =
+                Result.failure(UnsupportedOperationException())
         }
-        viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, dispatcher)
+        viewModel = ChatViewModel(appContext, failingRepo, sessionRepository, settingsRepository, agentRepository, networkMonitor, dispatcher)
         viewModel.clock = { dispatcher.scheduler.currentTime }
         dispatcher.scheduler.advanceTimeBy(200)
 
@@ -474,7 +485,7 @@ class ChatViewModelTest {
         activateSession()  // getMessages #1
         // 构造 IDLE_READY：发送失败后 ViewModel 会把 composerState 拨到 IDLE_READY + 保留 error
         runBlocking {
-            whenever(chatRepository.sendTurn(any(), any()))
+            whenever(chatRepository.sendTurn(any(), any(), any()))
                 .thenReturn(Result.failure(RuntimeException("boom")))
         }
         viewModel.sendMessage("半截话")
@@ -599,7 +610,7 @@ class ChatViewModelTest {
     fun `cancelTurn with null activeSessionId cancels sendTurnJob and resets to IDLE_READY`() = vmTest {
         // No active session initially — simulates first ever message
         // Mock sendTurn to hang so we can cancel while PENDING
-        whenever(chatRepository.sendTurn(anyOrNull(), any())).doSuspendableAnswer {
+        whenever(chatRepository.sendTurn(anyOrNull(), any(), any())).doSuspendableAnswer {
             kotlinx.coroutines.delay(30_000)
             Result.success("s1")
         }
@@ -781,7 +792,7 @@ class ChatViewModelTest {
         }
         // sendTurn mock must return success with the fixedClientId (already set up in @Before as "s1",
         // but we override to return the client id so the provisional flow doesn't restart SSE)
-        whenever(chatRepository.sendTurn(anyOrNull(), any())).thenReturn(Result.success(fixedClientId))
+        whenever(chatRepository.sendTurn(anyOrNull(), any(), any())).thenReturn(Result.success(fixedClientId))
 
         viewModel.sendMessage("hello")
         dispatcher.scheduler.advanceTimeBy(200)
@@ -794,12 +805,12 @@ class ChatViewModelTest {
         assertEquals("activeSessionId must be the client id", fixedClientId, viewModel.uiState.value.activeSessionId)
 
         // Verify sendTurn was called with the same client id
-        runBlocking { verify(chatRepository).sendTurn(fixedClientId, "hello") }
+        runBlocking { verify(chatRepository).sendTurn(fixedClientId, "hello", emptyList()) }
     }
 
     @Test
     fun `new main session failure removes user bubble and clears active session`() = vmTest {
-        whenever(chatRepository.sendTurn(anyOrNull(), any())).thenReturn(
+        whenever(chatRepository.sendTurn(anyOrNull(), any(), any())).thenReturn(
             Result.failure(RuntimeException("net error"))
         )
 
@@ -824,7 +835,7 @@ class ChatViewModelTest {
 
     @Test
     fun `new main session failure emits uiEffects for rollback`() = vmTest {
-        whenever(chatRepository.sendTurn(anyOrNull(), any())).thenReturn(
+        whenever(chatRepository.sendTurn(anyOrNull(), any(), any())).thenReturn(
             Result.failure(RuntimeException("net error"))
         )
 
@@ -916,7 +927,7 @@ class ChatViewModelTest {
             sseFlow
         }
         runBlocking {
-            whenever(chatRepository.sendSessionTurn(any(), any())).thenReturn(Result.success(Unit))
+            whenever(chatRepository.sendSessionTurn(any(), any(), any())).thenReturn(Result.success(Unit))
         }
 
         activateSession("s1")
@@ -949,7 +960,7 @@ class ChatViewModelTest {
             capturedStreamIds.add(inv.getArgument(1))
             sseFlow
         }
-        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull())).thenReturn(
+        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull(), any())).thenReturn(
             Result.success(com.sebastian.android.data.model.Session(id = "agent-s1", title = "Test", agentType = "research"))
         )
 
@@ -962,12 +973,12 @@ class ChatViewModelTest {
         assertFalse("SSE session id must not be null", sseId == null)
 
         // createAgentSession received the same id
-        runBlocking { verify(sessionRepository).createAgentSession(eq("research"), anyOrNull(), anyOrNull()) }
+        runBlocking { verify(sessionRepository).createAgentSession(eq("research"), anyOrNull(), anyOrNull(), any()) }
     }
 
     @Test
     fun `new agent session failure removes user bubble and clears active session`() = vmTest {
-        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull())).thenReturn(
+        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull(), any())).thenReturn(
             Result.failure(RuntimeException("server error"))
         )
 
@@ -992,7 +1003,7 @@ class ChatViewModelTest {
 
     @Test
     fun `new agent session failure emits uiEffects for rollback`() = vmTest {
-        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull())).thenReturn(
+        whenever(sessionRepository.createAgentSession(any(), anyOrNull(), anyOrNull(), any())).thenReturn(
             Result.failure(RuntimeException("server error"))
         )
 
@@ -1111,7 +1122,7 @@ class ChatViewModelTest {
         runBlocking {
             whenever(chatRepository.getMessages("s1")).thenReturn(Result.success(listOf(completedMsg)))
             whenever(chatRepository.getTodos("s1")).thenReturn(Result.success(todos))
-            whenever(chatRepository.sendTurn(any(), any())).thenReturn(Result.success("s1"))
+            whenever(chatRepository.sendTurn(any(), any(), any())).thenReturn(Result.success("s1"))
         }
 
         // 先 switchSession 让 activeSessionId = "s1"
@@ -1144,18 +1155,20 @@ class ChatViewModelTest {
                 throwingFlow
             override fun globalStream(baseUrl: String, lastEventId: String?) = flowOf<SseEnvelope>()
             override suspend fun getMessages(sessionId: String) = Result.success(emptyList<Message>())
-            override suspend fun sendTurn(sessionId: String?, content: String) =
+            override suspend fun sendTurn(sessionId: String?, content: String, attachmentIds: List<String>) =
                 Result.success("s1")
-            override suspend fun sendSessionTurn(sessionId: String, content: String) =
+            override suspend fun sendSessionTurn(sessionId: String, content: String, attachmentIds: List<String>) =
                 Result.success(Unit)
             override suspend fun cancelTurn(sessionId: String) = Result.success(Unit)
             override suspend fun grantApproval(approvalId: String) = Result.success(Unit)
             override suspend fun denyApproval(approvalId: String) = Result.success(Unit)
             override suspend fun getPendingApprovals() = Result.success(emptyList<ApprovalSnapshot>())
             override suspend fun getTodos(sessionId: String) = Result.success(emptyList<com.sebastian.android.data.model.TodoItem>())
+            override suspend fun uploadAttachment(pending: com.sebastian.android.data.model.PendingAttachment, contentResolver: android.content.ContentResolver): Result<com.sebastian.android.data.model.PendingAttachment> =
+                Result.failure(UnsupportedOperationException())
         }
 
-        viewModel = ChatViewModel(failingRepo, sessionRepository, settingsRepository, networkMonitor, dispatcher)
+        viewModel = ChatViewModel(appContext, failingRepo, sessionRepository, settingsRepository, agentRepository, networkMonitor, dispatcher)
         viewModel.clock = { dispatcher.scheduler.currentTime }
         dispatcher.scheduler.advanceTimeBy(200)
 

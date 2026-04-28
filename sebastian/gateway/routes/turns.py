@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sebastian.gateway.auth import create_access_token, require_auth, verify_password
 
@@ -28,8 +28,9 @@ class TokenResponse(BaseModel):
 
 
 class SendTurnRequest(BaseModel):
-    content: str
+    content: str = ""
     session_id: str | None = None
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 async def _ensure_llm_ready(agent_type: str) -> None:
@@ -77,11 +78,48 @@ async def send_turn(
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
     import sebastian.gateway.state as state
+    from sebastian.gateway.routes._attachment_helpers import validate_and_write_attachment_turn
 
     await _ensure_llm_ready("sebastian")
-    session = await state.sebastian.get_or_create_session(body.session_id, body.content)
-    task = _create_task(state.sebastian.run_streaming(body.content, session.id))
-    task.add_done_callback(_log_background_turn_failure)
+
+    content = body.content.strip()
+
+    if body.attachment_ids:
+        # Attachment path: validate first, then create/get session, then write atomically
+        # Use first attachment filename as session goal hint if content is empty
+        session_goal = content or "(attachment)"
+        is_new_session = body.session_id is None
+        session = await state.sebastian.get_or_create_session(body.session_id, session_goal)
+
+        try:
+            _att_records, exchange_id, exchange_index = await validate_and_write_attachment_turn(
+                content=content,
+                attachment_ids=body.attachment_ids,
+                session_id=session.id,
+                agent_type="sebastian",
+            )
+        except HTTPException:
+            if is_new_session:
+                await state.session_store.delete_session(session)
+            raise
+
+        task = _create_task(
+            state.sebastian.run_streaming(
+                content,
+                session.id,
+                persist_user_message=False,
+                preallocated_exchange=(exchange_id, exchange_index),
+            )
+        )
+        task.add_done_callback(_log_background_turn_failure)
+    else:
+        # No attachments: existing path unchanged
+        if not content:
+            raise HTTPException(400, "content or attachment_ids required")
+        session = await state.sebastian.get_or_create_session(body.session_id, content)
+        task = _create_task(state.sebastian.run_streaming(content, session.id))
+        task.add_done_callback(_log_background_turn_failure)
+
     return {
         "session_id": session.id,
         "ts": datetime.now(UTC).isoformat(),

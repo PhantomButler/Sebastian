@@ -17,6 +17,7 @@ routes/
 ├── llm_accounts.py          # LLM Account 管理（Account CRUD + Custom Model CRUD + Catalog 查询 + Default Binding）
 ├── memory_components.py     # 记忆组件 LLM 绑定管理（GET/PUT/DELETE /memory/components）
 ├── memory_settings.py       # 记忆功能运行时开关（GET/PUT /memory/settings）
+├── attachments.py           # 附件上传/下载（POST /attachments、GET /attachments/{id}/content）
 ├── sessions.py              # 会话与 Task 生命周期管理（创建/查询/暂停/取消）
 ├── stream.py                # SSE 事件流推送（全局流 + 单会话流）
 └── turns.py                 # 主对话入口（登录、发送消息触发 Sebastian 对话轮次）
@@ -52,6 +53,8 @@ routes/
 | `DELETE /llm/custom-models/{id}` — 删除自定义模型 | [llm_accounts.py](llm_accounts.py) |
 | `GET /llm/bindings/default` — 获取默认绑定 | [llm_accounts.py](llm_accounts.py) |
 | `PUT /llm/bindings/default` — 设置默认绑定（account_id + model_id） | [llm_accounts.py](llm_accounts.py) |
+| `POST /attachments` — 上传附件（图片 / 文本文件）| [attachments.py](attachments.py) |
+| `GET /attachments/{id}/content` — 下载附件内容 | [attachments.py](attachments.py) |
 | `GET /sessions` — 列出会话（支持过滤/分页） | [sessions.py](sessions.py) |
 | `GET /sessions/{id}` — 查询单个会话及其消息 | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}` — 删除会话 | [sessions.py](sessions.py) |

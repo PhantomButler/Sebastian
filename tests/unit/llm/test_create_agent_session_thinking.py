@@ -31,7 +31,9 @@ async def test_run_agent_session_calls_run_streaming_without_thinking_effort() -
         event_bus=None,
     )
 
-    agent.run_streaming.assert_awaited_once_with("hello", session.id)
+    agent.run_streaming.assert_awaited_once_with(
+        "hello", session.id, persist_user_message=True, preallocated_exchange=None
+    )
 
 
 @pytest.mark.asyncio

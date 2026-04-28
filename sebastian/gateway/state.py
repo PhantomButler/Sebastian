@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from sebastian.orchestrator.conversation import ConversationManager
     from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import EventBus
+    from sebastian.store.attachments import AttachmentStore
     from sebastian.store.owner_store import OwnerStore
     from sebastian.store.session_store import SessionStore
     from sebastian.store.todo_store import TodoStore
@@ -46,6 +47,7 @@ context_compaction_scheduler: TurnEndCompactionScheduler | None = None
 context_compaction_worker: SessionContextCompactionWorker | None = None
 agent_instances: dict[str, BaseAgent] = {}
 agent_registry: dict[str, AgentConfig] = {}
+attachment_store: AttachmentStore | None = None
 
 
 def get_owner_store() -> OwnerStore:

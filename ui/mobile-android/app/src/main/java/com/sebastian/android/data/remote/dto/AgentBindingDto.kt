@@ -37,6 +37,8 @@ data class ResolvedBindingDto(
     @param:Json(name = "model_display_name") val modelDisplayName: String?,
     @param:Json(name = "context_window_tokens") val contextWindowTokens: Long?,
     @param:Json(name = "thinking_capability") val thinkingCapability: String?,
+    @param:Json(name = "supports_image_input") val supportsImageInput: Boolean = false,
+    @param:Json(name = "supports_text_file_input") val supportsTextFileInput: Boolean = true,
 ) {
     fun toDomain() = ResolvedBinding(
         accountName = accountName,
@@ -44,5 +46,7 @@ data class ResolvedBindingDto(
         modelDisplayName = modelDisplayName,
         contextWindowTokens = contextWindowTokens,
         thinkingCapability = thinkingCapability?.let { ThinkingCapability.fromString(it) },
+        supportsImageInput = supportsImageInput,
+        supportsTextFileInput = supportsTextFileInput,
     )
 }
