@@ -63,7 +63,7 @@ import com.sebastian.android.ui.common.glass.GlassSurface
 import com.sebastian.android.ui.common.glass.pressScale
 import com.sebastian.android.ui.common.glass.rememberGlassState
 import com.sebastian.android.ui.composer.AttachmentPreviewBar
-import com.sebastian.android.ui.composer.AttachmentSlot
+import com.sebastian.android.ui.composer.AttachmentToolbar
 import com.sebastian.android.ui.composer.Composer
 import com.sebastian.android.ui.navigation.Route
 import com.sebastian.android.viewmodel.ChatUiEffect
@@ -414,11 +414,15 @@ fun ChatScreen(
                     onStop = chatViewModel::cancelTurn,
                     pendingAttachments = chatState.pendingAttachments,
                     attachmentSlot = {
-                        AttachmentSlot(
-                            onImageClick = chatViewModel::onAttachmentMenuImageSelected,
+                        AttachmentToolbar(
                             onFileClick = {
                                 filePickerLauncher.launch(
                                     arrayOf("text/plain", "text/markdown", "text/csv", "application/json", "text/x-log")
+                                )
+                            },
+                            onImageClick = {
+                                imagePickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
                             },
                             enabled = chatState.composerState == ComposerState.IDLE_EMPTY
