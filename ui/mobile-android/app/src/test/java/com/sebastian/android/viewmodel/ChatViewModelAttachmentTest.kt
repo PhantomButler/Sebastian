@@ -372,4 +372,48 @@ class ChatViewModelAttachmentTest {
         assertTrue(viewModel.uiState.value.inputCapabilities.supportsImageInput)
         assertFalse(viewModel.uiState.value.inputCapabilities.supportsTextFileInput)
     }
+
+    // ── Test 9 ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `refreshInputCapabilities falls back to defaults when getDefaultBinding fails`() = vmTest {
+        whenever(settingsRepository.getDefaultBinding()).thenReturn(
+            Result.failure(RuntimeException("network error")),
+        )
+
+        viewModel.refreshInputCapabilities(agentId = null)
+        // runCurrent(): avoids infinite advanceUntilIdle loop from startDeltaFlusher
+        dispatcher.scheduler.runCurrent()
+
+        // Default ModelInputCapabilities: supportsImageInput=false, supportsTextFileInput=true
+        assertFalse(
+            "supportsImageInput must be false (default) on binding failure",
+            viewModel.uiState.value.inputCapabilities.supportsImageInput,
+        )
+        assertTrue(
+            "supportsTextFileInput must be true (default) on binding failure",
+            viewModel.uiState.value.inputCapabilities.supportsTextFileInput,
+        )
+    }
+
+    // ── Test 10 ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `refreshInputCapabilities falls back to defaults when getAgentBinding fails`() = vmTest {
+        whenever(agentRepository.getAgentBinding("forge")).thenReturn(
+            Result.failure(RuntimeException("agent not found")),
+        )
+
+        viewModel.refreshInputCapabilities(agentId = "forge")
+        dispatcher.scheduler.runCurrent()
+
+        assertFalse(
+            "supportsImageInput must be false (default) on agent binding failure",
+            viewModel.uiState.value.inputCapabilities.supportsImageInput,
+        )
+        assertTrue(
+            "supportsTextFileInput must be true (default) on agent binding failure",
+            viewModel.uiState.value.inputCapabilities.supportsTextFileInput,
+        )
+    }
 }
