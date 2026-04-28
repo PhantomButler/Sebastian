@@ -157,7 +157,9 @@ class AttachmentStore:
                 )
         return records
 
-    async def mark_attached(
+    # Internal only: opens its own DB session and is NOT atomic with timeline writes.
+    # The canonical status transition is done inline in SessionStore.append_user_turn_with_attachments.
+    async def _mark_attached(
         self,
         attachment_ids: list[str],
         agent_type: str,
@@ -183,7 +185,7 @@ class AttachmentStore:
         returned_ids = {r.id for r in records}
         missing = set(attachment_ids) - returned_ids
         if missing:
-            raise AttachmentValidationError(f"Attachment(s) lost after mark_attached: {missing}")
+            raise AttachmentValidationError(f"Attachment(s) lost after _mark_attached: {missing}")
         return records
 
     async def mark_session_orphaned(self, agent_type: str, session_id: str) -> int:
