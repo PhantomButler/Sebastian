@@ -4,7 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -34,7 +34,7 @@ fun AttachmentToolbar(
             enabled = enabled,
             modifier = Modifier.focusProperties { canFocus = false },
         ) {
-            Icon(Icons.Default.Image, contentDescription = "选择图片", tint = iconTint)
+            Icon(Icons.Outlined.Image, contentDescription = "选择图片", tint = iconTint)
         }
     }
 }
