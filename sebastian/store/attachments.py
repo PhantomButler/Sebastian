@@ -27,7 +27,7 @@ ALLOWED_TEXT_MIME_TYPES = frozenset({
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 TEXT_EXCERPT_CHARS = 2000
-_UPLOADED_TTL = timedelta(hours=24)   # unattached uploads expire after 24 h
+_UPLOADED_TTL = timedelta(hours=24)   # status="uploaded" blobs expire after 24 h if never referenced
 _ORPHAN_TTL = timedelta(hours=24)     # orphaned blobs expire (can differ from uploaded in future)
 
 
@@ -237,8 +237,8 @@ class AttachmentStore:
             for tmp_file in tmp_dir.iterdir():
                 if tmp_file.is_file():
                     try:
-                        ctime = datetime.fromtimestamp(tmp_file.stat().st_ctime, UTC)
-                        if ctime < uploaded_cutoff:
+                        mtime = datetime.fromtimestamp(tmp_file.stat().st_mtime, UTC)
+                        if mtime < uploaded_cutoff:
                             tmp_file.unlink(missing_ok=True)
                             count += 1
                     except OSError:
