@@ -366,7 +366,27 @@ class ChatViewModel @Inject constructor(
             startSseCollection(sessionId = clientSessionId, lastEventId = "0")
             sendTurnJob = viewModelScope.launch(dispatcher) {
                 val uploadedAttachments = attachmentManager.uploadPendingAttachments(attachments, contentResolver)
-                if (uploadedAttachments == null) return@launch  // upload failed, already handled
+                if (uploadedAttachments == null) {
+                    // uploadPendingAttachments already set composerState=IDLE_READY and showed toast.
+                    // Also clean up the provisional session state.
+                    cancelPendingTimeout()
+                    sendTurnJob = null
+                    isProvisionalSession = false
+                    sseJob?.cancel()
+                    sseJob = null
+                    _uiState.update { state ->
+                        state.copy(
+                            messages = state.messages.filter { it.id != userMsgId },
+                            activeSessionId = null,
+                            composerState = ComposerState.IDLE_EMPTY,
+                            agentAnimState = AgentAnimState.IDLE,
+                        )
+                    }
+                    viewModelScope.launch {
+                        _uiEffects.emit(ChatUiEffect.RestoreComposerText(text))
+                    }
+                    return@launch
+                }
                 val attachmentIds = uploadedAttachments.mapNotNull { it.attachmentId }
                 chatRepository.sendTurn(clientSessionId, text, attachmentIds)
                     .onSuccess { _ ->
@@ -446,7 +466,27 @@ class ChatViewModel @Inject constructor(
             startSseCollection(sessionId = clientSessionId, lastEventId = "0")
             sendTurnJob = viewModelScope.launch(dispatcher) {
                 val uploadedAttachments = attachmentManager.uploadPendingAttachments(attachments, contentResolver)
-                if (uploadedAttachments == null) return@launch
+                if (uploadedAttachments == null) {
+                    // uploadPendingAttachments already set composerState=IDLE_READY and showed toast.
+                    // Also clean up the provisional session state.
+                    cancelPendingTimeout()
+                    sendTurnJob = null
+                    isProvisionalSession = false
+                    sseJob?.cancel()
+                    sseJob = null
+                    _uiState.update { state ->
+                        state.copy(
+                            messages = state.messages.filter { it.id != userMsgId },
+                            activeSessionId = null,
+                            composerState = ComposerState.IDLE_EMPTY,
+                            agentAnimState = AgentAnimState.IDLE,
+                        )
+                    }
+                    viewModelScope.launch {
+                        _uiEffects.emit(ChatUiEffect.RestoreComposerText(text))
+                    }
+                    return@launch
+                }
                 sessionRepository.createAgentSession(agentId, text, sessionId = clientSessionId)
                     .onSuccess { _ ->
                         sendTurnJob = null
