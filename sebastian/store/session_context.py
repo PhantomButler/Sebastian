@@ -200,7 +200,11 @@ async def _build_anthropic(
                             }
                         )
             else:
-                # Attachment with no matching pending user context: flush then skip.
+                # Attachment with no matching pending user context: guard then flush then skip.
+                if attachment_store is None and require_attachments:
+                    raise ValueError(
+                        "attachment_store is required for attachment timeline items"
+                    )
                 await _flush_pending_user()
             continue
 

@@ -222,6 +222,50 @@ async def test_multiple_attachments_same_exchange() -> None:
     assert "b.txt" in combined
 
 
+@pytest.mark.asyncio
+async def test_orphan_attachment_raises_when_require_attachments_true() -> None:
+    """Orphan attachment (no matching pending user exchange) must raise when require_attachments=True and store=None."""
+    items = [
+        {
+            "kind": "attachment",
+            "seq": 1,
+            "exchange_id": "exc-orphan",
+            "role": "user",
+            "content": "photo.jpg",
+            "payload": {"attachment_id": "att-1", "kind": "image"},
+        }
+    ]
+    with pytest.raises(ValueError, match="attachment_store is required"):
+        await build_context_messages(
+            items,
+            provider_format="anthropic",
+            attachment_store=None,
+            require_attachments=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_orphan_attachment_skipped_when_require_attachments_false() -> None:
+    """Orphan attachment must be silently skipped when require_attachments=False and store=None."""
+    items = [
+        {
+            "kind": "attachment",
+            "seq": 1,
+            "exchange_id": "exc-orphan",
+            "role": "user",
+            "content": "photo.jpg",
+            "payload": {"attachment_id": "att-1", "kind": "image"},
+        }
+    ]
+    result = await build_context_messages(
+        items,
+        provider_format="anthropic",
+        attachment_store=None,
+        require_attachments=False,
+    )
+    assert result == []
+
+
 async def test_openai_attachment_skipped() -> None:
     """OpenAI format silently skips attachment items."""
     items: list[dict[str, Any]] = [
