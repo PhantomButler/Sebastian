@@ -26,7 +26,7 @@ fun AttachmentSlot(
 
     Box(modifier) {
         IconButton(
-            onClick = { if (enabled) expanded = true },
+            onClick = { expanded = true },
             enabled = enabled,
         ) {
             Icon(Icons.Default.AttachFile, contentDescription = "附件")
