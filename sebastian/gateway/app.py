@@ -110,6 +110,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with db_factory() as _bootstrap_session:
         await bootstrap_slot_registry(_bootstrap_session, DEFAULT_SLOT_REGISTRY)
 
+    from sebastian.store.attachments import AttachmentStore
+
+    attachment_store = AttachmentStore(settings.attachments_dir, db_factory)
+    state.attachment_store = attachment_store
+
     session_store = SessionStore(db_factory=db_factory)
     todo_store = TodoStore(db_factory=db_factory)
 
@@ -327,6 +332,7 @@ def create_app() -> FastAPI:
     from sebastian.gateway.routes import (
         agents,
         approvals,
+        attachments,
         debug,
         llm_accounts,
         memory_components,
@@ -349,6 +355,7 @@ def create_app() -> FastAPI:
 
     app.include_router(turns.router, prefix="/api/v1")
     app.include_router(sessions.router, prefix="/api/v1")
+    app.include_router(attachments.router, prefix="/api/v1")
     app.include_router(approvals.router, prefix="/api/v1")
     app.include_router(stream.router, prefix="/api/v1")
     app.include_router(agents.router, prefix="/api/v1")
