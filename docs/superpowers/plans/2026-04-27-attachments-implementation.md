@@ -489,7 +489,7 @@ Expected: PASS。
 - [ ] **Step 11: Commit**
 
 ```bash
-git add sebastian/gateway/routes/turns.py sebastian/gateway/routes/sessions.py sebastian/store/session_timeline.py sebastian/core/base_agent.py tests/integration/test_gateway_attachments.py
+git add sebastian/gateway/routes/turns.py sebastian/gateway/routes/sessions.py sebastian/store/session_store.py sebastian/store/session_timeline.py sebastian/core/base_agent.py tests/integration/test_gateway_attachments.py
 git commit -m "feat(gateway): turn 请求支持附件 timeline 写入"
 ```
 
@@ -500,6 +500,9 @@ git commit -m "feat(gateway): turn 请求支持附件 timeline 写入"
 - Modify: `sebastian/llm/catalog/loader.py`
 - Modify: `sebastian/llm/registry.py`
 - Modify: `sebastian/store/session_context.py`
+- Modify: `sebastian/store/session_store.py`
+- Modify: `sebastian/core/base_agent.py`
+- Modify: `sebastian/gateway/app.py`
 - Modify: `sebastian/llm/anthropic.py`
 - Create: `tests/unit/store/test_session_context_attachments.py`
 
@@ -543,7 +546,18 @@ hello
 
 - [ ] **Step 7: 实现 `attachment` context 投影**
 
-在 `session_context.py`：
+附件投影需要读取 blob 内容，因此不能继续让 `build_context_messages()` 保持纯同步函数。采用方案 A：
+
+- `build_context_messages()` 改为 `async def`。
+- 新增参数 `attachment_store: AttachmentStore | None = None`。
+- 遇到 `kind="attachment"` 时，必须通过 `attachment_store.get(id)` + `read_text_content(record)` 或 `blob_absolute_path(record)` 读取真实 blob。
+- 如果 timeline 中存在 attachment item 但 `attachment_store is None`，抛明确异常，不静默忽略。
+- `SessionStore.get_context_messages()` 已经是 async，改为 `return await build_context_messages(...)`。
+- `BaseAgent.__init__()` 增加 `attachment_store: AttachmentStore | None = None`，保存为 `self._attachment_store`。
+- `BaseAgent.run_streaming()` 调 `get_context_messages(..., attachment_store=self._attachment_store)`。
+- `gateway/app.py` 初始化 agent instances 时把 `state.attachment_store` 注入 Sebastian 和 sub-agent。
+
+在 `session_context.py` 中实现：
 
 - Anthropic：user message content 从 string 升级为 content block list。
 - 文本文件：追加 `{ "type": "text", "text": fenced_content }`。
@@ -563,7 +577,7 @@ Expected: PASS。
 - [ ] **Step 10: Commit**
 
 ```bash
-git add sebastian/llm/catalog/builtin_providers.json sebastian/llm/catalog/loader.py sebastian/llm/registry.py sebastian/store/session_context.py sebastian/llm/anthropic.py tests/unit/store/test_session_context_attachments.py
+git add sebastian/llm/catalog/builtin_providers.json sebastian/llm/catalog/loader.py sebastian/llm/registry.py sebastian/store/session_context.py sebastian/store/session_store.py sebastian/core/base_agent.py sebastian/gateway/app.py sebastian/llm/anthropic.py tests/unit/store/test_session_context_attachments.py
 git commit -m "feat(llm): 支持附件 provider 能力与上下文投影"
 ```
 
