@@ -261,6 +261,28 @@ class ChatViewModelAttachmentTest {
     // ── Test 6 ─────────────────────────────────────────────────────────────────
 
     @Test
+    fun `sendMessage uses explicit attachments argument`() = vmTest {
+        val explicit = PendingAttachment(
+            localId = UUID.randomUUID().toString(),
+            kind = AttachmentKind.TEXT_FILE,
+            uri = makeUri(),
+            filename = "notes.md",
+            mimeType = "text/markdown",
+            sizeBytes = 12L,
+            uploadState = AttachmentUploadState.Uploaded("att-explicit"),
+        )
+
+        viewModel.sendMessage("", attachments = listOf(explicit))
+        dispatcher.scheduler.advanceTimeBy(200)
+
+        runBlocking {
+            verify(chatRepository).sendTurn(anyOrNull(), any(), org.mockito.kotlin.eq(listOf("att-explicit")))
+        }
+    }
+
+    // ── Test 7 ─────────────────────────────────────────────────────────────────
+
+    @Test
     fun `refreshInputCapabilities loads default resolved capabilities for main chat`() = vmTest {
         whenever(settingsRepository.getDefaultBinding()).thenReturn(
             Result.success(
@@ -292,7 +314,7 @@ class ChatViewModelAttachmentTest {
         assertTrue(viewModel.uiState.value.inputCapabilities.supportsTextFileInput)
     }
 
-    // ── Test 7 ─────────────────────────────────────────────────────────────────
+    // ── Test 8 ─────────────────────────────────────────────────────────────────
 
     @Test
     fun `refreshInputCapabilities loads agent resolved capabilities for sub agent`() = vmTest {

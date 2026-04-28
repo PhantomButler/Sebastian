@@ -357,8 +357,10 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun sendMessage(text: String) {
-        val attachments = _uiState.value.pendingAttachments
+    fun sendMessage(
+        text: String,
+        attachments: List<PendingAttachment> = _uiState.value.pendingAttachments,
+    ) {
         if (text.isBlank() && attachments.isEmpty()) return
         val currentSessionId = _uiState.value.activeSessionId
         val contentResolver = appContext.contentResolver
@@ -457,8 +459,11 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun sendAgentMessage(agentId: String, text: String) {
-        val attachments = _uiState.value.pendingAttachments
+    fun sendAgentMessage(
+        agentId: String,
+        text: String,
+        attachments: List<PendingAttachment> = _uiState.value.pendingAttachments,
+    ) {
         if (text.isBlank() && attachments.isEmpty()) return
         val currentSessionId = _uiState.value.activeSessionId
         val contentResolver = appContext.contentResolver

@@ -379,11 +379,11 @@ fun ChatScreen(
                 Composer(
                     state = chatState.composerState,
                     glassState = glassState,
-                    onSend = { text, _ ->
+                    onSend = { text, attachments ->
                         if (agentId != null) {
-                            chatViewModel.sendAgentMessage(agentId, text)
+                            chatViewModel.sendAgentMessage(agentId, text, attachments)
                         } else {
-                            chatViewModel.sendMessage(text)
+                            chatViewModel.sendMessage(text, attachments)
                         }
                     },
                     onStop = chatViewModel::cancelTurn,
