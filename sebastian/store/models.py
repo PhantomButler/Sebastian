@@ -115,6 +115,8 @@ class LLMCustomModelRecord(Base):
     context_window_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     thinking_capability: Mapped[str | None] = mapped_column(String(20), nullable=True)
     thinking_format: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    supports_image_input: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    supports_text_file_input: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)

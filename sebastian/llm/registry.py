@@ -302,6 +302,8 @@ class LLMProviderRegistry:
             context_window_tokens=record.context_window_tokens,
             thinking_capability=record.thinking_capability,
             thinking_format=record.thinking_format,
+            supports_image_input=record.supports_image_input,
+            supports_text_file_input=record.supports_text_file_input,
         )
 
     # ------------------------------------------------------------------
