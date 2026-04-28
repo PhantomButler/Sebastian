@@ -55,6 +55,16 @@
 | `ui/mobile-android/app/src/test/...` | Modify/Create | TimelineMapper、ChatViewModel 附件状态单测 |
 | README files | Modify | `sebastian/store/README.md`、`sebastian/gateway/README.md`、`ui/mobile-android/README.md`、data/ui/composer README 同步 |
 
+## Async Test Constraints
+
+本计划会把 `build_context_messages()` 改成 async，并新增多处 `AttachmentStore` / `SessionStore` SQLite 测试。所有新增 async DB fixture 必须遵守仓库现有 aiosqlite 清理规则，避免 Linux CI 在 event loop 关闭时挂起：
+
+- 如果测试 fixture 自己创建 `create_async_engine("sqlite+aiosqlite://...")`，`finally` 中必须执行 `await engine.dispose()` 后紧跟 `await asyncio.sleep(0)`。
+- 如果测试用 `asyncio.run()` seed 临时数据库，必须在 `asyncio.run()` 内部 dispose engine 并 `await asyncio.sleep(0)`；若触碰 `sebastian.store.database` 的全局 engine/session factory，run 完后立即重置全局引用。
+- 新增 `AttachmentStore` / `SessionStore` fixture 优先复用仓库已有 DB fixture；只有确实需要独立 engine 时才自建，并按上一条清理。
+- 不要在 async 测试中使用 `asyncio.create_subprocess_exec`。
+- 任何验证「失败时不写 timeline」的测试，都要断言 attachment status 仍是 `uploaded`，避免隐性跨事务半成功。
+
 ## Task 1: 后端 AttachmentRecord 与目录配置
 
 **Files:**
@@ -350,6 +360,7 @@ git commit -m "feat(gateway): 新增附件上传与下载 API"
 - Modify: `sebastian/store/session_store.py`
 - Modify: `sebastian/store/session_timeline.py`
 - Modify: `sebastian/store/attachments.py`
+- Modify: `tests/unit/core/test_base_agent.py`
 - Modify: `tests/integration/test_gateway_attachments.py`
 
 - [ ] **Step 1: 写失败测试：发送 turn 携带附件写入同 exchange**
@@ -391,7 +402,28 @@ body `{ "content": "", "attachment_ids": [] }` 应 400。
 
 同一个 `attachment_id` 成功发送一次后，再次发送，期望 409，且第二次不写 timeline。
 
-- [ ] **Step 7: 扩展 SendTurnRequest**
+- [ ] **Step 7: 写失败测试：Sub-Agent 首条消息支持纯附件**
+
+测试 `POST /api/v1/agents/{agent_type}/sessions`：
+
+- body `{ "content": "", "attachment_ids": ["..."] }` 应 200。
+- body `{ "content": "", "attachment_ids": [] }` 应 400。
+- 成功路径写入的 `user_message` 与 `attachment` 必须属于同一 exchange。
+
+这个测试专门覆盖 `CreateAgentSessionBody.content` 不能继续使用 `Field(min_length=1)`。
+
+- [ ] **Step 8: 写失败测试：atomic helper 失败时整体回滚**
+
+构造 `SessionStore.append_user_turn_with_attachments(...)` 在写 attachment item 或更新 attachment status 时失败的场景，期望：
+
+- 不保留 `user_message` timeline item。
+- 不保留 `attachment` timeline item。
+- attachment status 仍是 `uploaded`。
+- `sessions.next_exchange_index` / `next_item_seq` 不被推进到半成功状态。
+
+这个测试要直接打在 `SessionStore` facade 层，验证 timeline 写入和 attachment status transition 在同一个 transaction 内。
+
+- [ ] **Step 9: 扩展 SendTurnRequest**
 
 `turns.py`：
 
@@ -413,7 +445,7 @@ class CreateAgentSessionBody(BaseModel):
 
 Sub-Agent 首条消息也支持「空文本 + 附件」，统一由共享 helper 做 `content.strip() or attachment_ids` 联合非空校验。
 
-- [ ] **Step 8: 抽出共享 helper**
+- [ ] **Step 10: 抽出共享 helper**
 
 在 `sessions.py` 或新 helper 中实现：
 
@@ -455,7 +487,18 @@ async def append_user_turn_with_attachments(
 
 该方法在一个 SQLAlchemy transaction 内直接操作 `sessions.next_exchange_index`、`sessions.next_item_seq`、`SessionItemRecord` 和 `AttachmentRecord`。`AttachmentStore` 只负责预校验、blob 读取和非 timeline 的 attachment CRUD。
 
-- [ ] **Step 9: 调整 BaseAgent 入口避免重复写 user_message**
+- [ ] **Step 11: 写失败测试：BaseAgent 预写 turn 不重复 user_message**
+
+新增 `BaseAgent` 单元测试或覆盖 `turn` 集成测试，至少验证：
+
+- `persist_user_message=False` 时，不调用 `messages.append({"role": "user", ...})` 追加当前 user message 到内存上下文。
+- `persist_user_message=False` 时，不调用 `allocate_exchange_for_turn()`。
+- `persist_user_message=False` 时，不调用 `SessionStore.append_message(... role="user" ...)`。
+- `_stream_inner(...)` 收到并使用外部传入的 `preallocated_exchange`，assistant/tool 输出仍落在同一 exchange。
+
+同时保留普通文本路径回归测试：默认 `persist_user_message=True` 时，BaseAgent 仍只写入一次 user message，且现有无附件消息行为不变。
+
+- [ ] **Step 12: 调整 BaseAgent 入口避免重复写 user_message**
 
 当前 `BaseAgent.run_streaming(content, session.id)` 会自行写用户消息。实现时需要引入一个最小改造，避免 turn API 预写附件 timeline 后 BaseAgent 再写一条 user_message。
 
@@ -480,16 +523,16 @@ await agent.run_streaming(
 
 若改动过大，替代方案是在 BaseAgent 增加 `run_streaming_from_persisted_user_turn(...)`。不要用事后删除重复消息的补丁方案。
 
-- [ ] **Step 10: 跑集成测试**
+- [ ] **Step 13: 跑集成测试**
 
 Run: `pytest tests/integration/test_gateway_attachments.py -v`
 
 Expected: PASS。
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 14: Commit**
 
 ```bash
-git add sebastian/gateway/routes/turns.py sebastian/gateway/routes/sessions.py sebastian/store/session_store.py sebastian/store/session_timeline.py sebastian/core/base_agent.py tests/integration/test_gateway_attachments.py
+git add sebastian/gateway/routes/turns.py sebastian/gateway/routes/sessions.py sebastian/store/session_store.py sebastian/store/session_timeline.py sebastian/core/base_agent.py tests/unit/core/test_base_agent.py tests/integration/test_gateway_attachments.py
 git commit -m "feat(gateway): turn 请求支持附件 timeline 写入"
 ```
 
@@ -504,6 +547,7 @@ git commit -m "feat(gateway): turn 请求支持附件 timeline 写入"
 - Modify: `sebastian/core/base_agent.py`
 - Modify: `sebastian/gateway/app.py`
 - Modify: `sebastian/llm/anthropic.py`
+- Modify: `tests/unit/store/test_session_context.py`
 - Create: `tests/unit/store/test_session_context_attachments.py`
 
 - [ ] **Step 1: 写失败测试：文本文件投影为边界清晰的 text block**
@@ -529,11 +573,41 @@ hello
 
 当前 resolved provider `supports_image_input=False` 且 attachment kind=image 时，turn helper 返回 HTTP 400 或 context builder 抛明确异常。
 
-- [ ] **Step 5: 增加 catalog 能力字段**
+- [ ] **Step 5: 写失败测试：attachment item 缺少 AttachmentStore 时明确报错**
+
+构造包含 `kind="attachment"` 的 timeline items，调用：
+
+```python
+await build_context_messages(items, provider="anthropic", attachment_store=None)
+```
+
+期望抛明确异常，例如 `ValueError("attachment_store is required for attachment timeline items")`。不能静默忽略 attachment，也不能只投影 filename。
+
+- [ ] **Step 6: 写失败测试：SessionStore.get_context_messages 透传 attachment_store**
+
+使用 fake / test `AttachmentStore`，调用：
+
+```python
+messages = await session_store.get_context_messages(
+    session_id,
+    provider="anthropic",
+    attachment_store=attachment_store,
+)
+```
+
+断言最终 message content 包含文本文件完整内容或图片 base64 block。这个测试用于锁住 `SessionStore.get_context_messages()` 必须 `await build_context_messages(...)` 并传入 `attachment_store`。
+
+- [ ] **Step 7: 更新既有 session_context 测试为 async**
+
+所有直接调用 `build_context_messages()` 的既有测试都要改为 `await build_context_messages(...)`。若测试文件还不是 async，改成 `pytest.mark.asyncio` 或项目内现有 async 测试风格。
+
+注意：这些测试若创建独立 aiosqlite engine，必须遵守本计划上方 `Async Test Constraints` 的 dispose + `await asyncio.sleep(0)` 规则。
+
+- [ ] **Step 8: 增加 catalog 能力字段**
 
 内置视觉模型设 `supports_image_input: true`，文本文件默认 true。非视觉模型 false。Custom model CRUD 需要允许用户配置此字段；若表结构暂不加列，P0 可先在 model spec JSON 层处理内置模型，自定义模型默认为 false。
 
-- [ ] **Step 6: 扩展 registry resolved DTO**
+- [ ] **Step 9: 扩展 registry resolved DTO**
 
 在返回 Android binding/resolved model 时包含：
 
@@ -544,7 +618,7 @@ hello
 }
 ```
 
-- [ ] **Step 7: 实现 `attachment` context 投影**
+- [ ] **Step 10: 实现 `attachment` context 投影**
 
 附件投影需要读取 blob 内容，因此不能继续让 `build_context_messages()` 保持纯同步函数。采用方案 A：
 
@@ -564,20 +638,20 @@ hello
 - 图片：追加 `{ "type": "image", "source": { "type": "base64", "media_type": "...", "data": "..." } }`。
 - OpenAI-compatible：P0 对图片默认拒绝，文本文件作为普通 text。
 
-- [ ] **Step 8: Anthropic provider 透传 image blocks**
+- [ ] **Step 11: Anthropic provider 透传 image blocks**
 
 `anthropic.py` 当前把 messages 原样给 SDK；确认 content block list 已符合 SDK 格式即可。若 SDK 类型检查需要，保持 dict 格式。
 
-- [ ] **Step 9: 跑单元测试**
+- [ ] **Step 12: 跑单元测试**
 
 Run: `pytest tests/unit/store/test_session_context_attachments.py -v`
 
 Expected: PASS。
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
-git add sebastian/llm/catalog/builtin_providers.json sebastian/llm/catalog/loader.py sebastian/llm/registry.py sebastian/store/session_context.py sebastian/store/session_store.py sebastian/core/base_agent.py sebastian/gateway/app.py sebastian/llm/anthropic.py tests/unit/store/test_session_context_attachments.py
+git add sebastian/llm/catalog/builtin_providers.json sebastian/llm/catalog/loader.py sebastian/llm/registry.py sebastian/store/session_context.py sebastian/store/session_store.py sebastian/core/base_agent.py sebastian/gateway/app.py sebastian/llm/anthropic.py tests/unit/store/test_session_context.py tests/unit/store/test_session_context_attachments.py
 git commit -m "feat(llm): 支持附件 provider 能力与上下文投影"
 ```
 
