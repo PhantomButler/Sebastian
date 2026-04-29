@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added
+- 新增 `capture_screenshot_and_send` 工具：Sebastian 可截图当前屏幕并直接发送到对话（仅 Sebastian 主管家可用）
+
+### Fixed
+- Android App：任何工具（不限于 `send_file`）返回图片/文件 artifact 时均渲染为 ImageBlock/FileBlock，修复截图工具发送后消息区不显示图片的问题
+- Gateway 关闭时先等待 watchdog 任务完全取消，再销毁数据库引擎，消除 Linux CI 下偶发的 OperationalError 导致测试超时的竞态条件
+
 ## [0.5.3] - 2026-04-28
 
 ### Added
