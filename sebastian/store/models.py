@@ -24,7 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sebastian.store.database import Base  # noqa: F401
 
 
-class _UTCDateTime(types.TypeDecorator):
+class _UTCDateTime(types.TypeDecorator[datetime]):
     """DateTime column that always returns timezone-aware UTC datetimes.
 
     SQLite stores datetimes as naive strings; this decorator strips tzinfo on

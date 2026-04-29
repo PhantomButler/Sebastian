@@ -284,7 +284,8 @@ def test_screenshot_tool_is_allowed_only_for_sebastian() -> None:
 
     # Verify no sub-agent manifest exposes this tool
     manifest_matches = [
-        p for p in Path("sebastian/agents").glob("*/manifest.toml")
+        p
+        for p in Path("sebastian/agents").glob("*/manifest.toml")
         if "capture_screenshot_and_send" in p.read_text(encoding="utf-8")
     ]
     assert not manifest_matches, f"Tool found in sub-agent manifests: {manifest_matches}"

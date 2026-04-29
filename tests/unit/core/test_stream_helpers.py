@@ -192,9 +192,7 @@ async def test_dispatch_tool_call_publishes_artifact_on_tool_executed() -> None:
     )
 
     executed_events = [
-        (sid, et, data)
-        for (sid, et, data) in published
-        if et == EventType.TOOL_EXECUTED
+        (sid, et, data) for (sid, et, data) in published if et == EventType.TOOL_EXECUTED
     ]
     assert len(executed_events) == 1
     _, _, data = executed_events[0]
