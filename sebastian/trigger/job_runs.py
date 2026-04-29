@@ -5,6 +5,7 @@ from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from ulid import ULID
 
 from sebastian.store.models import ScheduledJobRunRecord
 
@@ -21,8 +22,6 @@ class ScheduledJobRunStore:
         self._db_factory = db_factory
 
     async def start_run(self, job_id: str, started_at: datetime) -> str:
-        from ulid import ULID
-
         run_id = str(ULID())
         async with self._db_factory() as session:
             async with session.begin():
@@ -57,8 +56,6 @@ class ScheduledJobRunStore:
                 record.error = error
 
     async def record_skipped(self, job_id: str, at: datetime, reason: str) -> None:
-        from ulid import ULID
-
         naive_at = _naive(at)
         async with self._db_factory() as session:
             async with session.begin():
@@ -76,13 +73,14 @@ class ScheduledJobRunStore:
 
     async def get_last_success_at(self, job_id: str) -> datetime | None:
         async with self._db_factory() as session:
-            result = await session.execute(
-                select(ScheduledJobRunRecord.finished_at)
-                .where(
-                    ScheduledJobRunRecord.job_id == job_id,
-                    ScheduledJobRunRecord.status == "success",
+            async with session.begin():
+                result = await session.execute(
+                    select(ScheduledJobRunRecord.finished_at)
+                    .where(
+                        ScheduledJobRunRecord.job_id == job_id,
+                        ScheduledJobRunRecord.status == "success",
+                    )
+                    .order_by(ScheduledJobRunRecord.started_at.desc())
+                    .limit(1)
                 )
-                .order_by(ScheduledJobRunRecord.started_at.desc())
-                .limit(1)
-            )
-            return result.scalar_one_or_none()
+                return result.scalar_one_or_none()

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 
 import pytest
 import sqlalchemy
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from sebastian.store.models import ScheduledJobRunRecord
+from sebastian.trigger.job_runs import ScheduledJobRunStore
 
 
 @pytest.fixture
@@ -26,21 +31,11 @@ async def db_factory():
 
 async def test_scheduled_job_runs_table_exists(db_factory):
     async with db_factory() as session:
-        rows = await session.execute(
-            sqlalchemy.text("PRAGMA table_info(scheduled_job_runs)")
-        )
+        rows = await session.execute(sqlalchemy.text("PRAGMA table_info(scheduled_job_runs)"))
         columns = {row[1] for row in rows.fetchall()}
     assert {"id", "job_id", "status", "started_at", "finished_at", "duration_ms", "error"}.issubset(
         columns
     )
-
-
-from datetime import UTC, datetime
-
-from sqlalchemy import select
-
-from sebastian.store.models import ScheduledJobRunRecord
-from sebastian.trigger.job_runs import ScheduledJobRunStore
 
 
 @pytest.fixture
@@ -143,3 +138,10 @@ async def test_get_last_success_at_ignores_running_failed_timeout(run_store):
 async def test_get_last_success_at_returns_none_when_no_history(run_store):
     result = await run_store.get_last_success_at("nonexistent.job")
     assert result is None
+
+
+async def test_finish_run_with_unknown_run_id_does_not_raise(run_store):
+    # Non-existent run_id: finish_run logs a warning and returns silently
+    finished_at = datetime(2024, 1, 1, 12, 0, 5, tzinfo=UTC)
+    await run_store.finish_run("nonexistent-id", "success", finished_at, duration_ms=0)
+    # No exception raised — method is a no-op for unknown IDs
