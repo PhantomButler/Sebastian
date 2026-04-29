@@ -71,6 +71,10 @@ def append_tool_result_block(
     }
     if result.error is not None:
         block["error"] = result.error
+    if isinstance(result.output, dict):
+        artifact = result.output.get("artifact")
+        if isinstance(artifact, dict):
+            block["artifact"] = artifact
     blocks.append(block)
 
 
@@ -217,10 +221,19 @@ async def dispatch_tool_call(
         display = format_tool_display(result)
         record["status"] = "done"
         record["result"] = display
+        event_data: dict[str, Any] = {
+            "tool_id": event.tool_id,
+            "name": event.name,
+            "result_summary": display,
+        }
+        if isinstance(result.output, dict):
+            artifact = result.output.get("artifact")
+            if isinstance(artifact, dict):
+                event_data["artifact"] = artifact
         await publish(
             session_id,
             EventType.TOOL_EXECUTED,
-            {"tool_id": event.tool_id, "name": event.name, "result_summary": display},
+            event_data,
         )
     else:
         record["result"] = result.error or ""
