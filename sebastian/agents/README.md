@@ -75,7 +75,7 @@ allowed_skills = []                        # 允许使用的 skill 列表
 
 | 类别 | 工具 | 声明方式 |
 |------|------|---------|
-| **能力工具**（领域执行） | Read / Write / Edit / Bash / Glob / Grep | 在 `allowed_tools` 里显式列出 |
+| **能力工具**（领域执行） | Read / Write / Edit / Bash / Glob / Grep / todo_read / send_file 等 | 在 `allowed_tools` 里显式列出 |
 | **协议工具**（层级通信） | `ask_parent` 等 | `_loader.py` 自动追加，**无需写入 manifest** |
 
 `allowed_tools = null`（不写此字段）表示不限制，Agent 可用所有工具（含协议工具）。

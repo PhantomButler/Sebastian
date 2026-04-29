@@ -32,7 +32,9 @@ capabilities/
 │   ├── resume_agent/    # 恢复 waiting/idle 子代理执行
 │   ├── stop_agent/      # 暂停运行中的子代理到 idle（可恢复）
 │   ├── spawn_sub_agent/ # Sebastian 创建新的 Sub-Agent session
+│   ├── todo_read/       # Session 级 todo 列表只读查询工具
 │   ├── todo_write/      # Session 级 todo 列表覆盖式写入工具
+│   ├── send_file/       # Agent 向用户发送文件/图片工具
 │   └── write/           # 文件写入工具（含 mtime 保护）
 ├── mcps/                # MCP server 配置目录，每个子目录一个 config.toml，启动时自动连接
 │   ├── __init__.py

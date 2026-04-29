@@ -67,6 +67,8 @@ UI 映射：FAB 显示 = `userAway`（绑意图而非事实 —— 流式中 `at
 | `ThinkingBlock` | `ThinkingCard` |
 | `ToolBlock` | `ToolCallCard` |
 | `SummaryBlock` | `SummaryCard`（折叠卡片，标题"Compressed summary"） |
+| `ImageBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` artifact） |
+| `FileBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` artifact） |
 
 `SummaryCard` 是对话上下文被压缩的视觉标记，表示其之前的内容已被归档压缩；被归档的原始块仍正常显示，不做置灰或隐藏。
 
