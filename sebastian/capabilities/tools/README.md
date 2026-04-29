@@ -34,6 +34,8 @@ tools/
 │   └── __init__.py          # @tool: todo_write
 ├── send_file/               # Agent 向用户发送文件/图片工具（permission_tier: MODEL_DECIDES）
 │   └── __init__.py          # @tool: send_file
+├── screenshot_send/          # Sebastian 截取后端主机屏幕并发送图片（permission_tier: HIGH_RISK，Sebastian-only）
+│   └── __init__.py          # @tool: capture_screenshot_and_send
 ├── write/                   # 文件写入工具，含 mtime 保护（permission_tier: MODEL_DECIDES）
 │   └── __init__.py          # @tool: file_write
 ├── memory_save/             # 显式记忆写入工具，仅在用户明确要求时使用（permission_tier: LOW）
@@ -76,6 +78,7 @@ tools/
 | Todo 列表只读查询工具 | [todo_read/\_\_init\_\_.py](todo_read/__init__.py) |
 | Todo 列表写入工具 | [todo_write/\_\_init\_\_.py](todo_write/__init__.py) |
 | Agent 向用户发送文件/图片工具 | [send_file/\_\_init\_\_.py](send_file/__init__.py) |
+| Sebastian 截图并发送 | [screenshot_send/\_\_init\_\_.py](screenshot_send/__init__.py) |
 | 文件写入工具 | [write/\_\_init\_\_.py](write/__init__.py) |
 | 显式记忆写入工具 | [memory_save/\_\_init\_\_.py](memory_save/__init__.py) |
 | 长期记忆检索工具 | [memory_search/\_\_init\_\_.py](memory_search/__init__.py) |
@@ -121,8 +124,10 @@ return ToolResult(
 
 | 类别 | 工具 | 控制方式 | 说明 |
 |------|------|---------|------|
-| **能力工具** | Read / Write / Edit / Bash / Glob / Grep / todo_write / todo_read / send_file 等 | manifest `allowed_tools` 白名单 | 决定 Agent 的领域执行范围 |
+| **能力工具** | Read / Write / Edit / Bash / Glob / Grep / todo_write / todo_read / send_file / capture_screenshot_and_send 等 | manifest `allowed_tools` 白名单 | 决定 Agent 的领域执行范围 |
 | **协议工具** | ask_parent / resume_agent / stop_agent / spawn_sub_agent / check_sub_agents / inspect_session（sub-agent 自动注入）；delegate_to_agent（Sebastian 手工配置） | 按 Agent 层级角色分配 | 决定 Agent 在层级中的通信与监控方式 |
+
+`capture_screenshot_and_send` 当前只加入 `Sebastian.allowed_tools`，不要加入 sub-agent manifest。
 
 **`manifest.toml` 的 `allowed_tools` 只需声明能力工具。**
 协议工具由 `_loader.py` 根据 Agent 角色自动追加，无需手动填写。
