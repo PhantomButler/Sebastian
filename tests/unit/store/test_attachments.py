@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from PIL import Image
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from sebastian.config import Settings
@@ -1004,3 +1005,111 @@ async def test_cleanup_does_not_double_unlink_shared_blob(
     blob_abs = attachment_store._root_dir / "blobs" / sha[:2] / sha
     blob_unlinks = [p for p in unlink_log if p == blob_abs]
     assert len(blob_unlinks) == 1, f"blob {blob_abs} 被 unlink 了 {len(blob_unlinks)} 次，期望 1 次"
+
+
+async def test_cleanup_unlink_failure_logs_warning_keeps_db_state(
+    attachment_store: AttachmentStore,
+    sqlite_session_factory,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """物理 unlink 抛 OSError 时记 warning，不回滚 DB。"""
+    import logging
+
+    data = b"unlink failure content"
+    sha = _hashlib.sha256(data).hexdigest()
+    blob_abs = attachment_store._root_dir / "blobs" / sha[:2] / sha
+
+    r = await attachment_store.upload_bytes(
+        filename="x.md", content_type="text/markdown", kind="text_file", data=data
+    )
+    async with sqlite_session_factory() as session:
+        rec = await session.get(AttachmentRecord, r.id)
+        rec.created_at = datetime.now(UTC) - timedelta(hours=48)
+        await session.commit()
+
+    # mock：让 blob_abs.unlink raise OSError
+    real_unlink = Path.unlink
+    target_path = blob_abs
+
+    def _failing_unlink(self, *args, **kwargs):
+        if self == target_path:
+            raise OSError("simulated unlink failure")
+        return real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", _failing_unlink)
+
+    with caplog.at_level(logging.WARNING, logger="sebastian.store.attachments"):
+        await attachment_store.cleanup()
+
+    # DB 状态正确：record 已被 delete + commit
+    async with sqlite_session_factory() as session:
+        assert await session.get(AttachmentRecord, r.id) is None
+
+    # warning 被记录
+    assert any("cleanup unlink failed" in m for m in caplog.messages)
+
+
+def test_thumbnail_corrupt_content_returns_none(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """文件名/MIME 声称是 PNG，但内容是任意二进制：Image.open 抛
+    UnidentifiedImageError，外层 except Exception 兜底返回 (None, False)。"""
+    import logging
+
+    data = b"\x00not a real png\x01\x02\x03"  # 任意字节，PIL 无法识别格式
+    sha = _hashlib.sha256(data).hexdigest()
+
+    with caplog.at_level(logging.WARNING, logger="sebastian.store.attachments"):
+        thumb_abs, created = _maybe_generate_thumbnail(tmp_path, sha, data)
+
+    assert thumb_abs is None
+    assert created is False
+    assert any("thumbnail generation skipped" in m for m in caplog.messages)
+    # 没有 thumb 文件
+    thumb_dir = tmp_path / "thumbs"
+    assert not thumb_dir.exists() or not any(thumb_dir.rglob("*"))
+
+
+async def test_cleanup_three_records_same_sha_two_expired_one_active(
+    attachment_store: AttachmentStore, sqlite_session_factory
+) -> None:
+    """三条 record 同 SHA，两条过期一条活跃 → 清理删两条 record，blob 保留。"""
+    data = b"three records same sha content"
+    sha = _hashlib.sha256(data).hexdigest()
+    blob_abs = attachment_store._root_dir / "blobs" / sha[:2] / sha
+
+    # 三条 record，全是同内容
+    r1 = await attachment_store.upload_bytes(
+        filename="a.md", content_type="text/markdown", kind="text_file", data=data
+    )
+    r2 = await attachment_store.upload_bytes(
+        filename="b.md", content_type="text/markdown", kind="text_file", data=data
+    )
+    await attachment_store.upload_bytes(
+        filename="c.md", content_type="text/markdown", kind="text_file", data=data
+    )  # r3 保持活跃
+
+    # r1 r2 标记过期
+    async with sqlite_session_factory() as session:
+        for rid in (r1.id, r2.id):
+            rec = await session.get(AttachmentRecord, rid)
+            rec.created_at = datetime.now(UTC) - timedelta(hours=48)
+        await session.commit()
+
+    deleted = await attachment_store.cleanup()
+    assert deleted >= 2
+
+    # r1 r2 已被 delete，r3 仍在
+    async with sqlite_session_factory() as session:
+        assert await session.get(AttachmentRecord, r1.id) is None
+        assert await session.get(AttachmentRecord, r2.id) is None
+        # r3 假设还存在；用 query count 验证
+        result = await session.execute(
+            select(AttachmentRecord).where(AttachmentRecord.sha256 == sha)
+        )
+        remaining = list(result.scalars().all())
+        assert len(remaining) == 1
+
+    # blob 保留（r3 仍持有引用）
+    assert blob_abs.exists()

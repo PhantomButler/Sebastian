@@ -11,11 +11,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from PIL import (  # noqa: F401  # UnidentifiedImageError used by Task 5
-    Image,
-    ImageOps,
-    UnidentifiedImageError,
-)
+from PIL import Image, ImageOps
 from sqlalchemy import (
     func,
     select,

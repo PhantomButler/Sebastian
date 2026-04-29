@@ -759,3 +759,40 @@ def test_orphaned_attachment_cannot_be_reused_in_new_turn(client) -> None:
     assert resp.status_code == 409, (
         f"Expected 409 for orphaned attachment, got {resp.status_code}: {resp.text}"
     )
+
+
+def test_thumbnail_returns_404_when_thumb_and_blob_both_missing(client) -> None:
+    """thumb 与原 blob 都被删除 → /thumbnail 返回 404。"""
+    from io import BytesIO
+
+    from PIL import Image
+
+    http_client, token = client
+    headers = {"Authorization": f"Bearer {token}"}
+
+    img = Image.new("RGB", (100, 100), color=(50, 50, 50))
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    payload = buf.getvalue()
+
+    resp = http_client.post(
+        "/api/v1/attachments",
+        data={"kind": "image"},
+        files={"file": ("p.jpg", payload, "image/jpeg")},
+        headers=headers,
+    )
+    att_id = resp.json()["attachment_id"]
+    sha = resp.json()["sha256"]
+
+    # 手动删除 thumb 和 blob 文件
+    import sebastian.gateway.state as state
+
+    root = state.attachment_store._root_dir
+    (root / "thumbs" / sha[:2] / f"{sha}.jpg").unlink(missing_ok=True)
+    (root / "blobs" / sha[:2] / sha).unlink(missing_ok=True)
+
+    thumb_resp = http_client.get(
+        f"/api/v1/attachments/{att_id}/thumbnail",
+        headers=headers,
+    )
+    assert thumb_resp.status_code == 404
