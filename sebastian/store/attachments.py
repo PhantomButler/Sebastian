@@ -356,6 +356,23 @@ class AttachmentStore:
             await session.commit()
             return int(result.rowcount)  # type: ignore[attr-defined]
 
+    async def _check_still_referenced_shas(self, shas: set[str]) -> set[str]:
+        """返回 `shas` 中仍被 AttachmentRecord 引用的 SHA。
+
+        cleanup 在 commit DB 删除 record 之后、unlink 物理文件之前调用此方法做
+        二次确认：commit 与 unlink 的窗口内可能有新 upload 命中同 SHA（blob 还在 →
+        跳过写入 → 新 record 入库），此时不能 unlink，否则新 record 悬空。
+        """
+        if not shas:
+            return set()
+        async with self._db_factory() as session:
+            rows = await session.execute(
+                select(AttachmentRecord.sha256)
+                .where(AttachmentRecord.sha256.in_(shas))
+                .group_by(AttachmentRecord.sha256)
+            )
+            return {row[0] for row in rows.all()}
+
     async def cleanup(self, now: datetime | None = None) -> int:
         _now = now or datetime.now(UTC)
         uploaded_cutoff = _now - _UPLOADED_TTL
@@ -407,8 +424,12 @@ class AttachmentStore:
 
             await session.commit()  # ← DB 必须先成功提交
 
-        # commit 后到 unlink 之前，可能有新 upload 命中同 SHA（Task 10 处理二次确认）
-        for _sha, p in pending_unlink:
+        shas_to_check = {sha for sha, _ in pending_unlink}
+        still_referenced = await self._check_still_referenced_shas(shas_to_check)
+
+        for sha, p in pending_unlink:
+            if sha in still_referenced:
+                continue  # 新 upload 在窗口内入库，保留物理文件
             try:
                 p.unlink(missing_ok=True)
             except OSError as exc:

@@ -910,3 +910,57 @@ async def test_cleanup_db_failure_keeps_files(
 
     # blob 必须保留
     assert blob_abs.exists()
+
+
+async def test_cleanup_skips_unlink_when_confirm_finds_references(
+    attachment_store: AttachmentStore,
+    sqlite_session_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """模拟 commit 与 unlink 之间出现新 upload：把 _check_still_referenced_shas
+    monkeypatch 成"全部仍有引用"，验证 unlink 被跳过、blob 保留。"""
+    data = b"two-step confirm content"
+    sha = _hashlib.sha256(data).hexdigest()
+    blob_abs = attachment_store._root_dir / "blobs" / sha[:2] / sha
+
+    r = await attachment_store.upload_bytes(
+        filename="x.md", content_type="text/markdown", kind="text_file", data=data
+    )
+    async with sqlite_session_factory() as session:
+        rec = await session.get(AttachmentRecord, r.id)
+        rec.created_at = datetime.now(UTC) - timedelta(hours=48)
+        await session.commit()
+
+    async def _fake_check(_self, shas):
+        # 模拟二次确认时，所有 SHA 都仍有引用（被并发 upload 占用）
+        return set(shas)
+
+    monkeypatch.setattr(
+        AttachmentStore,
+        "_check_still_referenced_shas",
+        _fake_check,
+    )
+
+    await attachment_store.cleanup()
+    assert blob_abs.exists()
+
+
+async def test_cleanup_unlinks_when_confirm_returns_empty(
+    attachment_store: AttachmentStore, sqlite_session_factory
+) -> None:
+    """二次确认返回空集合（确实无并发引用）→ blob 被 unlink。
+    顺带覆盖 _check_still_referenced_shas 默认实现的 happy path。"""
+    data = b"safe to delete content"
+    sha = _hashlib.sha256(data).hexdigest()
+    blob_abs = attachment_store._root_dir / "blobs" / sha[:2] / sha
+
+    r = await attachment_store.upload_bytes(
+        filename="x.md", content_type="text/markdown", kind="text_file", data=data
+    )
+    async with sqlite_session_factory() as session:
+        rec = await session.get(AttachmentRecord, r.id)
+        rec.created_at = datetime.now(UTC) - timedelta(hours=48)
+        await session.commit()
+
+    await attachment_store.cleanup()
+    assert not blob_abs.exists()
