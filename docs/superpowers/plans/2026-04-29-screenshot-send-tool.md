@@ -233,6 +233,30 @@ def test_linux_wayland_and_x11_prefers_wayland(tmp_path: Path) -> None:
     )
 
     assert command == ["/usr/bin/grim", str(output)]
+
+
+def test_linux_headless_raises_error(tmp_path: Path) -> None:
+    from sebastian.capabilities.tools.screenshot_send import _select_capture_command
+
+    with pytest.raises(RuntimeError, match="DISPLAY/WAYLAND_DISPLAY is missing"):
+        _select_capture_command(
+            system="Linux",
+            env={},
+            which=lambda name: None,
+            output_path=tmp_path / "shot.png",
+        )
+
+
+def test_linux_missing_backends_raises_error(tmp_path: Path) -> None:
+    from sebastian.capabilities.tools.screenshot_send import _select_capture_command
+
+    with pytest.raises(RuntimeError, match="No supported Linux screenshot backend found"):
+        _select_capture_command(
+            system="Linux",
+            env={"DISPLAY": ":0"},
+            which=lambda name: None,
+            output_path=tmp_path / "shot.png",
+        )
 ```
 
 - [ ] **Step 2: Run the tests and confirm they fail**
@@ -323,7 +347,7 @@ Run:
 pytest tests/unit/capabilities/test_screenshot_send_tool.py -q
 ```
 
-Expected: the five command-selection tests pass.
+Expected: the command-selection and deterministic-error tests pass.
 
 - [ ] **Step 5: Commit**
 
@@ -500,7 +524,11 @@ async def test_capture_screenshot_and_send_uploads_then_deletes_temp_file(
     from sebastian.capabilities.tools import screenshot_send
     from sebastian.core.types import ToolResult
 
-    monkeypatch.setattr(screenshot_send.settings, "sebastian_data_dir", str(tmp_path / "sebastian"))
+    monkeypatch.setattr(
+        screenshot_send,
+        "_screenshot_tmp_dir",
+        lambda: tmp_path / "sebastian" / "data" / "tmp" / "screenshots",
+    )
     sent_paths: list[Path] = []
 
     async def fake_send_file_path(file_path: str, display_name: str | None = None) -> ToolResult:
@@ -537,7 +565,11 @@ async def test_capture_screenshot_and_send_deletes_temp_file_after_send_failure(
     from sebastian.capabilities.tools import screenshot_send
     from sebastian.core.types import ToolResult
 
-    monkeypatch.setattr(screenshot_send.settings, "sebastian_data_dir", str(tmp_path / "sebastian"))
+    monkeypatch.setattr(
+        screenshot_send,
+        "_screenshot_tmp_dir",
+        lambda: tmp_path / "sebastian" / "data" / "tmp" / "screenshots",
+    )
     temp_paths: list[Path] = []
 
     async def fake_send_file_path(file_path: str, display_name: str | None = None) -> ToolResult:
@@ -564,8 +596,12 @@ async def test_capture_screenshot_and_send_deletes_temp_file_after_send_failure(
 
 
 def test_display_name_without_suffix_becomes_png() -> None:
+    import re
+
     from sebastian.capabilities.tools.screenshot_send import _resolve_screenshot_filename
 
+    default_name = _resolve_screenshot_filename(None)
+    assert re.fullmatch(r"screenshot-\d{8}-\d{6}\.png", default_name)
     assert _resolve_screenshot_filename("screen").endswith(".png")
     assert _resolve_screenshot_filename("screen.png") == "screen.png"
 ```
