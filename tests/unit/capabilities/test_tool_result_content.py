@@ -93,6 +93,44 @@ class TestToolResultContent:
         r = _make_result(output=output)
         assert _tool_result_content(r) == '{"stdout": "hello", "returncode": 0}'
 
+    def test_text_file_artifact_uses_lightweight_content(self) -> None:
+        output = {
+            "artifact": {
+                "kind": "text_file",
+                "attachment_id": "att-1",
+                "filename": "test.txt",
+                "mime_type": "text/plain",
+                "size_bytes": 25,
+                "download_url": "/api/v1/attachments/att-1",
+                "text_excerpt": "private file content",
+            }
+        }
+        content = _tool_result_content(_make_result(output=output))
+        assert content == "已向用户发送文件 test.txt"
+        assert "artifact" not in content
+        assert "attachment_id" not in content
+        assert "download_url" not in content
+        assert "text_excerpt" not in content
+        assert "private file content" not in content
+
+    def test_image_artifact_uses_lightweight_content(self) -> None:
+        output = {
+            "artifact": {
+                "kind": "image",
+                "attachment_id": "att-2",
+                "filename": "photo.jpg",
+                "mime_type": "image/jpeg",
+                "size_bytes": 1024,
+                "download_url": "/api/v1/attachments/att-2",
+                "thumbnail_url": "/api/v1/attachments/att-2/thumbnail",
+            }
+        }
+        content = _tool_result_content(_make_result(output=output))
+        assert content == "已向用户发送图片 photo.jpg"
+        assert "artifact" not in content
+        assert "attachment_id" not in content
+        assert "download_url" not in content
+
     def test_nonempty_dict_output_preserves_chinese(self) -> None:
         output = {"msg": "你好"}
         r = _make_result(output=output)

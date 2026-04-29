@@ -113,7 +113,7 @@ return ToolResult(
 )
 ```
 
-默认情况下，给模型的 `tool_result` 由完整 `output` 生成；因此工具应避免把不该进入上下文的内容放进普通 `output`。带 `artifact` 的工具结果是例外窄通道：`artifact` 只保留在 timeline payload / SSE 中，LLM-facing `model_content` 必须使用轻量事实文本（通常来自 `display`）。
+默认情况下，给模型的 `tool_result` 由完整 `output` 生成；因此工具应避免把不该进入上下文的内容放进普通 `output`。带 `artifact` 的工具结果是例外窄通道：`artifact` 只保留在 timeline payload / SSE 中，实时回灌给 LLM 的 tool result 与历史 `model_content` 都必须使用轻量事实文本（通常来自 `display`）。`send_file` 只负责发送文件，不通过 tool result 把文本文件内容或预览回传给模型。
 
 ## 工具分类：能力工具 vs 协议工具
 

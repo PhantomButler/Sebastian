@@ -45,12 +45,24 @@ def _tool_result_content(result: ToolResult) -> str:
     if _is_empty_output(result.output):
         return "<empty output>"
     output = result.output
+    if isinstance(output, dict):
+        artifact = output.get("artifact")
+        if isinstance(artifact, dict):
+            return _artifact_tool_result_content(artifact)
     if isinstance(output, str):
         return output
     try:
         return json.dumps(output, ensure_ascii=False, default=str)
     except (TypeError, ValueError):
         return str(output)
+
+
+def _artifact_tool_result_content(artifact: dict[str, Any]) -> str:
+    label = "图片" if artifact.get("kind") == "image" else "文件"
+    filename = artifact.get("filename")
+    if isinstance(filename, str) and filename:
+        return f"已向用户发送{label} {filename}"
+    return f"已向用户发送{label}"
 
 
 def _validate_injected_tool_result(

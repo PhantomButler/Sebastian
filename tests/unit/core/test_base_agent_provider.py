@@ -445,6 +445,77 @@ async def test_tool_result_model_content_uses_llm_facing_string() -> None:
 
 
 @pytest.mark.asyncio
+async def test_send_file_artifact_realtime_tool_result_does_not_leak_to_provider() -> None:
+    """AgentLoop 实时回灌给 provider 的 tool_result 也必须走 artifact 窄通道。"""
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.store.session_store import SessionStore
+
+    provider = MockLLMProvider(
+        [
+            ToolCallBlockStart(block_id="b0_0", tool_id="toolu_file", name="send_file"),
+            ToolCallReady(
+                block_id="b0_0",
+                tool_id="toolu_file",
+                name="send_file",
+                inputs={"file_path": "test.txt"},
+            ),
+            ProviderCallEnd(stop_reason="tool_use"),
+        ],
+        [
+            TextBlockStart(block_id="b1_0"),
+            TextDelta(block_id="b1_0", delta="done"),
+            TextBlockStop(block_id="b1_0", text="done"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ],
+    )
+
+    class TestAgent(BaseAgent):
+        name = "test"
+        system_prompt = "You are test."
+
+    session_store = MagicMock(spec=SessionStore)
+    session_store.get_session_for_agent_type = AsyncMock(return_value=MagicMock())
+    session_store.update_activity = AsyncMock()
+    session_store.get_messages = AsyncMock(return_value=[])
+    session_store.append_message = AsyncMock()
+
+    tool_result = MagicMock()
+    tool_result.ok = True
+    tool_result.output = {
+        "artifact": {
+            "kind": "text_file",
+            "attachment_id": "att-private",
+            "filename": "test.txt",
+            "mime_type": "text/plain",
+            "size_bytes": 25,
+            "download_url": "/api/v1/attachments/att-private",
+            "text_excerpt": "private file content",
+        }
+    }
+    tool_result.display = "已向用户发送文件 test.txt"
+    tool_result.empty_hint = None
+    tool_result.error = None
+
+    gate = MagicMock()
+    gate.call = AsyncMock(return_value=tool_result)
+    gate.get_tool_specs = MagicMock(return_value=[])
+    gate.get_skill_specs = MagicMock(return_value=[])
+
+    agent = TestAgent(gate=gate, session_store=session_store, provider=provider)
+    await agent.run("send file", session_id="sess_send_file_realtime")
+
+    second_messages = provider.last_messages
+    tool_result_message = second_messages[-1]
+    content = tool_result_message["content"][0]["content"]
+    assert content == "已向用户发送文件 test.txt"
+    assert "artifact" not in content
+    assert "attachment_id" not in content
+    assert "download_url" not in content
+    assert "text_excerpt" not in content
+    assert "private file content" not in content
+
+
+@pytest.mark.asyncio
 async def test_tool_dispatch_exception_persists_failed_tool_result() -> None:
     """工具抛异常时，DB flush 中也必须有匹配的失败 tool_result。"""
     from sebastian.core.base_agent import BaseAgent

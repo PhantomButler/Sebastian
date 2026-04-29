@@ -10,6 +10,7 @@
 chat/
 ├── AgentPill.kt              # 顶部 agent 名称胶囊（灵动岛展开/收起 + THINKING/ACTIVE 动画）
 ├── AgentPillAnimations.kt    # 4 光团 OrbsAnimation + Jarvis HUD 动画 Canvas 实现
+├── AttachmentBlocks.kt       # 图片/文件附件卡片（用户上传与 Agent send_file artifact 共用）
 ├── ChatScreen.kt             # 主对话 Screen（三栏脚手架 + GlassSurface Composer）
 ├── CollapsibleContent.kt     # 工具调用展开区的二次折叠容器（≤5行直展，>5行折叠+最多30行）
 ├── MessageList.kt            # 消息列表（LazyColumn + 滚动跟随逻辑）
@@ -71,6 +72,14 @@ UI 映射：FAB 显示 = `userAway`（绑意图而非事实 —— 流式中 `at
 | `FileBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` artifact） |
 
 `SummaryCard` 是对话上下文被压缩的视觉标记，表示其之前的内容已被归档压缩；被归档的原始块仍正常显示，不做置灰或隐藏。
+
+### `AttachmentBlocks`
+
+用户上传附件和 Agent `send_file` artifact 共用的附件渲染组件：
+
+- `ImageAttachmentBlock` 使用固定预览尺寸和 `ContentScale.Fit`，保证图片完整显示、不裁切；点击进入全屏查看原图。
+- `FileAttachmentBlock` 只显示文件图标、文件名和大小，不渲染文本 excerpt；后续保存到本地或系统打开能力应在此组件上扩展交互入口。
+- 用户消息和 assistant 消息通过调用侧传入不同布局约束：用户侧保持消息气泡下方的当前视觉密度，assistant 侧使用紧凑宽度，避免附件卡片满宽铺开。
 
 ### `ThinkingCard`
 

@@ -160,7 +160,7 @@ async def test_send_file_uploads_text_file_and_returns_artifact(
     assert artifact["kind"] == "text_file"
     assert artifact["filename"] == "notes.md"
     assert artifact["download_url"].startswith("/api/v1/attachments/")
-    assert artifact["text_excerpt"] == "# hello"
+    assert "text_excerpt" not in artifact
     assert "thumbnail_url" not in artifact
     assert result.display == "已向用户发送文件 notes.md"
 

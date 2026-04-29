@@ -181,7 +181,6 @@ async def send_file(file_path: str, display_name: str | None = None) -> ToolResu
             "mime_type": mime_type,
             "size_bytes": uploaded.size_bytes,
             "download_url": download_url,
-            "text_excerpt": uploaded.text_excerpt,
         }
         display_text = f"已向用户发送文件 {filename}"
 

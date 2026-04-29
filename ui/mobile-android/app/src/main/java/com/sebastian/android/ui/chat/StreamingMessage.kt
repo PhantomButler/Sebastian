@@ -190,11 +190,12 @@ private fun AssistantMessageBlocks(
                     )
                     is ContentBlock.ImageBlock -> ImageAttachmentBlock(
                         block = block,
-                        modifier = Modifier.fillMaxWidth().alpha(alpha),
+                        modifier = Modifier.alpha(alpha),
                     )
                     is ContentBlock.FileBlock -> FileAttachmentBlock(
                         block = block,
-                        modifier = Modifier.fillMaxWidth().alpha(alpha),
+                        modifier = Modifier.alpha(alpha),
+                        maxWidth = 320.dp,
                     )
                 }
                 Spacer(Modifier.height(8.dp))

@@ -9,10 +9,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -29,9 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -45,6 +45,8 @@ import com.sebastian.android.data.model.ContentBlock
 fun ImageAttachmentBlock(
     block: ContentBlock.ImageBlock,
     modifier: Modifier = Modifier,
+    previewWidth: Dp = 160.dp,
+    previewHeight: Dp = 120.dp,
 ) {
     var showFullscreen by remember { mutableStateOf(false) }
     val imageUrl = block.thumbnailUrl ?: block.downloadUrl
@@ -53,17 +55,21 @@ fun ImageAttachmentBlock(
     SubcomposeAsyncImage(
         model = imageUrl,
         contentDescription = block.filename,
-        contentScale = ContentScale.Crop,
+        contentScale = ContentScale.Fit,
         modifier = modifier
-            .size(width = 160.dp, height = 120.dp)
+            .size(width = previewWidth, height = previewHeight)
             .clip(shape)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = shape,
+            )
             .clickable { showFullscreen = true },
     ) {
         when (painter.state) {
             is AsyncImagePainter.State.Loading -> {
                 Box(
                     modifier = Modifier
-                        .size(width = 160.dp, height = 120.dp)
+                        .size(width = previewWidth, height = previewHeight)
                         .background(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = shape,
@@ -73,7 +79,7 @@ fun ImageAttachmentBlock(
             is AsyncImagePainter.State.Error -> {
                 Box(
                     modifier = Modifier
-                        .size(width = 160.dp, height = 120.dp)
+                        .size(width = previewWidth, height = previewHeight)
                         .background(
                             color = MaterialTheme.colorScheme.errorContainer,
                             shape = shape,
@@ -121,13 +127,15 @@ fun ImageAttachmentBlock(
 fun FileAttachmentBlock(
     block: ContentBlock.FileBlock,
     modifier: Modifier = Modifier,
+    maxWidth: Dp? = null,
 ) {
     val shape = RoundedCornerShape(12.dp)
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val widthModifier = maxWidth?.let { Modifier.widthIn(max = it) } ?: Modifier.fillMaxWidth()
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
+            .then(widthModifier)
             .clip(shape)
             .background(
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -161,26 +169,6 @@ fun FileAttachmentBlock(
                     color = mutedColor,
                 )
             }
-        }
-
-        if (block.textExcerpt != null) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = block.textExcerpt,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                ),
-                color = mutedColor.copy(alpha = 0.8f),
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(6.dp),
-                    )
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
         }
     }
 }

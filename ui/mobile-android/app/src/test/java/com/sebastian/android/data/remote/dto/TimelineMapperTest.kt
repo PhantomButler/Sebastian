@@ -253,6 +253,32 @@ class TimelineMapperTest {
     }
 
     @Test
+    fun `text_file attachment without excerpt still produces FileBlock`() {
+        val items = listOf(
+            item(
+                seq = 1, kind = "user_message", content = "check this",
+                exchangeId = "exch-2b",
+            ),
+            item(
+                seq = 2, kind = "attachment", content = "notes.md",
+                exchangeId = "exch-2b",
+                payload = mapOf(
+                    "attachment_id" to "att-no-excerpt",
+                    "kind" to "text_file",
+                    "mime_type" to "text/markdown",
+                    "size_bytes" to 500.0,
+                ),
+            ),
+        )
+        val messages = items.toMessagesFromTimeline()
+        assertEquals(1, messages.size)
+        val fileBlocks = messages[0].blocks.filterIsInstance<ContentBlock.FileBlock>()
+        assertEquals(1, fileBlocks.size)
+        assertEquals("notes.md", fileBlocks[0].filename)
+        assertEquals(null, fileBlocks[0].textExcerpt)
+    }
+
+    @Test
     fun `user_message without attachment emits message with no blocks`() {
         val items = listOf(
             item(seq = 1, kind = "user_message", content = "hi"),
@@ -380,7 +406,6 @@ class TimelineMapperTest {
                         "mime_type" to "text/plain",
                         "size_bytes" to 512.0,
                         "download_url" to "/api/v1/attachments/att-2",
-                        "text_excerpt" to "first line",
                     ),
                 ),
             ),
@@ -393,7 +418,7 @@ class TimelineMapperTest {
         assertEquals("http://server/api/v1/attachments/att-2", file.downloadUrl)
         assertEquals("notes.txt", file.filename)
         assertEquals(512L, file.sizeBytes)
-        assertEquals("first line", file.textExcerpt)
+        assertEquals(null, file.textExcerpt)
     }
 
     @Test

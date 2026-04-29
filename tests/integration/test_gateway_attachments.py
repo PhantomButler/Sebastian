@@ -328,7 +328,6 @@ def test_send_file_tool_result_artifact_hydrates_without_model_content_leak(clie
         "mime_type": "text/markdown",
         "size_bytes": 20,
         "download_url": "/api/v1/attachments/att-agent-1",
-        "text_excerpt": "# private excerpt",
     }
     blocks = [
         {
@@ -391,9 +390,10 @@ def test_send_file_tool_result_artifact_hydrates_without_model_content_leak(clie
     result_item = result_items[0]
     payload = result_item["payload"]
     assert payload["artifact"]["attachment_id"] == "att-agent-1"
-    assert payload["artifact"]["text_excerpt"] == "# private excerpt"
+    assert "text_excerpt" not in payload["artifact"]
     assert result_item["content"] == "已向用户发送文件 notes.md"
     assert "attachment_id" not in result_item["content"]
+    assert "text_excerpt" not in result_item["content"]
     assert "text_excerpt" not in payload
     assert "model_content" not in payload
 

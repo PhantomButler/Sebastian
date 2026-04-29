@@ -49,6 +49,7 @@ CREATED → PLANNING → RUNNING → COMPLETED
 | Task 状态流转规则 | [task_manager.py](task_manager.py) 的 `_VALID_TRANSITIONS` |
 | LLM 调用参数 / 最大迭代次数 | [agent_loop.py](agent_loop.py) 的 `MAX_ITERATIONS` |
 | Anthropic / OpenAI 消息格式适配 | [agent_loop.py](agent_loop.py)，由 `provider.message_format` 自动分支 |
+| 工具结果回灌给 LLM 的内容 | [agent_loop.py](agent_loop.py) 的 `_tool_result_content`；`artifact` 工具结果只能回灌轻量事实文本 |
 | 多轮 thinking signature 回填逻辑 | [agent_loop.py](agent_loop.py) 处理 `ThinkingBlockStop` 的分支 |
 | BaseAgent 默认行为（system_prompt、run_streaming、thinking_effort 参数） | [base_agent.py](base_agent.py) |
 | 每轮 system prompt 的记忆上下文注入（`_resident_memory_section` 注入常驻快照、`_memory_section` 注入动态检索；注入顺序：base → resident → dynamic → todos） | [base_agent.py](base_agent.py) |
