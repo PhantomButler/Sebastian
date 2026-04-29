@@ -351,3 +351,25 @@ async def test_send_file_attachment_store_unavailable(
     assert result.ok is False
     assert "unavailable" in result.error.lower()
     assert "Do not retry automatically" in result.error
+
+
+@pytest.mark.asyncio
+async def test_send_file_path_helper_uploads_image_and_returns_artifact(
+    patched_state, set_ctx, tmp_path: Path
+) -> None:
+    set_ctx("s1", "sebastian")
+
+    file_path = tmp_path / "photo.png"
+    file_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 10)
+
+    from sebastian.capabilities.tools.send_file import send_file_path
+
+    result = await send_file_path(str(file_path), display_name="screen")
+
+    assert result.ok is True
+    artifact = result.output["artifact"]
+    assert artifact["kind"] == "image"
+    assert artifact["filename"] == "screen.png"
+    assert artifact["mime_type"] == "image/png"
+    assert "thumbnail_url" in artifact
+    assert result.display == "已向用户发送图片 screen.png"

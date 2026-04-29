@@ -51,17 +51,7 @@ def _detect_kind(path: Path) -> tuple[str, str] | None:
     return None
 
 
-@tool(
-    name="send_file",
-    description=(
-        "Send a file from the server filesystem to the user in this conversation. "
-        "Supported types: images (jpg/jpeg/png/webp/gif) and text files (txt/md/csv/json/log). "
-        "The file will appear in the chat for the user to view or download. "
-        "Use display_name to override the filename shown to the user."
-    ),
-    permission_tier=PermissionTier.MODEL_DECIDES,
-)
-async def send_file(file_path: str, display_name: str | None = None) -> ToolResult:
+async def send_file_path(file_path: str, display_name: str | None = None) -> ToolResult:
     ctx = get_tool_context()
     if ctx is None or not ctx.session_id:
         return ToolResult(
@@ -189,3 +179,17 @@ async def send_file(file_path: str, display_name: str | None = None) -> ToolResu
         display=display_text,
         output={"artifact": artifact},
     )
+
+
+@tool(
+    name="send_file",
+    description=(
+        "Send a file from the server filesystem to the user in this conversation. "
+        "Supported types: images (jpg/jpeg/png/webp/gif) and text files (txt/md/csv/json/log). "
+        "The file will appear in the chat for the user to view or download. "
+        "Use display_name to override the filename shown to the user."
+    ),
+    permission_tier=PermissionTier.MODEL_DECIDES,
+)
+async def send_file(file_path: str, display_name: str | None = None) -> ToolResult:
+    return await send_file_path(file_path, display_name)
