@@ -18,9 +18,26 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy import types
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sebastian.store.database import Base  # noqa: F401
+
+
+class _UTCDateTime(types.TypeDecorator):
+    """DateTime column that always returns timezone-aware UTC datetimes.
+
+    SQLite stores datetimes as naive strings; this decorator re-attaches UTC
+    on load so callers always receive tz-aware values.
+    """
+
+    impl = types.DateTime
+    cache_ok = True
+
+    def process_result_value(self, value: datetime | None, dialect: Any) -> datetime | None:
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 
 class EventRecord(Base):
@@ -410,8 +427,8 @@ class ScheduledJobRunRecord(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     job_id: Mapped[str] = mapped_column(String(100), index=True)
     status: Mapped[str] = mapped_column(String(20), index=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime, index=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(_UTCDateTime, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(_UTCDateTime, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
