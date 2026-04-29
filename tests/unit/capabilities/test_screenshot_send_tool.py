@@ -160,3 +160,92 @@ async def test_capture_command_nonzero_exit_is_failure(tmp_path: Path) -> None:
     assert result.ok is False
     assert "permission denied" in result.error
     assert "Do not retry automatically" in result.error
+
+
+@pytest.mark.asyncio
+async def test_capture_screenshot_and_send_uploads_then_deletes_temp_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sebastian.capabilities.tools import screenshot_send
+    from sebastian.core.types import ToolResult
+
+    monkeypatch.setattr(
+        screenshot_send,
+        "_screenshot_tmp_dir",
+        lambda: tmp_path / "sebastian" / "data" / "tmp" / "screenshots",
+    )
+    sent_paths: list[Path] = []
+
+    async def fake_send_file_path(file_path: str, display_name: str | None = None) -> ToolResult:
+        path = Path(file_path)
+        assert path.exists()
+        sent_paths.append(path)
+        assert display_name is not None
+        return ToolResult(ok=True, output={"artifact": {"kind": "image", "filename": display_name}})
+
+    async def fake_run_capture(command: list[str], output_path: Path, **kwargs) -> ToolResult | None:
+        output_path.write_bytes(b"png")
+        return None
+
+    monkeypatch.setattr(screenshot_send, "send_file_path", fake_send_file_path)
+    monkeypatch.setattr(screenshot_send, "_run_capture_command", fake_run_capture)
+    monkeypatch.setattr(
+        screenshot_send,
+        "_select_capture_command",
+        lambda **kwargs: ["capture", str(kwargs["output_path"])],
+    )
+
+    result = await screenshot_send.capture_screenshot_and_send(display_name="screen")
+
+    assert result.ok is True
+    assert sent_paths
+    assert sent_paths[0].name == "screen.png"
+    assert sent_paths[0].exists() is False
+
+
+@pytest.mark.asyncio
+async def test_capture_screenshot_and_send_deletes_temp_file_after_send_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sebastian.capabilities.tools import screenshot_send
+    from sebastian.core.types import ToolResult
+
+    monkeypatch.setattr(
+        screenshot_send,
+        "_screenshot_tmp_dir",
+        lambda: tmp_path / "sebastian" / "data" / "tmp" / "screenshots",
+    )
+    temp_paths: list[Path] = []
+
+    async def fake_send_file_path(file_path: str, display_name: str | None = None) -> ToolResult:
+        temp_paths.append(Path(file_path))
+        return ToolResult(ok=False, error="send failed. Do not retry automatically; tell the user.")
+
+    async def fake_run_capture(command: list[str], output_path: Path, **kwargs) -> ToolResult | None:
+        output_path.write_bytes(b"png")
+        return None
+
+    monkeypatch.setattr(screenshot_send, "send_file_path", fake_send_file_path)
+    monkeypatch.setattr(screenshot_send, "_run_capture_command", fake_run_capture)
+    monkeypatch.setattr(
+        screenshot_send,
+        "_select_capture_command",
+        lambda **kwargs: ["capture", str(kwargs["output_path"])],
+    )
+
+    result = await screenshot_send.capture_screenshot_and_send()
+
+    assert result.ok is False
+    assert temp_paths
+    assert temp_paths[0].exists() is False
+
+
+def test_display_name_without_suffix_becomes_png() -> None:
+    import re
+
+    from sebastian.capabilities.tools.screenshot_send import _resolve_screenshot_filename
+
+    default_name = _resolve_screenshot_filename(None)
+    assert re.fullmatch(r"screenshot-\d{8}-\d{6}\.png", default_name)
+    assert _resolve_screenshot_filename("screen").endswith(".png")
+    assert _resolve_screenshot_filename("screen.png") == "screen.png"

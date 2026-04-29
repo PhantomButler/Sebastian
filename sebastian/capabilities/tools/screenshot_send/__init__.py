@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import platform
 import shutil
 import subprocess
+import time
 from collections.abc import Callable, Mapping
+from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
 
+from sebastian.capabilities.tools.send_file import send_file_path
+from sebastian.config import settings
+from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
+from sebastian.permissions.types import PermissionTier
+
+logger = logging.getLogger(__name__)
+_TEMP_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
 DESCRIPTION = (
@@ -107,3 +118,68 @@ async def _run_capture_command(
         )
 
     return None
+
+
+def _resolve_screenshot_filename(display_name: str | None = None) -> str:
+    if display_name is None:
+        return datetime.now().strftime("screenshot-%Y%m%d-%H%M%S.png")
+    path = Path(display_name)
+    if path.suffix:
+        return display_name
+    return f"{display_name}.png"
+
+
+def _screenshot_tmp_dir() -> Path:
+    return settings.user_data_dir / "tmp" / "screenshots"
+
+
+def _cleanup_old_temp_files(directory: Path, *, now: float | None = None) -> None:
+    current = time.time() if now is None else now
+    if not directory.exists():
+        return
+    for path in directory.glob("*.png"):
+        with suppress(OSError):
+            if current - path.stat().st_mtime > _TEMP_MAX_AGE_SECONDS:
+                path.unlink()
+
+
+@tool(
+    name="capture_screenshot_and_send",
+    description=DESCRIPTION,
+    permission_tier=PermissionTier.HIGH_RISK,
+)
+async def capture_screenshot_and_send(display_name: str | None = None) -> ToolResult:
+    filename = _resolve_screenshot_filename(display_name)
+    directory = _screenshot_tmp_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    _cleanup_old_temp_files(directory)
+    output_path = directory / filename
+
+    try:
+        command = _select_capture_command(
+            system=platform.system(),
+            env=os.environ,
+            which=shutil.which,
+            output_path=output_path,
+        )
+    except RuntimeError as exc:
+        return ToolResult(ok=False, error=str(exc))
+
+    try:
+        capture_error = await _run_capture_command(command, output_path)
+        if capture_error is not None:
+            return capture_error
+
+        result = await send_file_path(str(output_path), display_name=filename)
+        if not result.ok:
+            return ToolResult(
+                ok=False,
+                error=(
+                    f"Screenshot was captured but could not be sent: {result.error}. "
+                    "Do not retry automatically; tell the user the screenshot could not be attached."
+                ),
+            )
+        return result
+    finally:
+        with suppress(OSError):
+            output_path.unlink()
