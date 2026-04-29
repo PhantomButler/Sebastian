@@ -92,6 +92,19 @@ log = EventLog(db_session)
 await log.append(event)
 ```
 
+## AttachmentStore
+
+`attachments.py` 负责附件的 blob 写入、状态流转与垃圾回收。
+
+### 内容寻址与引用计数
+
+- `blob_path` 由 `f"blobs/{sha[:2]}/{sha}"` 决定。多次上传同内容只占用一份 blob 文件。
+- 缩略图同样按 SHA 内容寻址：`thumbs/{sha[:2]}/{sha}.{jpg|png|webp}`。
+- `cleanup` 按 SHA 做引用计数：仅当 DB 中没有任何 record 指向该 SHA 时才物理删除 blob/thumb。
+- `cleanup` 顺序约束：DB delete 先 commit 成功，commit 后再二次查询确认 SHA 无并发新引用，最后才 unlink 物理文件。物理 unlink 失败仅 warning 不回滚 DB。
+- `upload_bytes` 失败回滚同样按 SHA 二次查询：DB commit 失败时，仅在 SHA 引用计数为 0 时才删除本次新写入的 blob/thumb，避免误删并发 upload 已 commit 的共享文件。
+- 不变量：任何 DB-committed 的活跃 `AttachmentRecord` 都能通过 `blob_path` 找到磁盘文件；缩略图存在性不是不变量（解码失败 / 老数据时缺失，端点 fallback 处理）。
+
 ---
 
 > 修改本目录或模块后，请同步更新此 README。
