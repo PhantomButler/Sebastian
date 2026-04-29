@@ -631,7 +631,6 @@ def test_thumbnail_dedup_skips_save_when_exists(
 
 async def test_upload_bytes_db_failure_keeps_dedup_blob(
     attachment_store: AttachmentStore,
-    sqlite_session_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """DB commit 失败 + blob 是 dedup 命中（非本次新建）→ 不删 blob。"""
@@ -712,3 +711,77 @@ async def test_upload_bytes_db_failure_deletes_new_blob_when_no_other_record(
 
     # blob 必须被删除（没有任何 record 引用它）
     assert not blob_abs.exists()
+
+
+async def test_upload_bytes_db_failure_keeps_blob_when_concurrent_record_exists(
+    attachment_store: AttachmentStore,
+    sqlite_session_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """并发安全：created_blob=True 但 DB 中已有同 SHA record，二次查询找到 → blob 保留。
+
+    模拟：upload A 新建 blob（created_blob=True），但在 A 的 DB commit 失败前，
+    并发 upload B 已用同 SHA 成功入库。回滚时二次查询应找到 B 的 record，
+    阻止 A 误删共享 blob。
+    """
+    from uuid import uuid4
+
+    data = b"concurrent shared content"
+    sha = _hashlib.sha256(data).hexdigest()
+    blob_abs = attachment_store._root_dir / "blobs" / sha[:2] / sha
+
+    # 模拟"并发 upload B 已成功提交 record"
+    async with sqlite_session_factory() as session:
+        concurrent_rec = AttachmentRecord(
+            id=str(uuid4()),
+            kind="text_file",
+            original_filename="from_concurrent_upload.md",
+            mime_type="text/markdown",
+            size_bytes=len(data),
+            sha256=sha,
+            blob_path=f"blobs/{sha[:2]}/{sha}",
+            text_excerpt=None,
+            status="uploaded",
+            created_at=datetime.now(UTC),
+            owner_user_id=None,
+        )
+        session.add(concurrent_rec)
+        await session.commit()
+
+    # 强制让本次 upload 走"新建 blob"路径：删掉可能存在的 blob 文件
+    blob_abs.unlink(missing_ok=True)
+    assert not blob_abs.exists()
+
+    # 让本次 upload 的 DB commit 失败（触发回滚分支）
+    real_factory = attachment_store._db_factory
+
+    def _failing_factory():
+        sess = real_factory()
+
+        class _W:
+            async def __aenter__(self):
+                self._inner = await sess.__aenter__()
+
+                async def _bad_commit():
+                    raise RuntimeError("simulated commit failure")
+
+                self._inner.commit = _bad_commit
+                return self._inner
+
+            async def __aexit__(self, *args):
+                return await sess.__aexit__(*args)
+
+        return _W()
+
+    monkeypatch.setattr(attachment_store, "_db_factory", _failing_factory)
+
+    with pytest.raises(RuntimeError, match="simulated commit failure"):
+        await attachment_store.upload_bytes(
+            filename="a.md",
+            content_type="text/markdown",
+            kind="text_file",
+            data=data,
+        )
+
+    # 关键断言：created_blob=True 但二次查询发现 B 的 record，blob 必须保留
+    assert blob_abs.exists()

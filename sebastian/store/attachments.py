@@ -16,7 +16,7 @@ from PIL import (  # noqa: F401  # UnidentifiedImageError used by Task 5
     UnidentifiedImageError,
 )
 from sqlalchemy import (
-    func,  # noqa: F401  # used by Task 9
+    func,
     select,
     update,
 )
