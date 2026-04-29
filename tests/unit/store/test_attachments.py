@@ -483,4 +483,4 @@ def test_thumbnail_png_palette_with_transparency(tmp_path: Path) -> None:
     with Image.open(thumb_abs) as out:
         assert out.format == "PNG"
         # 应已转换为 RGBA（保留透明信息），不是 P
-        assert out.mode in ("RGBA", "RGB")  # 至少不能因 mode 转换抛异常
+        assert out.mode == "RGBA"

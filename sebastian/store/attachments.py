@@ -6,11 +6,11 @@ import os
 import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from io import BytesIO  # noqa: F401
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
-from PIL import (  # noqa: F401  # ImageOps/UnidentifiedImageError used by Task 3+
+from PIL import (  # noqa: F401  # UnidentifiedImageError used by Task 5
     Image,
     ImageOps,
     UnidentifiedImageError,
