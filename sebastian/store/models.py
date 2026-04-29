@@ -402,3 +402,19 @@ class AttachmentRecord(Base):
         Index("ix_attachments_session", "agent_type", "session_id"),
         Index("ix_attachments_sha256", "sha256"),
     )
+
+
+class ScheduledJobRunRecord(Base):
+    __tablename__ = "scheduled_job_runs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(100), index=True)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_scheduled_job_runs_job_status_started", "job_id", "status", "started_at"),
+    )
