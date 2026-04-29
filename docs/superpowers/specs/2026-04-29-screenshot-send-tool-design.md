@@ -13,6 +13,7 @@ P0 supports:
 - Full-screen screenshot only.
 - macOS and Linux backend hosts.
 - Sending the captured PNG through the existing `send_file` attachment pipeline.
+- Exposing the tool only to the Sebastian top-level orchestrator.
 - Clear deterministic failures when the current host cannot capture the screen.
 
 P0 does not support:
@@ -22,6 +23,7 @@ P0 does not support:
 - Multi-monitor selection.
 - Android device screen capture.
 - Browser-only screenshot capture.
+- Sub-agent access.
 
 ## 3. Tool Shape
 
@@ -30,6 +32,7 @@ Add a new native tool:
 - Path: `sebastian/capabilities/tools/screenshot_send/__init__.py`
 - Tool name: `capture_screenshot_and_send`
 - Permission tier: `PermissionTier.HIGH_RISK`
+- Exposure: Sebastian only. Add it to `sebastian/orchestrator/sebas.py` and do not add it to sub-agent `manifest.toml` files.
 
 Suggested signature:
 
@@ -233,15 +236,16 @@ When implementing, update:
 
 - `sebastian/capabilities/tools/README.md`
 - `sebastian/capabilities/README.md`
-- Any agent manifests that should be allowed to use `capture_screenshot_and_send`
+- `sebastian/orchestrator/sebas.py` so Sebastian can call `capture_screenshot_and_send`
 
-Because this is a new capability tool, manifests must opt into it explicitly unless the target agent already receives it through a separate capability policy.
+Do not add `capture_screenshot_and_send` to sub-agent manifests such as `sebastian/agents/forge/manifest.toml` or `sebastian/agents/aide/manifest.toml`. P0 intentionally keeps screenshot capture at the top-level Sebastian boundary only.
 
 ## 12. Acceptance Criteria
 
 - On macOS with Screen Recording permission granted, the tool captures the backend host screen and sends it as an image block in the current chat.
 - On supported Linux desktop sessions, the tool captures the backend host screen and sends it as an image block in the current chat.
 - In headless or unsupported Linux sessions, the tool fails clearly and does not retry automatically.
+- Sub-agents cannot call the screenshot tool.
 - The temporary screenshot does not remain in the repository workspace.
 - Normal successful operation leaves no screenshot temp file behind.
 - The LLM-facing tool result remains lightweight and does not include image bytes or local blob paths.
