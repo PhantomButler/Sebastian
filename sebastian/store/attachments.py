@@ -23,11 +23,10 @@ from sebastian.store.models import AttachmentRecord
 
 logger = logging.getLogger(__name__)
 
-# DecompressionBomb 防护：Pillow 默认 MAX_IMAGE_PIXELS ≈ 89.5M（超过时仅发 Warning，
-# > 2× 才抛 Error）。这里将上限设为 100M，并把 Warning 升级为 Error，
-# 使单层阈值即触发硬阻断，而非依赖 Pillow 的双重阈值机制。
+# DecompressionBomb 防护：仅设置像素上限常量。
+# DecompressionBombWarning → Error 的升级在 _maybe_generate_thumbnail 内部
+# 用 warnings.catch_warnings() 作用域化处理，避免进程级副作用。
 Image.MAX_IMAGE_PIXELS = 100_000_000
-warnings.simplefilter("error", Image.DecompressionBombWarning)
 
 ALLOWED_IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 ALLOWED_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
@@ -72,59 +71,63 @@ def _maybe_generate_thumbnail(root_dir: Path, sha: str, data: bytes) -> tuple[Pa
       - thumb_abs not None / created False：thumb 已存在，跳过写入（dedup）
     """
     try:
-        with Image.open(BytesIO(data)) as opened:
-            opened.load()
-            img: Image.Image = opened  # 重绑定到基类类型，convert/exif_transpose 返回 Image.Image
-            src_format = img.format or ""
-            if src_format == "GIF":
-                img.seek(0)
-                ext: str = "png"
-                save_format = "PNG"
-            else:
-                _ext = _THUMB_EXT_BY_FORMAT.get(src_format)
-                if _ext is None:
-                    return None, False
-                ext = _ext
-                save_format = src_format
+        # catch_warnings 将 filter 变更限定在本次调用栈，退出后自动还原，
+        # 不污染进程全局 filter list。asyncio 单线程下无线程安全问题。
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(data)) as opened:
+                opened.load()
+                img: Image.Image = opened  # 重绑定到基类类型，convert/exif_transpose 返回 Image.Image
+                src_format = img.format or ""
+                if src_format == "GIF":
+                    img.seek(0)
+                    ext: str = "png"
+                    save_format = "PNG"
+                else:
+                    _ext = _THUMB_EXT_BY_FORMAT.get(src_format)
+                    if _ext is None:
+                        return None, False
+                    ext = _ext
+                    save_format = src_format
 
-            thumb_rel = f"thumbs/{sha[:2]}/{sha}.{ext}"
-            thumb_abs = root_dir / thumb_rel
-            if thumb_abs.exists():
-                return thumb_abs, False
+                thumb_rel = f"thumbs/{sha[:2]}/{sha}.{ext}"
+                thumb_abs = root_dir / thumb_rel
+                if thumb_abs.exists():
+                    return thumb_abs, False
 
-            # EXIF orientation 校正必须在缩放前
-            img = ImageOps.exif_transpose(img)
+                # EXIF orientation 校正必须在缩放前
+                img = ImageOps.exif_transpose(img)
 
-            # 按输出格式做必要的 mode 转换
-            if save_format == "JPEG":
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
-            elif save_format == "PNG":
-                if img.mode == "P":
-                    if "transparency" in img.info:
-                        img = img.convert("RGBA")
-                    else:
-                        img = img.convert("RGB")
-            elif save_format == "WEBP":
-                # WebP 同时支持 RGB / RGBA。其他 mode 一律转 RGBA，不损失 alpha。
-                if img.mode not in ("RGB", "RGBA"):
-                    img = img.convert("RGBA")
-
-            img.thumbnail((THUMB_MAX_EDGE, THUMB_MAX_EDGE))
-
-            thumb_abs.parent.mkdir(parents=True, exist_ok=True)
-            (root_dir / "tmp").mkdir(parents=True, exist_ok=True)
-            tmp_path = root_dir / "tmp" / str(uuid4())
-            try:
-                save_kwargs: dict[str, Any] = {"format": save_format, "optimize": True}
+                # 按输出格式做必要的 mode 转换
                 if save_format == "JPEG":
-                    save_kwargs["quality"] = JPEG_QUALITY
-                img.save(tmp_path, **save_kwargs)
-                os.replace(tmp_path, thumb_abs)
-                return thumb_abs, True
-            except Exception:
-                tmp_path.unlink(missing_ok=True)
-                raise
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                elif save_format == "PNG":
+                    if img.mode == "P":
+                        if "transparency" in img.info:
+                            img = img.convert("RGBA")
+                        else:
+                            img = img.convert("RGB")
+                elif save_format == "WEBP":
+                    # WebP 同时支持 RGB / RGBA。其他 mode 一律转 RGBA，不损失 alpha。
+                    if img.mode not in ("RGB", "RGBA"):
+                        img = img.convert("RGBA")
+
+                img.thumbnail((THUMB_MAX_EDGE, THUMB_MAX_EDGE))
+
+                thumb_abs.parent.mkdir(parents=True, exist_ok=True)
+                (root_dir / "tmp").mkdir(parents=True, exist_ok=True)
+                tmp_path = root_dir / "tmp" / str(uuid4())
+                try:
+                    save_kwargs: dict[str, Any] = {"format": save_format, "optimize": True}
+                    if save_format == "JPEG":
+                        save_kwargs["quality"] = JPEG_QUALITY
+                    img.save(tmp_path, **save_kwargs)
+                    os.replace(tmp_path, thumb_abs)
+                    return thumb_abs, True
+                except Exception:
+                    tmp_path.unlink(missing_ok=True)
+                    raise
     except Exception as exc:
         logger.warning("thumbnail generation skipped for sha=%s: %s", sha[:8], exc)
         return None, False
