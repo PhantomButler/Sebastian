@@ -33,6 +33,7 @@ Add a new native tool:
 - Tool name: `capture_screenshot_and_send`
 - Permission tier: `PermissionTier.HIGH_RISK`
 - Exposure: Sebastian only. Add it to `sebastian/orchestrator/sebas.py` and do not add it to sub-agent `manifest.toml` files.
+- Description: `Capture a screenshot of the backend host machine's screen and send it to the current conversation. This captures the server desktop, not the Android device screen.`
 
 Suggested signature:
 
@@ -232,9 +233,11 @@ Use `shutil.which()` for Linux backend discovery.
 Backend unit tests should cover:
 
 - macOS backend builds the expected `screencapture` command.
+- macOS command exits 0 but writes a zero-byte output file; this is treated as failure.
 - Linux X11 prefers `gnome-screenshot`.
 - Linux X11 falls back to `scrot`.
 - Linux Wayland uses `grim`.
+- Linux with both `WAYLAND_DISPLAY` and `DISPLAY` set prefers the Wayland path.
 - Headless Linux returns a deterministic error.
 - Missing Linux backends return a deterministic error.
 - Successful capture calls the shared `send_file_path` helper.
