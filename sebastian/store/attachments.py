@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
+import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from io import BytesIO  # noqa: F401
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from PIL import Image, ImageOps, UnidentifiedImageError  # noqa: F401
+from sqlalchemy import func, select, update  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sebastian.store.models import AttachmentRecord
+
+logger = logging.getLogger(__name__)
+
+# DecompressionBomb 防护：Pillow 默认在 > MAX_IMAGE_PIXELS 时只发 Warning，
+# > 2 × MAX 才抛 Error。主动把 Warning 升级为 Error，让 1 亿像素成为真正的硬上限。
+Image.MAX_IMAGE_PIXELS = 100_000_000
+warnings.simplefilter("error", Image.DecompressionBombWarning)
 
 ALLOWED_IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 ALLOWED_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
