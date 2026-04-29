@@ -145,3 +145,14 @@ async def test_finish_run_with_unknown_run_id_does_not_raise(run_store):
     finished_at = datetime(2024, 1, 1, 12, 0, 5, tzinfo=UTC)
     await run_store.finish_run("nonexistent-id", "success", finished_at, duration_ms=0)
     # No exception raised — method is a no-op for unknown IDs
+
+
+async def test_get_last_success_at_returns_aware_datetime(run_store):
+    t_start = datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC)
+    t_end = datetime(2024, 1, 1, 10, 5, 0, tzinfo=UTC)
+    run_id = await run_store.start_run("test.job", t_start)
+    await run_store.finish_run(run_id, "success", t_end, duration_ms=0)
+
+    result = await run_store.get_last_success_at("test.job")
+    assert result is not None
+    assert result.tzinfo is not None  # must be timezone-aware

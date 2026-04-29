@@ -267,3 +267,35 @@ async def test_aclose_sets_shutdown_and_cancels_loop(scheduler_db) -> None:
 
     assert runner._shutdown is True
     assert runner._loop_task.done()
+
+
+async def test_run_job_writes_cancelled_record_on_cancel(scheduler_db) -> None:
+    handler_started = asyncio.Event()
+    gate = asyncio.Event()
+
+    async def blocking() -> None:
+        handler_started.set()
+        await gate.wait()
+
+    job = ScheduledJob(id="test.cancel", handler=blocking, interval=timedelta(hours=1))
+    registry = JobRegistry()
+    registry.register(job)
+    run_store = ScheduledJobRunStore(scheduler_db)
+    runner = SchedulerRunner(registry=registry, run_store=run_store)
+
+    task = asyncio.create_task(runner._run_job(job))
+    # Wait until the handler is actually running (start_run already wrote to DB)
+    await handler_started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    async with scheduler_db() as session:
+        async with session.begin():
+            result = await session.execute(
+                select(ScheduledJobRunRecord).where(
+                    ScheduledJobRunRecord.job_id == "test.cancel",
+                    ScheduledJobRunRecord.status == "cancelled",
+                )
+            )
+            assert result.first() is not None

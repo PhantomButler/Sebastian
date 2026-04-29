@@ -80,6 +80,8 @@ class SchedulerRunner:
             await asyncio.sleep(self._poll_interval.total_seconds())
 
     async def _tick(self, now: datetime) -> None:
+        # Clean up completed task references to avoid memory leak
+        self._running = {k: v for k, v in self._running.items() if not v.done()}
         for job in self._registry.list_jobs():
             next_run = self._next_run.get(job.id)
             if next_run is None or now < next_run:
@@ -87,9 +89,10 @@ class SchedulerRunner:
             self._next_run[job.id] = now + job.interval
             running_task = self._running.get(job.id)
             if running_task is not None and not running_task.done():
-                await self._run_store.record_skipped(
-                    job.id, at=now, reason="previous run still in progress"
-                )
+                if job.concurrency_policy == "skip_if_running":
+                    await self._run_store.record_skipped(
+                        job.id, at=now, reason="previous run still in progress"
+                    )
             else:
                 self._running[job.id] = asyncio.create_task(self._run_job(job))
 
