@@ -107,6 +107,8 @@ def _maybe_generate_thumbnail(
 
             thumb_rel = f"thumbs/{sha[:2]}/{sha}.{ext}"
             thumb_abs = root_dir / thumb_rel
+            if thumb_abs.exists():
+                return thumb_abs, False
             thumb_abs.parent.mkdir(parents=True, exist_ok=True)
             (root_dir / "tmp").mkdir(parents=True, exist_ok=True)
             tmp_path = root_dir / "tmp" / str(uuid4())

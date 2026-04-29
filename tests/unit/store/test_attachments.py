@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib as _hashlib
+import os
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -583,3 +584,31 @@ def test_thumbnail_generic_exception_fallback(
     assert thumb_abs is None
     assert created is False
     assert any("thumbnail generation skipped" in m for m in caplog.messages)
+
+
+def test_thumbnail_dedup_skips_save_when_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _make_image_bytes("JPEG")
+    sha = _hashlib.sha256(data).hexdigest()
+
+    # 第一次正常生成
+    thumb_abs1, created1 = _maybe_generate_thumbnail(tmp_path, sha, data)
+    assert created1 is True
+    assert thumb_abs1.exists()
+
+    # 第二次：mock os.replace 验证未被调用
+    real_replace = os.replace
+    call_count = {"n": 0}
+
+    def _counting_replace(*args, **kwargs):
+        call_count["n"] += 1
+        return real_replace(*args, **kwargs)
+
+    monkeypatch.setattr("sebastian.store.attachments.os.replace", _counting_replace)
+
+    thumb_abs2, created2 = _maybe_generate_thumbnail(tmp_path, sha, data)
+
+    assert thumb_abs2 == thumb_abs1
+    assert created2 is False
+    assert call_count["n"] == 0  # 未执行 os.replace
