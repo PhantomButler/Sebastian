@@ -36,7 +36,16 @@ async def todo_read() -> ToolResult:
 
         state = _state
 
-    items = await state.todo_store.read(ctx.agent_type, ctx.session_id)
+    try:
+        items = await state.todo_store.read(ctx.agent_type, ctx.session_id)
+    except Exception as exc:
+        return ToolResult(
+            ok=False,
+            error=(
+                f"Todo service is unavailable: {exc}. Do not retry automatically; "
+                "tell the user the current todo list could not be read."
+            ),
+        )
 
     if not items:
         return ToolResult(

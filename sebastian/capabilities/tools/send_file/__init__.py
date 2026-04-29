@@ -135,11 +135,20 @@ async def send_file(file_path: str, display_name: str | None = None) -> ToolResu
             error=f"{exc}. Do not retry automatically; tell the user the file could not be sent.",
         )
 
-    record = await attachment_store.mark_agent_sent(
-        attachment_id=uploaded.id,
-        agent_type=ctx.agent_type,
-        session_id=ctx.session_id,
-    )
+    try:
+        record = await attachment_store.mark_agent_sent(
+            attachment_id=uploaded.id,
+            agent_type=ctx.agent_type,
+            session_id=ctx.session_id,
+        )
+    except Exception as exc:
+        return ToolResult(
+            ok=False,
+            error=(
+                f"Attachment service is unavailable: {exc}. Do not retry automatically; "
+                "tell the user sending files is currently unavailable."
+            ),
+        )
 
     att_id = record.id
     download_url = f"/api/v1/attachments/{att_id}"
