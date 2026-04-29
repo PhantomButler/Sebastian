@@ -17,8 +17,6 @@ from sebastian.store.attachments import (
     AttachmentValidationError,
 )
 
-_ALL_ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_TEXT_EXTENSIONS
-
 
 def _resolve_display_name(display_name: str | None, source_path: Path) -> str:
     if display_name is None:
@@ -99,22 +97,12 @@ async def send_file(file_path: str, display_name: str | None = None) -> ToolResu
             ),
         )
 
-    suffix = path.suffix.lower()
-    if suffix not in _ALL_ALLOWED_EXTENSIONS:
-        return ToolResult(
-            ok=False,
-            error=(
-                f"Unsupported file type: {suffix}. Do not retry automatically; "
-                "only image and supported text files can be sent."
-            ),
-        )
-
     kind_info = _detect_kind(path)
     if kind_info is None:
         return ToolResult(
             ok=False,
             error=(
-                f"Unsupported file type: {suffix}. Do not retry automatically; "
+                f"Unsupported file type: {path.suffix.lower()!r}. Do not retry automatically; "
                 "only image and supported text files can be sent."
             ),
         )
