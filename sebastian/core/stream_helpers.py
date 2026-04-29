@@ -250,7 +250,7 @@ async def dispatch_tool_call(
         error=result.error,
         empty_hint=result.empty_hint,
     )
-    display_content = format_tool_display(result) if result.ok else (result.error or "")
+    display_content = display if result.ok else (result.error or "")
     append_tool_result_block(
         assistant_blocks,
         tool_id=event.tool_id,
