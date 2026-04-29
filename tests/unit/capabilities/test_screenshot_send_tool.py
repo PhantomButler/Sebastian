@@ -183,7 +183,9 @@ async def test_capture_screenshot_and_send_uploads_then_deletes_temp_file(
         assert display_name is not None
         return ToolResult(ok=True, output={"artifact": {"kind": "image", "filename": display_name}})
 
-    async def fake_run_capture(command: list[str], output_path: Path, **kwargs) -> ToolResult | None:
+    async def fake_run_capture(
+        command: list[str], output_path: Path, **kwargs
+    ) -> ToolResult | None:
         output_path.write_bytes(b"png")
         return None
 
@@ -221,7 +223,9 @@ async def test_capture_screenshot_and_send_deletes_temp_file_after_send_failure(
         temp_paths.append(Path(file_path))
         return ToolResult(ok=False, error="send failed. Do not retry automatically; tell the user.")
 
-    async def fake_run_capture(command: list[str], output_path: Path, **kwargs) -> ToolResult | None:
+    async def fake_run_capture(
+        command: list[str], output_path: Path, **kwargs
+    ) -> ToolResult | None:
         output_path.write_bytes(b"png")
         return None
 

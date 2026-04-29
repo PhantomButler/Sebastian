@@ -64,8 +64,10 @@ def _select_capture_command(
         )
 
     raise RuntimeError(
-        "Linux screenshot requires a graphical session; DISPLAY/WAYLAND_DISPLAY is missing. "
-        "Do not retry automatically; tell the user screenshots are unavailable in this headless session."
+        "Linux screenshot requires a graphical session; "
+        "DISPLAY/WAYLAND_DISPLAY is missing. "
+        "Do not retry automatically; tell the user screenshots are unavailable "
+        "in this headless session."
     )
 
 
@@ -86,7 +88,11 @@ async def _run_capture_command(
     runner = run or default_run
     completed = await asyncio.to_thread(runner, command)
     if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
+        detail = (
+            completed.stderr.strip()
+            or completed.stdout.strip()
+            or f"exit code {completed.returncode}"
+        )
         return ToolResult(
             ok=False,
             error=(
@@ -101,7 +107,8 @@ async def _run_capture_command(
         return ToolResult(
             ok=False,
             error=(
-                f"Screenshot command did not create an output file: {exc}. Do not retry automatically; "
+                f"Screenshot command did not create an output file: {exc}. "
+                "Do not retry automatically; "
                 "tell the user the screen could not be captured."
             ),
         )
@@ -110,7 +117,8 @@ async def _run_capture_command(
         return ToolResult(
             ok=False,
             error=(
-                "Screenshot command created an empty zero-byte output file. Do not retry automatically; "
+                "Screenshot command created an empty zero-byte output file. "
+                "Do not retry automatically; "
                 "ask the user to grant screen capture permission or check the desktop session."
             ),
         )
@@ -180,7 +188,8 @@ async def capture_screenshot_and_send(display_name: str | None = None) -> ToolRe
                 ok=False,
                 error=(
                     f"Screenshot was captured but could not be sent: {exc}. "
-                    "Do not retry automatically; tell the user the screenshot could not be attached."
+                    "Do not retry automatically; "
+                    "tell the user the screenshot could not be attached."
                 ),
             )
         if not result.ok:
@@ -188,7 +197,8 @@ async def capture_screenshot_and_send(display_name: str | None = None) -> ToolRe
                 ok=False,
                 error=(
                     f"Screenshot was captured but could not be sent: {result.error}. "
-                    "Do not retry automatically; tell the user the screenshot could not be attached."
+                    "Do not retry automatically; "
+                    "tell the user the screenshot could not be attached."
                 ),
             )
         return result
