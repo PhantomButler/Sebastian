@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import platform
 import shutil
@@ -17,6 +18,7 @@ from sebastian.core.tool import tool
 from sebastian.core.types import ToolResult
 from sebastian.permissions.types import PermissionTier
 
+logger = logging.getLogger(__name__)
 _TEMP_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
@@ -203,5 +205,7 @@ async def capture_screenshot_and_send(display_name: str | None = None) -> ToolRe
             )
         return result
     finally:
-        with suppress(OSError):
+        try:
             output_path.unlink()
+        except OSError as exc:
+            logger.warning("Failed to delete screenshot temp file %s: %s", output_path, exc)
