@@ -192,6 +192,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         session_store=session_store,
         memory_settings_fn=lambda: state.memory_settings.enabled,
         resident_snapshot_refresher=resident_refresher,
+        memory_service=state.memory_service,
     )
     consolidation_scheduler = MemoryConsolidationScheduler(
         event_bus=event_bus,
