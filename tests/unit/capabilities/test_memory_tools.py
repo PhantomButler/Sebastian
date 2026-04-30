@@ -54,12 +54,21 @@ async def _create_in_memory_factory() -> tuple[AsyncEngine, async_sessionmaker]:
 @pytest.fixture
 async def enabled_memory_state(monkeypatch):
     """Patch gateway.state with memory enabled and a real in-memory DB factory."""
+    from sebastian.memory.services.memory_service import MemoryService
+
     fake_settings = MagicMock()
     fake_settings.enabled = True
     monkeypatch.setattr(state_module, "memory_settings", fake_settings, raising=False)
 
     engine, factory = await _create_in_memory_factory()
     monkeypatch.setattr(state_module, "db_factory", factory, raising=False)
+
+    memory_service = MemoryService(
+        db_factory=factory,
+        memory_settings_fn=lambda: True,
+    )
+    monkeypatch.setattr(state_module, "memory_service", memory_service, raising=False)
+
     yield factory
     await engine.dispose()
     # 等 aiosqlite worker 线程退出，避免 PytestUnhandledThreadExceptionWarning
@@ -1373,6 +1382,59 @@ async def test_memory_search_raises_effective_limit_to_cover_active_lanes(
     assert "context" in lanes, f"Context lane missing; lanes={lanes}"
     assert "episode" in lanes, f"Episode lane missing; lanes={lanes}"
     assert "relation" in lanes, f"Relation lane missing; lanes={lanes}"
+
+
+# ---------------------------------------------------------------------------
+# memory_search service delegation test (Task 7)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_memory_search_delegates_to_memory_service(monkeypatch) -> None:
+    """memory_search 应委托给 state.memory_service.search()，返回相同的 ToolResult 结构。"""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.capabilities.tools.memory_search import memory_search
+    from sebastian.memory.contracts.retrieval import ExplicitMemorySearchRequest, ExplicitMemorySearchResult
+
+    fake_items = [
+        {
+            "lane": "profile",
+            "kind": "preference",
+            "content": "以后回答简洁中文",
+            "source": "explicit",
+            "confidence": 1.0,
+            "citation_type": "current_truth",
+            "is_current": True,
+        }
+    ]
+
+    mock_service = MagicMock()
+    mock_service.search = AsyncMock(
+        return_value=ExplicitMemorySearchResult(items=fake_items)
+    )
+
+    fake_settings = MagicMock()
+    fake_settings.enabled = True
+    monkeypatch.setattr(state_module, "memory_settings", fake_settings, raising=False)
+    monkeypatch.setattr(state_module, "db_factory", MagicMock(), raising=False)
+    monkeypatch.setattr(state_module, "memory_service", mock_service, raising=False)
+
+    result = await memory_search(query="简洁中文", limit=5)
+
+    assert result.ok is True
+    assert result.output == {"items": fake_items}
+
+    from sebastian.memory.feedback import render_memory_search_display
+
+    assert result.display == render_memory_search_display(fake_items)
+
+    call_args = mock_service.search.call_args
+    assert call_args is not None
+    req: ExplicitMemorySearchRequest = call_args.args[0]
+    assert isinstance(req, ExplicitMemorySearchRequest)
+    assert req.query == "简洁中文"
+    assert req.limit == 5
 
 
 # ---------------------------------------------------------------------------

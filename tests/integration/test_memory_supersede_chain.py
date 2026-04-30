@@ -72,12 +72,19 @@ async def enabled_memory_state(
     monkeypatch, db_factory: async_sessionmaker[AsyncSession]
 ) -> async_sessionmaker[AsyncSession]:
     """Patch ``gateway.state`` with memory enabled and a real in-memory DB."""
+    from sebastian.memory.services.memory_service import MemoryService
+
     fake_settings = MagicMock()
     fake_settings.enabled = True
     monkeypatch.setattr(state_module, "memory_settings", fake_settings, raising=False)
     monkeypatch.setattr(state_module, "db_factory", db_factory, raising=False)
     fake_llm_registry = MagicMock()
     monkeypatch.setattr(state_module, "llm_registry", fake_llm_registry, raising=False)
+    memory_service = MemoryService(
+        db_factory=db_factory,
+        memory_settings_fn=lambda: True,
+    )
+    monkeypatch.setattr(state_module, "memory_service", memory_service, raising=False)
     return db_factory
 
 
