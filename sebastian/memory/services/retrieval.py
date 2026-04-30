@@ -28,6 +28,7 @@ class MemoryRetrievalService:
             user_message=request.user_message,
             subject_id=request.subject_id,
             access_purpose="context_injection",
+            active_project_or_agent_context=request.active_project_or_agent_context,
             resident_record_ids=request.resident_record_ids,
             resident_dedupe_keys=request.resident_dedupe_keys,
             resident_canonical_bullets=request.resident_canonical_bullets,

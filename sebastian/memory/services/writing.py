@@ -30,7 +30,7 @@ class MemoryWriteService:
         entity_registry: EntityRegistry,
         decision_logger: MemoryDecisionLogger,
         slot_registry: SlotRegistry,
-        slot_proposal_handler: SlotProposalHandler,
+        slot_proposal_handler: SlotProposalHandler | None,
     ) -> MemoryWriteResult:
         pipeline_result = await process_candidates(
             request.candidates,

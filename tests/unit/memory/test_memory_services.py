@@ -76,6 +76,32 @@ async def test_retrieval_service_delegates_prompt_retrieval(db_session, monkeypa
 
     assert result.section == "## Memory\n- [fact] hello"
     assert captured["context"].access_purpose == "context_injection"
+    assert captured["context"].active_project_or_agent_context is None
+
+
+@pytest.mark.asyncio
+async def test_retrieval_service_forwards_active_context(db_session, monkeypatch) -> None:
+    captured = {}
+
+    async def fake_retrieve(context, *, db_session):
+        captured["context"] = context
+        return ""
+
+    monkeypatch.setattr("sebastian.memory.services.retrieval.retrieve_memory_section", fake_retrieve)
+
+    service = MemoryRetrievalService()
+    await service.retrieve_for_prompt(
+        PromptMemoryRequest(
+            session_id="sess-1",
+            agent_type="sebastian",
+            user_message="hello",
+            subject_id="user:owner",
+            active_project_or_agent_context={"project": "home-automation"},
+        ),
+        db_session=db_session,
+    )
+
+    assert captured["context"].active_project_or_agent_context == {"project": "home-automation"}
 
 
 @pytest.mark.asyncio

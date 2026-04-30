@@ -10,6 +10,7 @@ class PromptMemoryRequest(BaseModel):
     agent_type: str
     user_message: str
     subject_id: str
+    active_project_or_agent_context: dict[str, Any] | None = None
     resident_record_ids: set[str] = Field(default_factory=set)
     resident_dedupe_keys: set[str] = Field(default_factory=set)
     resident_canonical_bullets: set[str] = Field(default_factory=set)
