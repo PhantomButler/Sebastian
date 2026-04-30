@@ -264,14 +264,6 @@ class BaseAgent(ABC):
         if self._db_factory is None:
             return ""
         try:
-            import sebastian.gateway.state as state
-
-            if not state.memory_settings.enabled:
-                return ""
-        except (ImportError, AttributeError):
-            return ""
-        try:
-            from sebastian.memory.retrieval import RetrievalContext, retrieve_memory_section
             from sebastian.memory.subject import resolve_subject
             from sebastian.memory.trace import trace
             from sebastian.memory.types import MemoryScope
@@ -281,26 +273,33 @@ class BaseAgent(ABC):
                 session_id=session_id,
                 agent_type=agent_context,
             )
-            ctx = RetrievalContext(
-                subject_id=subject_id,
+
+            import sebastian.gateway.state as state
+
+            if state.memory_service is None:
+                return ""
+
+            from sebastian.memory.contracts.retrieval import PromptMemoryRequest
+
+            request = PromptMemoryRequest(
                 session_id=session_id,
                 agent_type=agent_context,
                 user_message=user_message,
+                subject_id=subject_id,
                 active_project_or_agent_context={"agent_type": agent_context},
                 resident_record_ids=resident_record_ids or set(),
                 resident_dedupe_keys=resident_dedupe_keys or set(),
                 resident_canonical_bullets=resident_canonical_bullets or set(),
             )
-            async with self._db_factory() as session:
-                section = await retrieve_memory_section(ctx, db_session=session)
+            result = await state.memory_service.retrieve_for_prompt(request)
             trace(
                 "memory_section.injected",
                 session_id=session_id,
                 agent_type=agent_context,
                 subject_id=subject_id,
-                section_chars=len(section),
+                section_chars=len(result.section),
             )
-            return section
+            return result.section
         except Exception:
             logger.warning(
                 "Memory section retrieval failed, continuing without memory context",

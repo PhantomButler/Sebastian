@@ -384,3 +384,97 @@ async def test_memory_service_no_dirty_mark_when_no_saves() -> None:
     await service.write_candidates(request)
 
     mock_refresher.schedule_refresh.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# BaseAgent._memory_section() delegates to state.memory_service
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_base_agent_memory_section_calls_memory_service() -> None:
+    """_memory_section() should delegate to state.memory_service.retrieve_for_prompt()
+    and return its result.section, not call retrieve_memory_section() directly."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.memory.contracts.retrieval import PromptMemoryResult
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "test"
+
+    agent = TestAgent(
+        gate=MagicMock(),
+        session_store=MagicMock(spec=SessionStore),
+        db_factory=MagicMock(),  # non-None so _db_factory guard passes
+    )
+    agent._current_depth["sess"] = 1
+
+    mock_service = MagicMock()
+    mock_service.retrieve_for_prompt = AsyncMock(
+        return_value=PromptMemoryResult(section="## Memory\n- 喜欢茶")
+    )
+
+    import sebastian.gateway.state as gw_state
+
+    with patch.object(gw_state, "memory_service", mock_service, create=True):
+        # resolve_subject needs a db session — patch it to return a fixed value
+        with patch(
+            "sebastian.memory.subject.resolve_subject",
+            AsyncMock(return_value="user:owner"),
+        ):
+            result = await agent._memory_section(
+                session_id="sess",
+                agent_context="sebastian",
+                user_message="我喜欢茶",
+                resident_record_ids={"rec-1"},
+                resident_dedupe_keys={"key-1"},
+                resident_canonical_bullets={"bullet-1"},
+            )
+
+    assert result == "## Memory\n- 喜欢茶"
+    mock_service.retrieve_for_prompt.assert_awaited_once()
+    call_request: PromptMemoryRequest = mock_service.retrieve_for_prompt.call_args[0][0]
+    assert call_request.session_id == "sess"
+    assert call_request.agent_type == "sebastian"
+    assert call_request.user_message == "我喜欢茶"
+    assert call_request.subject_id == "user:owner"
+    assert call_request.resident_record_ids == {"rec-1"}
+    assert call_request.resident_dedupe_keys == {"key-1"}
+    assert call_request.resident_canonical_bullets == {"bullet-1"}
+    assert call_request.active_project_or_agent_context == {"agent_type": "sebastian"}
+
+
+@pytest.mark.asyncio
+async def test_base_agent_memory_section_absent_service_returns_empty() -> None:
+    """Fail-closed: when state.memory_service is None, return empty string."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "test"
+
+    agent = TestAgent(
+        gate=MagicMock(),
+        session_store=MagicMock(spec=SessionStore),
+        db_factory=MagicMock(),
+    )
+    agent._current_depth["sess"] = 1
+
+    import sebastian.gateway.state as gw_state
+
+    with patch.object(gw_state, "memory_service", None, create=True):
+        with patch(
+            "sebastian.memory.subject.resolve_subject",
+            AsyncMock(return_value="user:owner"),
+        ):
+            result = await agent._memory_section(
+                session_id="sess",
+                agent_context="sebastian",
+                user_message="hello",
+            )
+
+    assert result == ""

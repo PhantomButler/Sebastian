@@ -61,13 +61,18 @@ async def base_agent_with_memory():
         db_factory=factory,
     )
 
-    # Patch memory_settings to enabled=True for all tests in this file
+    # Patch memory_settings to enabled=True for all tests in this file,
+    # and set memory_service to a real MemoryService backed by the test db.
+    from sebastian.memory.services.memory_service import MemoryService
+
     import sebastian.gateway.state as gw_state
 
     fake_settings = MagicMock()
     fake_settings.enabled = True
+    real_memory_service = MemoryService(db_factory=factory)
     with patch.object(gw_state, "memory_settings", fake_settings, create=True):
-        yield agent
+        with patch.object(gw_state, "memory_service", real_memory_service, create=True):
+            yield agent
 
     await engine.dispose()
 
