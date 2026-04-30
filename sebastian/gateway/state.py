@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from sebastian.memory.consolidation import MemoryConsolidationScheduler
     from sebastian.memory.extraction import MemoryExtractor
     from sebastian.memory.resident_snapshot import ResidentMemorySnapshotRefresher
+    from sebastian.memory.services import MemoryService
     from sebastian.orchestrator.conversation import ConversationManager
     from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import EventBus
@@ -43,6 +44,7 @@ llm_registry: LLMProviderRegistry = None  # type: ignore[assignment]
 memory_settings: MemoryRuntimeSettings
 consolidation_scheduler: MemoryConsolidationScheduler | None = None
 memory_extractor: MemoryExtractor | None = None
+memory_service: MemoryService | None = None
 resident_snapshot_refresher: ResidentMemorySnapshotRefresher | None = None
 context_compaction_scheduler: TurnEndCompactionScheduler | None = None
 context_compaction_worker: SessionContextCompactionWorker | None = None

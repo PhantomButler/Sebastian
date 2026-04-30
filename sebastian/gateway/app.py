@@ -175,6 +175,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("resident snapshot rebuild failed at startup: %s", exc, exc_info=True)
         resident_refresher.schedule_refresh()
 
+    from sebastian.memory.services import MemoryService
+
+    state.memory_service = MemoryService(
+        db_factory=db_factory,
+        resident_snapshot_refresher=resident_refresher,
+        memory_settings_fn=lambda: state.memory_settings.enabled,
+    )
+
     consolidator = MemoryConsolidator(llm_registry)
     extractor = MemoryExtractor(llm_registry)
     consolidation_worker = SessionConsolidationWorker(
