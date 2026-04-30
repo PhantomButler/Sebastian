@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_updated: 2026-04-26
+version: "1.2"
+last_updated: 2026-04-30
 status: in-progress
 ---
 
@@ -75,6 +75,29 @@ Sebastian 的长期记忆采用三层逻辑模型：
 ---
 
 ## 5. 与现有架构集成
+
+### 5.0 MemoryService — 顶层访问边界
+
+`MemoryService`（`sebastian/memory/services/memory_service.py`）是记忆系统对外的**唯一访问边界**。所有外部调用方均通过 `MemoryService` 接入，不直接调用 `retrieval.py` 或 `pipeline.py` 的内部函数。
+
+```
+外部调用方
+  ├── BaseAgent._memory_section()        → MemoryService.retrieve_for_prompt()
+  ├── memory_search 工具                  → MemoryService.search()
+  ├── memory_save 工具                    → MemoryService.write_candidates()
+  └── SessionConsolidationWorker         → MemoryService.write_candidates_in_session()
+                         │
+                         ▼
+              MemoryRetrievalService      封装 retrieve_memory_section()
+              MemoryWriteService          封装 process_candidates()
+                         │
+                         ▼
+              retrieval.py / pipeline.py  P0 内部实现（原地保留）
+```
+
+`contracts/` 子包（`contracts/retrieval.py`、`contracts/writing.py`）定义服务边界的 Pydantic 入参与返回值模型，与内部实现解耦。
+
+图路由检索（graph-routed retrieval）为 P1/P2 后续工作，当前不实现。
 
 ### 5.1 WorkingMemory
 

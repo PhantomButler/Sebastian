@@ -1,6 +1,6 @@
 ---
-version: "1.2"
-last_updated: 2026-04-26
+version: "1.3"
+last_updated: 2026-04-30
 status: in-progress
 ---
 
@@ -13,9 +13,20 @@ status: in-progress
 
 ## 1. 总原则
 
-Sebastian 不做“统一 search top-k 然后塞进 prompt”，而做：
+Sebastian 不做”统一 search top-k 然后塞进 prompt”，而做：
 
 `Intent（意图） -> Retrieval Plan（检索计划） -> Assemble（装配）`
+
+### 1.1 外部访问边界
+
+所有检索调用均通过 `MemoryService`（`sebastian/memory/services/memory_service.py`）进入，内部实现由 `MemoryRetrievalService`（`services/retrieval.py`）封装：
+
+- `BaseAgent._memory_section()` → `MemoryService.retrieve_for_prompt()` → `MemoryRetrievalService` → `retrieve_memory_section()`
+- `memory_search` 工具 → `MemoryService.search()` → `MemoryRetrievalService`
+
+`retrieve_memory_section()`（`sebastian/memory/retrieval.py`）是 P0 内部实现，保持原位，不对外直接暴露。
+
+图路由检索（graph-routed retrieval）为 P1/P2 后续工作，当前 Relation Lane 仍基于 SQLite FTS，不引入向量检索或图数据库。
 
 ---
 

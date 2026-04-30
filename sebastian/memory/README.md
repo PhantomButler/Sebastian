@@ -19,11 +19,56 @@
 
 语义记忆（向量检索）为后续规划能力，当前未实现。
 
+## 服务边界（Service Facade）
+
+P0 阶段在现有文件基础上新增了两个子包，建立统一的外部访问边界，**现有文件原地保留，未做搬迁**。
+
+### `contracts/` — 服务契约模型
+
+定义调用方与记忆服务之间的 Pydantic 数据模型，与内部实现完全解耦：
+
+| 文件 | 内容 |
+|------|------|
+| [contracts/retrieval.py](contracts/retrieval.py) | `PromptMemoryRequest`、`PromptMemoryResult`、`ExplicitMemorySearchRequest`、`ExplicitMemorySearchResult` |
+| [contracts/writing.py](contracts/writing.py) | `MemoryWriteRequest`、`MemoryWriteResult` |
+
+### `services/` — 服务 Facade
+
+封装内部检索与写入实现，对外暴露稳定接口：
+
+| 文件 | 职责 |
+|------|------|
+| [services/memory_service.py](services/memory_service.py) | `MemoryService`：顶层 facade，统一入口，暴露 `retrieve_for_prompt()`、`search()`、`write_candidates()`、`write_candidates_in_session()` |
+| [services/retrieval.py](services/retrieval.py) | `MemoryRetrievalService`：封装 `retrieve_memory_section()` 与显式搜索逻辑 |
+| [services/writing.py](services/writing.py) | `MemoryWriteService`：封装 `process_candidates()` |
+
+**外部调用方均通过 `MemoryService` 访问记忆功能**：
+
+| 调用方 | 调用接口 |
+|--------|---------|
+| `BaseAgent._memory_section()` | `MemoryService.retrieve_for_prompt()` |
+| `memory_search` 工具 | `MemoryService.search()` |
+| `memory_save` 工具 | `MemoryService.write_candidates()` |
+| `SessionConsolidationWorker` | `MemoryService.write_candidates_in_session()` |
+
+`retrieve_memory_section()`（`retrieval.py`）和 `process_candidates()`（`pipeline.py`）保持原位，继续作为 P0 内部实现，由 `services/` 层封装调用，不直接对外暴露。
+
+---
+
 ## 目录结构
 
 ```
 memory/
 ├── __init__.py              # 空，包入口
+├── contracts/               # 服务契约 Pydantic 模型（调用方 ↔ 服务边界）
+│   ├── __init__.py
+│   ├── retrieval.py         # PromptMemoryRequest/Result, ExplicitMemorySearchRequest/Result
+│   └── writing.py           # MemoryWriteRequest, MemoryWriteResult
+├── services/                # 服务 Facade（封装内部检索与写入实现）
+│   ├── __init__.py          # 导出 MemoryService, MemoryRetrievalService, MemoryWriteService
+│   ├── memory_service.py    # MemoryService — 顶层 facade
+│   ├── retrieval.py         # MemoryRetrievalService — 封装 retrieve_memory_section + search
+│   └── writing.py           # MemoryWriteService — 封装 process_candidates
 ├── decision_log.py          # MemoryDecisionLogger：把 ResolveDecision 写入 memory_decision_log
 ├── entity_registry.py       # EntityRegistry：实体 CRUD（entities 表）
 ├── episode_store.py         # EpisodeMemoryStore：经历写入、FTS 检索；ensure_episode_fts 建表
@@ -168,6 +213,10 @@ LLM 在对话中可提议新的记忆 slot，提议经校验后写入 `memory_sl
 
 | 如果要修改… | 看这里 |
 |------------|--------|
+| 外部调用记忆系统（检索注入、工具、沉淀） | [services/memory_service.py](services/memory_service.py)（`MemoryService` 顶层 facade） |
+| 服务入参 / 返回值数据结构 | [contracts/retrieval.py](contracts/retrieval.py)、[contracts/writing.py](contracts/writing.py) |
+| 检索服务内部逻辑 | [services/retrieval.py](services/retrieval.py)（`MemoryRetrievalService`） |
+| 写入服务内部逻辑 | [services/writing.py](services/writing.py)（`MemoryWriteService`） |
 | 任务临时状态的存取（set/get/clear） | [working_memory.py](working_memory.py) |
 | session 对话历史的写入与读取（append_message / get_context_messages） | `SessionStore`（见 [store/README.md](../store/README.md)） |
 | 统一记忆入口（同时访问 working + 会话历史兼容层） | [store.py](store.py) |

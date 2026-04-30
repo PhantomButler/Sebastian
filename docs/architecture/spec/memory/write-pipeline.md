@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_updated: 2026-04-21
+version: "1.2"
+last_updated: 2026-04-30
 status: in-progress
 ---
 
@@ -12,6 +12,17 @@ status: in-progress
 ---
 
 ## 1. 总原则
+
+### 1.1 外部访问边界
+
+所有写入调用均通过 `MemoryService`（`sebastian/memory/services/memory_service.py`）进入，内部实现由 `MemoryWriteService`（`services/writing.py`）封装：
+
+- `memory_save` 工具 → `MemoryService.write_candidates()`
+- `SessionConsolidationWorker` → `MemoryService.write_candidates_in_session()`
+
+两者最终都调用 `process_candidates()`（`sebastian/memory/pipeline.py`），该函数保持原位作为 P0 内部实现，不对外直接暴露。
+
+### 1.2 写入管线总原则
 
 所有记忆写入来源都必须经过相同的逻辑阶段：
 
