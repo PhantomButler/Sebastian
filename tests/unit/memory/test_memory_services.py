@@ -61,7 +61,9 @@ async def test_retrieval_service_delegates_prompt_retrieval(db_session, monkeypa
         captured["context"] = context
         return "## Memory\n- [fact] hello"
 
-    monkeypatch.setattr("sebastian.memory.services.retrieval.retrieve_memory_section", fake_retrieve)
+    monkeypatch.setattr(
+        "sebastian.memory.services.retrieval.retrieve_memory_section", fake_retrieve
+    )
 
     service = MemoryRetrievalService()
     result = await service.retrieve_for_prompt(
@@ -87,7 +89,9 @@ async def test_retrieval_service_forwards_active_context(db_session, monkeypatch
         captured["context"] = context
         return ""
 
-    monkeypatch.setattr("sebastian.memory.services.retrieval.retrieve_memory_section", fake_retrieve)
+    monkeypatch.setattr(
+        "sebastian.memory.services.retrieval.retrieve_memory_section", fake_retrieve
+    )
 
     service = MemoryRetrievalService()
     await service.retrieve_for_prompt(
@@ -148,7 +152,6 @@ async def test_retrieval_service_search_returns_empty_on_no_data(db_session, mon
 async def test_write_service_caller_owned_does_not_commit(db_session, monkeypatch) -> None:
     from unittest.mock import AsyncMock, MagicMock
 
-    from sebastian.memory.contracts.writing import MemoryWriteRequest
     from sebastian.memory.decision_log import MemoryDecisionLogger
     from sebastian.memory.entity_registry import EntityRegistry
     from sebastian.memory.episode_store import EpisodeMemoryStore
@@ -217,7 +220,6 @@ async def test_write_service_owned_commits(monkeypatch) -> None:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from sebastian.memory.contracts.writing import MemoryWriteRequest
     from sebastian.memory.pipeline import PipelineResult
     from sebastian.memory.services.writing import MemoryWriteService
 
@@ -350,24 +352,44 @@ async def test_memory_service_search_exception_returns_empty() -> None:
 
 @pytest.mark.asyncio
 async def test_memory_service_marks_snapshot_dirty_on_successful_write() -> None:
+    """When saved_count > 0, write_candidates() must call mark_dirty_locked() inside
+    mutation_scope() — not schedule_refresh() — to prevent stale snapshot reads."""
+    from contextlib import asynccontextmanager
     from unittest.mock import AsyncMock, MagicMock
 
-    from sebastian.memory.contracts.writing import MemoryWriteRequest
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from sebastian.memory.services.memory_service import MemoryService
 
-    # Use a MagicMock result with saved_count > 0 to avoid constructing real Pydantic models
+    # Result with saves
     mock_result = MagicMock()
     mock_result.saved_count = 2
 
     mock_writing = MagicMock()
-    mock_writing.write_candidates = AsyncMock(return_value=mock_result)
+    mock_writing.write_candidates_in_session = AsyncMock(return_value=mock_result)
 
-    mock_refresher = MagicMock()
+    # Refresher: mutation_scope is a real asynccontextmanager so we can track entry
+    mark_dirty_called = False
+
+    class FakeRefresher:
+        @asynccontextmanager
+        async def mutation_scope(self):
+            yield
+
+        async def mark_dirty_locked(self) -> None:
+            nonlocal mark_dirty_called
+            mark_dirty_called = True
+
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_db_factory = MagicMock(return_value=mock_cm)
 
     service = MemoryService(
-        db_factory=MagicMock(),
+        db_factory=mock_db_factory,
         writing=mock_writing,
-        resident_snapshot_refresher=mock_refresher,
+        resident_snapshot_refresher=FakeRefresher(),
     )
 
     request = MemoryWriteRequest(
@@ -380,28 +402,48 @@ async def test_memory_service_marks_snapshot_dirty_on_successful_write() -> None
     )
     await service.write_candidates(request)
 
-    mock_refresher.schedule_refresh.assert_called_once()
+    mock_writing.write_candidates_in_session.assert_awaited_once()
+    mock_session.commit.assert_awaited_once()
+    assert mark_dirty_called, "mark_dirty_locked() must be called when saved_count > 0"
 
 
 @pytest.mark.asyncio
 async def test_memory_service_no_dirty_mark_when_no_saves() -> None:
+    """When saved_count == 0, write_candidates() must NOT call mark_dirty_locked()."""
+    from contextlib import asynccontextmanager
     from unittest.mock import AsyncMock, MagicMock
 
-    from sebastian.memory.contracts.writing import MemoryWriteRequest
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from sebastian.memory.services.memory_service import MemoryService
 
     mock_result = MagicMock()
     mock_result.saved_count = 0
 
     mock_writing = MagicMock()
-    mock_writing.write_candidates = AsyncMock(return_value=mock_result)
+    mock_writing.write_candidates_in_session = AsyncMock(return_value=mock_result)
 
-    mock_refresher = MagicMock()
+    mark_dirty_called = False
+
+    class FakeRefresher:
+        @asynccontextmanager
+        async def mutation_scope(self):
+            yield
+
+        async def mark_dirty_locked(self) -> None:
+            nonlocal mark_dirty_called
+            mark_dirty_called = True
+
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_db_factory = MagicMock(return_value=mock_cm)
 
     service = MemoryService(
-        db_factory=MagicMock(),
+        db_factory=mock_db_factory,
         writing=mock_writing,
-        resident_snapshot_refresher=mock_refresher,
+        resident_snapshot_refresher=FakeRefresher(),
     )
 
     request = MemoryWriteRequest(
@@ -414,7 +456,9 @@ async def test_memory_service_no_dirty_mark_when_no_saves() -> None:
     )
     await service.write_candidates(request)
 
-    mock_refresher.schedule_refresh.assert_not_called()
+    mock_writing.write_candidates_in_session.assert_awaited_once()
+    mock_session.commit.assert_awaited_once()
+    assert not mark_dirty_called, "mark_dirty_locked() must NOT be called when saved_count == 0"
 
 
 # ---------------------------------------------------------------------------

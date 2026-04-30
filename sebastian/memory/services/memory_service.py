@@ -25,6 +25,16 @@ if TYPE_CHECKING:
     from sebastian.memory.slot_proposals import SlotProposalHandler
     from sebastian.memory.slots import SlotRegistry
 
+# Store imports needed when MemoryService owns the session (mutation_scope path)
+from sebastian.memory.decision_log import MemoryDecisionLogger
+from sebastian.memory.entity_registry import EntityRegistry
+from sebastian.memory.episode_store import EpisodeMemoryStore
+from sebastian.memory.profile_store import ProfileMemoryStore
+from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
+from sebastian.memory.slot_definition_store import SlotDefinitionStore
+from sebastian.memory.slot_proposals import SlotProposalHandler
+from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,9 +93,42 @@ class MemoryService:
     async def write_candidates(self, request: MemoryWriteRequest) -> MemoryWriteResult:
         if self._writing is None:
             return MemoryWriteResult()
-        result = await self._writing.write_candidates(request)
-        if result.saved_count > 0 and self._resident_snapshot_refresher is not None:
-            self._resident_snapshot_refresher.schedule_refresh()
+
+        # No refresher: delegate directly (MemoryWriteService owns session + commit).
+        if self._resident_snapshot_refresher is None:
+            return await self._writing.write_candidates(request)
+
+        # Refresher present: own the session so we can wrap the commit inside
+        # mutation_scope(), preventing concurrent snapshot readers from seeing a
+        # stale snapshot between DB commit and dirty-flag write.
+        assert self._db_factory is not None  # guaranteed when refresher is set
+
+        async with self._db_factory() as db_session:
+            slot_store = SlotDefinitionStore(db_session)
+            profile_store = ProfileMemoryStore(db_session)
+            episode_store = EpisodeMemoryStore(db_session)
+            entity_registry = EntityRegistry(db_session, planner=DEFAULT_RETRIEVAL_PLANNER)
+            decision_logger = MemoryDecisionLogger(db_session)
+            slot_proposal_handler = SlotProposalHandler(
+                store=slot_store, registry=DEFAULT_SLOT_REGISTRY
+            )
+
+            result = await self._writing.write_candidates_in_session(
+                request,
+                db_session=db_session,
+                profile_store=profile_store,
+                episode_store=episode_store,
+                entity_registry=entity_registry,
+                decision_logger=decision_logger,
+                slot_registry=DEFAULT_SLOT_REGISTRY,
+                slot_proposal_handler=slot_proposal_handler,
+            )
+
+            async with self._resident_snapshot_refresher.mutation_scope():
+                await db_session.commit()
+                if result.saved_count > 0:
+                    await self._resident_snapshot_refresher.mark_dirty_locked()
+
         return result
 
     async def write_candidates_in_session(
