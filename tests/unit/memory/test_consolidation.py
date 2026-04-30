@@ -563,6 +563,8 @@ class TestMemoryConsolidatorConsolidate:
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
         from sebastian.memory.consolidation import SessionConsolidationWorker
+        from sebastian.memory.services.memory_service import MemoryService
+        from sebastian.memory.services.writing import MemoryWriteService
         from sebastian.store.models import Base, MemoryDecisionLogRecord
 
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
@@ -621,12 +623,17 @@ class TestMemoryConsolidatorConsolidate:
                         artifacts=[],
                     )
 
+            memory_service = MemoryService(
+                db_factory=factory,
+                writing=MemoryWriteService(db_factory=factory),
+            )
             worker = SessionConsolidationWorker(
                 db_factory=factory,
                 consolidator=_FakeConsolidator(),  # type: ignore[arg-type]
                 extractor=_FakeExtractor(),  # type: ignore[arg-type]
                 session_store=_FakeSessionStore(),
                 memory_settings_fn=lambda: True,
+                memory_service=memory_service,
             )
 
             await worker.consolidate_session("sess-1", "sebastian")

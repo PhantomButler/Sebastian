@@ -11,6 +11,8 @@ from sebastian.memory.consolidation import (
     SessionConsolidationWorker,
 )
 from sebastian.memory.extraction import ExtractorOutput
+from sebastian.memory.services.memory_service import MemoryService
+from sebastian.memory.services.writing import MemoryWriteService
 from sebastian.memory.types import (
     CandidateArtifact,
     Cardinality,
@@ -133,14 +135,28 @@ def db_factory(engine):
     return async_sessionmaker(engine, expire_on_commit=False)
 
 
+def _make_memory_service(db_factory: async_sessionmaker) -> MemoryService:
+    """Build a real MemoryService backed by the given session factory."""
+    return MemoryService(
+        db_factory=db_factory,
+        writing=MemoryWriteService(db_factory=db_factory),
+    )
+
+
 @pytest.fixture
-def worker(db_factory):
+def memory_service(db_factory):
+    return _make_memory_service(db_factory)
+
+
+@pytest.fixture
+def worker(db_factory, memory_service):
     return SessionConsolidationWorker(
         db_factory=db_factory,
         consolidator=FakeConsolidator(),
         extractor=FakeExtractor(),
         session_store=FakeSessionStore(),
         memory_settings_fn=lambda: True,
+        memory_service=memory_service,
     )
 
 
@@ -222,6 +238,7 @@ async def test_consolidate_logs_summary_decision(db_factory):
         extractor=FakeExtractor(),
         session_store=FakeSessionStore(),
         memory_settings_fn=lambda: True,
+        memory_service=_make_memory_service(db_factory),
     )
 
     await worker.consolidate_session("sess-summary", "sebastian")
@@ -267,6 +284,7 @@ async def test_summary_subject_id_resolved_from_scope(db_factory):
         extractor=FakeExtractor(),
         session_store=FakeSessionStore(),
         memory_settings_fn=lambda: True,
+        memory_service=_make_memory_service(db_factory),
     )
 
     await worker.consolidate_session("sess-mal", "sebastian")
@@ -399,6 +417,7 @@ async def test_consolidator_input_includes_full_context(db_factory):
         extractor=FakeExtractor(),
         session_store=FakeSessionStore(),
         memory_settings_fn=lambda: True,
+        memory_service=_make_memory_service(db_factory),
     )
     await worker.consolidate_session("sess-ctx", "sebastian")
 
@@ -476,6 +495,7 @@ async def test_worker_runs_extractor_before_consolidator(db_factory):
         extractor=extractor,
         session_store=FakeSessionStore(),
         memory_settings_fn=lambda: True,
+        memory_service=_make_memory_service(db_factory),
     )
 
     await worker.consolidate_session("sess-extr", "sebastian")
@@ -539,6 +559,7 @@ async def test_worker_executes_proposed_expire_action(db_factory):
         extractor=FakeExtractor(),
         session_store=FakeSessionStore(),
         memory_settings_fn=lambda: True,
+        memory_service=_make_memory_service(db_factory),
     )
     await worker.consolidate_session("sess-exp", "sebastian")
 
@@ -565,6 +586,7 @@ async def test_consolidation_decision_log_has_input_source(db_factory):
         extractor=FakeExtractor(),
         session_store=FakeSessionStore(),
         memory_settings_fn=lambda: True,
+        memory_service=_make_memory_service(db_factory),
     )
     await worker.consolidate_session("sess-input-src", "sebastian")
 
@@ -630,6 +652,7 @@ async def test_consolidation_expire_log_has_input_source(db_factory):
         extractor=FakeExtractor(),
         session_store=FakeSessionStore(),
         memory_settings_fn=lambda: True,
+        memory_service=_make_memory_service(db_factory),
     )
     await worker.consolidate_session("sess-exp-src", "sebastian")
 
