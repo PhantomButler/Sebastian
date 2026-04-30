@@ -318,6 +318,37 @@ async def test_memory_service_retrieval_exception_returns_empty_section() -> Non
 
 
 @pytest.mark.asyncio
+async def test_memory_service_search_exception_returns_empty() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.memory.services.memory_service import MemoryService
+
+    mock_retrieval = MagicMock()
+    mock_retrieval.search = AsyncMock(side_effect=RuntimeError("db exploded"))
+
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=MagicMock())
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_db_factory = MagicMock(return_value=mock_cm)
+
+    service = MemoryService(
+        db_factory=mock_db_factory,
+        retrieval=mock_retrieval,
+    )
+
+    result = await service.search(
+        ExplicitMemorySearchRequest(
+            query="咖啡",
+            session_id="sess-1",
+            agent_type="sebastian",
+            subject_id="user:owner",
+        )
+    )
+
+    assert result == ExplicitMemorySearchResult(items=[])
+
+
+@pytest.mark.asyncio
 async def test_memory_service_marks_snapshot_dirty_on_successful_write() -> None:
     from unittest.mock import AsyncMock, MagicMock
 

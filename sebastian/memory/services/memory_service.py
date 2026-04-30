@@ -40,9 +40,12 @@ class MemoryService:
     ) -> None:
         self._db_factory = db_factory
         self._retrieval = retrieval if retrieval is not None else MemoryRetrievalService()
-        self._writing = (
-            writing if writing is not None else MemoryWriteService(db_factory=db_factory)
-        )
+        if writing is not None:
+            self._writing: MemoryWriteService | None = writing
+        elif db_factory is not None:
+            self._writing = MemoryWriteService(db_factory=db_factory)
+        else:
+            self._writing = None
         self._resident_snapshot_refresher = resident_snapshot_refresher
         self._memory_settings_fn = memory_settings_fn
 
@@ -70,10 +73,16 @@ class MemoryService:
             return ExplicitMemorySearchResult(items=[])
         if self._db_factory is None:
             return ExplicitMemorySearchResult(items=[])
-        async with self._db_factory() as db_session:
-            return await self._retrieval.search(request, db_session=db_session)
+        try:
+            async with self._db_factory() as db_session:
+                return await self._retrieval.search(request, db_session=db_session)
+        except Exception:
+            logger.warning("memory: search failed", exc_info=True)
+            return ExplicitMemorySearchResult(items=[])
 
     async def write_candidates(self, request: MemoryWriteRequest) -> MemoryWriteResult:
+        if self._writing is None:
+            return MemoryWriteResult()
         result = await self._writing.write_candidates(request)
         if result.saved_count > 0 and self._resident_snapshot_refresher is not None:
             self._resident_snapshot_refresher.schedule_refresh()
@@ -91,6 +100,8 @@ class MemoryService:
         slot_registry: SlotRegistry,
         slot_proposal_handler: SlotProposalHandler | None,
     ) -> MemoryWriteResult:
+        if self._writing is None:
+            return MemoryWriteResult()
         return await self._writing.write_candidates_in_session(
             request,
             db_session=db_session,
