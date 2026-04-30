@@ -116,3 +116,112 @@ async def test_retrieval_service_search_returns_empty_on_no_data(db_session, mon
 
     assert isinstance(result, ExplicitMemorySearchResult)
     assert result.items == []
+
+
+@pytest.mark.asyncio
+async def test_write_service_caller_owned_does_not_commit(db_session, monkeypatch) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.memory.contracts.writing import MemoryWriteRequest
+    from sebastian.memory.decision_log import MemoryDecisionLogger
+    from sebastian.memory.entity_registry import EntityRegistry
+    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.pipeline import PipelineResult
+    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.services.writing import MemoryWriteService
+    from sebastian.memory.slot_proposals import SlotProposalHandler
+    from sebastian.memory.slots import SlotRegistry
+
+    fake_result = PipelineResult(
+        decisions=[],
+        proposed_slots_registered=["user.profile.hobby"],
+        proposed_slots_rejected=[],
+    )
+    mock_process = AsyncMock(return_value=fake_result)
+    monkeypatch.setattr("sebastian.memory.services.writing.process_candidates", mock_process)
+
+    service = MemoryWriteService(db_factory=MagicMock())
+    request = MemoryWriteRequest(
+        candidates=[],
+        session_id="sess-1",
+        agent_type="sebastian",
+        worker_id="test",
+        rule_version="spec-a-v1",
+        input_source={"type": "test"},
+    )
+
+    profile_store = ProfileMemoryStore(db_session)
+    episode_store = EpisodeMemoryStore(db_session)
+    entity_registry = EntityRegistry(db_session)
+    decision_logger = MemoryDecisionLogger(db_session)
+    slot_registry = SlotRegistry(slots=[])
+    slot_store_mock = MagicMock()
+    slot_proposal_handler = SlotProposalHandler(store=slot_store_mock, registry=slot_registry)
+
+    commit_called = False
+    original_commit = db_session.commit
+
+    async def spy_commit() -> None:
+        nonlocal commit_called
+        commit_called = True
+        await original_commit()
+
+    db_session.commit = spy_commit
+
+    write_result = await service.write_candidates_in_session(
+        request,
+        db_session=db_session,
+        profile_store=profile_store,
+        episode_store=episode_store,
+        entity_registry=entity_registry,
+        decision_logger=decision_logger,
+        slot_registry=slot_registry,
+        slot_proposal_handler=slot_proposal_handler,
+    )
+
+    assert mock_process.called
+    assert not commit_called
+    assert write_result.proposed_slots_registered == ["user.profile.hobby"]
+    assert write_result.decisions == []
+
+
+@pytest.mark.asyncio
+async def test_write_service_owned_commits(monkeypatch) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from sebastian.memory.contracts.writing import MemoryWriteRequest
+    from sebastian.memory.pipeline import PipelineResult
+    from sebastian.memory.services.writing import MemoryWriteService
+
+    fake_result = PipelineResult(
+        decisions=[],
+        proposed_slots_registered=[],
+        proposed_slots_rejected=[],
+    )
+    mock_process = AsyncMock(return_value=fake_result)
+    monkeypatch.setattr("sebastian.memory.services.writing.process_candidates", mock_process)
+
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_db_factory = MagicMock(return_value=mock_cm)
+
+    service = MemoryWriteService(db_factory=mock_db_factory)
+    request = MemoryWriteRequest(
+        candidates=[],
+        session_id="sess-2",
+        agent_type="sebastian",
+        worker_id="test",
+        rule_version="spec-a-v1",
+        input_source={"type": "test"},
+    )
+
+    result = await service.write_candidates(request)
+
+    assert mock_process.called
+    mock_session.commit.assert_awaited_once()
+    assert result.decisions == []
+    assert result.proposed_slots_registered == []
