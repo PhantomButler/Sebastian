@@ -1,0 +1,1 @@
+{"nodes": [{"id": "agents_forge", "label": "ForgeAgent (code writing Sub-Agent)", "file_type": "code", "source_file": "sebastian/agents/forge/__init__.py", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

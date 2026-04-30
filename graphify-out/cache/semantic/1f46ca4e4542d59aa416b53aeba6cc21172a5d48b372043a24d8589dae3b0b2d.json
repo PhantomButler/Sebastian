@@ -1,0 +1,1 @@
+{"nodes": [{"id": "tool_spawn_sub_agent", "label": "spawn_sub_agent Tool (Protocol)", "file_type": "code", "source_file": "sebastian/capabilities/tools/spawn_sub_agent/__init__.py", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

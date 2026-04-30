@@ -1,0 +1,1 @@
+{"nodes": [{"id": "llm_openai_compat_py", "label": "OpenAICompatProvider", "file_type": "code", "source_file": "sebastian/llm/openai_compat.py", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}
