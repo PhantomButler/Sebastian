@@ -251,3 +251,136 @@ async def test_write_service_owned_commits(monkeypatch) -> None:
     mock_session.commit.assert_awaited_once()
     assert result.decisions == []
     assert result.proposed_slots_registered == []
+
+
+# ---------------------------------------------------------------------------
+# MemoryService facade tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_memory_service_disabled_returns_empty_prompt() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.memory.services.memory_service import MemoryService
+
+    mock_retrieval = MagicMock()
+    mock_retrieval.retrieve_for_prompt = AsyncMock()
+
+    service = MemoryService(
+        db_factory=MagicMock(),
+        retrieval=mock_retrieval,
+        memory_settings_fn=lambda: False,
+    )
+
+    result = await service.retrieve_for_prompt(
+        PromptMemoryRequest(
+            session_id="sess-1",
+            agent_type="sebastian",
+            user_message="hello",
+            subject_id="user:owner",
+        )
+    )
+
+    assert result == PromptMemoryResult(section="")
+    mock_retrieval.retrieve_for_prompt.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_memory_service_retrieval_exception_returns_empty_section() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.memory.services.memory_service import MemoryService
+
+    mock_retrieval = MagicMock()
+    mock_retrieval.retrieve_for_prompt = AsyncMock(side_effect=RuntimeError("db exploded"))
+
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=MagicMock())
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_db_factory = MagicMock(return_value=mock_cm)
+
+    service = MemoryService(
+        db_factory=mock_db_factory,
+        retrieval=mock_retrieval,
+    )
+
+    result = await service.retrieve_for_prompt(
+        PromptMemoryRequest(
+            session_id="sess-1",
+            agent_type="sebastian",
+            user_message="hello",
+            subject_id="user:owner",
+        )
+    )
+
+    assert result == PromptMemoryResult(section="")
+
+
+@pytest.mark.asyncio
+async def test_memory_service_marks_snapshot_dirty_on_successful_write() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.memory.contracts.writing import MemoryWriteRequest
+    from sebastian.memory.services.memory_service import MemoryService
+
+    # Use a MagicMock result with saved_count > 0 to avoid constructing real Pydantic models
+    mock_result = MagicMock()
+    mock_result.saved_count = 2
+
+    mock_writing = MagicMock()
+    mock_writing.write_candidates = AsyncMock(return_value=mock_result)
+
+    mock_refresher = MagicMock()
+
+    service = MemoryService(
+        db_factory=MagicMock(),
+        writing=mock_writing,
+        resident_snapshot_refresher=mock_refresher,
+    )
+
+    request = MemoryWriteRequest(
+        candidates=[],
+        session_id="sess-1",
+        agent_type="sebastian",
+        worker_id="test",
+        rule_version="spec-a-v1",
+        input_source={"type": "test"},
+    )
+    await service.write_candidates(request)
+
+    mock_refresher.schedule_refresh.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_memory_service_no_dirty_mark_when_no_saves() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.memory.contracts.writing import MemoryWriteRequest
+    from sebastian.memory.services.memory_service import MemoryService
+
+    mock_result = MagicMock()
+    mock_result.saved_count = 0
+
+    mock_writing = MagicMock()
+    mock_writing.write_candidates = AsyncMock(return_value=mock_result)
+
+    mock_refresher = MagicMock()
+
+    service = MemoryService(
+        db_factory=MagicMock(),
+        writing=mock_writing,
+        resident_snapshot_refresher=mock_refresher,
+    )
+
+    request = MemoryWriteRequest(
+        candidates=[],
+        session_id="sess-1",
+        agent_type="sebastian",
+        worker_id="test",
+        rule_version="spec-a-v1",
+        input_source={"type": "test"},
+    )
+    await service.write_candidates(request)
+
+    mock_refresher.schedule_refresh.assert_not_called()
