@@ -8,7 +8,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from sebastian.memory.stores.entity_registry import EntityRegistry
-from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 from sebastian.memory.startup import init_memory_storage, seed_builtin_slots
 from sebastian.store.models import Base, EntityRecord, MemorySlotRecord
 

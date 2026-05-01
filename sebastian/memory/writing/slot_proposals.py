@@ -19,7 +19,7 @@ from sebastian.memory.types import (
 
 if TYPE_CHECKING:
     from sebastian.memory.stores.slot_definition_store import SlotDefinitionStore
-    from sebastian.memory.slots import SlotRegistry
+    from sebastian.memory.writing.slots import SlotRegistry
 
 logger = logging.getLogger(__name__)
 

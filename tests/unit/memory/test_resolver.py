@@ -9,8 +9,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from sebastian.memory.stores.episode_store import EpisodeMemoryStore
-from sebastian.memory.resolver import resolve_candidate
-from sebastian.memory.slots import SlotRegistry
+from sebastian.memory.writing.resolver import resolve_candidate
+from sebastian.memory.writing.slots import SlotRegistry
 from sebastian.memory.types import (
     CandidateArtifact,
     Cardinality,

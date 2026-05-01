@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sebastian.memory.feedback import MemorySaveResult, render_memory_save_summary
+from sebastian.memory.writing.feedback import MemorySaveResult, render_memory_save_summary
 
 
 def _make(**kwargs) -> MemorySaveResult:

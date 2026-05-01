@@ -22,7 +22,7 @@ from sebastian.memory.types import (
     MemoryStatus,
     ResolveDecision,
 )
-from sebastian.memory.write_router import persist_decision
+from sebastian.memory.writing.write_router import persist_decision
 from sebastian.store import models  # noqa: F401 — ensure all tables are registered
 from sebastian.store.database import Base
 from sebastian.store.models import (

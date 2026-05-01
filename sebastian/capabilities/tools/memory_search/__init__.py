@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 async def memory_search(query: str, limit: int = 5) -> ToolResult:
     import sebastian.gateway.state as state
     from sebastian.memory.contracts.retrieval import ExplicitMemorySearchRequest
-    from sebastian.memory.feedback import render_memory_search_display
+    from sebastian.memory.writing.feedback import render_memory_search_display
 
     trace(
         "tool.memory_search.start",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.memory.slots import SlotRegistry
+from sebastian.memory.writing.slots import SlotRegistry
 from sebastian.memory.startup import bootstrap_slot_registry, seed_builtin_slots
 from sebastian.store.models import Base
 
@@ -41,7 +41,7 @@ async def test_bootstrap_slot_registry_loads_all_seeds(fresh_gateway_db):
 async def test_bootstrap_slot_registry_is_additive(fresh_gateway_db):
     """bootstrap_from_db should add DB slots on top of any already-registered slots."""
     # Start with 9 builtin slots already in registry (as DEFAULT_SLOT_REGISTRY would)
-    from sebastian.memory.slots import _BUILTIN_SLOTS
+    from sebastian.memory.writing.slots import _BUILTIN_SLOTS
 
     registry = SlotRegistry(slots=_BUILTIN_SLOTS)
     assert len(registry.list_all()) == 10

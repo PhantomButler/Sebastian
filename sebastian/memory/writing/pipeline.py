@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from sebastian.memory.errors import InvalidCandidateError, InvalidSlotProposalError
-from sebastian.memory.resolver import resolve_candidate
-from sebastian.memory.slot_proposals import SlotProposalHandler
+from sebastian.memory.writing.resolver import resolve_candidate
+from sebastian.memory.writing.slot_proposals import SlotProposalHandler
 from sebastian.memory.subject import resolve_subject
 from sebastian.memory.types import (
     CandidateArtifact,
@@ -14,16 +14,16 @@ from sebastian.memory.types import (
     ProposedSlot,
     ResolveDecision,
 )
-from sebastian.memory.write_router import persist_decision
+from sebastian.memory.writing.write_router import persist_decision
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from sebastian.memory.decision_log import MemoryDecisionLogger
+    from sebastian.memory.writing.decision_log import MemoryDecisionLogger
     from sebastian.memory.stores.entity_registry import EntityRegistry
     from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.stores.profile_store import ProfileMemoryStore
-    from sebastian.memory.slots import SlotRegistry
+    from sebastian.memory.writing.slots import SlotRegistry
 
 logger = logging.getLogger(__name__)
 

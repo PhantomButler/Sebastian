@@ -7,7 +7,7 @@ import pytest
 
 from sebastian.capabilities.tools.memory_save import memory_save
 from sebastian.memory.extraction import ExtractorOutput
-from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 from sebastian.memory.types import (
     CandidateArtifact,
     Cardinality,

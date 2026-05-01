@@ -171,7 +171,7 @@ async def test_worker_passes_slot_proposal_handler_to_write_candidates_in_sessio
 
     await worker.consolidate_session("test-session-2", "default")
 
-    from sebastian.memory.slot_proposals import SlotProposalHandler
+    from sebastian.memory.writing.slot_proposals import SlotProposalHandler
 
     assert "slot_proposal_handler" in captured_kwargs
     assert isinstance(captured_kwargs["slot_proposal_handler"], SlotProposalHandler), (
@@ -245,7 +245,7 @@ async def test_worker_proposed_slot_persisted_only_when_artifact_references_it(
     from sqlalchemy import select
 
     from sebastian.memory.services.writing import MemoryWriteService
-    from sebastian.memory.slots import _BUILTIN_SLOTS, SlotRegistry
+    from sebastian.memory.writing.slots import _BUILTIN_SLOTS, SlotRegistry
     from sebastian.store.models import MemorySlotRecord
 
     factory = tmp_memory_env
@@ -283,7 +283,7 @@ async def test_worker_proposed_slot_persisted_only_when_artifact_references_it(
     )
 
     isolated_registry = SlotRegistry(slots=list(_BUILTIN_SLOTS))
-    with patch("sebastian.memory.slots.DEFAULT_SLOT_REGISTRY", isolated_registry):
+    with patch("sebastian.memory.writing.slots.DEFAULT_SLOT_REGISTRY", isolated_registry):
         worker = SessionConsolidationWorker(
             db_factory=factory,
             consolidator=mock_consolidator,

@@ -20,7 +20,7 @@ from sebastian.memory.types import (
 if TYPE_CHECKING:
     from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.stores.profile_store import ProfileMemoryStore
-    from sebastian.memory.slots import SlotRegistry
+    from sebastian.memory.writing.slots import SlotRegistry
     from sebastian.store.models import ProfileMemoryRecord
 
 

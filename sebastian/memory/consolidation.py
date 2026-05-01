@@ -34,7 +34,7 @@ from sebastian.memory.types import (
     ResolveDecision,
     SlotDefinition,
 )
-from sebastian.memory.write_router import persist_decision
+from sebastian.memory.writing.write_router import persist_decision
 from sebastian.protocol.events.types import Event, EventType
 from sebastian.store.session_context import build_legacy_messages
 
@@ -232,11 +232,11 @@ class SessionConsolidationWorker:
         #    idempotency.
         async with self._db_factory() as session:
             from sebastian.memory.contracts.writing import MemoryWriteRequest
-            from sebastian.memory.decision_log import MemoryDecisionLogger
+            from sebastian.memory.writing.decision_log import MemoryDecisionLogger
             from sebastian.memory.stores.entity_registry import EntityRegistry
             from sebastian.memory.stores.episode_store import EpisodeMemoryStore
             from sebastian.memory.stores.profile_store import ProfileMemoryStore
-            from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+            from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
             from sebastian.store.models import SessionConsolidationRecord
 
             episode_store = EpisodeMemoryStore(session)
@@ -274,7 +274,7 @@ class SessionConsolidationWorker:
             #     messages. Extractor returns [] on LLM failure, never raises.
             from sebastian.memory.errors import InvalidSlotProposalError
             from sebastian.memory.stores.slot_definition_store import SlotDefinitionStore
-            from sebastian.memory.slot_proposals import SlotProposalHandler
+            from sebastian.memory.writing.slot_proposals import SlotProposalHandler
 
             slot_store = SlotDefinitionStore(session)
             slot_handler = SlotProposalHandler(store=slot_store, registry=DEFAULT_SLOT_REGISTRY)
@@ -283,7 +283,7 @@ class SessionConsolidationWorker:
                 # 只做格式校验，不写 DB。
                 # 实际注册延迟到 process_candidates，届时只注册被 candidate 引用的 slot，
                 # 避免在 consolidator 失败时留下无对应记忆的孤儿 slot。
-                from sebastian.memory.slot_proposals import validate_proposed_slot
+                from sebastian.memory.writing.slot_proposals import validate_proposed_slot
 
                 rejected: list[tuple[str, str]] = []
                 for p in output.proposed_slots:

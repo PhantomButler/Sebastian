@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select, text
 
 from sebastian.memory.stores.episode_store import ensure_episode_fts
-from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 from sebastian.store.models import MemorySlotRecord
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
-    from sebastian.memory.slots import SlotRegistry
+    from sebastian.memory.writing.slots import SlotRegistry
 
 
 async def ensure_profile_fts(conn: AsyncConnection) -> None:

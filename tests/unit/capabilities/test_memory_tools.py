@@ -290,7 +290,7 @@ async def test_memory_save_discard_writes_decision_log(enabled_memory_state, mon
             slot_id=candidate.slot_id,
         )
 
-    monkeypatch.setattr("sebastian.memory.pipeline.resolve_candidate", fake_resolve)
+    monkeypatch.setattr("sebastian.memory.writing.pipeline.resolve_candidate", fake_resolve)
 
     result = await memory_save(content="x")
     assert result.ok is True
@@ -401,7 +401,7 @@ async def test_memory_save_discard_decision_log_has_input_source(
             slot_id=candidate.slot_id,
         )
 
-    monkeypatch.setattr("sebastian.memory.pipeline.resolve_candidate", fake_resolve)
+    monkeypatch.setattr("sebastian.memory.writing.pipeline.resolve_candidate", fake_resolve)
 
     result = await memory_save(content="x")
     assert result.ok is True
@@ -1481,7 +1481,7 @@ async def test_memory_search_delegates_to_memory_service(monkeypatch) -> None:
     assert result.ok is True
     assert result.output == {"items": fake_items}
 
-    from sebastian.memory.feedback import render_memory_search_display
+    from sebastian.memory.writing.feedback import render_memory_search_display
 
     assert result.display == render_memory_search_display(fake_items)
 

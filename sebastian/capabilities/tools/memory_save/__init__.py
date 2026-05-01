@@ -8,7 +8,7 @@ from sebastian.core.tool import tool
 from sebastian.core.tool_context import get_tool_context
 from sebastian.core.types import ToolResult
 from sebastian.memory.constants import MEMORY_SAVE_TIMEOUT_SECONDS
-from sebastian.memory.feedback import MemorySaveResult, render_memory_save_summary
+from sebastian.memory.writing.feedback import MemorySaveResult, render_memory_save_summary
 from sebastian.memory.trace import preview_text, trace
 from sebastian.permissions.types import PermissionTier
 
@@ -70,8 +70,8 @@ async def _do_save(content: str, session_id: str | None, agent_type: str) -> Mem
     from sebastian.memory.contracts.writing import MemoryWriteRequest
     from sebastian.memory.errors import InvalidSlotProposalError
     from sebastian.memory.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor
-    from sebastian.memory.slot_proposals import validate_proposed_slot
-    from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+    from sebastian.memory.writing.slot_proposals import validate_proposed_slot
+    from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 
     if state.memory_service is None:
         raise RuntimeError("memory_service 未初始化，无法保存记忆。")

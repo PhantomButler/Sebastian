@@ -18,17 +18,17 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from sebastian.memory.resident_snapshot import ResidentMemorySnapshotRefresher
-    from sebastian.memory.slots import SlotRegistry
+    from sebastian.memory.writing.slots import SlotRegistry
 
 # Store imports needed when MemoryService owns the session (mutation_scope path)
-from sebastian.memory.decision_log import MemoryDecisionLogger
+from sebastian.memory.writing.decision_log import MemoryDecisionLogger
 from sebastian.memory.stores.entity_registry import EntityRegistry
 from sebastian.memory.stores.episode_store import EpisodeMemoryStore
 from sebastian.memory.stores.profile_store import ProfileMemoryStore
 from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
 from sebastian.memory.stores.slot_definition_store import SlotDefinitionStore
-from sebastian.memory.slot_proposals import SlotProposalHandler
-from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+from sebastian.memory.writing.slot_proposals import SlotProposalHandler
+from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 
 logger = logging.getLogger(__name__)
 

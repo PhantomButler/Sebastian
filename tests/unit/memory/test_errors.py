@@ -7,7 +7,7 @@ from sebastian.memory.errors import (
     MemoryError,
     UnknownSlotError,
 )
-from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 
 
 def test_unknown_slot_is_subclass_of_memory_error() -> None:

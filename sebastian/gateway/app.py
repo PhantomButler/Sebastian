@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception as exc:  # noqa: BLE001
             logger.warning("planner entity trigger bootstrap failed at startup: %s", exc)
 
-    from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
+    from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 
     async with db_factory() as _bootstrap_session:
         await bootstrap_slot_registry(_bootstrap_session, DEFAULT_SLOT_REGISTRY)
