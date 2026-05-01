@@ -1,3 +1,8 @@
+---
+integrated_to: capabilities/screenshot-send.md
+integrated_at: 2026-05-01
+---
+
 # Screenshot And Send Tool Design
 
 ## 1. Goal

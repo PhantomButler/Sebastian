@@ -2,6 +2,8 @@
 date: 2026-04-28
 status: draft
 topic: agent-file-send-and-todo-read
+integrated_to: capabilities/agent-file-send.md, mobile/attachments.md
+integrated_at: 2026-05-01
 ---
 
 # Agent File Send and Todo Read Design

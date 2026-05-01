@@ -38,7 +38,7 @@ status: in-progress
 | [toast-center.md](toast-center.md) | ToastCenter 公共组件：时间窗口节流 + 同时刻单例显示，替代散落的 `Toast.makeText` 样板 |
 | [pending-state.md](pending-state.md) | Chat PENDING 状态与即时停止：SENDING→PENDING 统一、后端 `_pending_cancel_intents` 竞态兜底、15s 超时、AgentPill BREATHING |
 | [timeline-hydration.md](timeline-hydration.md) | REST timeline 历史恢复（hydration）、SSE replay 边界、client-generated session id、TimelineMapper、SummaryCard、ChatUiEffect |
-| [attachments.md](attachments.md) | 图片与文本文件附件输入：本地存储、attachments 表、REST 上传/下载 API、turn 扩展、provider 能力字段、context projection、Android PendingAttachment + ContentBlock + Composer 附件按钮、生命周期与清理 |
+| [attachments.md](attachments.md) | 图片与文本文件附件输入/输出：本地存储（blob/thumb 内容寻址）、attachments 表、REST 上传/下载 API、turn 扩展、provider 能力字段、context projection、Android PendingAttachment + ContentBlock + AttachmentToolbar（双按钮）、Agent 发送附件 SSE 实时显示 + timeline 水合、生命周期与清理 |
 
 ---
 
@@ -53,6 +53,8 @@ status: in-progress
 | 改附件上传、预览条、图片/文件选择、provider 能力拦截 | [attachments.md](attachments.md) |
 | 改附件历史渲染、ImageBlock、FileBlock、TimelineMapper | [attachments.md](attachments.md) |
 | 改附件 REST API、attachment store、错误码、清理任务 | [attachments.md](attachments.md) |
+| 改 Agent 发送文件（send_file）的 SSE 实时显示或历史水合 | [attachments.md](attachments.md) §12 |
+| 改 Composer 附件工具栏（AttachmentToolbar）按钮行为/样式 | [attachments.md](attachments.md) §8.3 |
 | 改 ViewModel / Repository / 数据流 | [data-layer.md](data-layer.md) |
 | 改全局审批、审批弹窗、审批队列 | [global-approval.md](global-approval.md) |
 | 改 SubAgent 对话页、ChatScreen agentId | [global-approval.md](global-approval.md) |

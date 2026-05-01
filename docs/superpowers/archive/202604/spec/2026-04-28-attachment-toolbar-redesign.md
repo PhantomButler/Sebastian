@@ -1,3 +1,8 @@
+---
+integrated_to: mobile/attachments.md
+integrated_at: 2026-05-01
+---
+
 # Attachment Toolbar Redesign
 
 **Date:** 2026-04-28  

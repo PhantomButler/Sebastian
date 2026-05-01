@@ -1,7 +1,7 @@
 ---
-version: "1.0"
-last_updated: 2026-04-28
-status: in-progress
+version: "1.2"
+last_updated: 2026-05-01
+status: implemented
 ---
 
 # 附件输入（图片与文本文件）
@@ -42,9 +42,10 @@ Android Composer
 <data_dir>/attachments/
   blobs/
     ab/
-      <sha256>
+      <sha256>          # 内容寻址，同内容只存一份（去重）
   thumbs/
-    <attachment_id>.jpg
+    ab/
+      <sha256>.jpg      # 缩略图按 SHA 内容寻址（jpg/png/webp 之一）
   tmp/
 ```
 
@@ -53,8 +54,12 @@ Android Composer
 规则：
 - blob 文件名使用 sha256，不使用原始文件名
 - 上传先写入 `tmp/`，校验通过后原子 rename 到 `blobs/<sha256-prefix-2chars>/<sha256>`
-- 缩略图失败不影响原图上传
+- 同内容二次上传跳过写文件（blob 已存在时 `created_blob=False`，直接入库新 record）
+- 缩略图按 SHA 内容寻址：`thumbs/<sha[:2]>/<sha>.<ext>`，上传图片时同步生成（256×256，Pillow）
+- 缩略图失败不影响原图上传（降级返回原图）
 - 下载接口根据 DB metadata 定位 blob，不接受客户端传入任意路径
+
+存储层详细实现（blob 去重、引用计数 cleanup、缩略图生成算法）见 [store/attachments.md](../store/attachments.md)。
 
 ---
 
@@ -168,7 +173,7 @@ GET /api/v1/attachments/{attachment_id}
 GET /api/v1/attachments/{attachment_id}/thumbnail
 ```
 
-均需 JWT。P0 缩略图端点直接返回原图（无服务端缩放）。
+均需 JWT。`/thumbnail` 端点优先返回服务端生成的 256×256 缩略图；无缩略图时 fallback 返回原图（兼容老数据和生成失败场景）。
 
 ### 6.3 发送 turn（扩展）
 
@@ -296,12 +301,24 @@ data class PendingAttachment(
 - `pendingAttachments: List<PendingAttachment>`
 - 当前 provider 能力快照：`inputCapabilities: ModelInputCapabilities`
 
-### 8.3 Composer
+### 8.3 Composer 附件工具栏
 
-Composer 左下角附件按钮，点击后弹出「图片 / 文件」菜单：
+Composer 输入框左下角展示两个并排图标按钮（`AttachmentToolbar`）：
 
-- 选择「图片」：先读 `ModelInputCapabilities.supportsImageInput`，false 时 Toast 并返回，true 时打开系统 Photo Picker
-- 选择「文件」：打开 SAF 文件选择器，客户端限制 `.txt/.md/.csv/.json/.log`
+| 按钮 | 图标 | 行为 |
+|------|------|------|
+| 左：附件 | `Icons.Default.AttachFile` | 直接打开 SAF 文件选择器（限 `.txt/.md/.csv/.json/.log`） |
+| 右：图片 | `Icons.Outlined.Image` | 先读 `supportsImageInput`，false 时 Toast 并返回，true 时打开 Photo Picker |
+
+两个按钮均设 `Modifier.focusProperties { canFocus = false }`，点击不收起键盘。
+
+深色模式图标颜色：`if (isSystemInDarkTheme()) Color(0xFF9E9E9E) else Color.Black`（两按钮共用）。
+
+**组件位置**：`ui/mobile-android/app/src/main/java/com/sebastian/android/ui/composer/AttachmentSlot.kt`（文件名保留，内部 composable 已改名为 `AttachmentToolbar`）
+
+> **实现差异**：原始 spec 设计文件改名为 `AttachmentToolbar.kt`；实际实现保留文件名 `AttachmentSlot.kt`，仅 composable 函数改名。
+
+> **实现差异**：原始 spec 设计右侧图标为 `Icons.Default.Image`（filled）；实际实现使用 `Icons.Outlined.Image`（outline 变体）。
 
 `onSend` 签名扩展：
 
@@ -392,9 +409,53 @@ session 删除时调用 `attachment_store.mark_session_orphaned()`，将关联 a
 ## 11. 待完成
 
 - `AttachmentStore.cleanup()` 接入 gateway lifespan 定期调度
-- 图片缩略图服务端真正生成（P0 直接返回原图）
 - `upload_attachment` 响应补充 `download_url` / `thumbnail_url` 字段（P0 可接受，客户端自行拼接）
 - 多用户权限扩展（P0 只有 owner 可访问）
+
+---
+
+## 12. Agent 发送附件（send_file）的 Android 显示
+
+Agent 通过 `send_file` 工具发送的图片/文件，在 Android 端复用现有 `ImageBlock`/`FileBlock` UI，无需新增组件。改动集中在数据映射层。后端工具规格见 [capabilities/agent-file-send.md](../capabilities/agent-file-send.md)。
+
+### 12.1 实时 SSE 映射
+
+`StreamEvent.ToolExecuted` 增加可选 `artifact` 字段。
+
+`ChatViewModel.handleEvent()` 处理 `ToolExecuted` 时：
+
+- 若 `event.name == "send_file"` 且 `event.artifact != null`：
+  - 找到对应 `toolId` 的 `ToolBlock`，原地替换为 `ImageBlock`/`FileBlock`
+  - 不全量刷新消息列表（防止滚动位置变化/闪烁）
+  - 找不到对应 `ToolBlock` 时，若当前 assistant message 存在，则追加附件 block 到末尾
+  - 用 `attachment_id` 去重（防 SSE replay 或后续历史水合产生重复 block）
+  - 当前 assistant message 不存在时，不创建临时消息；历史水合负责最终一致
+- 否则沿用现有逻辑，将工具卡状态置为 DONE
+
+失败时（`ToolFailed`）：保持现有工具卡错误显示，不生成附件 block。
+
+### 12.2 历史 Timeline 水合
+
+`TimelineMapper.buildAssistantBlocks()` 新增 `send_file` 特例：
+
+- 找到 `tool_result` 对应的 `tool_call`，若工具名为 `send_file`
+- 且 `tool_result.ok == true`
+- 且 `tool_result.payload.artifact` 存在
+- → 转为 `ImageBlock`/`FileBlock`，不生成 `ToolBlock`
+
+其他工具不受影响。
+
+水合链路：
+
+```
+GET /api/v1/sessions/{id}?include_archived=true
+  → timeline_items
+  → TimelineMapper 读取 tool_result.payload.artifact
+  → ImageBlock / FileBlock
+  → AttachmentBlocks 渲染
+```
+
+切走再切回 session、重启 App 后，Agent 发出的图片/文件仍能正常显示。
 
 ---
 

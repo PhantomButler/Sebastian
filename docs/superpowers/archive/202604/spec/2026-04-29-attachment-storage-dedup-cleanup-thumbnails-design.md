@@ -2,6 +2,8 @@
 date: 2026-04-29
 status: draft
 topic: attachment-storage-dedup-cleanup-thumbnails
+integrated_to: store/attachments.md, mobile/attachments.md
+integrated_at: 2026-05-01
 ---
 
 # Attachment Storage: Dedup, Ref-Counted Cleanup, Thumbnails
