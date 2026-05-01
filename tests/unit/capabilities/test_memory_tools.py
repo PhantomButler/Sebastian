@@ -130,7 +130,7 @@ def _mock_extractor(monkeypatch, candidates):
     """Patch MemoryExtractor.extract_with_slot_retry to return a fake ExtractorOutput."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from sebastian.memory.extraction import ExtractorOutput
+    from sebastian.memory.consolidation.extraction import ExtractorOutput
 
     fake_output = ExtractorOutput(artifacts=candidates, proposed_slots=[])
 
@@ -139,7 +139,7 @@ def _mock_extractor(monkeypatch, candidates):
 
     mock = AsyncMock(return_value=fake_output)
     monkeypatch.setattr(
-        "sebastian.memory.extraction.MemoryExtractor.extract_with_slot_retry",
+        "sebastian.memory.consolidation.extraction.MemoryExtractor.extract_with_slot_retry",
         mock,
         raising=True,
     )

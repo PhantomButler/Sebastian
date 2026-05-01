@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 import sebastian.gateway.state as state_module
 from sebastian.capabilities.tools.memory_save import memory_save
 from sebastian.capabilities.tools.memory_search import memory_search
-from sebastian.memory.extraction import ExtractorOutput
+from sebastian.memory.consolidation.extraction import ExtractorOutput
 from sebastian.memory.types import (
     CandidateArtifact,
     MemoryDecisionType,
@@ -150,7 +150,7 @@ async def test_supersede_chain_from_memory_save_to_search(enabled_memory_state) 
     fake_output = ExtractorOutput(artifacts=[new_candidate], proposed_slots=[])
     with pytest.MonkeyPatch().context() as mp:
         mp.setattr(
-            "sebastian.memory.extraction.MemoryExtractor.extract_with_slot_retry",
+            "sebastian.memory.consolidation.extraction.MemoryExtractor.extract_with_slot_retry",
             AsyncMock(return_value=fake_output),
         )
         save_result = await memory_save(content=new_content)

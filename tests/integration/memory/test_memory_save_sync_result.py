@@ -37,7 +37,7 @@ def _preference_candidate() -> CandidateArtifact:
 @pytest.mark.asyncio
 async def test_success_returns_structured_result(tmp_memory_env) -> None:
     """成功路径：返回 ok=True，output 含 saved_count >= 1 且 summary 含 '已记住'。"""
-    from sebastian.memory.extraction import ExtractorOutput
+    from sebastian.memory.consolidation.extraction import ExtractorOutput
 
     fake_output = ExtractorOutput(
         artifacts=[_preference_candidate()],
@@ -45,7 +45,7 @@ async def test_success_returns_structured_result(tmp_memory_env) -> None:
     )
 
     with patch(
-        "sebastian.memory.extraction.MemoryExtractor.extract_with_slot_retry",
+        "sebastian.memory.consolidation.extraction.MemoryExtractor.extract_with_slot_retry",
         new_callable=AsyncMock,
         return_value=fake_output,
     ):
@@ -71,7 +71,7 @@ async def test_timeout_returns_ok_false(tmp_memory_env) -> None:
         await asyncio.sleep(20)
 
     with patch(
-        "sebastian.memory.extraction.MemoryExtractor.extract_with_slot_retry",
+        "sebastian.memory.consolidation.extraction.MemoryExtractor.extract_with_slot_retry",
         side_effect=slow_extract,
     ):
         with patch("sebastian.capabilities.tools.memory_save.MEMORY_SAVE_TIMEOUT_SECONDS", 0.1):
@@ -84,12 +84,12 @@ async def test_timeout_returns_ok_false(tmp_memory_env) -> None:
 @pytest.mark.asyncio
 async def test_extractor_empty_returns_empty_summary(tmp_memory_env) -> None:
     """extractor 返回空时：ok=True，saved_count == 0，summary 含 '暂无可保存'。"""
-    from sebastian.memory.extraction import ExtractorOutput
+    from sebastian.memory.consolidation.extraction import ExtractorOutput
 
     fake_output = ExtractorOutput(artifacts=[], proposed_slots=[])
 
     with patch(
-        "sebastian.memory.extraction.MemoryExtractor.extract_with_slot_retry",
+        "sebastian.memory.consolidation.extraction.MemoryExtractor.extract_with_slot_retry",
         new_callable=AsyncMock,
         return_value=fake_output,
     ):

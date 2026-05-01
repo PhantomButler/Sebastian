@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from sebastian.gateway.auth import require_auth
 from sebastian.gateway.routes.llm_accounts import _build_resolved_metadata
-from sebastian.memory.provider_bindings import MEMORY_COMPONENT_META, MEMORY_COMPONENT_TYPES
+from sebastian.memory.consolidation.provider_bindings import MEMORY_COMPONENT_META, MEMORY_COMPONENT_TYPES
 
 if TYPE_CHECKING:
     from sebastian.store.models import AgentLLMBindingRecord

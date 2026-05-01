@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
 
-from sebastian.memory.prompts import build_extractor_prompt
-from sebastian.memory.provider_bindings import MEMORY_EXTRACTOR_BINDING
+from sebastian.memory.consolidation.prompts import build_extractor_prompt
+from sebastian.memory.consolidation.provider_bindings import MEMORY_EXTRACTOR_BINDING
 from sebastian.memory.types import CandidateArtifact, ProposedSlot
 
 if TYPE_CHECKING:

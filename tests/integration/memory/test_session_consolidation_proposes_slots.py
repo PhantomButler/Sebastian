@@ -4,14 +4,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from sebastian.memory.consolidation import (
+from sebastian.memory.consolidation.consolidation import (
     ConsolidationResult,
     MemoryConsolidator,
     MemorySummary,
     SessionConsolidationWorker,
 )
 from sebastian.memory.contracts.writing import MemoryWriteResult
-from sebastian.memory.extraction import ExtractorOutput, MemoryExtractor
+from sebastian.memory.consolidation.extraction import ExtractorOutput, MemoryExtractor
 from sebastian.memory.services.memory_service import MemoryService
 from sebastian.memory.types import (
     CandidateArtifact,

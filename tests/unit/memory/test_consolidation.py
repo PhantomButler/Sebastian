@@ -11,14 +11,14 @@ from pydantic import ValidationError
 from sebastian.core.stream_events import LLMStreamEvent, ProviderCallEnd, TextDelta
 from sebastian.llm.provider import LLMProvider
 from sebastian.llm.registry import ResolvedProvider
-from sebastian.memory.consolidation import (
+from sebastian.memory.consolidation.consolidation import (
     ConsolidationResult,
     ConsolidatorInput,
     MemoryConsolidator,
     MemorySummary,
     ProposedAction,
 )
-from sebastian.memory.extraction import ExtractorOutput
+from sebastian.memory.consolidation.extraction import ExtractorOutput
 from sebastian.memory.types import (
     CandidateArtifact,
     MemoryKind,
@@ -485,7 +485,7 @@ class TestMemoryConsolidatorConsolidate:
         from sqlalchemy import select, text
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-        from sebastian.memory.consolidation import SessionConsolidationWorker
+        from sebastian.memory.consolidation.consolidation import SessionConsolidationWorker
         from sebastian.store.models import (
             Base,
             EpisodeMemoryRecord,
@@ -569,7 +569,7 @@ class TestMemoryConsolidatorConsolidate:
         from sqlalchemy import select, text
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-        from sebastian.memory.consolidation import SessionConsolidationWorker
+        from sebastian.memory.consolidation.consolidation import SessionConsolidationWorker
         from sebastian.memory.services.memory_service import MemoryService
         from sebastian.memory.services.writing import MemoryWriteService
         from sebastian.store.models import Base, MemoryDecisionLogRecord

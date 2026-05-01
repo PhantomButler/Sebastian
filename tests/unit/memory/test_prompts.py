@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sebastian.memory.prompts import (
+from sebastian.memory.consolidation.prompts import (
     build_consolidator_prompt,
     build_extractor_prompt,
     group_slots_by_kind,
@@ -46,8 +46,8 @@ def test_extractor_prompt_no_pinned_example() -> None:
 
 def test_embedded_examples_parse_as_extractor_output() -> None:
     """示例 JSON 必须能被 ExtractorOutput 解析，防止 prompt 示例随代码演进腐坏。"""
-    from sebastian.memory.extraction import ExtractorOutput
-    from sebastian.memory.prompts import _EXAMPLE_1_JSON, _EXAMPLE_2_JSON, _EXAMPLE_3_JSON
+    from sebastian.memory.consolidation.extraction import ExtractorOutput
+    from sebastian.memory.consolidation.prompts import _EXAMPLE_1_JSON, _EXAMPLE_2_JSON, _EXAMPLE_3_JSON
 
     for example_json in (_EXAMPLE_1_JSON, _EXAMPLE_2_JSON, _EXAMPLE_3_JSON):
         parsed = ExtractorOutput.model_validate_json(example_json)
@@ -57,7 +57,7 @@ def test_embedded_examples_parse_as_extractor_output() -> None:
 
 def test_extractor_prompt_contains_confidence_guide() -> None:
     """置信度评分指南必须出现在 extractor system prompt 中。"""
-    from sebastian.memory.prompts import build_extractor_prompt, group_slots_by_kind
+    from sebastian.memory.consolidation.prompts import build_extractor_prompt, group_slots_by_kind
     from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 
     prompt = build_extractor_prompt(group_slots_by_kind(DEFAULT_SLOT_REGISTRY.list_all()))

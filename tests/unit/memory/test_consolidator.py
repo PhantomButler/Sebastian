@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sebastian.memory.consolidation import (
+from sebastian.memory.consolidation.consolidation import (
     ConsolidationResult,
     ConsolidatorInput,
     MemoryConsolidator,

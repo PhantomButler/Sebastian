@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from sebastian.memory.consolidation import SessionConsolidationWorker
+from sebastian.memory.consolidation.consolidation import SessionConsolidationWorker
 from sebastian.memory.services.memory_service import MemoryService
 from sebastian.memory.services.writing import MemoryWriteService
 from sebastian.store.models import (

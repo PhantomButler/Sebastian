@@ -75,7 +75,7 @@ async def test_startup_rebuild_failure_schedules_refresh(tmp_path) -> None:
     from contextlib import asynccontextmanager
     from unittest.mock import AsyncMock
 
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )

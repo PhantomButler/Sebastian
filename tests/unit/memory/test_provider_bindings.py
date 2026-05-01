@@ -29,13 +29,13 @@ async def registry_with_db(tmp_path, monkeypatch):
 
 
 def test_memory_extractor_binding_constant() -> None:
-    from sebastian.memory.provider_bindings import MEMORY_EXTRACTOR_BINDING
+    from sebastian.memory.consolidation.provider_bindings import MEMORY_EXTRACTOR_BINDING
 
     assert MEMORY_EXTRACTOR_BINDING == "memory_extractor"
 
 
 def test_memory_consolidator_binding_constant() -> None:
-    from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
+    from sebastian.memory.consolidation.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
 
     assert MEMORY_CONSOLIDATOR_BINDING == "memory_consolidator"
 
@@ -43,7 +43,7 @@ def test_memory_consolidator_binding_constant() -> None:
 async def test_get_provider_memory_extractor_falls_back_to_default(
     registry_with_db,
 ) -> None:
-    from sebastian.memory.provider_bindings import MEMORY_EXTRACTOR_BINDING
+    from sebastian.memory.consolidation.provider_bindings import MEMORY_EXTRACTOR_BINDING
 
     account = LLMAccountRecord(
         name="default",
@@ -64,7 +64,7 @@ async def test_get_provider_memory_extractor_falls_back_to_default(
 async def test_get_provider_memory_consolidator_falls_back_to_default(
     registry_with_db,
 ) -> None:
-    from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
+    from sebastian.memory.consolidation.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
 
     account = LLMAccountRecord(
         name="default",

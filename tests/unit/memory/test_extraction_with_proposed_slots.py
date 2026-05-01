@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sebastian.memory.extraction import (
+from sebastian.memory.consolidation.extraction import (
     ExtractorInput,
     ExtractorOutput,
     MemoryExtractor,

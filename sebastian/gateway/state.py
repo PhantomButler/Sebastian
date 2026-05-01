@@ -15,9 +15,9 @@ if TYPE_CHECKING:
     from sebastian.core.base_agent import BaseAgent
     from sebastian.gateway.sse import SSEManager
     from sebastian.llm.registry import LLMProviderRegistry
-    from sebastian.memory.consolidation import MemoryConsolidationScheduler
-    from sebastian.memory.extraction import MemoryExtractor
-    from sebastian.memory.resident_snapshot import ResidentMemorySnapshotRefresher
+    from sebastian.memory.consolidation.consolidation import MemoryConsolidationScheduler
+    from sebastian.memory.consolidation.extraction import MemoryExtractor
+    from sebastian.memory.resident.resident_snapshot import ResidentMemorySnapshotRefresher
     from sebastian.memory.services import MemoryService
     from sebastian.orchestrator.conversation import ConversationManager
     from sebastian.orchestrator.sebas import Sebastian

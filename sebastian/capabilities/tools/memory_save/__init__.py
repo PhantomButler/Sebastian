@@ -69,7 +69,7 @@ async def memory_save(content: str) -> ToolResult:
 async def _do_save(content: str, session_id: str | None, agent_type: str) -> MemorySaveResult:
     from sebastian.memory.contracts.writing import MemoryWriteRequest
     from sebastian.memory.errors import InvalidSlotProposalError
-    from sebastian.memory.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor
+    from sebastian.memory.consolidation.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor
     from sebastian.memory.writing.slot_proposals import validate_proposed_slot
     from sebastian.memory.writing.slots import DEFAULT_SLOT_REGISTRY
 

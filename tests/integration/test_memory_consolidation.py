@@ -4,13 +4,13 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.memory.consolidation import (
+from sebastian.memory.consolidation.consolidation import (
     ConsolidationResult,
     ConsolidatorInput,
     MemorySummary,
     SessionConsolidationWorker,
 )
-from sebastian.memory.extraction import ExtractorOutput
+from sebastian.memory.consolidation.extraction import ExtractorOutput
 from sebastian.memory.services.memory_service import MemoryService
 from sebastian.memory.services.writing import MemoryWriteService
 from sebastian.memory.types import (
@@ -511,7 +511,7 @@ class FakeExpireConsolidator:
     """Returns a ConsolidationResult that contains only an EXPIRE action."""
 
     async def consolidate(self, input: ConsolidatorInput) -> ConsolidationResult:
-        from sebastian.memory.consolidation import ProposedAction
+        from sebastian.memory.consolidation.consolidation import ProposedAction
 
         return ConsolidationResult(
             summaries=[],
@@ -637,7 +637,7 @@ async def test_consolidation_expire_log_has_input_source(db_factory):
 
     class FakeExpireConsolidatorSrc:
         async def consolidate(self, input: ConsolidatorInput) -> ConsolidationResult:
-            from sebastian.memory.consolidation import ProposedAction
+            from sebastian.memory.consolidation.consolidation import ProposedAction
 
             return ConsolidationResult(
                 summaries=[],

@@ -152,13 +152,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await connect_all(mcp_clients, registry)
 
     event_bus = bus
-    from sebastian.memory.consolidation import (
+    from sebastian.memory.consolidation.consolidation import (
         MemoryConsolidationScheduler,
         MemoryConsolidator,
         SessionConsolidationWorker,
     )
-    from sebastian.memory.extraction import MemoryExtractor
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.consolidation.extraction import MemoryExtractor
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -225,7 +225,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state.context_compaction_worker = _compaction_worker
 
     # Catch-up sweep: consolidate sessions that completed while the gateway was down.
-    from sebastian.memory.consolidation import sweep_unconsolidated
+    from sebastian.memory.consolidation.consolidation import sweep_unconsolidated
 
     await sweep_unconsolidated(
         db_factory=db_factory,

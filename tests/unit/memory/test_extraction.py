@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from sebastian.core.stream_events import LLMStreamEvent, ProviderCallEnd, TextDelta
 from sebastian.llm.provider import LLMProvider
 from sebastian.llm.registry import ResolvedProvider
-from sebastian.memory.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor
+from sebastian.memory.consolidation.extraction import ExtractorInput, ExtractorOutput, MemoryExtractor
 from sebastian.memory.types import (
     CandidateArtifact,
     MemoryKind,

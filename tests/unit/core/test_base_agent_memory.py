@@ -507,7 +507,7 @@ async def test_stream_inner_prompt_order_resident_dynamic_todo(mem_factory) -> N
 
     # Resident refresher returns a ready snapshot.
     # rendered_record_ids contains "res-1" — so dynamic retrieval excludes that record.
-    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+    from sebastian.memory.resident.resident_snapshot import ResidentSnapshotReadResult
 
     fake_refresher = MagicMock()
     fake_refresher.read = AsyncMock(
@@ -576,7 +576,7 @@ async def test_stream_inner_prompt_order_resident_dynamic_todo(mem_factory) -> N
 async def test_memory_section_receives_resident_exclusions(mem_factory) -> None:
     """When _stream_inner() calls _memory_section(), it passes the resident dedup sets
     so that dynamic retrieval can skip already-rendered records."""
-    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+    from sebastian.memory.resident.resident_snapshot import ResidentSnapshotReadResult
     from sebastian.memory.retrieval.retrieval import RetrievalContext
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
@@ -641,7 +641,7 @@ async def test_memory_section_receives_resident_exclusions(mem_factory) -> None:
 async def test_resident_memory_section_skips_depth_above_one(mem_factory) -> None:
     """When _current_depth[session] != 1, _resident_memory_section must return an
     empty result and must NOT call refresher.read()."""
-    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+    from sebastian.memory.resident.resident_snapshot import ResidentSnapshotReadResult
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
     agent._current_depth["s-depth"] = 2  # sub-agent depth — memory ineligible
@@ -672,7 +672,7 @@ async def test_resident_memory_section_skips_depth_above_one(mem_factory) -> Non
 @pytest.mark.asyncio
 async def test_resident_memory_section_skips_when_memory_disabled(mem_factory) -> None:
     """When memory_settings.enabled is False, _resident_memory_section returns empty."""
-    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+    from sebastian.memory.resident.resident_snapshot import ResidentSnapshotReadResult
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
     agent._current_depth["s-dis"] = 1
@@ -727,7 +727,7 @@ async def test_resident_memory_section_skips_missing_refresher(mem_factory) -> N
 async def test_resident_memory_read_does_not_open_db_factory(mem_factory) -> None:
     """_resident_memory_section() must read from refresher.read(), not the DB.
     db_factory is patched to raise AssertionError if called."""
-    from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
+    from sebastian.memory.resident.resident_snapshot import ResidentSnapshotReadResult
 
     # Build a db_factory that raises if called
     bad_factory = MagicMock(side_effect=AssertionError("db_factory must not be called"))

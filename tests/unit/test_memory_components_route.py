@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from sebastian.memory.provider_bindings import (
+from sebastian.memory.consolidation.provider_bindings import (
     MEMORY_CONSOLIDATOR_BINDING,
     MEMORY_EXTRACTOR_BINDING,
 )

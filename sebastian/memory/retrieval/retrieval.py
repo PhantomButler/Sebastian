@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Any
 import jieba  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field
 
-from sebastian.memory.resident_dedupe import (
+from sebastian.memory.resident.resident_dedupe import (
     canonical_bullet as _canonical_bullet,
 )
-from sebastian.memory.resident_dedupe import (
+from sebastian.memory.resident.resident_dedupe import (
     slot_value_dedupe_key as _slot_value_dedupe_key,
 )
 from sebastian.memory.retrieval.retrieval_lexicon import (

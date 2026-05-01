@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sebastian.memory.consolidation import MemoryConsolidationScheduler
+from sebastian.memory.consolidation.consolidation import MemoryConsolidationScheduler
 from sebastian.protocol.events.bus import EventBus
 from sebastian.protocol.events.types import Event, EventType
 

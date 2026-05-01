@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sebastian.memory.resident_dedupe import (
+from sebastian.memory.resident.resident_dedupe import (
     canonical_bullet,
     canonical_json,
     normalize_memory_text,

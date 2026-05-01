@@ -17,7 +17,7 @@ from sebastian.memory.services.writing import MemoryWriteService
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    from sebastian.memory.resident_snapshot import ResidentMemorySnapshotRefresher
+    from sebastian.memory.resident.resident_snapshot import ResidentMemorySnapshotRefresher
     from sebastian.memory.writing.slots import SlotRegistry
 
 # Store imports needed when MemoryService owns the session (mutation_scope path)

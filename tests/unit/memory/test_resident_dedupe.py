@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sebastian.memory.resident_dedupe import (
+from sebastian.memory.resident.resident_dedupe import (
     canonical_bullet,
     canonical_json,
     normalize_memory_text,

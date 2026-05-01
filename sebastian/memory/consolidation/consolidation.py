@@ -12,14 +12,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sebastian.memory.retrieval.depth_guard import is_memory_eligible
-from sebastian.memory.extraction import (
+from sebastian.memory.consolidation.extraction import (
     ExtractorInput,
     ExtractorOutput,
     MemoryExtractor,
     _strip_code_fence,
 )
-from sebastian.memory.prompts import build_consolidator_prompt, group_slots_by_kind
-from sebastian.memory.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
+from sebastian.memory.consolidation.prompts import build_consolidator_prompt, group_slots_by_kind
+from sebastian.memory.consolidation.provider_bindings import MEMORY_CONSOLIDATOR_BINDING
 from sebastian.memory.subject import resolve_subject
 from sebastian.memory.trace import record_ref, trace
 from sebastian.memory.types import (
@@ -40,7 +40,7 @@ from sebastian.store.session_context import build_legacy_messages
 
 if TYPE_CHECKING:
     from sebastian.llm.registry import LLMProviderRegistry, ResolvedProvider
-    from sebastian.memory.resident_snapshot import ResidentMemorySnapshotRefresher
+    from sebastian.memory.resident.resident_snapshot import ResidentMemorySnapshotRefresher
     from sebastian.memory.services.memory_service import MemoryService
     from sebastian.protocol.events.bus import EventBus
 

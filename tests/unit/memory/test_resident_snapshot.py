@@ -88,7 +88,7 @@ def _profile_record(
 
 
 def test_paths_live_under_user_data_dir(tmp_path: Path) -> None:
-    from sebastian.memory.resident_snapshot import ResidentSnapshotPaths
+    from sebastian.memory.resident.resident_snapshot import ResidentSnapshotPaths
 
     paths = ResidentSnapshotPaths.from_user_data_dir(tmp_path)
     assert paths.directory == tmp_path / "memory"
@@ -97,7 +97,7 @@ def test_paths_live_under_user_data_dir(tmp_path: Path) -> None:
 
 
 async def test_read_missing_snapshot_returns_empty(tmp_path: Path) -> None:
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -113,7 +113,7 @@ async def test_read_missing_snapshot_returns_empty(tmp_path: Path) -> None:
 
 
 async def test_read_rejects_markdown_hash_mismatch(tmp_path: Path) -> None:
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -143,7 +143,7 @@ async def test_read_rejects_markdown_hash_mismatch(tmp_path: Path) -> None:
 
     refresher = ResidentMemorySnapshotRefresher(paths=paths)
     # manually load the state as "ready" so we can test hash validation
-    from sebastian.memory.resident_snapshot import ResidentSnapshotMetadata
+    from sebastian.memory.resident.resident_snapshot import ResidentSnapshotMetadata
 
     refresher._cached_metadata = ResidentSnapshotMetadata(**meta)
     refresher._snapshot_state = "ready"
@@ -162,7 +162,7 @@ async def test_read_rejects_markdown_hash_mismatch(tmp_path: Path) -> None:
 async def test_rebuild_includes_high_confidence_allowlisted_profile(
     tmp_path: Path, resident_db_session: AsyncSession
 ) -> None:
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -190,7 +190,7 @@ async def test_rebuild_includes_high_confidence_allowlisted_profile(
 async def test_rebuild_excludes_low_confidence_sensitive_and_needs_review(
     tmp_path: Path, resident_db_session: AsyncSession
 ) -> None:
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -219,7 +219,7 @@ async def test_rebuild_excludes_low_confidence_sensitive_and_needs_review(
 async def test_same_record_allowlist_and_pinned_renders_once_in_core_profile(
     tmp_path: Path, resident_db_session: AsyncSession
 ) -> None:
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -252,7 +252,7 @@ async def test_same_record_allowlist_and_pinned_renders_once_in_core_profile(
 async def test_rebuild_dedupes_by_slot_value_key(
     tmp_path: Path, resident_db_session: AsyncSession
 ) -> None:
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -291,7 +291,7 @@ async def test_rebuild_dedupes_by_slot_value_key(
 async def test_pinned_eligibility_rejects_unsafe_raw_content(
     tmp_path: Path, resident_db_session: AsyncSession
 ) -> None:
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -337,7 +337,7 @@ async def test_pinned_eligibility_rejects_unsafe_raw_content(
 
 async def test_mark_dirty_file_failure_still_blocks_stale_reads(tmp_path: Path) -> None:
     """Even if _write_empty_state raises OSError, in-memory state is dirty → read() returns ''."""
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -368,7 +368,7 @@ async def test_rebuild_discards_if_dirty_generation_changes(
     tmp_path: Path, resident_db_session: AsyncSession
 ) -> None:
     """If _dirty_generation changes between render and publish, rebuild does not serve result."""
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -406,7 +406,7 @@ async def test_rebuild_excludes_expired_and_future_dated(
     tmp_path: Path, resident_db_session: AsyncSession
 ) -> None:
     """Records outside their valid window must not appear in the snapshot."""
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -436,7 +436,7 @@ async def test_rebuild_failure_writes_error_state(
     from contextlib import asynccontextmanager
     from unittest.mock import AsyncMock
 
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -485,7 +485,7 @@ async def test_read_hash_mismatch_triggers_schedule_refresh(
     """On markdown hash mismatch read() must call schedule_refresh()."""
     import json as _json
 
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -513,7 +513,7 @@ async def test_read_hash_mismatch_triggers_schedule_refresh(
         encoding="utf-8",
     )
 
-    from sebastian.memory.resident_snapshot import ResidentSnapshotMetadata
+    from sebastian.memory.resident.resident_snapshot import ResidentSnapshotMetadata
 
     refresher = ResidentMemorySnapshotRefresher(paths=paths)
     refresher._snapshot_state = "ready"
@@ -551,7 +551,7 @@ async def test_read_hash_mismatch_triggers_schedule_refresh(
 
 async def test_read_returns_empty_while_writer_active(tmp_path: Path) -> None:
     """Reader must not serve stale snapshot while a writer is in mutation_scope()."""
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
         ResidentSnapshotReadResult,
@@ -581,8 +581,8 @@ async def test_write_empty_state_produces_valid_markdown_hash(tmp_path: Path) ->
     """_write_empty_state must write the real SHA-256 of empty content, not 'sha256:'."""
     import json as _json
 
-    from sebastian.memory.resident_dedupe import sha256_text
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_dedupe import sha256_text
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
@@ -607,7 +607,7 @@ async def test_write_empty_state_produces_valid_markdown_hash(tmp_path: Path) ->
 
 async def test_rw_lock_write_blocks_new_readers() -> None:
     """write() must block new readers that arrive while the writer is active."""
-    from sebastian.memory.resident_snapshot import AsyncRWLock
+    from sebastian.memory.resident.resident_snapshot import AsyncRWLock
 
     lock = AsyncRWLock()
     order: list[str] = []
@@ -637,7 +637,7 @@ async def test_record_hash_changes_when_content_changes(
     """record_hash must change when a record's content changes, not just when IDs change."""
     import json as _json
 
-    from sebastian.memory.resident_snapshot import (
+    from sebastian.memory.resident.resident_snapshot import (
         ResidentMemorySnapshotRefresher,
         ResidentSnapshotPaths,
     )
