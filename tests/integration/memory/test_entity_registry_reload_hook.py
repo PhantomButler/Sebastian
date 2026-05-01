@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from sebastian.memory.entity_registry import EntityRegistry
+from sebastian.memory.stores.entity_registry import EntityRegistry
 
 
 @pytest.mark.asyncio
@@ -51,7 +51,7 @@ async def test_list_all_names_and_aliases_flat_order(db_session) -> None:
 @pytest.mark.asyncio
 async def test_sync_jieba_terms_still_works(db_session, monkeypatch) -> None:
     """重构后 sync_jieba_terms 应复用 list_all_names_and_aliases，行为不变。"""
-    from sebastian.memory import entity_registry as er_mod
+    from sebastian.memory.stores import entity_registry as er_mod
 
     captured: list[list[str]] = []
 

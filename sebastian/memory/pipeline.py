@@ -20,9 +20,9 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.entity_registry import EntityRegistry
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.slots import SlotRegistry
 
 logger = logging.getLogger(__name__)

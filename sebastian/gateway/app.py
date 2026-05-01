@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sebastian.core.task_manager import TaskManager
     from sebastian.gateway.sse import SSEManager
     from sebastian.log import setup_logging
-    from sebastian.memory.entity_registry import EntityRegistry
+    from sebastian.memory.stores.entity_registry import EntityRegistry
     from sebastian.memory.startup import (
         bootstrap_slot_registry,
         init_memory_storage,

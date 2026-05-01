@@ -4,7 +4,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.memory.entity_registry import EntityRegistry
+from sebastian.memory.stores.entity_registry import EntityRegistry
 from sebastian.memory.retrieval import (
     DEFAULT_RETRIEVAL_PLANNER,
     RetrievalContext,

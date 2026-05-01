@@ -95,7 +95,7 @@ async def test_memory_save_proposes_slot_and_reuses_on_second_call(
     )
 
     # 断言 DB 里有该行
-    from sebastian.memory.slot_definition_store import SlotDefinitionStore
+    from sebastian.memory.stores.slot_definition_store import SlotDefinitionStore
 
     async with factory() as verify_session:
         store = SlotDefinitionStore(verify_session)

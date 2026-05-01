@@ -9,9 +9,9 @@ from sebastian.memory.types import MemoryDecisionType, MemoryKind, ResolveDecisi
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.entity_registry import EntityRegistry
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
 
 
 async def persist_decision(

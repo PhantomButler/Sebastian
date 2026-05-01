@@ -477,8 +477,8 @@ async def test_memory_search_returns_structured_items(enabled_memory_state, capl
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -601,7 +601,7 @@ async def test_memory_search_respects_limit(enabled_memory_state) -> None:
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -678,7 +678,7 @@ async def test_memory_search_citation_type_profile(enabled_memory_state) -> None
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -731,7 +731,7 @@ async def test_memory_search_citation_type_summary(enabled_memory_state) -> None
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -784,7 +784,7 @@ async def test_memory_search_citation_type_episode(enabled_memory_state) -> None
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -837,7 +837,7 @@ async def test_memory_search_context_lane(enabled_memory_state) -> None:
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -973,7 +973,7 @@ async def test_memory_search_summary_first(enabled_memory_state) -> None:
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1072,8 +1072,8 @@ async def test_memory_search_profile_does_not_starve_episode_lane(
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1160,8 +1160,8 @@ async def test_memory_search_all_lanes_represented_within_limit(
     from uuid import uuid4
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1302,8 +1302,8 @@ async def test_memory_search_raises_effective_limit_to_cover_active_lanes(
     from uuid import uuid4
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1504,7 +1504,7 @@ async def test_memory_search_excludes_low_confidence_record(enabled_memory_state
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1559,7 +1559,7 @@ async def test_memory_search_excludes_expired_record(enabled_memory_state) -> No
     from datetime import UTC, datetime, timedelta
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1614,7 +1614,7 @@ async def test_memory_search_returns_do_not_auto_inject_record(enabled_memory_st
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1673,7 +1673,7 @@ async def test_memory_search_bypasses_planner_trigger_words(enabled_memory_state
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1736,7 +1736,7 @@ async def test_memory_search_unaffected_by_resident_dedup(enabled_memory_state) 
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,
@@ -1793,7 +1793,7 @@ async def test_memory_search_dedups_cross_lane_duplicates(enabled_memory_state) 
     from datetime import UTC, datetime
 
     from sebastian.capabilities.tools.memory_search import memory_search
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.types import (
         MemoryArtifact,
         MemoryKind,

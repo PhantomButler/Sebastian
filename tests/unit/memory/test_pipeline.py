@@ -84,10 +84,10 @@ def _bad_slot_candidate():
 async def _run(candidates, *, session_id="s1", input_source=None):
     """Helper: run process_candidates with real in-memory DB, return (decisions, factory)."""
     from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.entity_registry import EntityRegistry
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.pipeline import process_candidates
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
 
     factory = await _make_db_factory()
@@ -177,10 +177,10 @@ async def test_process_candidates_does_not_commit(monkeypatch) -> None:
     """process_candidates must NOT call db_session.commit() — caller owns the transaction."""
 
     from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.entity_registry import EntityRegistry
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.pipeline import process_candidates
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
 
     factory = await _make_db_factory()
@@ -217,10 +217,10 @@ async def test_process_candidates_does_not_commit(monkeypatch) -> None:
 async def test_process_candidates_proposed_slots_without_handler_raises() -> None:
     """proposed_slots 非空但 slot_proposal_handler=None 时应抛 ValueError。"""
     from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.entity_registry import EntityRegistry
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.pipeline import process_candidates
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
     from sebastian.memory.types import (
         Cardinality,
@@ -266,10 +266,10 @@ async def test_process_candidates_proposed_slots_without_handler_raises() -> Non
 async def test_process_candidates_empty_proposed_slots_handler_none_allowed() -> None:
     """proposed_slots=[] 时 handler=None 不应抛错（向下兼容）。"""
     from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.entity_registry import EntityRegistry
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.pipeline import process_candidates
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
 
     factory = await _make_db_factory()

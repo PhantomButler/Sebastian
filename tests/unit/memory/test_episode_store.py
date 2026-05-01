@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.memory.episode_store import EpisodeMemoryStore
+from sebastian.memory.stores.episode_store import EpisodeMemoryStore
 from sebastian.memory.segmentation import segment_for_fts
 from sebastian.memory.types import (
     MemoryArtifact,

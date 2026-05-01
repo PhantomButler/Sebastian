@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select, text
 
-from sebastian.memory.episode_store import ensure_episode_fts
+from sebastian.memory.stores.episode_store import ensure_episode_fts
 from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
 from sebastian.store.models import MemorySlotRecord
 
@@ -108,7 +108,7 @@ async def bootstrap_slot_registry(
     registry: SlotRegistry,
 ) -> None:
     """服务启动时调用：把 memory_slots 表全部数据灌入 registry。"""
-    from sebastian.memory.slot_definition_store import SlotDefinitionStore
+    from sebastian.memory.stores.slot_definition_store import SlotDefinitionStore
 
     store = SlotDefinitionStore(session)
     await registry.bootstrap_from_db(store)

@@ -113,23 +113,23 @@ async def test_retrieval_service_search_returns_empty_on_no_data(db_session, mon
     from unittest.mock import AsyncMock
 
     monkeypatch.setattr(
-        "sebastian.memory.profile_store.ProfileMemoryStore.search_active",
+        "sebastian.memory.stores.profile_store.ProfileMemoryStore.search_active",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
-        "sebastian.memory.profile_store.ProfileMemoryStore.search_recent_context",
+        "sebastian.memory.stores.profile_store.ProfileMemoryStore.search_recent_context",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
-        "sebastian.memory.episode_store.EpisodeMemoryStore.search_summaries_by_query",
+        "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_summaries_by_query",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
-        "sebastian.memory.episode_store.EpisodeMemoryStore.search_episodes_only",
+        "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_episodes_only",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
-        "sebastian.memory.entity_registry.EntityRegistry.list_relations",
+        "sebastian.memory.stores.entity_registry.EntityRegistry.list_relations",
         AsyncMock(return_value=[]),
     )
 
@@ -153,10 +153,10 @@ async def test_write_service_caller_owned_does_not_commit(db_session, monkeypatc
     from unittest.mock import AsyncMock, MagicMock
 
     from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.entity_registry import EntityRegistry
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
     from sebastian.memory.pipeline import PipelineResult
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.services.writing import MemoryWriteService
     from sebastian.memory.slot_proposals import SlotProposalHandler
     from sebastian.memory.slots import SlotRegistry
@@ -560,9 +560,9 @@ async def test_memory_service_disabled_write_candidates_in_session_returns_empty
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.entity_registry import EntityRegistry
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
     from sebastian.memory.services.memory_service import MemoryService
     from sebastian.memory.slot_proposals import SlotProposalHandler
     from sebastian.memory.slots import SlotRegistry

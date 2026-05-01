@@ -24,7 +24,7 @@ from sebastian.memory.trace import record_ref, trace
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from sebastian.memory.entity_registry import EntityRegistry
+    from sebastian.memory.stores.entity_registry import EntityRegistry
 
 DO_NOT_AUTO_INJECT_TAG = "do_not_auto_inject"
 
@@ -416,8 +416,8 @@ async def retrieve_memory_section(
     db_session: AsyncSession,
 ) -> str:
     """Full retrieval pipeline: plan → fetch → assemble → return string."""
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+    from sebastian.memory.stores.profile_store import ProfileMemoryStore
 
     planner = DEFAULT_RETRIEVAL_PLANNER
     plan = planner.plan(context)
@@ -484,7 +484,7 @@ async def retrieve_memory_section(
 
     relation_records: list[Any] = []
     if plan.relation_lane:
-        from sebastian.memory.entity_registry import EntityRegistry
+        from sebastian.memory.stores.entity_registry import EntityRegistry
 
         relation_registry = EntityRegistry(db_session)
         relation_records = await relation_registry.list_relations(

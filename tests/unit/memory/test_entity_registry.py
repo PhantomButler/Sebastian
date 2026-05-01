@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.memory.entity_registry import EntityRegistry
+from sebastian.memory.stores.entity_registry import EntityRegistry
 from sebastian.memory.types import MemoryStatus
 from sebastian.store import models  # noqa: F401
 from sebastian.store.database import Base
@@ -155,7 +155,7 @@ async def test_sync_jieba_terms_calls_add_entity_terms(db_session) -> None:
     await registry.upsert_entity("小橘", "pet", aliases=["橘猫", "小橘子"])
     await db_session.flush()
 
-    with patch("sebastian.memory.entity_registry.add_entity_terms") as mock_add:
+    with patch("sebastian.memory.stores.entity_registry.add_entity_terms") as mock_add:
         await registry.sync_jieba_terms()
 
     mock_add.assert_called_once()

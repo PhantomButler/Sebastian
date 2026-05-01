@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.memory.slot_definition_store import SlotDefinitionStore
+from sebastian.memory.stores.slot_definition_store import SlotDefinitionStore
 from sebastian.memory.types import (
     Cardinality,
     MemoryKind,

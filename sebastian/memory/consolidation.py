@@ -233,9 +233,9 @@ class SessionConsolidationWorker:
         async with self._db_factory() as session:
             from sebastian.memory.contracts.writing import MemoryWriteRequest
             from sebastian.memory.decision_log import MemoryDecisionLogger
-            from sebastian.memory.entity_registry import EntityRegistry
-            from sebastian.memory.episode_store import EpisodeMemoryStore
-            from sebastian.memory.profile_store import ProfileMemoryStore
+            from sebastian.memory.stores.entity_registry import EntityRegistry
+            from sebastian.memory.stores.episode_store import EpisodeMemoryStore
+            from sebastian.memory.stores.profile_store import ProfileMemoryStore
             from sebastian.memory.slots import DEFAULT_SLOT_REGISTRY
             from sebastian.store.models import SessionConsolidationRecord
 
@@ -273,7 +273,7 @@ class SessionConsolidationWorker:
             #     candidate artifacts instead of having to re-extract from raw
             #     messages. Extractor returns [] on LLM failure, never raises.
             from sebastian.memory.errors import InvalidSlotProposalError
-            from sebastian.memory.slot_definition_store import SlotDefinitionStore
+            from sebastian.memory.stores.slot_definition_store import SlotDefinitionStore
             from sebastian.memory.slot_proposals import SlotProposalHandler
 
             slot_store = SlotDefinitionStore(session)

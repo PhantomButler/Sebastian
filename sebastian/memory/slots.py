@@ -14,7 +14,7 @@ from sebastian.memory.types import (
 )
 
 if TYPE_CHECKING:
-    from sebastian.memory.slot_definition_store import SlotDefinitionStore
+    from sebastian.memory.stores.slot_definition_store import SlotDefinitionStore
 
 # Kinds that MUST be bound to a registered slot.
 _SLOT_REQUIRED_KINDS: frozenset[MemoryKind] = frozenset([MemoryKind.FACT, MemoryKind.PREFERENCE])

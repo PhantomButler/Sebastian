@@ -727,7 +727,7 @@ async def test_retrieve_memory_section_calls_context_lane(db_session, caplog) ->
         user_message="今天有什么安排",
     )
     with patch(
-        "sebastian.memory.profile_store.ProfileMemoryStore.search_recent_context",
+        "sebastian.memory.stores.profile_store.ProfileMemoryStore.search_recent_context",
         new=AsyncMock(return_value=[]),
     ) as spy:
         await retrieve_memory_section(context, db_session=db_session)
@@ -750,7 +750,7 @@ async def test_retrieve_memory_section_skips_context_lane_when_inactive(db_sessi
         user_message="帮我设个提醒",
     )
     with patch(
-        "sebastian.memory.profile_store.ProfileMemoryStore.search_recent_context",
+        "sebastian.memory.stores.profile_store.ProfileMemoryStore.search_recent_context",
         new=AsyncMock(return_value=[]),
     ) as spy:
         await retrieve_memory_section(context, db_session=db_session)
@@ -766,7 +766,7 @@ async def test_retrieve_memory_section_calls_relation_lane(db_session) -> None:
         user_message="老婆喜欢什么",
     )
     with patch(
-        "sebastian.memory.entity_registry.EntityRegistry.list_relations",
+        "sebastian.memory.stores.entity_registry.EntityRegistry.list_relations",
         new=AsyncMock(return_value=[]),
     ) as spy:
         await retrieve_memory_section(context, db_session=db_session)
@@ -785,7 +785,7 @@ async def test_retrieve_memory_section_skips_relation_lane_when_inactive(db_sess
         user_message="帮我设个提醒",
     )
     with patch(
-        "sebastian.memory.entity_registry.EntityRegistry.list_relations",
+        "sebastian.memory.stores.entity_registry.EntityRegistry.list_relations",
         new=AsyncMock(return_value=[]),
     ) as spy:
         await retrieve_memory_section(context, db_session=db_session)
@@ -809,11 +809,11 @@ async def test_episode_lane_uses_only_summaries_when_budget_filled(db_session) -
     )
     with (
         patch(
-            "sebastian.memory.episode_store.EpisodeMemoryStore.search_summaries_by_query",
+            "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_summaries_by_query",
             new=AsyncMock(return_value=summary_records),
         ) as summary_spy,
         patch(
-            "sebastian.memory.episode_store.EpisodeMemoryStore.search_episodes_only",
+            "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_episodes_only",
             new=AsyncMock(return_value=[]),
         ) as detail_spy,
     ):
@@ -843,11 +843,11 @@ async def test_episode_lane_supplements_with_detail_when_summaries_insufficient(
     )
     with (
         patch(
-            "sebastian.memory.episode_store.EpisodeMemoryStore.search_summaries_by_query",
+            "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_summaries_by_query",
             new=AsyncMock(return_value=summary_records),
         ) as summary_spy,
         patch(
-            "sebastian.memory.episode_store.EpisodeMemoryStore.search_episodes_only",
+            "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_episodes_only",
             new=AsyncMock(return_value=detail_records),
         ) as detail_spy,
     ):
@@ -992,15 +992,15 @@ async def test_episode_lane_irrelevant_summaries_do_not_enter_results(db_session
     )
     with (
         patch(
-            "sebastian.memory.episode_store.EpisodeMemoryStore.search_summaries_by_query",
+            "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_summaries_by_query",
             new=AsyncMock(return_value=[]),  # no matching summaries
         ),
         patch(
-            "sebastian.memory.episode_store.EpisodeMemoryStore.search_episodes_only",
+            "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_episodes_only",
             new=AsyncMock(return_value=[]),
         ),
         patch(
-            "sebastian.memory.episode_store.EpisodeMemoryStore.search_summaries",
+            "sebastian.memory.stores.episode_store.EpisodeMemoryStore.search_summaries",
             new=AsyncMock(return_value=[FakeEpisodeRecord(content="不相关的最近摘要")]),
         ) as recency_spy,
     ):

@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.memory.profile_store import ProfileMemoryStore
+from sebastian.memory.stores.profile_store import ProfileMemoryStore
 from sebastian.memory.types import (
     Cardinality,
     MemoryArtifact,
