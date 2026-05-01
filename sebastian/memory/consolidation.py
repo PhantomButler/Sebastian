@@ -540,7 +540,8 @@ class SessionConsolidationWorker:
                 else:
                     async with self._resident_snapshot_refresher.mutation_scope():
                         await session.commit()
-                        await self._resident_snapshot_refresher.mark_dirty_locked()
+                        if write_result.saved_count > 0:
+                            await self._resident_snapshot_refresher.mark_dirty_locked()
             except IntegrityError:
                 await session.rollback()
                 trace(

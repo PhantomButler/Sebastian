@@ -233,7 +233,7 @@ class BaseAgent(ABC):
         try:
             import sebastian.gateway.state as state
 
-            if not getattr(state, "memory_settings", None) or not state.memory_settings.enabled:
+            if state.memory_service is None or not state.memory_service.is_enabled():
                 return ResidentSnapshotReadResult(content="")
             refresher = getattr(state, "resident_snapshot_refresher", None)
             if refresher is None:

@@ -743,10 +743,10 @@ async def test_resident_memory_read_does_not_open_db_factory(mem_factory) -> Non
 
     import sebastian.gateway.state as gw_state
 
-    fake_settings = MagicMock()
-    fake_settings.enabled = True
+    fake_memory_service = MagicMock()
+    fake_memory_service.is_enabled.return_value = True
 
-    with patch.object(gw_state, "memory_settings", fake_settings, create=True):
+    with patch.object(gw_state, "memory_service", fake_memory_service, create=True):
         with patch.object(gw_state, "resident_snapshot_refresher", fake_refresher, create=True):
             result = await agent._resident_memory_section("s-nodb")
 

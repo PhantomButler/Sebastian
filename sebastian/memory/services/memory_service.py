@@ -17,12 +17,7 @@ from sebastian.memory.services.writing import MemoryWriteService
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    from sebastian.memory.decision_log import MemoryDecisionLogger
-    from sebastian.memory.entity_registry import EntityRegistry
-    from sebastian.memory.episode_store import EpisodeMemoryStore
-    from sebastian.memory.profile_store import ProfileMemoryStore
     from sebastian.memory.resident_snapshot import ResidentMemorySnapshotRefresher
-    from sebastian.memory.slot_proposals import SlotProposalHandler
     from sebastian.memory.slots import SlotRegistry
 
 # Store imports needed when MemoryService owns the session (mutation_scope path)
@@ -63,6 +58,9 @@ class MemoryService:
         if self._memory_settings_fn is not None:
             return self._memory_settings_fn()
         return True
+
+    def is_enabled(self) -> bool:
+        return self._is_enabled()
 
     async def retrieve_for_prompt(self, request: PromptMemoryRequest) -> PromptMemoryResult:
         if not self._is_enabled():
