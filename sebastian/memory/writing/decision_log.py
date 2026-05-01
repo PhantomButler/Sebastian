@@ -4,12 +4,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
 from sebastian.memory.trace import trace
 from sebastian.memory.types import ResolveDecision
 from sebastian.store.models import MemoryDecisionLogRecord
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class MemoryDecisionLogger:
