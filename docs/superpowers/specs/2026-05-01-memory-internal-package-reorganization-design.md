@@ -252,7 +252,11 @@ external callers
 6. `stores/` 不能依赖 `services/`、`consolidation/`、`resident/`。
 7. 根基础模块不能依赖业务子包。
 
-`SessionConsolidationWorker` 是一个明确例外：为保持 P0 facade 行为不变，它可以通过构造函数接收 `MemoryService`，并调用 `MemoryService.write_candidates_in_session()`。这个依赖必须保持为注入依赖，不能在 `consolidation/` 内读取 gateway global state，也不能让 consolidation 自行构造 `MemoryService`。
+`SessionConsolidationWorker` 有两个明确例外：
+
+1. 它可以通过构造函数接收 `MemoryService`，并调用 `MemoryService.write_candidates_in_session()`。这个依赖必须保持为注入依赖，不能在 `consolidation/` 内读取 gateway global state，也不能让 consolidation 自行构造 `MemoryService`。
+
+2. 它还可以通过构造函数接收 `ResidentMemorySnapshotRefresher | None`（可选注入），用于在沉淀写入后调用 `mark_dirty_locked()` 标记 resident snapshot 为脏。该依赖必须保持为注入依赖，不能在 `consolidation/` 内自行构造 `ResidentMemorySnapshotRefresher`。`consolidation/` 对 `resident/` 的 import 仅限 `if TYPE_CHECKING:` 块（仅用于类型标注），运行时依赖通过构造函数注入传入。
 
 外部模块包括 `sebastian/core`、`sebastian/gateway`、`sebastian/capabilities/tools` 等。它们的 memory 业务调用应继续通过 `MemoryService` / `contracts`，不应新增对 `stores/`、`writing/`、`retrieval/` 的直接业务依赖。
 

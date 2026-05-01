@@ -480,10 +480,10 @@ sequenceDiagram
     <a href="../../../../sebastian/memory/data-flow.md">sebastian/memory/data-flow.md<span>读写链路说明。注意后半段关于动态 slot 的描述已落后，应以当前代码与最新 spec 为准。</span></a>
     <a href="../../spec/memory/write-pipeline.md">spec/memory/write-pipeline.md<span>Capture → Extract → Normalize → Resolve → Persist 设计约束。</span></a>
     <a href="../../spec/memory/retrieval.md">spec/memory/retrieval.md<span>Intent → Retrieval Planner → Assembler、四条 lane 与 confidence 阈值。</span></a>
-    <a href="../../../../sebastian/memory/pipeline.py">sebastian/memory/pipeline.py<span><code>process_candidates()</code>：统一写入入口。</span></a>
-    <a href="../../../../sebastian/memory/resolver.py">sebastian/memory/resolver.py<span><code>resolve_candidate()</code>：冲突解析和决策生成。</span></a>
-    <a href="../../../../sebastian/memory/retrieval.py">sebastian/memory/retrieval.py<span>Planner、四 lane fetch、Assembler。</span></a>
-    <a href="../../../../sebastian/memory/slot_proposals.py">sebastian/memory/slot_proposals.py<span>动态 slot 校验、注册、并发 race 处理。</span></a>
+    <a href="../../../../sebastian/memory/writing/pipeline.py">sebastian/memory/writing/pipeline.py<span><code>process_candidates()</code>：统一写入入口。</span></a>
+    <a href="../../../../sebastian/memory/writing/resolver.py">sebastian/memory/writing/resolver.py<span><code>resolve_candidate()</code>：冲突解析和决策生成。</span></a>
+    <a href="../../../../sebastian/memory/retrieval/retrieval.py">sebastian/memory/retrieval/retrieval.py<span>Planner、四 lane fetch、Assembler。</span></a>
+    <a href="../../../../sebastian/memory/writing/slot_proposals.py">sebastian/memory/writing/slot_proposals.py<span>动态 slot 校验、注册、并发 race 处理。</span></a>
     <a href="../../../../sebastian/memory/startup.py">sebastian/memory/startup.py<span>FTS 初始化、内置 slot seed、registry bootstrap。</span></a>
     <a href="../../../../sebastian/capabilities/tools/memory_save/__init__.py">memory_save 工具<span>显式记忆保存入口，当前是同步等待真实保存结果。</span></a>
   </div>
