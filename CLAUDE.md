@@ -16,7 +16,7 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 - `ui/mobile-android/README.md`：Android 原生 App 目录结构、页面导航、前端模块说明
 
 **踩坑记录**：
-- `docs/mobile-dev-gotchas.md`：移动端平台行为坑与修复结论（Android touch、布局等）
+- `docs/handbook/mobile-dev-gotchas.md`：移动端平台行为坑与修复结论（Android touch、布局等）
 - `docs/handbook/testing-gotchas.md`：测试坑点手册（Python mock patch 路径、aiosqlite 清理、Android ViewModel 协程）
 
 ## 1) 项目概览

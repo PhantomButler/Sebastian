@@ -3,7 +3,7 @@
 > 面向 `ui/mobile/`（React Native / Expo / Android）的平台行为坑与修复结论。
 > 每条记录包含：现象、根因、结论/修复。
 
-**相关导航**：[ui/mobile/README.md](../ui/mobile/README.md)
+**相关导航**：[ui/mobile/README.md](../../ui/mobile/README.md)
 
 ---
 
