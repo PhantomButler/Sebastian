@@ -392,19 +392,10 @@ git checkout -b feat/your-feature   # 或 fix/ chore/ docs/ 等前缀
 - 版本号遵循 Semantic Versioning：有 Added/Changed → minor bump；仅 Fixed → patch bump
 
 ### 发版流程
-1. 在 `main` 上手动触发 release workflow，二选一：
-   - GitHub UI：Actions → Release → Run workflow → 输入版本号
-   - 命令行：`gh workflow run release.yml -f version=X.Y.Z --ref main`
-2. Workflow 自动：
-   - 同步 `pyproject.toml` + `ui/mobile-android/app/build.gradle.kts` 版本号
-   - 把 `CHANGELOG.md` 的 `## [Unreleased]` 翻成 `## [X.Y.Z] - YYYY-MM-DD`
-   - commit + tag + push 到 main
-   - 构建 backend tarball、签名 Android APK
-   - 发布 GitHub Release（包含 `sebastian-backend-vX.Y.Z.tar.gz`、`sebastian-app-vX.Y.Z.apk`、`SHA256SUMS`）
-3. 用 `gh run watch <run-id>` 跟随进度（Android 构建约 20 分钟）
-4. 用户端升级方式：
-   - 已安装：`sebastian update`（保留数据/venv，失败自动回滚）
-   - 全新安装：`curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash`
+
+使用 `/release` skill（或 `/release X.Y.Z` 直接指定版本号）。skill 会引导完成环境检查、CHANGELOG 确认、版本号确定、CI 验证、workflow 触发全流程。
+
+详见 `.claude/skills/release/SKILL.md`。
 
 ## 12) 安全规范
 
