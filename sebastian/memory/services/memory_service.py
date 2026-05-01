@@ -74,9 +74,7 @@ class MemoryService:
             logger.warning("memory: retrieve_for_prompt failed", exc_info=True)
             return PromptMemoryResult(section="")
 
-    async def search(
-        self, request: ExplicitMemorySearchRequest
-    ) -> ExplicitMemorySearchResult:
+    async def search(self, request: ExplicitMemorySearchRequest) -> ExplicitMemorySearchResult:
         if not self._is_enabled():
             return ExplicitMemorySearchResult(items=[])
         if self._db_factory is None:

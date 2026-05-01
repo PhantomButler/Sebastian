@@ -414,9 +414,7 @@ async def test_memory_save_discard_decision_log_has_input_source(
 
 
 @pytest.mark.asyncio
-async def test_memory_save_delegates_to_memory_service(
-    enabled_memory_state, monkeypatch
-) -> None:
+async def test_memory_save_delegates_to_memory_service(enabled_memory_state, monkeypatch) -> None:
     """_do_save() 通过 state.memory_service.write_candidates() 写入，
     并将返回的 MemoryWriteResult 正确转换为 MemorySaveResult。
     """
@@ -1466,9 +1464,7 @@ async def test_memory_search_delegates_to_memory_service(monkeypatch) -> None:
     ]
 
     mock_service = MagicMock()
-    mock_service.search = AsyncMock(
-        return_value=ExplicitMemorySearchResult(items=fake_items)
-    )
+    mock_service.search = AsyncMock(return_value=ExplicitMemorySearchResult(items=fake_items))
 
     fake_settings = MagicMock()
     fake_settings.enabled = True

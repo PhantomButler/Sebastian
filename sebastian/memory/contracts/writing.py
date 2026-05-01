@@ -36,8 +36,7 @@ class MemoryWriteResult:
         return sum(
             1
             for decision in self.decisions
-            if decision.decision != MemoryDecisionType.DISCARD
-            and decision.new_memory is not None
+            if decision.decision != MemoryDecisionType.DISCARD and decision.new_memory is not None
         )
 
     @property
