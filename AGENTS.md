@@ -16,7 +16,8 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统，灵感来自黑
 - `ui/mobile-android/README.md`：Android 原生 App 目录结构、页面导航、前端模块说明
 
 **踩坑记录**：
-- `docs/mobile-dev-gotchas.md`：移动端平台行为坑与修复结论（Android touch、布局等）
+- `docs/handbook/mobile-dev-gotchas.md`：移动端平台行为坑与修复结论（Android touch、布局等）
+- `docs/handbook/testing-gotchas.md`：测试坑点手册（Python mock patch 路径、aiosqlite 清理、Android ViewModel 协程）
 
 ## 1) 项目概览
 
@@ -282,48 +283,10 @@ SEBASTIAN_GATEWAY_PORT=8823
   - e2e：`tests/e2e/`，覆盖完整请求链路
 - 方法名描述单一行为，覆盖 happy path 和失败/边界场景
 
-### aiosqlite 测试清理规范（Linux CI 关键）
-
-**问题根源**：aiosqlite 每个连接跑一个 worker 线程，`engine.dispose()` 只发送 close 信号，不等线程真正退出；Linux 上 function-scoped event loop 关闭时若线程未退出会挂住下一个 loop。
-
-**规则 1 — async fixture 中 dispose engine 后必须加 sleep(0)**：
-```python
-@pytest.fixture
-async def sqlite_session_factory():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    ...
-    try:
-        yield factory
-    finally:
-        await engine.dispose()
-        await asyncio.sleep(0)  # 让 aiosqlite worker 线程完成最后一次回调后退出
-```
-
-**规则 2 — `asyncio.run()` 内部的临时 engine 必须在 loop 关闭前 dispose**：
-```python
-async def _seed() -> None:
-    await init_db()
-    ...
-    # 必须在 asyncio.run() 关闭 loop 前 dispose，否则 worker 线程无法回调
-    from sebastian.store.database import get_engine
-    await get_engine().dispose()
-    await asyncio.sleep(0)
-
-asyncio.run(_seed())
-# dispose 后立即重置全局引用，让下一个 context（如 TestClient）用新引擎
-db_module._engine = None
-db_module._session_factory = None
-```
-
-**规则 3 — gateway lifespan 关闭时 dispose engine**：
-```python
-# lifespan teardown（yield 之后）
-await get_engine().dispose()
-```
-确保 TestClient 退出时 worker loop 中的 aiosqlite 线程也能干净退出。
-
-**规则 4 — 不要在 async 测试中使用 `asyncio.create_subprocess_exec`**：
-Linux 上该调用注册 `PidfdChildWatcher`，function-scoped event loop 关闭时 watcher cleanup 会挂住。改用 `asyncio.to_thread(subprocess.run, ...)` 代替。
+详见 [`docs/handbook/testing-gotchas.md`](docs/handbook/testing-gotchas.md)，包含：
+- Python mock patch 路径规范（打在使用方，不是定义方）
+- aiosqlite 测试清理规范（Linux CI 关键，4 条规则）
+- Android ViewModel 协程测试规范（避免 advanceUntilIdle 死循环，3 条规则）
 
 ## 项目级工作规则
 
@@ -377,7 +340,7 @@ git checkout -b feat/your-feature   # 或 fix/ chore/ docs/ 等前缀
   - 类型：`feat` / `fix` / `docs` / `refactor` / `chore` / `test` / `style` / `ci`
   - 可在类型前加 emoji（参考现有历史记录风格）
 - message 末尾附：`Co-Authored-By: Claude <noreply@anthropic.com>`
-  （或写当前实际模型，例如 `Claude Opus 4.6` / `Claude Sonnet 4.6` /  `gpt 5.5`）
+  （或写当前实际模型，例如 `Claude Opus 4.6` / `Claude Sonnet 4.6` / `gpt 5.5`）
 - 保持改动原子化，一个 commit 只做一件事
 
 ### 推送与 PR
