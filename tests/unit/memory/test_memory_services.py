@@ -522,6 +522,86 @@ async def test_base_agent_memory_section_calls_memory_service() -> None:
 
 
 @pytest.mark.asyncio
+async def test_memory_service_disabled_write_candidates_returns_empty() -> None:
+    """When memory is disabled, write_candidates() must return empty result without writing."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sebastian.memory.services.memory_service import MemoryService
+
+    mock_writing = MagicMock()
+    mock_writing.write_candidates = AsyncMock()
+
+    service = MemoryService(
+        db_factory=MagicMock(),
+        writing=mock_writing,
+        memory_settings_fn=lambda: False,
+    )
+
+    request = MemoryWriteRequest(
+        candidates=[],
+        session_id="sess-dis",
+        agent_type="sebastian",
+        worker_id="test",
+        rule_version="spec-a-v1",
+        input_source={"type": "test"},
+    )
+    result = await service.write_candidates(request)
+
+    assert result.saved_count == 0
+    assert result.decisions == []
+    mock_writing.write_candidates.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_memory_service_disabled_write_candidates_in_session_returns_empty() -> None:
+    """When memory is disabled, write_candidates_in_session() must return empty result without writing."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from sebastian.memory.decision_log import MemoryDecisionLogger
+    from sebastian.memory.entity_registry import EntityRegistry
+    from sebastian.memory.episode_store import EpisodeMemoryStore
+    from sebastian.memory.profile_store import ProfileMemoryStore
+    from sebastian.memory.services.memory_service import MemoryService
+    from sebastian.memory.slot_proposals import SlotProposalHandler
+    from sebastian.memory.slots import SlotRegistry
+
+    mock_writing = MagicMock()
+    mock_writing.write_candidates_in_session = AsyncMock()
+
+    service = MemoryService(
+        db_factory=MagicMock(),
+        writing=mock_writing,
+        memory_settings_fn=lambda: False,
+    )
+
+    mock_session = MagicMock(spec=AsyncSession)
+    request = MemoryWriteRequest(
+        candidates=[],
+        session_id="sess-dis",
+        agent_type="sebastian",
+        worker_id="test",
+        rule_version="spec-a-v1",
+        input_source={"type": "test"},
+    )
+    result = await service.write_candidates_in_session(
+        request,
+        db_session=mock_session,
+        profile_store=MagicMock(spec=ProfileMemoryStore),
+        episode_store=MagicMock(spec=EpisodeMemoryStore),
+        entity_registry=MagicMock(spec=EntityRegistry),
+        decision_logger=MagicMock(spec=MemoryDecisionLogger),
+        slot_registry=SlotRegistry(slots=[]),
+        slot_proposal_handler=MagicMock(spec=SlotProposalHandler),
+    )
+
+    assert result.saved_count == 0
+    assert result.decisions == []
+    mock_writing.write_candidates_in_session.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_base_agent_memory_section_absent_service_returns_empty() -> None:
     """Fail-closed: when state.memory_service is None, return empty string."""
     from unittest.mock import AsyncMock, MagicMock, patch

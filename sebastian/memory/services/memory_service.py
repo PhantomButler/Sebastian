@@ -89,6 +89,8 @@ class MemoryService:
             return ExplicitMemorySearchResult(items=[])
 
     async def write_candidates(self, request: MemoryWriteRequest) -> MemoryWriteResult:
+        if not self._is_enabled():
+            return MemoryWriteResult()
         if self._writing is None:
             return MemoryWriteResult()
 
@@ -141,6 +143,8 @@ class MemoryService:
         slot_registry: SlotRegistry,
         slot_proposal_handler: SlotProposalHandler | None,
     ) -> MemoryWriteResult:
+        if not self._is_enabled():
+            return MemoryWriteResult()
         if self._writing is None:
             return MemoryWriteResult()
         return await self._writing.write_candidates_in_session(
