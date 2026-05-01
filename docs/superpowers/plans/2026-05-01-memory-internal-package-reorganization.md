@@ -327,7 +327,7 @@ Replace with `sebastian.memory.writing.<module>`.
 Run:
 
 ```bash
-pytest tests/unit/memory/test_pipeline.py tests/unit/memory/test_resolver.py tests/unit/memory/test_write_router.py tests/unit/memory/test_decision_log.py tests/unit/memory/test_feedback.py tests/unit/memory/test_slot_proposals.py tests/unit/memory/test_slots.py tests/unit/memory/test_builtin_slots.py tests/unit/memory/test_pipeline_proposed_slots_flow.py tests/unit/capabilities/test_memory_tools.py -q
+pytest tests/unit/memory/test_pipeline.py tests/unit/memory/test_resolver.py tests/unit/memory/test_write_router.py tests/unit/memory/test_decision_log.py tests/unit/memory/test_feedback.py tests/unit/memory/test_slot_proposals.py tests/unit/memory/test_slots.py tests/unit/memory/test_builtin_slots.py tests/unit/memory/test_slot_registry_bootstrap.py tests/unit/memory/test_pipeline_proposed_slots_flow.py tests/unit/capabilities/test_memory_tools.py -q
 ```
 
 Expected: PASS.
@@ -742,7 +742,27 @@ sebastian.memory.resident_snapshot
 sebastian.memory.resident_dedupe
 ```
 
-For `retrieval` and `consolidation`, ignore legal new paths:
+For `retrieval` and `consolidation`, use exact import-pattern searches first. Do not rely only on raw substring search, because legal new paths contain the old package prefix.
+
+Recommended regex patterns for old string targets:
+
+```text
+sebastian\.memory\.retrieval(?!\.)
+sebastian\.memory\.consolidation(?!\.)
+```
+
+These match old module-string targets such as `sebastian.memory.retrieval` and exclude legal new paths such as `sebastian.memory.retrieval.retrieval`.
+
+If using plain text search instead of regex, search exact import prefixes:
+
+```text
+from sebastian.memory.retrieval import
+import sebastian.memory.retrieval as
+from sebastian.memory.consolidation import
+import sebastian.memory.consolidation as
+```
+
+Ignore legal new paths:
 
 ```text
 sebastian.memory.retrieval.retrieval
@@ -823,7 +843,9 @@ git commit -m "refactor(memory): 清理旧 memory import 路径" \
 - Modify: `docs/architecture/spec/memory/consolidation.md`
 - Modify: `docs/architecture/spec/memory/implementation.md`
 - Modify: `docs/architecture/spec/memory/resident-snapshot.md`
+- Modify: `sebastian/memory/data-flow.md`
 - Search all: `docs/architecture/spec/memory/*.md`
+- Search all: `sebastian/memory/data-flow.md`
 
 - [ ] **Step 1: Update `sebastian/memory/README.md`**
 
@@ -857,7 +879,27 @@ sebastian/memory/consolidation.py -> sebastian/memory/consolidation/consolidatio
 sebastian/memory/resident_snapshot.py -> sebastian/memory/resident/resident_snapshot.py
 ```
 
-- [ ] **Step 4: Run docs old-path search**
+- [ ] **Step 4: Update `sebastian/memory/data-flow.md`**
+
+Search and update links inside `sebastian/memory/data-flow.md` itself. At minimum, local links such as:
+
+```text
+retrieval.py
+pipeline.py
+consolidation.py
+resident_snapshot.py
+```
+
+must point to the new subpackage paths when those files move, for example:
+
+```text
+retrieval/retrieval.py
+writing/pipeline.py
+consolidation/consolidation.py
+resident/resident_snapshot.py
+```
+
+- [ ] **Step 5: Run docs old-path search**
 
 Use PyCharm MCP search over:
 
@@ -865,23 +907,24 @@ Use PyCharm MCP search over:
 docs/architecture/spec/memory
 sebastian/memory/README.md
 sebastian/README.md
+sebastian/memory/data-flow.md
 ```
 
 Verify old runtime paths are gone unless they appear in this P1 design document or a clearly marked migration table.
 
-- [ ] **Step 5: Commit docs**
+- [ ] **Step 6: Commit docs**
 
 Before staging, run:
 
 ```bash
-git status --short docs/architecture/spec/memory sebastian/memory/README.md sebastian/README.md
+git status --short docs/architecture/spec/memory sebastian/memory/README.md sebastian/README.md sebastian/memory/data-flow.md
 ```
 
 Stage every modified file reported there. Do not assume the list below is exhaustive if the old-path search found additional docs.
 
 ```bash
-git add sebastian/memory/README.md sebastian/README.md docs/architecture/spec/memory/INDEX.md docs/architecture/spec/memory/overview.md docs/architecture/spec/memory/retrieval.md docs/architecture/spec/memory/storage.md docs/architecture/spec/memory/write-pipeline.md docs/architecture/spec/memory/consolidation.md docs/architecture/spec/memory/implementation.md docs/architecture/spec/memory/resident-snapshot.md
-git status --short docs/architecture/spec/memory sebastian/memory/README.md sebastian/README.md
+git add sebastian/memory/README.md sebastian/README.md sebastian/memory/data-flow.md docs/architecture/spec/memory/INDEX.md docs/architecture/spec/memory/overview.md docs/architecture/spec/memory/retrieval.md docs/architecture/spec/memory/storage.md docs/architecture/spec/memory/write-pipeline.md docs/architecture/spec/memory/consolidation.md docs/architecture/spec/memory/implementation.md docs/architecture/spec/memory/resident-snapshot.md
+git status --short docs/architecture/spec/memory sebastian/memory/README.md sebastian/README.md sebastian/memory/data-flow.md
 git commit -m "docs(memory): 同步 memory 内部包结构" \
   -m "Co-Authored-By: gpt 5.5 <noreply@openai.com>"
 ```
