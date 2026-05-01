@@ -554,7 +554,7 @@ async def test_memory_service_disabled_write_candidates_returns_empty() -> None:
 
 @pytest.mark.asyncio
 async def test_memory_service_disabled_write_candidates_in_session_returns_empty() -> None:
-    """When memory is disabled, write_candidates_in_session() must return empty result without writing."""
+    """When memory is disabled, write_candidates_in_session() returns empty without writing."""
     from unittest.mock import AsyncMock, MagicMock
 
     from sqlalchemy.ext.asyncio import AsyncSession
