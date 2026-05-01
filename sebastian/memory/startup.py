@@ -27,7 +27,7 @@ async def ensure_profile_fts(conn: AsyncConnection) -> None:
 
 async def _backfill_profile_fts(conn: AsyncConnection) -> None:
     """Index profile_memories rows not yet in the FTS virtual table."""
-    from sebastian.memory.segmentation import segment_for_fts
+    from sebastian.memory.retrieval.segmentation import segment_for_fts
 
     result = await conn.execute(
         text(
@@ -49,7 +49,7 @@ async def _backfill_profile_fts(conn: AsyncConnection) -> None:
 
 async def _backfill_episode_fts(conn: AsyncConnection) -> None:
     """Index episode_memories rows not yet in the FTS virtual table."""
-    from sebastian.memory.segmentation import segment_for_fts
+    from sebastian.memory.retrieval.segmentation import segment_for_fts
 
     result = await conn.execute(
         text(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sebastian.memory.segmentation import (
+from sebastian.memory.retrieval.segmentation import (
     add_entity_terms,
     build_match_query,
     segment_for_fts,

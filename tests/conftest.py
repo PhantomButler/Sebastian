@@ -73,8 +73,8 @@ def _reset_default_planner() -> Generator[None, None, None]:
     The planner accumulates entity triggers via bootstrap/reload; without
     cleanup, entity names from one test leak into subsequent tests.
     """
-    from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
-    from sebastian.memory.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
+    from sebastian.memory.retrieval.retrieval import DEFAULT_RETRIEVAL_PLANNER
+    from sebastian.memory.retrieval.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
 
     DEFAULT_RETRIEVAL_PLANNER._relation_trigger_set = RELATION_LANE_STATIC_WORDS
     yield

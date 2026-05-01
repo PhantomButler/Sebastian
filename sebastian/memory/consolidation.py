@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sebastian.memory.depth_guard import is_memory_eligible
+from sebastian.memory.retrieval.depth_guard import is_memory_eligible
 from sebastian.memory.extraction import (
     ExtractorInput,
     ExtractorOutput,
@@ -241,7 +241,7 @@ class SessionConsolidationWorker:
 
             episode_store = EpisodeMemoryStore(session)
             profile_store = ProfileMemoryStore(session)
-            from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
+            from sebastian.memory.retrieval.retrieval import DEFAULT_RETRIEVAL_PLANNER
 
             entity_registry = EntityRegistry(session, planner=DEFAULT_RETRIEVAL_PLANNER)
             decision_logger = MemoryDecisionLogger(session)

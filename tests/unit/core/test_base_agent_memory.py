@@ -347,7 +347,7 @@ async def test_memory_section_passes_active_project_or_agent_context(mem_factory
     from unittest.mock import patch
 
     import sebastian.gateway.state as gw_state
-    from sebastian.memory.retrieval import RetrievalContext
+    from sebastian.memory.retrieval.retrieval import RetrievalContext
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
     agent._current_depth["s-ctx"] = 1  # depth guard: only depth=1 injects memory
@@ -577,7 +577,7 @@ async def test_memory_section_receives_resident_exclusions(mem_factory) -> None:
     """When _stream_inner() calls _memory_section(), it passes the resident dedup sets
     so that dynamic retrieval can skip already-rendered records."""
     from sebastian.memory.resident_snapshot import ResidentSnapshotReadResult
-    from sebastian.memory.retrieval import RetrievalContext
+    from sebastian.memory.retrieval.retrieval import RetrievalContext
 
     agent = _make_test_agent(_silent_provider(), db_factory=mem_factory)
     agent._current_depth["s-excl"] = 1

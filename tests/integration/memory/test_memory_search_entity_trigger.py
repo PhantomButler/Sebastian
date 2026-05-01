@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from sebastian.memory.stores.entity_registry import EntityRegistry
-from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER, RetrievalContext
-from sebastian.memory.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
+from sebastian.memory.retrieval.retrieval import DEFAULT_RETRIEVAL_PLANNER, RetrievalContext
+from sebastian.memory.retrieval.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
 
 
 @pytest.mark.asyncio

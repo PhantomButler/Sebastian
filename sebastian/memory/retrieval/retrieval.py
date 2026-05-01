@@ -12,7 +12,7 @@ from sebastian.memory.resident_dedupe import (
 from sebastian.memory.resident_dedupe import (
     slot_value_dedupe_key as _slot_value_dedupe_key,
 )
-from sebastian.memory.retrieval_lexicon import (
+from sebastian.memory.retrieval.retrieval_lexicon import (
     CONTEXT_LANE_WORDS,
     EPISODE_LANE_WORDS,
     PROFILE_LANE_WORDS,
@@ -146,7 +146,7 @@ class MemoryRetrievalPlanner:
 
         同时向 jieba 注册自定义词，确保分词时实体名不被拆散。
         """
-        from sebastian.memory.segmentation import add_entity_terms
+        from sebastian.memory.retrieval.segmentation import add_entity_terms
 
         entity_names = await registry.list_all_names_and_aliases()
         add_entity_terms(entity_names)

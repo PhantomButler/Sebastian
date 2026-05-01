@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select, text, update
 
-from sebastian.memory.segmentation import build_match_query, segment_for_fts, terms_for_query
+from sebastian.memory.retrieval.segmentation import build_match_query, segment_for_fts, terms_for_query
 from sebastian.memory.types import MemoryArtifact, MemoryKind, MemoryStatus
 from sebastian.store.models import EpisodeMemoryRecord
 

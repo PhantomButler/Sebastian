@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sebastian.memory.retrieval_lexicon import (
+from sebastian.memory.retrieval.retrieval_lexicon import (
     CONTEXT_LANE_WORDS,
     EPISODE_LANE_WORDS,
     PROFILE_LANE_WORDS,

@@ -8,7 +8,7 @@ from sebastian.memory.contracts.retrieval import (
     PromptMemoryRequest,
     PromptMemoryResult,
 )
-from sebastian.memory.retrieval import (
+from sebastian.memory.retrieval.retrieval import (
     RetrievalContext,
     RetrievalPlan,
     _keep_record,

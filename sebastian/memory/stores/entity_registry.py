@@ -6,14 +6,14 @@ from uuid import uuid4
 
 from sqlalchemy import or_, select
 
-from sebastian.memory.segmentation import add_entity_terms
+from sebastian.memory.retrieval.segmentation import add_entity_terms
 from sebastian.memory.types import MemoryStatus
 from sebastian.store.models import EntityRecord, RelationCandidateRecord
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from sebastian.memory.retrieval import MemoryRetrievalPlanner
+    from sebastian.memory.retrieval.retrieval import MemoryRetrievalPlanner
 
 
 class EntityRegistry:

@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("jieba entity term sync failed at startup: %s", exc)
         try:
             # 把 Entity 名灌入 Planner relation 触发词缓存
-            from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
+            from sebastian.memory.retrieval.retrieval import DEFAULT_RETRIEVAL_PLANNER
 
             await DEFAULT_RETRIEVAL_PLANNER.bootstrap_entity_triggers(entity_registry)
         except Exception as exc:  # noqa: BLE001

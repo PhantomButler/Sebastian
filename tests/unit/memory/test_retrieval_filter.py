@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from sebastian.memory.retrieval import (
+from sebastian.memory.retrieval.retrieval import (
     MIN_CONFIDENCE_AUTO_INJECT,
     MIN_CONFIDENCE_HARD,
     MemorySectionAssembler,
@@ -96,7 +96,7 @@ def test_auto_inject_keeps_above_gate() -> None:
 
 def test_min_confidence_constant_fully_removed() -> None:
     """旧常量必须彻底删除，避免调用方误用。"""
-    import sebastian.memory.retrieval as ret_mod
+    import sebastian.memory.retrieval.retrieval as ret_mod
 
     assert not hasattr(ret_mod, "MIN_CONFIDENCE")
 

@@ -46,7 +46,7 @@ from sebastian.core.stream_helpers import (
 from sebastian.core.stream_helpers import (
     ensure_tool_results_for_pending_calls as _ensure_tool_results_for_pending_calls,
 )
-from sebastian.memory.depth_guard import is_memory_eligible
+from sebastian.memory.retrieval.depth_guard import is_memory_eligible
 from sebastian.memory.working_memory import WorkingMemory
 from sebastian.permissions.gate import PolicyGate
 from sebastian.protocol.events.bus import EventBus

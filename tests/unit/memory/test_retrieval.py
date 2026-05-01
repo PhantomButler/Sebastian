@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from sebastian.memory.retrieval import (
+from sebastian.memory.retrieval.retrieval import (
     MemoryRetrievalPlanner,
     MemorySectionAssembler,
     RetrievalContext,

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from sebastian.memory.retrieval import (
+from sebastian.memory.retrieval.retrieval import (
     MemoryRetrievalPlanner,
     RetrievalContext,
 )
-from sebastian.memory.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
+from sebastian.memory.retrieval.retrieval_lexicon import RELATION_LANE_STATIC_WORDS
 
 
 def _ctx(msg: str) -> RetrievalContext:

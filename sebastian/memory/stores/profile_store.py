@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import or_, select, text, update
 from sqlalchemy.engine import CursorResult
 
-from sebastian.memory.segmentation import build_match_query, segment_for_fts, terms_for_query
+from sebastian.memory.retrieval.segmentation import build_match_query, segment_for_fts, terms_for_query
 from sebastian.memory.types import MemoryArtifact, MemoryStatus
 from sebastian.store.models import ProfileMemoryRecord
 

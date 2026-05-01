@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from sebastian.memory.retrieval import (
+from sebastian.memory.retrieval.retrieval import (
     MemoryRetrievalPlanner,
     RetrievalContext,
 )
@@ -73,7 +73,7 @@ def test_empty_message_no_activation() -> None:
 
 def test_default_planner_singleton_is_module_level() -> None:
     """retrieve_memory_section 内部必须用同一实例，否则 bootstrap 状态丢失。"""
-    from sebastian.memory.retrieval import DEFAULT_RETRIEVAL_PLANNER
+    from sebastian.memory.retrieval.retrieval import DEFAULT_RETRIEVAL_PLANNER
 
     assert isinstance(DEFAULT_RETRIEVAL_PLANNER, MemoryRetrievalPlanner)
 
