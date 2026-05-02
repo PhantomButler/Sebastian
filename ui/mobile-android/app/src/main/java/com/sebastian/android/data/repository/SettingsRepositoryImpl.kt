@@ -27,12 +27,17 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override val serverUrl: Flow<String> = dataStore.serverUrl
     override val theme: Flow<String> = dataStore.theme
+    override val activeSoul: Flow<String> = dataStore.activeSoul
 
     private val _isLoggedIn = MutableStateFlow(tokenStore.getToken() != null)
     override val isLoggedIn: Flow<Boolean> = _isLoggedIn.asStateFlow()
 
     override suspend fun saveServerUrl(url: String) = dataStore.saveServerUrl(url)
     override suspend fun saveTheme(theme: String) = dataStore.saveTheme(theme)
+    override suspend fun saveActiveSoul(name: String) = dataStore.saveActiveSoul(name)
+    override suspend fun fetchActiveSoul(): Result<String> = runCatching {
+        apiService.getCurrentSoul().activeSoul
+    }
 
     override suspend fun login(password: String): Result<Unit> = runCatching {
         val response = apiService.login(mapOf("password" to password))

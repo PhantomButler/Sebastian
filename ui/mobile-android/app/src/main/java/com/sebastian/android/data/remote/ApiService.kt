@@ -167,6 +167,10 @@ interface ApiService {
         @Part file: MultipartBody.Part,
     ): AttachmentUploadResponseDto
 
+    // Soul
+    @GET("api/v1/soul/current")
+    suspend fun getCurrentSoul(): SoulCurrentDto
+
     // Health
     @GET("api/v1/health")
     suspend fun health(): Map<String, Any>

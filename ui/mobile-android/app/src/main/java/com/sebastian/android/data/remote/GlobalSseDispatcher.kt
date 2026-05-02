@@ -53,6 +53,11 @@ class GlobalSseDispatcher @Inject constructor(
                             _connectionState.value = ConnectionState.Connected
                         }
                         _events.emit(event)
+                        if (event is StreamEvent.SoulChanged) {
+                            scope.launch(dispatcher) {
+                                settingsRepository.saveActiveSoul(event.soulName)
+                            }
+                        }
                     }
             } catch (_: CancellationException) {
                 throw CancellationException()

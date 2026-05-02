@@ -92,6 +92,9 @@ sealed class StreamEvent {
     // Todo
     data class TodoUpdated(val sessionId: String, val count: Int) : StreamEvent()
 
+    // Soul
+    data class SoulChanged(val soulName: String) : StreamEvent()
+
     // 未识别事件（忽略）
     object Unknown : StreamEvent()
 }

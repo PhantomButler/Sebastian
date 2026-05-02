@@ -19,6 +19,10 @@ interface SettingsRepository {
     suspend fun getMemorySettings(): Result<MemorySettingsDto>
     suspend fun setMemoryEnabled(enabled: Boolean): Result<MemorySettingsDto>
 
+    val activeSoul: Flow<String>
+    suspend fun saveActiveSoul(name: String)
+    suspend fun fetchActiveSoul(): Result<String>
+
     suspend fun getLlmCatalog(): Result<List<CatalogProvider>>
     suspend fun getLlmAccounts(): Result<List<LlmAccount>>
     suspend fun createLlmAccount(name: String, catalogProviderId: String, apiKey: String, providerType: String?, baseUrlOverride: String?): Result<LlmAccount>

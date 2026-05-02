@@ -27,6 +27,7 @@ class SettingsDataStore @Inject constructor(
     companion object {
         val SERVER_URL = stringPreferencesKey("server_url")
         val THEME = stringPreferencesKey("theme")
+        val ACTIVE_SOUL = stringPreferencesKey("active_soul")
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -39,11 +40,19 @@ class SettingsDataStore @Inject constructor(
         prefs[THEME] ?: "system"
     }
 
+    val activeSoul: StateFlow<String> = context.dataStore.data
+        .map { prefs -> prefs[ACTIVE_SOUL] ?: "" }
+        .stateIn(scope, SharingStarted.Eagerly, "")
+
     suspend fun saveServerUrl(url: String) {
         context.dataStore.edit { it[SERVER_URL] = url }
     }
 
     suspend fun saveTheme(theme: String) {
         context.dataStore.edit { it[THEME] = theme }
+    }
+
+    suspend fun saveActiveSoul(name: String) {
+        context.dataStore.edit { it[ACTIVE_SOUL] = name }
     }
 }
