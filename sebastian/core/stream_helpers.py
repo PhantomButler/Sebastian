@@ -16,6 +16,7 @@ from typing import Any
 from sebastian.core.agent_loop import _tool_result_content
 from sebastian.core.stream_events import ToolCallReady
 from sebastian.core.stream_events import ToolResult as StreamToolResult
+from sebastian.core.tool import get_tool
 from sebastian.core.types import ToolResult
 
 logger = logging.getLogger(__name__)
@@ -192,6 +193,10 @@ async def dispatch_tool_call(
     """
     from sebastian.protocol.events.types import EventType
 
+    tool_entry = get_tool(event.name)
+    spec_display_name = tool_entry[0].display_name if tool_entry else None
+    display_name = _resolve_display_name(event.name, event.inputs, spec_display_name)
+
     await publish(
         session_id,
         EventType.TOOL_BLOCK_STOP,
@@ -200,12 +205,13 @@ async def dispatch_tool_call(
     await publish(
         session_id,
         EventType.TOOL_RUNNING,
-        {"tool_id": event.tool_id, "name": event.name, "input": event.inputs},
+        {"tool_id": event.tool_id, "name": event.name, "display_name": display_name, "input": event.inputs},
     )
     record: dict[str, Any] = {
         "type": "tool",
         "tool_call_id": event.tool_id,
         "tool_name": event.name,
+        "display_name": display_name,
         "input": event.inputs,
         "status": "failed",
         "assistant_turn_id": assistant_turn_id,
@@ -254,7 +260,7 @@ async def dispatch_tool_call(
         await publish(
             session_id,
             EventType.TOOL_FAILED,
-            {"tool_id": event.tool_id, "name": event.name, "error": error},
+            {"tool_id": event.tool_id, "name": event.name, "display_name": display_name, "error": error},
         )
         return stream_result, block_index
 
@@ -265,6 +271,7 @@ async def dispatch_tool_call(
         event_data: dict[str, Any] = {
             "tool_id": event.tool_id,
             "name": event.name,
+            "display_name": display_name,
             "result_summary": display,
         }
         if isinstance(result.output, dict):
@@ -281,7 +288,7 @@ async def dispatch_tool_call(
         await publish(
             session_id,
             EventType.TOOL_FAILED,
-            {"tool_id": event.tool_id, "name": event.name, "error": result.error},
+            {"tool_id": event.tool_id, "name": event.name, "display_name": display_name, "error": result.error},
         )
     stream_result = StreamToolResult(
         tool_id=event.tool_id,
