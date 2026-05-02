@@ -28,4 +28,5 @@ data class ChatUiState(
     val pendingAttachments: List<PendingAttachment> = emptyList(),
     val inputCapabilities: ModelInputCapabilities = ModelInputCapabilities(),
     val isSessionSwitching: Boolean = false,
+    val activeSoulName: String = "Sebastian",
 )

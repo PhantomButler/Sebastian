@@ -111,6 +111,29 @@ class ChatViewModel @Inject constructor(
         observeNetwork()
         startDeltaFlusher()
         // activeSessionId starts as null → blank new conversation
+        observeActiveSoul()
+        fetchInitialSoulIfNeeded()
+    }
+
+    private fun observeActiveSoul() {
+        viewModelScope.launch(dispatcher) {
+            settingsRepository.activeSoul.collect { name ->
+                if (name.isNotBlank()) {
+                    _uiState.update { it.copy(activeSoulName = name.replaceFirstChar { c -> c.uppercase() }) }
+                }
+            }
+        }
+    }
+
+    private fun fetchInitialSoulIfNeeded() {
+        viewModelScope.launch(dispatcher) {
+            val cached = settingsRepository.activeSoul.first()  // Flow<String>.first(), NOT .value
+            if (cached.isNotBlank()) return@launch
+            settingsRepository.fetchActiveSoul()
+                .onSuccess { name ->
+                    settingsRepository.saveActiveSoul(name)
+                }
+        }
     }
 
     private fun startDeltaFlusher() {

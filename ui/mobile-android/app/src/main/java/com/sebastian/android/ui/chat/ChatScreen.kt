@@ -333,7 +333,7 @@ fun ChatScreen(
                             .padding(horizontal = 8.dp),
                     ) {
                         AgentPill(
-                            agentName = agentName,
+                            agentName = agentName ?: chatState.activeSoulName,
                             agentAnimState = chatState.agentAnimState,
                             glassState = glassState,
                         )
