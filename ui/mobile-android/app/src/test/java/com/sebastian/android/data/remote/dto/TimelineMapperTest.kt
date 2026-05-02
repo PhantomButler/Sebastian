@@ -59,6 +59,7 @@ class TimelineMapperTest {
         assertEquals("web_search", block.name)
         assertEquals("done", block.resultSummary)
         assertEquals(ToolStatus.DONE, block.status)
+        assertEquals("web_search", block.displayName)  // 无 display_name payload，fallback 到 toolName
     }
 
     @Test
@@ -140,6 +141,7 @@ class TimelineMapperTest {
         assertEquals(ToolStatus.DONE, block.status)
         assertEquals("result content", block.resultSummary)
         assertEquals("timeline-s1-tool-result-4", block.blockId)
+        assertEquals("", block.displayName)
     }
 
     @Test

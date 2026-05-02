@@ -52,6 +52,7 @@ data class MessageDto(
                             blockId = "$msgId-tool-$i",
                             toolId = b.toolId ?: "$msgId-tool-$i",
                             name = b.name ?: "",
+                            displayName = b.displayName ?: b.name ?: "",
                             inputs = b.input ?: "",
                             status = if (b.status == "failed") ToolStatus.FAILED else ToolStatus.DONE,
                             resultSummary = b.result,
@@ -101,4 +102,5 @@ data class BlockDto(
     @param:Json(name ="input") val input: String? = null,
     @param:Json(name ="status") val status: String? = null,
     @param:Json(name ="result") val result: String? = null,
+    @param:Json(name = "display_name") val displayName: String? = null,
 )

@@ -261,6 +261,7 @@ class ChatViewModel @Inject constructor(
                     blockId = event.blockId,
                     toolId = event.toolId,
                     name = event.name,
+                    displayName = event.name,  // 初始 fallback，ToolRunning 时会更新
                     inputs = "",
                     status = ToolStatus.PENDING,
                 )

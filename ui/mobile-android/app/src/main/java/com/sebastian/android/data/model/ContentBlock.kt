@@ -30,6 +30,7 @@ sealed class ContentBlock {
         override val blockId: String,
         val toolId: String,
         val name: String,
+        val displayName: String = "",  // UI 显示名，来自后端；空串作 fallback
         val inputs: String,
         val status: ToolStatus,
         val resultSummary: String? = null,
