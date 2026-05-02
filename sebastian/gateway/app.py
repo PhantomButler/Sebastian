@@ -414,6 +414,7 @@ def create_app() -> FastAPI:
         memory_components,
         memory_settings,
         sessions,
+        soul,
         stream,
         turns,
     )
@@ -439,6 +440,7 @@ def create_app() -> FastAPI:
     app.include_router(debug.router, prefix="/api/v1")
     app.include_router(memory_components.router, prefix="/api/v1")
     app.include_router(memory_settings.router, prefix="/api/v1")
+    app.include_router(soul.router, prefix="/api/v1")
     return app
 
 

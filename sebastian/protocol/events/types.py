@@ -72,6 +72,9 @@ class EventType(StrEnum):
     # Todo lifecycle
     TODO_UPDATED = "todo.updated"
 
+    # Soul
+    SOUL_CHANGED = "soul.changed"
+
 
 class Event(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
