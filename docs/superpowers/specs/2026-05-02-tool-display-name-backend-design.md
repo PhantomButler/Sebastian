@@ -1,5 +1,5 @@
 ---
-version: "1.1"
+version: "1.2"
 last_updated: 2026-05-02
 status: planned
 ---
@@ -244,14 +244,33 @@ is StreamEvent.ToolRunning -> {
 }
 ```
 
-`ToolExecuted` / `ToolFailed` 同样可顺带 copy `displayName`，确保最终状态一致。
+`ToolExecuted` / `ToolFailed` 同样 copy `displayName`，确保最终状态一致：
+
+```kotlin
+is StreamEvent.ToolExecuted -> {
+    if (event.artifact != null) {
+        // artifact 路径保持原逻辑不变
+    } else {
+        updateToolBlockByToolId(event.toolId) { existing ->
+            existing.copy(status = ToolStatus.DONE, resultSummary = event.resultSummary, displayName = event.displayName)
+        }
+    }
+}
+
+is StreamEvent.ToolFailed -> {
+    updateToolBlockByToolId(event.toolId) { existing ->
+        existing.copy(status = ToolStatus.FAILED, error = event.error, displayName = event.displayName)
+    }
+}
+```
 
 ### 9. Android：`TimelineMapper.kt` 加 `displayName`（历史加载主路径）
 
 历史会话加载主路径为 `toMessagesFromTimeline()` → `buildAssistantBlocks()`，不是 `BlockDto.toDomain()`（后者是 legacy fallback）。
 
-文件：`TimelineMapper.kt`，在 `tool_call` block 的 `ToolBlock` 构造处：
+文件：`TimelineMapper.kt`，两处 `ToolBlock` 构造均需补 `displayName`：
 
+**`tool_call` 分支**（正常路径）：
 ```kotlin
 blocks += ContentBlock.ToolBlock(
     blockId = item.stableBlockId(),
@@ -260,6 +279,20 @@ blocks += ContentBlock.ToolBlock(
     displayName = item.payloadString("display_name") ?: toolName,  // 新增
     inputs = item.content ?: "",
     status = status,
+    resultSummary = ...,
+    error = ...,
+)
+```
+
+**孤儿 `tool_result` 分支**（无对应 tool_call 时的兜底）：
+```kotlin
+blocks += ContentBlock.ToolBlock(
+    blockId = "timeline-$sessionId-tool-result-${item.seq}",
+    toolId = callId,
+    name = "",
+    displayName = "",  // 新增，孤儿块无工具名，留空
+    inputs = "",
+    status = if (failed) ToolStatus.FAILED else ToolStatus.DONE,
     resultSummary = ...,
     error = ...,
 )
@@ -284,9 +317,13 @@ data class BlockDto(
 displayName = b.displayName ?: b.name ?: "",
 ```
 
-### 12. Android：删除 `ToolDisplayName.kt`
+### 12. Android：删除 `ToolDisplayName.kt` 及配套测试
 
-整个文件移除，不再需要。`ToolCallInputExtractor.kt` 保留不动。
+同时删除：
+- `ui/mobile-android/app/src/main/java/com/sebastian/android/ui/chat/ToolDisplayName.kt`
+- `ui/mobile-android/app/src/test/java/com/sebastian/android/ui/chat/ToolDisplayNameTest.kt`
+
+`ToolCallInputExtractor.kt` 保留不动。
 
 ---
 
@@ -344,4 +381,5 @@ ToolBlock.displayName → ToolCallCard header 显示 "Save Memory"
 | `ChatViewModel.kt` | `ToolBlockStart` 初始化 + `ToolRunning` 更新逻辑 |
 | `ToolCallCard.kt` | 读 `block.displayName`，移除 `ToolDisplayName.resolve()` 调用 |
 | `ToolDisplayName.kt` | **删除** |
+| `ToolDisplayNameTest.kt` | **删除**（配套测试） |
 | `MessageDto.kt` / `BlockDto.kt` | 可选兼容性补全（低优先级） |
