@@ -13,6 +13,7 @@ if TYPE_CHECKING:
         TurnEndCompactionScheduler,
     )
     from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.soul_loader import SoulLoader
     from sebastian.gateway.sse import SSEManager
     from sebastian.llm.registry import LLMProviderRegistry
     from sebastian.memory.consolidation.consolidation import MemoryConsolidationScheduler
@@ -52,6 +53,7 @@ agent_instances: dict[str, BaseAgent] = {}
 agent_registry: dict[str, AgentConfig] = {}
 attachment_store: AttachmentStore | None = None
 scheduler: SchedulerRunner | None = None
+soul_loader: SoulLoader
 
 
 def get_owner_store() -> OwnerStore:

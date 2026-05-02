@@ -9,9 +9,13 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
     from sebastian.agents._loader import AgentConfig
     from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.soul_loader import SoulLoader
     from sebastian.llm.registry import LLMProviderRegistry
+    from sebastian.orchestrator.sebas import Sebastian
     from sebastian.protocol.events.bus import EventBus
     from sebastian.store.session_store import SessionStore
 
@@ -46,6 +50,32 @@ def _initialize_agent_instances(
         instances[cfg.agent_type] = agent
         logger.info("Registered agent instance: %s", cfg.agent_type)
     return instances
+
+
+async def _restore_active_soul(
+    soul_loader: SoulLoader,
+    db_factory: async_sessionmaker[AsyncSession],
+    sebastian_agent: Sebastian,
+) -> None:
+    from sebastian.store.app_settings_store import APP_SETTING_ACTIVE_SOUL, AppSettingsStore
+
+    try:
+        async with db_factory() as session:
+            store = AppSettingsStore(session)
+            active = await store.get(APP_SETTING_ACTIVE_SOUL, "sebastian")
+        content = soul_loader.load(active)
+        if content is None:
+            logger.warning(
+                "active soul file '%s.md' not found, keeping default persona", active
+            )
+            return
+        soul_loader.current_soul = active
+        sebastian_agent.persona = content
+        sebastian_agent.system_prompt = sebastian_agent.build_system_prompt(
+            sebastian_agent._gate, sebastian_agent._agent_registry
+        )
+    except Exception:
+        logger.warning("soul restore failed at startup, keeping default persona", exc_info=True)
 
 
 @asynccontextmanager
@@ -263,6 +293,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     state.sebastian = sebastian_agent
+
+    # Soul restore ── 从 DB 恢复上次激活的 soul，用 builtin_souls 防止误删
+    from sebastian.core.soul_loader import SoulLoader
+    from sebastian.orchestrator.sebas import CORTANA_PERSONA, SEBASTIAN_PERSONA
+
+    _soul_loader = SoulLoader(
+        souls_dir=settings.souls_dir,
+        builtin_souls={"sebastian": SEBASTIAN_PERSONA, "cortana": CORTANA_PERSONA},
+    )
+    _soul_loader.ensure_defaults()
+    state.soul_loader = _soul_loader
+    await _restore_active_soul(_soul_loader, db_factory, sebastian_agent)
+
     state.sse_manager = sse_mgr
     state.event_bus = event_bus
     state.conversation = conversation
