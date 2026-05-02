@@ -190,7 +190,8 @@ def test_resolve_display_name_resume_agent() -> None:
     assert result == "Resume Agent: Builder"
 
 
-def test_resolve_display_name_spawn_sub_agent() -> None:
+def test_resolve_display_name_spec_display_name_for_spawn_sub_agent() -> None:
+    """spawn_sub_agent has no match case — its display name comes from spec_display_name."""
     from sebastian.core.stream_helpers import _resolve_display_name
 
     result = _resolve_display_name("spawn_sub_agent", {"goal": "do stuff"}, "Worker")
@@ -238,8 +239,9 @@ def _resolve_display_name(
 ) -> str:
     """Compute the UI display name for a tool call.
 
-    Handles four tools that need dynamic titles built from inputs;
+    Handles three tools that need dynamic titles built from agent_type;
     all others use spec_display_name or fall back to the internal name.
+    spawn_sub_agent is NOT in the match — its display name comes from @tool(display_name="Worker").
     """
     agent_type = inputs.get("agent_type", "") if isinstance(inputs, dict) else ""
     match name:
@@ -249,8 +251,6 @@ def _resolve_display_name(
             return f"Stop Agent: {agent_type.capitalize()}" if agent_type else "Stop Agent"
         case "resume_agent":
             return f"Resume Agent: {agent_type.capitalize()}" if agent_type else "Resume Agent"
-        case "spawn_sub_agent":
-            return "Worker"
     return spec_display_name or name
 ```
 
@@ -778,7 +778,114 @@ data class ToolFailed(
 )
 ```
 
-- [ ] **Step 3：运行全量 Android 单元测试，确认编译通过且无回归**
+- [ ] **Step 3：在 `ChatViewModelTest.kt` 中验证 displayName 写入 ToolBlock**
+
+在 `ChatViewModelTest.kt` 中找到已有的 `ToolRunning` 相关测试，追加以下三个测试（验证 displayName 从事件正确传入 ToolBlock）：
+
+```kotlin
+@Test
+fun `ToolRunning event updates ToolBlock displayName`() = runTest {
+    // Arrange: pre-insert a ToolBlock in PENDING state (simulating ToolBlockStart)
+    val toolId = "toolu_test_dn"
+    val pendingBlock = ContentBlock.ToolBlock(
+        blockId = "block-1",
+        toolId = toolId,
+        name = "memory_save",
+        displayName = "memory_save",   // initial fallback from ToolBlockStart
+        inputs = "",
+        status = ToolStatus.PENDING,
+    )
+    viewModel.appendBlockForTest(pendingBlock)
+
+    // Act
+    viewModel.handleEvent(
+        StreamEvent.ToolRunning(
+            sessionId = "s1",
+            toolId = toolId,
+            name = "memory_save",
+            displayName = "Save Memory",
+        )
+    )
+    testScheduler.runCurrent()
+
+    // Assert
+    val block = viewModel.uiState.value.messages
+        .flatMap { it.contentBlocks }
+        .filterIsInstance<ContentBlock.ToolBlock>()
+        .first { it.toolId == toolId }
+    assertThat(block.displayName).isEqualTo("Save Memory")
+    assertThat(block.status).isEqualTo(ToolStatus.RUNNING)
+}
+
+@Test
+fun `ToolExecuted event updates ToolBlock displayName`() = runTest {
+    val toolId = "toolu_test_dn_executed"
+    val pendingBlock = ContentBlock.ToolBlock(
+        blockId = "block-2",
+        toolId = toolId,
+        name = "memory_save",
+        displayName = "memory_save",
+        inputs = "",
+        status = ToolStatus.RUNNING,
+    )
+    viewModel.appendBlockForTest(pendingBlock)
+
+    viewModel.handleEvent(
+        StreamEvent.ToolExecuted(
+            sessionId = "s1",
+            toolId = toolId,
+            name = "memory_save",
+            resultSummary = "saved",
+            artifact = null,
+            displayName = "Save Memory",
+        )
+    )
+    testScheduler.runCurrent()
+
+    val block = viewModel.uiState.value.messages
+        .flatMap { it.contentBlocks }
+        .filterIsInstance<ContentBlock.ToolBlock>()
+        .first { it.toolId == toolId }
+    assertThat(block.displayName).isEqualTo("Save Memory")
+    assertThat(block.status).isEqualTo(ToolStatus.DONE)
+}
+
+@Test
+fun `ToolFailed event updates ToolBlock displayName`() = runTest {
+    val toolId = "toolu_test_dn_failed"
+    val pendingBlock = ContentBlock.ToolBlock(
+        blockId = "block-3",
+        toolId = toolId,
+        name = "memory_save",
+        displayName = "memory_save",
+        inputs = "",
+        status = ToolStatus.RUNNING,
+    )
+    viewModel.appendBlockForTest(pendingBlock)
+
+    viewModel.handleEvent(
+        StreamEvent.ToolFailed(
+            sessionId = "s1",
+            toolId = toolId,
+            name = "memory_save",
+            error = "timeout",
+            displayName = "Save Memory",
+        )
+    )
+    testScheduler.runCurrent()
+
+    val block = viewModel.uiState.value.messages
+        .flatMap { it.contentBlocks }
+        .filterIsInstance<ContentBlock.ToolBlock>()
+        .first { it.toolId == toolId }
+    assertThat(block.displayName).isEqualTo("Save Memory")
+    assertThat(block.status).isEqualTo(ToolStatus.FAILED)
+}
+```
+
+> **注意**：`appendBlockForTest` 是 `ChatViewModel` 的测试辅助方法（如已存在类似方法，用现有名称）。如果不存在，用 `viewModel.handleEvent(StreamEvent.ToolBlockStart(...))` 代替预插入步骤。
+
+- [ ] **Step 4：运行全量 Android 单元测试，确认编译通过且无回归**
 
 ```bash
 cd ui/mobile-android
@@ -787,11 +894,12 @@ cd ui/mobile-android
 
 期望：所有测试 `PASSED`
 
-- [ ] **Step 4：提交**
+- [ ] **Step 5：提交**
 
 ```bash
 git add ui/mobile-android/app/src/main/java/com/sebastian/android/data/model/StreamEvent.kt \
-        ui/mobile-android/app/src/main/java/com/sebastian/android/data/remote/dto/SseFrameDto.kt
+        ui/mobile-android/app/src/main/java/com/sebastian/android/data/remote/dto/SseFrameDto.kt \
+        ui/mobile-android/app/src/test/java/com/sebastian/android/viewmodel/ChatViewModelTest.kt
 git commit -m "feat(android): StreamEvent ToolRunning/Executed/Failed 加 displayName，更新 SSE 解析"
 ```
 

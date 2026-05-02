@@ -1,5 +1,5 @@
 ---
-version: "1.2"
+version: "1.3"
 last_updated: 2026-05-02
 status: planned
 ---
@@ -60,7 +60,7 @@ class ToolSpec:
 
 ### 3. 后端：`stream_helpers.py` 加 `_resolve_display_name`
 
-在发 SSE 事件前计算最终显示名，处理动态拼接的 4 个特殊工具：
+在发 SSE 事件前计算最终显示名，处理需要动态拼接 `agent_type` 的三个工具：
 
 ```python
 from sebastian.core.tool import get_tool   # 新增 import
@@ -78,10 +78,10 @@ def _resolve_display_name(
             return f"Stop Agent: {agent_type.capitalize()}" if agent_type else "Stop Agent"
         case "resume_agent":
             return f"Resume Agent: {agent_type.capitalize()}" if agent_type else "Resume Agent"
-        case "spawn_sub_agent":
-            return "Worker"
     return spec_display_name or name
 ```
+
+> **注意**：`spawn_sub_agent` 不在 `match` 里——它的 `display_name="Worker"` 已在装饰器上设置，会经由 `spec_display_name or name` 自然返回 `"Worker"`。将其硬编码进 `match` 会导致装饰器值实际无效，造成两处维护不一致。
 
 调用方 `dispatch_tool_call` 在调用前先取 spec：
 
@@ -108,7 +108,11 @@ record: dict[str, Any] = {
 }
 ```
 
-存进 DB 后，REST `/api/v1/sessions/{id}` 返回的 `timelineItems` 中对应 tool_call item 会携带 `display_name` 字段。旧记录该字段为 null，前端 fallback 到 `name`（历史数据显示原始名可接受）。
+存进 DB 后，REST `/api/v1/sessions/{id}` 返回的 `timelineItems` 中对应 tool_call item 会携带 `display_name` 字段。
+
+**为什么 `display_name` 会出现在 REST 响应里**：`session_timeline.py` 的 `_normalize_block_payload()` 采用排除列表机制——只过滤掉 `text` / `content` / `assistant_turn_id` 等固定键，其余字段透传进 `SessionItemRecord.payload` JSON 列。`display_name` 不在排除列表中，因此自然进入 payload，Android 的 `item.payloadString("display_name")` 可直接读到，无需额外配置。
+
+旧记录该字段为 null，前端 fallback 到 `name`（历史数据显示原始名可接受）。
 
 ### 5. 后端：SSE 事件加 `display_name` 字段
 
@@ -177,17 +181,17 @@ data class ToolExecuted(
     val sessionId: String,
     val toolId: String,
     val name: String,
-    val displayName: String,   // 新增
     val resultSummary: String,
     val artifact: AttachmentArtifact? = null,
+    val displayName: String = "",  // 新增，放末尾：现有测试有位置参数传 artifact，插到中间会类型不匹配
 ) : StreamEvent()
 
 data class ToolFailed(
     val sessionId: String,
     val toolId: String,
     val name: String,
-    val displayName: String,   // 新增
     val error: String,
+    val displayName: String = "",  // 新增，放末尾：现有测试用具名参数，不影响兼容性
 ) : StreamEvent()
 ```
 
@@ -198,22 +202,22 @@ data class ToolFailed(
     data.getString("session_id"),
     data.getString("tool_id"),
     data.getString("name"),
-    data.optString("display_name", data.getString("name")),  // fallback 到 name
+    data.optString("display_name", data.getString("name")),
 )
 "tool.executed" -> StreamEvent.ToolExecuted(
-    data.getString("session_id"),
-    data.getString("tool_id"),
-    data.getString("name"),
-    data.optString("display_name", data.getString("name")),  // fallback 到 name
-    data.optString("result_summary", ""),
-    data.optJSONObject("artifact")?.toArtifactOrNull(),
+    sessionId = data.getString("session_id"),
+    toolId = data.getString("tool_id"),
+    name = data.getString("name"),
+    resultSummary = data.optString("result_summary", ""),
+    artifact = data.optJSONObject("artifact")?.toArtifactOrNull(),
+    displayName = data.optString("display_name", data.getString("name")),
 )
 "tool.failed" -> StreamEvent.ToolFailed(
     data.getString("session_id"),
     data.getString("tool_id"),
     data.getString("name"),
-    data.optString("display_name", data.getString("name")),  // fallback 到 name
     data.optString("error", ""),
+    data.optString("display_name", data.getString("name")),
 )
 ```
 
