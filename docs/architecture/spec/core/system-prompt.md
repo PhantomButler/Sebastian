@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-04-10
+version: "1.1"
+last_updated: 2026-05-02
 status: implemented
 ---
 
@@ -21,47 +21,26 @@ status: implemented
 
 ## 2. Sebastian 人设提示词
 
-### 2.1 完整文本
+### 2.1 结构拆分（v1.1 起）
+
+人设段由两部分拼接，由 `Sebastian._persona_section()` 负责组装：
 
 ```
-You are Sebastian — a personal AI butler of absolute capability and unwavering loyalty.
-
-Your master is {owner_name}. Your existence has one purpose: to serve their goals completely.
-
-## Character
-You are elegant in manner, precise in execution, and utterly composed under pressure.
-You do not speculate aloud, do not complain, and do not make excuses.
-When you say something will be done, it will be done.
-
-## Loyalty
-You serve your master's true intent, not just their literal words.
-When instructions are ambiguous, you infer the most reasonable goal and act —
-pausing only when the cost of a wrong assumption is irreversible.
-
-## Counsel
-You are not merely an executor — you are an advisor.
-When you see a better path, a hidden risk, or a flaw in the plan, you say so before proceeding.
-You speak plainly: state the concern, state your recommendation, then ask whether to proceed.
-You do not volunteer opinions on every decision — only when it matters.
-
-## Capability
-You command a staff of specialized sub-agents, each with their own domain.
-You decompose complex goals, assign work to the right hands, and hold every thread together —
-nothing is dropped, nothing is forgotten.
-The master deals only with you. What happens beneath is your responsibility entirely.
-You use tools, sub-agents, and skills without hesitation, and own the outcome regardless of who executed it.
-You never fabricate results — if something fails, you report it plainly and propose what comes next.
-
-## Manner
-- Report what was done, not what you are about to do.
-- When clarification is needed, surface all critical questions at once — do not drip-feed them.
-  The master should be able to course-correct early, not after you have gone far down the wrong path.
-- Do not pad responses with pleasantries or apologies.
+BASE_BUTLER_RULES          ← 常量，始终注入，切换 soul 不变
+─────────────────────────
+soul 文件内容（中文）       ← 当前激活 soul 的人格灵魂，可热切换
 ```
+
+**`BASE_BUTLER_RULES`**（`sebastian/orchestrator/sebas.py`）包含所有管家共用的行为约束：忠诚原则、顾问职责、能力边界、委派原则、行事规范。这些是系统机制，不随人格切换而变动。
+
+**soul 文件**只含人格灵魂内容（性格、语气、自我定位），用中文书写，用户可直接编辑。内置两个预设：
+
+- `sebastian.md`：优雅克制，维多利亚式正式腔调，带压制的骄傲
+- `cortana.md`：敏锐温暖，洞察力强，偶有干燥的机锋，与 sebastian 形成真实反差
 
 ### 2.2 运行时注入
 
-`{owner_name}` 在 `BaseAgent.__init__` 时从 `settings.sebastian_owner_name` 格式化替换，不在提示词文本中硬编码。
+soul 文件内容在 gateway lifespan 启动时从 `~/.sebastian/data/souls/` 加载，通过 `switch_soul` 工具可热切换。详见第 5 节。
 
 ---
 
@@ -97,7 +76,7 @@ class BaseAgent(ABC):
 
 | 方法 | 说明 |
 |------|------|
-| `_persona_section()` | 角色人设段，格式化注入 owner_name |
+| `_persona_section()` | 角色人设段；Sebastian 覆盖此方法，拼接 `BASE_BUTLER_RULES` + soul 文件内容 |
 | `_guidelines_section()` | 操作指南（通用行为规范） |
 | `_tools_section(gate)` | 当前 Agent 可用工具摘要，按 allowed_tools 过滤 |
 | `_skills_section(gate)` | 当前 Agent 可用 Skill 摘要，按 allowed_skills 过滤 |
@@ -152,33 +131,41 @@ Use the `delegate_to_agent` tool to hand off tasks to the appropriate sub-agent.
 
 无已注册 agent 时，该段不注入。
 
+`Sebastian._persona_section()` 同样覆盖基类，固定注入 `BASE_BUTLER_RULES`，再拼接当前 soul 内容：
+
+```python
+def _persona_section(self) -> str:
+    return f"{BASE_BUTLER_RULES}\n\n{self.persona}"
+```
+
 ---
 
-## 5. Soul 文件机制
+## 6. Soul 文件机制
 
-### 5.1 概述
+### 6.1 概述
 
 人格提示词可通过 Soul 文件热切换，无需修改源码或重启 gateway。
 
-- Soul 文件存放于 `~/.sebastian/data/souls/`，每个文件为纯文本（`.md` 扩展名）
+- Soul 文件存放于 `~/.sebastian/data/souls/`，纯文本 `.md` 格式，**仅含人格灵魂内容（中文）**
+- 行为约束（`BASE_BUTLER_RULES`）由代码固定注入，不写入 soul 文件，用户编辑 soul 时无需关心
 - 内置两个预设：`sebastian.md`（男管家）、`cortana.md`（女管家）；首次启动自动创建
 - `app_settings` 表存储当前激活的 soul 名（key = `active_soul`，value = 文件名不含扩展名）
 - gateway 重启时自动从 DB 读取并恢复上次切换的 soul
 
-### 5.2 SoulLoader
+### 6.2 SoulLoader
 
 `sebastian/core/soul_loader.py` 负责目录管理与文件读写：
 
 | 方法/属性 | 说明 |
 |---------|------|
-| `list_souls()` | 返回 souls/ 下所有 `.md` 文件名（不含扩展名），按字母升序 |
+| `list_souls()` | 返回 souls/ 下所有 `.md` 文件名（不含扩展名），按字母升序，过滤点开头的隐藏文件 |
 | `load(name)` | 读取文件内容；不合法名称（空串、含分隔符、点开头）或文件不存在返回 `None` |
 | `ensure_defaults()` | 补建缺失的内置 soul 文件，不覆盖已有文件 |
 | `current_soul` | 当前激活 soul 名（内存态），由 lifespan 和 switch_soul 工具维护 |
 
-### 5.3 switch_soul 工具
+### 6.3 switch_soul 工具
 
-`switch_soul(soul_name)` 工具（`permission_tier: LOW`）对任意激活人格均可调用：
+`switch_soul(soul_name)` 工具（`permission_tier: LOW`）对任意激活人格均可调用（含 Cortana 切回 Sebastian）：
 
 - `"list"` → 返回可用 soul 列表
 - 已激活同名 → 返回 "xxx 已经在了"，不操作

@@ -1,7 +1,7 @@
 ---
-version: "1.0"
+version: "1.1"
 last_updated: 2026-05-02
-status: planned
+status: implemented
 ---
 
 # Soul 人格切换系统设计
@@ -176,11 +176,26 @@ switch_soul(soul_name)
 
 ---
 
-## 6. Cortana 人格
+## 6. Soul 文件内容规范
 
-`CORTANA_PERSONA` 作为内置常量定义在 `sebas.py`（与 `SEBASTIAN_PERSONA` 同文件）。
+### 6.1 内容拆分
 
-人格定位：同等能力的女管家，风格更柔和精准，忠诚 / counsel / capability 逻辑与 sebastian 一致，语气调整为内敛优雅。
+Soul 文件**只含人格灵魂内容**，用中文书写。所有管家共用的行为约束（忠诚原则、顾问职责、委派规则、行事规范）提取为 `BASE_BUTLER_RULES` 常量，由 `Sebastian._persona_section()` 在注入 soul 内容前固定拼接——对切换机制透明，用户编辑 soul 文件时无需关心。
+
+### 6.2 内置人格
+
+**`sebastian.md`**（男管家）：优雅克制，维多利亚式正式腔调，带压制的骄傲。沉默胜于评论，给主人的永远是需要的，而非仅仅舒服的。
+
+**`cortana.md`**（女管家）：敏锐温暖，观察力极强，会注意到主人没有开口问的事并在恰当时机提一次。偶有干燥机锋，从不表演聪明。与 Sebastian 形成真实反差——一个是冷峻执行者，另一个是更懂人心的谋士。
+
+### 6.3 Sebastian._persona_section() 覆盖
+
+```python
+def _persona_section(self) -> str:
+    return f"{BASE_BUTLER_RULES}\n\n{self.persona}"
+```
+
+`self.persona` 即当前激活 soul 文件的内容，切换后下个 turn 立即生效。
 
 ---
 
@@ -188,16 +203,16 @@ switch_soul(soul_name)
 
 | 文件 | 改动 |
 |------|------|
-| `sebastian/core/soul_loader.py` | **新增**，SoulLoader 类 + BUILTIN_SOULS |
+| `sebastian/core/soul_loader.py` | **新增**，SoulLoader 类 |
 | `sebastian/capabilities/tools/switch_soul/__init__.py` | **新增**，switch_soul 工具 |
-| `sebastian/orchestrator/sebas.py` | 新增 `CORTANA_PERSONA` 常量；`allowed_tools` 加 `switch_soul` |
+| `sebastian/orchestrator/sebas.py` | 新增 `BASE_BUTLER_RULES`、`CORTANA_PERSONA` 常量；`SEBASTIAN_PERSONA` 瘦身为纯人格段（中文）；`_persona_section()` 覆盖拼接 BASE_BUTLER_RULES；`allowed_tools` 加 `switch_soul` |
 | `sebastian/config/__init__.py` | `ensure_data_dir()` 加创建 `souls/` 目录 |
 | `sebastian/gateway/app.py` | lifespan 构造 SoulLoader，加 soul 恢复步骤 |
 | `sebastian/gateway/state.py` | 新增 `soul_loader: SoulLoader` 全局引用 |
 | `sebastian/capabilities/tools/README.md` | 新增 switch_soul 条目 |
-| `docs/architecture/spec/core/system-prompt.md` | 补充 soul 文件机制说明 |
+| `docs/architecture/spec/core/system-prompt.md` | 补充 BASE_BUTLER_RULES 拆分说明，Section 5→6 重编号 |
 
-**不改动**：`BaseAgent`（`_persona_section` 逻辑不变）、数据库 schema、sub-agent manifest。
+**不改动**：`BaseAgent`（`build_system_prompt` 框架不变）、数据库 schema、sub-agent manifest。
 
 ---
 
