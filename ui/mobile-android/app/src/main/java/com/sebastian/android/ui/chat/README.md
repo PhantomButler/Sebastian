@@ -21,8 +21,7 @@ chat/
 ├── ThinkingCard.kt           # 思考块卡片（可展开/折叠）
 ├── TodoPanel.kt              # 右栏：Todo 面板（Extra Pane）
 ├── ToolCallCard.kt           # 工具调用块卡片（含状态 badge）
-├── ToolCallInputExtractor.kt # 从 tool inputs JSON 抽 summary / 参数列表
-└── ToolDisplayName.kt        # tool 名 → 卡片 header (title, summary) 的自定义映射
+└── ToolCallInputExtractor.kt # 从 tool inputs JSON 抽 summary / 参数列表
 ```
 
 ## 模块说明
@@ -87,22 +86,13 @@ UI 映射：FAB 显示 = `userAway`（绑意图而非事实 —— 流式中 `at
 
 ### `ToolCallCard`
 
-工具调用块卡片，含状态 badge（`RUNNING` / `SUCCESS` / `ERROR`）。header 显示的标题与右侧一行 summary 由 [`ToolDisplayName`](ToolDisplayName.kt) 根据 tool 名决定，展开区的参数列表由 [`ToolCallInputExtractor`](ToolCallInputExtractor.kt) 从 inputs JSON 抽取。
+工具调用块卡片，含状态 badge（`RUNNING` / `SUCCESS` / `ERROR`）。
 
-### `ToolDisplayName`
+- **标题（title）**：直接读 `block.displayName`，该字段由后端通过 SSE/REST 下发——后端在 `@tool(display_name="...")` 装饰器中声明，随 `ToolBlock` 一起传到前端。如果 `displayName` 为空则回退到原始 tool 名。
+- **右侧一行 summary**：由 [`ToolCallInputExtractor`](ToolCallInputExtractor.kt) 从 inputs JSON 抽取。
+- **展开区参数列表**：同样由 `ToolCallInputExtractor` 抽取。
 
-tool 名 → 卡片 header 显示的集中映射。默认规则：`title = toolName`、`summary = ToolCallInputExtractor.extractInputSummary(...)`，对少数工具做自定义覆盖：
-
-| Tool | Title | Summary |
-|------|-------|---------|
-| `delegate_to_agent` | `Agent: <子代理名>` | 空（信息已并入 title） |
-| `spawn_sub_agent` | `Worker` | goal（inputs.goal） |
-| 其他 | 原 tool 名 | `ToolCallInputExtractor` 抽取结果 |
-
-新增映射：
-1. 如需用到的 inputs 字段不在 [`ToolCallInputExtractor.KEY_PRIORITY`](ToolCallInputExtractor.kt) 里，先加进去，保证抽取顺序确定。
-2. 在 `ToolDisplayName.resolve` 的 `when` 里追加 case，返回 `Display(title, summary)`。
-3. 仅做展示层改动；如需依赖非 inputs 字段，请先扩展 `ContentBlock.ToolBlock`。
+> 要为某个工具设置卡片显示名称，在后端对应 tool 文件（`sebastian/capabilities/tools/<name>/__init__.py`）的 `@tool()` 装饰器中添加 `display_name="..."` 参数即可，无需改前端代码。
 
 ### `ToolCallInputExtractor`
 
@@ -147,7 +137,7 @@ Session 按时间分桶的纯函数逻辑，不含 UI。提供：
 | 改思考块展开/折叠 | `ThinkingCard.kt` |
 | 改工具调用块样式/状态 | `ToolCallCard.kt` |
 | 改工具调用展开区内二次折叠行为 | `CollapsibleContent.kt` |
-| 新增/修改 tool 名在卡片 header 的显示规则 | `ToolDisplayName.kt` |
+| 新增/修改 tool 在卡片 header 的显示名称 | 后端 `@tool(display_name="...")` → `sebastian/capabilities/tools/<name>/__init__.py` |
 | 改 tool inputs 摘要字段优先级 | `ToolCallInputExtractor.kt` |
 | 改 Session 时间分桶/排序逻辑 | `SessionGrouping.kt` |
 | 改 Session 列表面板 | `SessionPanel.kt` |
