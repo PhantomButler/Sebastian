@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
         "只基于记忆 content 自然地回答。"
     ),
     permission_tier=PermissionTier.LOW,
+    display_name="Search Memory",
 )
 async def memory_search(query: str, limit: int = 5) -> ToolResult:
     import sebastian.gateway.state as state

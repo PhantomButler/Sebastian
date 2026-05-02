@@ -18,6 +18,7 @@ _STATUS_LABELS = {"pending": "待完成", "in_progress": "进行中", "completed
         "progress without modifying it."
     ),
     permission_tier=PermissionTier.LOW,
+    display_name="Read Todos",
 )
 async def todo_read() -> ToolResult:
     ctx = get_tool_context()

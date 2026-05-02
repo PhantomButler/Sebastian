@@ -17,6 +17,7 @@ def _get_state() -> ModuleType:
     name="inspect_session",
     description="查看指定 session 的最近消息和当前状态，用于判断下属任务进展。",
     permission_tier=PermissionTier.LOW,
+    display_name="Inspect Session",
 )
 async def inspect_session(
     session_id: str,

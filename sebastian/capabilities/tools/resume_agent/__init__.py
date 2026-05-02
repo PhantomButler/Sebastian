@@ -56,6 +56,7 @@ async def _schedule_session(*, state: ModuleType, agent: Any, session: Session) 
     name="resume_agent",
     description="恢复已暂停或等待指示的子代理 session，并可附带新的执行指示。",
     permission_tier=PermissionTier.LOW,
+    display_name="Resume Agent",
 )
 async def resume_agent(
     agent_type: str,

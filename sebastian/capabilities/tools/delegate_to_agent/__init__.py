@@ -36,6 +36,7 @@ def _get_state() -> ModuleType:
     name="delegate_to_agent",
     description="委派任务给指定的下属 Agent。任务将异步执行，你可以继续处理其他事务。",
     permission_tier=PermissionTier.LOW,
+    display_name="Agent",
 )
 async def delegate_to_agent(
     agent_type: str,

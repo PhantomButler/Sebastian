@@ -40,6 +40,7 @@ def _parse_todos(raw: list[dict[str, Any]]) -> list[TodoItem]:
         "need a separate read tool."
     ),
     permission_tier=PermissionTier.LOW,
+    display_name="Update Todos",
 )
 async def todo_write(todos: list[dict[str, Any]]) -> ToolResult:
     ctx = get_tool_context()

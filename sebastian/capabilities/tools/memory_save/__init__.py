@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
         "output 里的 summary 字段已是面向用户的自然语言结果，可直接引用。"
     ),
     permission_tier=PermissionTier.LOW,
+    display_name="Save Memory",
 )
 async def memory_save(content: str) -> ToolResult:
     trace(

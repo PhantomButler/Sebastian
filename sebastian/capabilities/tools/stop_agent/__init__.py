@@ -33,6 +33,7 @@ def _get_state() -> ModuleType:
     name="stop_agent",
     description="暂停指定 sub-agent session 的执行，保留上下文以便恢复。",
     permission_tier=PermissionTier.LOW,
+    display_name="Stop Agent",
 )
 async def stop_agent(
     agent_type: str,

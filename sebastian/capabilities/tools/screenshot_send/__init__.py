@@ -159,6 +159,7 @@ def _cleanup_old_temp_files(directory: Path, *, now: float | None = None) -> Non
     name="capture_screenshot_and_send",
     description=DESCRIPTION,
     permission_tier=PermissionTier.HIGH_RISK,
+    display_name="Take Screenshot",
 )
 async def capture_screenshot_and_send(display_name: str | None = None) -> ToolResult:
     filename = _resolve_screenshot_filename(display_name)

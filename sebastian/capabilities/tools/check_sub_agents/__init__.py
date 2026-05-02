@@ -18,6 +18,7 @@ def _get_state() -> ModuleType:
     name="check_sub_agents",
     description="查看下属 Agent 的任务执行状态摘要。",
     permission_tier=PermissionTier.LOW,
+    display_name="Check Workers",
 )
 async def check_sub_agents() -> ToolResult:
     ctx = get_tool_context()

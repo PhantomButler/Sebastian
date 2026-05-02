@@ -40,6 +40,7 @@ def _get_state() -> ModuleType:
     name="spawn_sub_agent",
     description="分派子任务给组员处理。组员异步执行，你可以继续处理其他工作。",
     permission_tier=PermissionTier.LOW,
+    display_name="Worker",
 )
 async def spawn_sub_agent(
     goal: str,

@@ -190,6 +190,7 @@ async def send_file_path(file_path: str, display_name: str | None = None) -> Too
         "Use display_name to override the filename shown to the user."
     ),
     permission_tier=PermissionTier.MODEL_DECIDES,
+    display_name="Send File",
 )
 async def send_file(file_path: str, display_name: str | None = None) -> ToolResult:
     return await send_file_path(file_path, display_name)

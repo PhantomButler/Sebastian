@@ -21,6 +21,7 @@ def _get_state() -> ModuleType:
         "遇到无法自行决定的问题时，暂停当前任务并向上级请求指示。上级回复前请勿继续执行任何操作。"
     ),
     permission_tier=PermissionTier.LOW,
+    display_name="Ask Parent",
 )
 async def ask_parent(question: str) -> ToolResult:
     ctx = get_tool_context()
