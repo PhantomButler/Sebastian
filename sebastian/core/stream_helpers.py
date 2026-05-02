@@ -205,7 +205,12 @@ async def dispatch_tool_call(
     await publish(
         session_id,
         EventType.TOOL_RUNNING,
-        {"tool_id": event.tool_id, "name": event.name, "display_name": display_name, "input": event.inputs},
+        {
+            "tool_id": event.tool_id,
+            "name": event.name,
+            "display_name": display_name,
+            "input": event.inputs,
+        },
     )
     record: dict[str, Any] = {
         "type": "tool",
@@ -260,7 +265,12 @@ async def dispatch_tool_call(
         await publish(
             session_id,
             EventType.TOOL_FAILED,
-            {"tool_id": event.tool_id, "name": event.name, "display_name": display_name, "error": error},
+            {
+                "tool_id": event.tool_id,
+                "name": event.name,
+                "display_name": display_name,
+                "error": error,
+            },
         )
         return stream_result, block_index
 
@@ -288,7 +298,12 @@ async def dispatch_tool_call(
         await publish(
             session_id,
             EventType.TOOL_FAILED,
-            {"tool_id": event.tool_id, "name": event.name, "display_name": display_name, "error": result.error},
+            {
+                "tool_id": event.tool_id,
+                "name": event.name,
+                "display_name": display_name,
+                "error": result.error,
+            },
         )
     stream_result = StreamToolResult(
         tool_id=event.tool_id,
