@@ -159,6 +159,7 @@ class Sebastian(BaseAgent):
         "capture_screenshot_and_send",
         "memory_save",
         "memory_search",
+        "switch_soul",
         "Read",
         "Write",
         "Edit",

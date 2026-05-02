@@ -154,4 +154,37 @@ Use the `delegate_to_agent` tool to hand off tasks to the appropriate sub-agent.
 
 ---
 
+## 5. Soul 文件机制
+
+### 5.1 概述
+
+人格提示词可通过 Soul 文件热切换，无需修改源码或重启 gateway。
+
+- Soul 文件存放于 `~/.sebastian/data/souls/`，每个文件为纯文本（`.md` 扩展名）
+- 内置两个预设：`sebastian.md`（男管家）、`cortana.md`（女管家）；首次启动自动创建
+- `app_settings` 表存储当前激活的 soul 名（key = `active_soul`，value = 文件名不含扩展名）
+- gateway 重启时自动从 DB 读取并恢复上次切换的 soul
+
+### 5.2 SoulLoader
+
+`sebastian/core/soul_loader.py` 负责目录管理与文件读写：
+
+| 方法/属性 | 说明 |
+|---------|------|
+| `list_souls()` | 返回 souls/ 下所有 `.md` 文件名（不含扩展名），按字母升序 |
+| `load(name)` | 读取文件内容；不合法名称（空串、含分隔符、点开头）或文件不存在返回 `None` |
+| `ensure_defaults()` | 补建缺失的内置 soul 文件，不覆盖已有文件 |
+| `current_soul` | 当前激活 soul 名（内存态），由 lifespan 和 switch_soul 工具维护 |
+
+### 5.3 switch_soul 工具
+
+`switch_soul(soul_name)` 工具（`permission_tier: LOW`）对任意激活人格均可调用：
+
+- `"list"` → 返回可用 soul 列表
+- 已激活同名 → 返回 "xxx 已经在了"，不操作
+- 文件不存在 → `ok=False` + `Do not retry automatically`
+- 正常切换 → 写 DB + 更新 `sebastian.persona` + 重建 `system_prompt`，下个 turn 立即生效
+
+---
+
 *← [Core 索引](INDEX.md) · [Spec 根索引](../INDEX.md)*

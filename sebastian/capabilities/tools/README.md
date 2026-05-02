@@ -42,6 +42,8 @@ tools/
 │   └── __init__.py          # @tool: memory_save(content: str)；fire-and-forget，立即返回；后台调 MemoryExtractor 分配 slot，经 process_candidates() 写入；extractor 返回空则跳过
 ├── memory_search/           # 长期记忆检索工具（permission_tier: LOW）
 │   └── __init__.py          # @tool: memory_search
+├── switch_soul/             # Sebastian 人格切换工具（Sebastian-only，permission_tier: LOW）
+│   └── __init__.py          # @tool: switch_soul(soul_name)；list 列出可用 soul；其他值切换并重建 system_prompt
 │
 │   # ── 协议工具（按 Agent 层级角色自动注入，无需在 manifest 声明）──
 ├── ask_parent/              # 子代理主动暂停并向上级请求指示（状态置 WAITING）
@@ -82,6 +84,7 @@ tools/
 | 文件写入工具 | [write/\_\_init\_\_.py](write/__init__.py) |
 | 显式记忆写入工具 | [memory_save/\_\_init\_\_.py](memory_save/__init__.py) |
 | 长期记忆检索工具 | [memory_search/\_\_init\_\_.py](memory_search/__init__.py) |
+| Sebastian 人格切换工具 | [switch_soul/\_\_init\_\_.py](switch_soul/__init__.py) |
 | 子代理主动请示上级 | [ask_parent/\_\_init\_\_.py](ask_parent/__init__.py) |
 | 查询子代理状态 | [check_sub_agents/\_\_init\_\_.py](check_sub_agents/__init__.py) |
 | Sebastian 委派任务 | [delegate_to_agent/\_\_init\_\_.py](delegate_to_agent/__init__.py) |
