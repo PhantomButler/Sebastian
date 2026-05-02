@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from sebastian.core.soul_loader import SoulLoader
 from sebastian.gateway.app import _restore_active_soul
@@ -15,7 +16,7 @@ _BUILTIN = {"sebastian": "You are Sebastian.", "cortana": "You are Cortana."}
 
 
 @pytest.fixture
-async def db_factory(tmp_path: Path):
+async def db_factory(tmp_path: Path) -> AsyncGenerator[async_sessionmaker[AsyncSession], None]:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

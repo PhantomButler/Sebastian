@@ -70,6 +70,7 @@ async def switch_soul(soul_name: str) -> ToolResult:
         return ToolResult(ok=True, output=msg, display=msg)
 
     except Exception as e:
+        logger.exception("switch_soul unexpected error: %s", e)
         return ToolResult(
             ok=False,
             error=f"switch_soul 内部错误: {e}。Do not retry automatically；请向用户报告此错误",
