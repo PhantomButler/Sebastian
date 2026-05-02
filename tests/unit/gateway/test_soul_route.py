@@ -22,6 +22,14 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+def test_get_current_soul_requires_auth() -> None:
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")  # NO dependency_overrides
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.get("/api/v1/soul/current")
+    assert resp.status_code == 401
+
+
 def test_get_current_soul_returns_active_soul(client: TestClient) -> None:
     mock_loader = MagicMock()
     mock_loader.current_soul = "cortana"
