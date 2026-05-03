@@ -190,6 +190,18 @@ conda activate sebastian
 python --version
 ```
 
+If `conda activate` is unavailable in the agent's non-interactive shell, use the
+base path directly:
+
+```bash
+CONDA_BASE="$(conda info --base 2>/dev/null || echo "$HOME/miniconda3")"
+"$CONDA_BASE/bin/conda" create -n sebastian python=3.12 -y
+export PATH="$CONDA_BASE/envs/sebastian/bin:$PATH"
+python --version
+python -m venv /tmp/sebastian-conda-venv-check
+rm -rf /tmp/sebastian-conda-venv-check
+```
+
 If Conda is installed in a common directory but not on `PATH`, source its shell
 hook or call it by full path. Do not install another Conda distribution before
 checking these common locations.
@@ -232,7 +244,25 @@ deployment.
 
 ## Phase 3: Install Sebastian
 
-Use the official installer from the latest release:
+Use the official installer from the latest release.
+
+If using Conda, make the Conda environment's Python the first `python3` on PATH
+before running the installer. This is important: Sebastian's installer creates
+its own `.venv`, but that `.venv` can be created by Conda's Python. In this path,
+do not install `python3.12-venv`.
+
+```bash
+CONDA_BASE="$(conda info --base 2>/dev/null || echo "$HOME/miniconda3")"
+export PATH="$CONDA_BASE/envs/sebastian/bin:$CONDA_BASE/bin:$PATH"
+python --version
+python3 --version
+python -m venv /tmp/sebastian-conda-venv-check
+rm -rf /tmp/sebastian-conda-venv-check
+curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
+```
+
+If no Conda-compatible runtime exists and the system Python path was explicitly
+selected in Phase 2, use the plain installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
