@@ -40,8 +40,17 @@ Follow these rules:
 - Read this whole guide before changing the machine.
 - Explain before installing software, changing startup services, using sudo, or
   asking the user to log in to a third-party service.
+- Do not run `sudo` commands yourself by default. Local agents often cannot
+  enter the user's password, and failed sudo attempts confuse non-technical
+  users. When elevated privileges are required, print the exact command, explain
+  why it is needed, ask the user to run it in their own terminal, and continue
+  only after they paste back the result.
 - Prefer safe, user-level installs over global system changes.
 - Prefer an isolated Python environment over modifying the system Python.
+- Do not repair Sebastian's Python runtime by default with system packages such
+  as `sudo apt install python3.12-venv`, `sudo apt install python3-pip`, or
+  distro Python upgrades. Use an existing Conda-compatible runtime first; if none
+  exists, install Miniforge/Miniconda under the user's home directory.
 - Use reproducible commands and verify each phase before moving on.
 - Do not silently open paid accounts, buy domains, enter passwords, or bypass
   interactive login/verification steps.
@@ -118,6 +127,11 @@ command -v shasum || true
 command -v python3 || true
 python3 --version || true
 command -v conda || true
+command -v mamba || true
+command -v micromamba || true
+test -x "$HOME/miniconda3/bin/conda" && echo "$HOME/miniconda3/bin/conda" || true
+test -x "$HOME/miniforge3/bin/conda" && echo "$HOME/miniforge3/bin/conda" || true
+test -x "$HOME/anaconda3/bin/conda" && echo "$HOME/anaconda3/bin/conda" || true
 command -v cloudflared || true
 ```
 
@@ -139,13 +153,17 @@ command -v launchctl || true
 
 Decision rules:
 
-- If Python 3.12+ exists and `python3 -m venv` works, use the built-in
-  Sebastian installer path.
-- If Python is missing, too old, externally managed, or venv creation fails,
-  install a user-level Conda-compatible runtime and create a `sebastian`
-  environment.
+- If an existing Conda-compatible runtime is present (`conda`, `mamba`,
+  `micromamba`, `~/miniconda3`, `~/miniforge3`, or `~/anaconda3`), prefer it and
+  create/use a `sebastian` environment with Python 3.12.
+- If no Conda-compatible runtime exists, and Python 3.12+ exists with working
+  `python3 -m venv`, the built-in Sebastian installer path is acceptable.
+- If Python is missing, too old, externally managed, or venv creation fails, do
+  not install distro Python/venv packages as the default fix. Install a
+  user-level Conda-compatible runtime and create a `sebastian` environment.
 - If `curl`, `tar`, or checksum tools are missing, install the smallest platform
-  package that provides them.
+  package that provides them. If installing that package requires sudo, hand the
+  command to the user instead of running sudo yourself.
 - If the user is on an unsupported OS, stop and say this guide supports macOS
   and Debian/Ubuntu-like Linux first.
 
@@ -153,7 +171,30 @@ Decision rules:
 
 Sebastian requires Python 3.12 or newer.
 
-Preferred path when Python is already suitable:
+Preferred path when Conda already exists:
+
+```bash
+command -v conda || true
+test -x "$HOME/miniconda3/bin/conda" && echo "$HOME/miniconda3/bin/conda" || true
+test -x "$HOME/miniforge3/bin/conda" && echo "$HOME/miniforge3/bin/conda" || true
+test -x "$HOME/anaconda3/bin/conda" && echo "$HOME/anaconda3/bin/conda" || true
+conda env list || true
+```
+
+If a `sebastian` environment already exists, use it after verifying Python 3.12+.
+If it does not exist, create it:
+
+```bash
+conda create -n sebastian python=3.12 -y
+conda activate sebastian
+python --version
+```
+
+If Conda is installed in a common directory but not on `PATH`, source its shell
+hook or call it by full path. Do not install another Conda distribution before
+checking these common locations.
+
+Secondary path when no Conda exists but Python is already suitable:
 
 ```bash
 python3 --version
@@ -161,7 +202,7 @@ python3 -m venv /tmp/sebastian-venv-check
 rm -rf /tmp/sebastian-venv-check
 ```
 
-If that works, continue to Phase 3.
+If that works and the user prefers not to install Conda, continue to Phase 3.
 
 Fallback path when Python is missing or unsuitable:
 
@@ -182,6 +223,12 @@ python --version
 
 Do not continue until `python --version` or `python3 --version` reports 3.12 or
 newer in the environment that will run the installer.
+
+Important: if `python3 -m venv` fails because `ensurepip` or `venv` is missing,
+do not default to `sudo apt install python3.12-venv`. That changes system Python
+state and teaches users to depend on distro-specific packaging. Use the
+Conda-compatible path above unless the user explicitly asks for a system Python
+deployment.
 
 ## Phase 3: Install Sebastian
 
@@ -253,7 +300,9 @@ logs in, systemd user services may need linger:
 sudo loginctl enable-linger "$USER"
 ```
 
-This requires sudo. Explain why before asking the user to approve it.
+This requires sudo. Do not run it yourself. Explain that it lets a Linux
+user-level service start after reboot before login, then ask the user to run the
+command in their own terminal and paste back the result.
 
 Verify:
 

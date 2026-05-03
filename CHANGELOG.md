@@ -9,6 +9,7 @@
 
 ### Changed
 - README 快速开始改为优先推荐复制 Agentic 部署提示词给本机 AI Agent，传统 `bootstrap.sh` 安装命令保留为手动路径。
+- Agentic 部署指南补强 Conda 优先策略：Agent 会先检查现有 Miniconda/Miniforge/Anaconda/mamba 环境，不再默认用 `sudo apt install python3.12-venv` 修补系统 Python；需要 sudo 的命令改为交给用户手动执行并回传结果。
 
 ## [0.5.5] - 2026-05-03
 
