@@ -1,6 +1,6 @@
 # Core — 核心运行时与基础设施
 
-> 本目录包含 Sebastian 核心引擎的详细设计：流式推理引擎、LLM Provider 抽象、Prompt 构造、日志系统。
+> 本目录包含 Sebastian 核心引擎的详细设计：流式推理引擎、LLM Provider 抽象、Prompt 构造、日志系统、单实例后台调度器。
 
 *← 返回 [Spec 根索引](../INDEX.md)*
 
@@ -51,15 +51,15 @@ LLM 三层架构（Catalog → Account → Binding）+ 多 Provider 抽象 + Thi
 
 Agent 结构化 Prompt 构建体系。涵盖：
 
-- Sebastian 角色人设提示词（完整文本）
-- BaseAgent prompt 构造方法体系（五段式：persona / guidelines / tools / skills / agents / knowledge）
+- Sebastian 角色人设提示词、`BASE_BUTLER_RULES` 与 soul 文件热切换
+- BaseAgent prompt 构造方法体系（persona / guidelines / tools / skills / agents / knowledge）
 - per-agent 工具与 Skill 白名单（manifest.toml allowed_tools / allowed_skills）
 - CapabilityRegistry 过滤查询扩展
 - Sebastian 特化（动态注入 Sub-Agent 列表）
 
 | 版本 | 状态 | 最后更新 |
 |------|------|---------|
-| 1.0 | implemented | 2026-04-10 |
+| 1.3 | implemented | 2026-05-03 |
 
 ---
 
@@ -96,3 +96,19 @@ Session 短期上下文的运行时压缩系统。涵盖：
 | 版本 | 状态 | 最后更新 |
 |------|------|---------|
 | 1.0 | implemented | 2026-04-10 |
+
+---
+
+### [single-instance-scheduler.md](single-instance-scheduler.md) — 单实例后台调度器
+
+进程内 interval scheduler，用于系统内置后台维护任务。涵盖：
+
+- `ScheduledJob` / `JobRegistry` / `SchedulerRunner`
+- `scheduled_job_runs` 运行历史表与重启恢复
+- `skip_if_running` 并发策略、timeout、cancelled shutdown
+- 内置 `attachments.cleanup` job
+- Gateway lifespan startup / shutdown 集成
+
+| 版本 | 状态 | 最后更新 |
+|------|------|---------|
+| 1.0 | implemented | 2026-05-03 |

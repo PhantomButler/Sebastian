@@ -1,5 +1,5 @@
 ---
-version: "1.2"
+version: "1.3"
 last_updated: 2026-05-03
 status: implemented
 ---
@@ -16,6 +16,7 @@ status: implemented
 2. 将 prompt 构造机制提升至 `BaseAgent`，结构化、可扩展
 3. 支持 per-agent 工具与 Skill 白名单（`manifest.toml` 声明）
 4. 新增 Agent 只需建目录 + 配置，无需改代码
+5. Sebastian 主管家 persona 支持 soul 文件热切换，切换后下个 LLM turn 立即生效
 
 ---
 
@@ -154,6 +155,7 @@ def _persona_section(self) -> str:
 - 内置文件只有在内容精确等于已知旧版默认文本时才会自动升级；用户自定义修改过的文件不覆盖
 - `app_settings` 表存储当前激活的 soul 名（key = `active_soul`，value = 文件名不含扩展名）
 - gateway 重启时自动从 DB 读取并恢复上次切换的 soul
+- `ensure_data_dir()` 负责创建 `souls/` 目录；`SoulLoader.ensure_defaults()` 会在 gateway startup 和 `switch_soul` 工具入口执行，恢复运行时误删的内置 soul 文件
 
 ### 6.2 SoulLoader
 
@@ -166,6 +168,8 @@ def _persona_section(self) -> str:
 | `ensure_defaults()` | 补建缺失的内置 soul 文件；仅精确匹配旧版默认内容时升级，不覆盖用户自定义文件 |
 | `current_soul` | 当前激活 soul 名（内存态），由 lifespan 和 switch_soul 工具维护 |
 
+> **实现增强**：`SoulLoader` 支持 hash-based 内置 soul 升级名单（`BUILTIN_SOUL_UPGRADES`），用于不保留旧全文常量时识别可安全升级的旧默认内容。
+
 ### 6.3 switch_soul 工具
 
 `switch_soul(soul_name)` 工具（`permission_tier: LOW`）对任意激活身份均可调用（含 Cortana 切回 Sebastian）。工具描述面向模型强调它是运行时控制能力，不应让当前身份在面向用户的回复中自称为 soul/persona/配置/系统组成部分：
@@ -173,7 +177,26 @@ def _persona_section(self) -> str:
 - `"list"` → 返回 `{"current": 当前身份, "available": 全量可用身份列表}`，`display` 标记当前项
 - 已激活同名 → 返回 "xxx 已经在了"，不操作
 - 文件不存在 → `ok=False` + `Do not retry automatically`
-- 正常切换 → 写 DB + 更新 `sebastian.persona` + 重建 `system_prompt`，下个 turn 立即生效
+- 正常切换 → 写 DB + 更新 `soul_loader.current_soul` + 更新 `sebastian.persona` + `rebuild_system_prompt()`，下个 turn 立即生效
+- 切换成功后发布 `EventType.SOUL_CHANGED`，事件数据为 `{"soul_name": soul_name}`
+
+工具入口先调用 `soul_loader.ensure_defaults()`，因此服务运行中内置 soul 被误删时，下一次 `switch_soul("list")` 或切换调用会自动恢复默认文件。
+
+### 6.4 Gateway 启动恢复
+
+`gateway/app.py` lifespan 在 Sebastian 单例构造后初始化 soul runtime：
+
+```text
+SoulLoader(settings.souls_dir, builtin_souls={sebastian, cortana})
+→ ensure_defaults()
+→ state.soul_loader = loader
+→ 读取 app_settings["active_soul"]（缺失视为 "sebastian"）
+→ load(active_soul)
+→ 成功：sebastian.persona = 文件内容，rebuild_system_prompt()
+→ 失败：保留默认 SEBASTIAN_PERSONA 并写 warning
+```
+
+硬编码 `SEBASTIAN_PERSONA` 和 `CORTANA_PERSONA` 保留在 `sebastian/orchestrator/sebas.py`，作为首次生成文件和恢复失败兜底来源。
 
 ---
 

@@ -1,6 +1,6 @@
 ---
-version: "1.2"
-last_updated: 2026-04-30
+version: "1.3"
+last_updated: 2026-05-03
 status: in-progress
 ---
 
@@ -21,6 +21,18 @@ status: in-progress
 - `SessionConsolidationWorker` → `MemoryService.write_candidates_in_session()`
 
 两者最终都调用 `process_candidates()`（`sebastian/memory/writing/pipeline.py`），该函数是内部实现，不对外直接暴露。
+
+`writing/` 子包边界：
+
+| 文件 | 职责 |
+|------|------|
+| `pipeline.py` | `process_candidates()`：validate → resolve → persist → log 统一入口 |
+| `resolver.py` | 画像冲突检测与 `ResolveDecision` 生成 |
+| `write_router.py` | 按 kind 路由 artifact 到对应 store |
+| `decision_log.py` | `MemoryDecisionLogger` 审计落库 |
+| `feedback.py` | `memory_save` / `memory_search` 的用户可读摘要 |
+| `slot_proposals.py` | ProposedSlot 校验、注册、并发 race 保护 |
+| `slots.py` | `SlotRegistry` 与 builtin slots |
 
 ### 1.2 写入管线总原则
 

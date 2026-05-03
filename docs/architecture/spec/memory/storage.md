@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_updated: 2026-04-21
+version: "1.2"
+last_updated: 2026-05-03
 status: in-progress
 ---
 
@@ -22,6 +22,17 @@ status: in-progress
 - `Relation Layer`（关系层）
 - `memory_slots`（slot 定义存储）
 - `memory_decision_log`（记忆决策日志）
+
+当前 store 实现统一位于 `sebastian/memory/stores/`：
+
+| Store | 路径 | 说明 |
+|-------|------|------|
+| `ProfileMemoryStore` | `stores/profile_store.py` | 画像 CRUD、search_active、supersede |
+| `EpisodeMemoryStore` | `stores/episode_store.py` | episode / summary 写入、FTS 检索、summary-first 检索 |
+| `EntityRegistry` | `stores/entity_registry.py` | entity CRUD、alias lookup、planner trigger reload |
+| `SlotDefinitionStore` | `stores/slot_definition_store.py` | `memory_slots` DB CRUD |
+
+`stores/` 只负责 DB record 读写，不依赖 `services/`、`consolidation/` 或 gateway state。
 
 ---
 
@@ -59,11 +70,11 @@ status: in-progress
 - 维护最近回忆、阶段摘要、决策历史
 - 为 query-aware 检索提供全文、时间和主题索引
 
-与现有 `sebastian/memory/episodic_memory.py` 的关系：
+与 session history 的关系：
 
-- 现有 `EpisodicMemory` 实际是 session history compatibility layer（会话历史兼容层）
-- 它负责当前 session 消息读写，不负责跨 session 回忆、summary（摘要）或 episode artifact（经历记忆产物）
-- 新的 `Episode Store` 应新增实现，不应直接替换现有类，以免影响 BaseAgent 的主对话上下文链路
+- 当前 session 消息读写由 `SessionStore` 负责，不经过 Memory 模块
+- `SessionStore` 支撑 BaseAgent 对话上下文、cancel partial flush 和 assistant blocks 持久化
+- `EpisodeMemoryStore` 是在 session history 之上建立的可检索回忆层，不替代主对话上下文链路
 
 建议拆成两类逻辑对象：
 

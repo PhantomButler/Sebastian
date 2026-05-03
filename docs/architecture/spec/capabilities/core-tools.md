@@ -1,6 +1,6 @@
 ---
-version: "1.2"
-last_updated: 2026-04-17
+version: "1.3"
+last_updated: 2026-05-03
 status: implemented
 ---
 
@@ -332,11 +332,121 @@ def _format_tool_display(result: ToolResult) -> str:
 
 其他内部工具（`ask_parent` / `check_sub_agents` / `inspect_session` / `todo_write` / `spawn_sub_agent` / `resume_agent`）不填 `display`，走回退路径。
 
-### 7.5 持久化与兼容性
+### 7.5 ToolSpec.display_name
+
+`ToolSpec` 新增可选 `display_name` 元数据，用于 UI 展示工具调用标题；内部工具名 `name` 保持稳定，继续供模型、权限和前端逻辑判断使用。
+
+```python
+class ToolSpec:
+    __slots__ = ("name", "description", "parameters", "permission_tier", "display_name")
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        parameters: dict[str, Any],
+        permission_tier: PermissionTier = PermissionTier.LOW,
+        display_name: str | None = None,
+    ) -> None: ...
+
+
+@tool(name="memory_save", display_name="Save Memory")
+async def memory_save(...) -> ToolResult: ...
+```
+
+规则：
+
+- `display_name is None` 时回退到内部 `name`
+- 新增工具可只改后端装饰器，Android 不再维护工具名映射表
+- LLM-facing tool spec 仍只包含 `name` / `description` / `input_schema`，`display_name` 不进入模型可见工具参数
+
+当前内置工具显示名：
+
+| 工具 `name` | `display_name` |
+|-------------|----------------|
+| `spawn_sub_agent` | `Worker` |
+| `delegate_to_agent` | `Agent` |
+| `stop_agent` | `Stop Agent` |
+| `resume_agent` | `Resume Agent` |
+| `ask_parent` | `Ask Parent` |
+| `check_sub_agents` | `Check Workers` |
+| `inspect_session` | `Inspect Session` |
+| `memory_save` | `Save Memory` |
+| `memory_search` | `Search Memory` |
+| `todo_read` | `Read Todos` |
+| `todo_write` | `Update Todos` |
+| `send_file` | `Send File` |
+| `capture_screenshot_and_send` | `Take Screenshot` |
+| `switch_soul` | `Soul` |
+
+### 7.6 SSE 与持久化 display_name
+
+`sebastian/core/stream_helpers.py::dispatch_tool_call()` 在发送 tool 事件前解析最终显示名：
+
+```python
+tool_entry = get_tool(event.name)
+spec_display_name = tool_entry[0].display_name if tool_entry else None
+display_name = _resolve_display_name(event.name, event.inputs, spec_display_name)
+```
+
+`_resolve_display_name()` 对需要带 agent 类型的工具做动态标题：
+
+| 工具 | 有 `agent_type` 时 | 无 `agent_type` 时 |
+|------|-------------------|--------------------|
+| `delegate_to_agent` | `Agent: Forge` | `Agent` |
+| `stop_agent` | `Stop Agent: Forge` | `Stop Agent` |
+| `resume_agent` | `Resume Agent: Forge` | `Resume Agent` |
+
+`spawn_sub_agent` 不在动态分支中，固定使用装饰器上的 `display_name="Worker"`，避免两处维护。
+
+三个 tool SSE 事件均携带 `display_name`：
+
+```json
+{
+  "type": "tool.running",
+  "data": {
+    "tool_id": "...",
+    "name": "memory_save",
+    "display_name": "Save Memory",
+    "input": {}
+  }
+}
+```
+
+`tool.executed` / `tool.failed` 同样携带该字段。持久化的 tool block 也写入：
+
+```python
+record = {
+    "type": "tool",
+    "tool_call_id": event.tool_id,
+    "tool_name": event.name,
+    "display_name": display_name,
+    ...
+}
+```
+
+`SessionItemRecord.payload` 透传该字段，REST timeline 历史加载可直接读取；旧记录没有该字段时前端回退到内部 `name`。
+
+### 7.7 Android 消费边界
+
+Android 原生客户端的 `ContentBlock.ToolBlock` 持有：
+
+- `name`：内部工具名，保留给输入摘要提取和逻辑判断
+- `displayName`：后端下发的展示名，直接用于 `ToolCallCard` 标题
+
+实时 SSE 路径：
+
+1. `ToolBlockStart` 先用 `event.name` 做 fallback
+2. `ToolRunning` 收到 `displayName` 后更新 ToolBlock
+3. `ToolExecuted` / `ToolFailed` 保持最终 displayName 一致
+
+历史 REST 路径：`TimelineMapper` 从 `payload["display_name"]` 读取，缺失时 fallback 到 `tool_name`。旧的 `ToolDisplayName.kt` 前端映射表已删除。
+
+### 7.8 持久化与兼容性
 
 - 所有 tool block 写入同一 `record["result"]` 字段，新老数据共用
 - 老 session 回放仍是 Python repr 字符串，新 session 是干净 display，共存无冲突
-- 前端（Android + Web）**不需要改动**
+- 旧 session 没有 `display_name` 时，前端回退到内部 `name`
 
 ---
 

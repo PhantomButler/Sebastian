@@ -2,6 +2,8 @@
 version: "1.2"
 last_updated: 2026-05-03
 status: implemented
+integrated_to: core/system-prompt.md
+integrated_at: 2026-05-03
 ---
 
 # Soul 人格切换系统设计

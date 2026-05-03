@@ -2,6 +2,8 @@
 version: "0.1"
 last_updated: 2026-05-01
 status: draft
+integrated_to: memory/overview.md
+integrated_at: 2026-05-03
 ---
 
 # Memory 内部包结构重组设计

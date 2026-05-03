@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-04-20
+version: "1.1"
+last_updated: 2026-05-03
 status: partially-implemented
 ---
 
@@ -66,7 +66,16 @@ status: partially-implemented
 - `memory_id` 必须非空且指向 active 的 profile memory 记录；0 命中时记录 `failed_expire` decision log，不写成功状态
 - 所有 EXPIRE 操作必须进入 `memory_decision_log`
 
-**Phase C 实现状态**：`SessionConsolidationWorker`（`sebastian/memory/consolidation/consolidation.py`）已实现，由 `MemoryConsolidationScheduler` 订阅 `SESSION_COMPLETED` 事件触发。幂等性通过 `SessionConsolidationRecord(session_id, agent_type)` DB 标记保证；写入原子性通过单事务实现。启动时的 catch-up sweep 会补处理未沉淀的 completed session。
+**Phase C 实现状态**：`SessionConsolidationWorker`（`sebastian/memory/consolidation/consolidation.py`）已实现，由 `MemoryConsolidationScheduler` 订阅 `SESSION_COMPLETED` 事件触发。幂等性通过 `SessionConsolidationRecord(session_id, agent_type)` DB 标记保证；写入原子性通过单事务实现。启动时的 catch-up sweep 会补处理未沉淀的 completed session。候选 artifacts 写入通过注入的 `MemoryService.write_candidates_in_session()` 完成，consolidation 继续拥有事务和幂等 marker，不在内部读取 gateway global state。
+
+`consolidation/` 子包边界：
+
+| 文件 | 职责 |
+|------|------|
+| `consolidation.py` | `MemoryConsolidator`、`SessionConsolidationWorker`、`MemoryConsolidationScheduler`、startup catch-up sweep |
+| `extraction.py` | `MemoryExtractor` 与 slot 拒绝重试 |
+| `prompts.py` | Extractor / Consolidator 共享 prompt 模板 |
+| `provider_bindings.py` | `memory_extractor` / `memory_consolidator` binding 常量与 component metadata |
 
 `idle` / `stalled` 触发当前不属于已实现契约。未来如果需要支持，应先补独立 spec，明确：
 

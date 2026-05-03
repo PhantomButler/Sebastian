@@ -2,6 +2,8 @@
 version: "0.1"
 last_updated: 2026-04-30
 status: draft
+integrated_to: memory/overview.md
+integrated_at: 2026-05-03
 ---
 
 # Memory Service 顶层抽象设计

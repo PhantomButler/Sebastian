@@ -2,6 +2,8 @@
 version: "1.3"
 last_updated: 2026-05-02
 status: planned
+integrated_to: capabilities/core-tools.md
+integrated_at: 2026-05-03
 ---
 
 # Tool Display Name 后端化设计

@@ -1,6 +1,6 @@
 ---
-version: "1.3"
-last_updated: 2026-04-26
+version: "1.4"
+last_updated: 2026-05-03
 status: in-progress
 ---
 
@@ -154,6 +154,40 @@ PUT 行为与 `/agents/{agent_type}/llm-binding` 一致：
 #### 存储说明
 
 两个 memory component 的绑定存储在 `AgentLLMBindingRecord` 表中，`agent_type` 字段值分别为 `"memory_extractor"` 和 `"memory_consolidator"`，与 agent binding 行共存于同一表。Memory component 路由通过 `MEMORY_COMPONENT_TYPES` 白名单管理自己的键空间，agent 路由通过 `agent_registry` 管理自己的键空间，两者互不干扰。
+
+---
+
+## 3.2 MemoryService 运行时接线
+
+`MemoryService` 是 memory 模块的运行时 composition root。Gateway lifespan 在 DB、slot registry、resident snapshot 初始化后创建：
+
+```python
+state.memory_service = MemoryService(
+    db_factory=db_factory,
+    resident_snapshot_refresher=resident_refresher,
+    memory_settings_fn=lambda: state.memory_settings.enabled,
+)
+```
+
+服务边界 contracts：
+
+| Contract | 字段/语义 |
+|----------|-----------|
+| `PromptMemoryRequest` | `session_id`、`agent_type`、`user_message`、`subject_id`、`active_project_or_agent_context`、resident dedupe sets |
+| `PromptMemoryResult` | `section: str`，保持现有 Markdown 注入格式 |
+| `ExplicitMemorySearchRequest` | `query`、`session_id`、`agent_type`、`subject_id`、`limit=5` |
+| `ExplicitMemorySearchResult` | `items: list[dict[str, Any]]`，兼容工具输出结构 |
+| `MemoryWriteRequest` | `candidates`、`proposed_slots`、`session_id`、`agent_type`、`worker_id`、`model_name`、`rule_version`、`input_source`、`proposed_by` |
+| `MemoryWriteResult` | dataclass，包含 `decisions`、slot 注册/拒绝列表，以及 `saved_count` / `discarded_count` 统计 |
+
+降级行为集中在 `MemoryService`：
+
+- memory disabled → prompt/search 返回空，write 返回空结果
+- `db_factory is None` → prompt/search 返回空
+- prompt/search 异常 → warning log + 空结果，不中断主对话
+- `write_candidates()` 在有 resident refresher 时，使用 `mutation_scope()` 包住 DB commit 与 `mark_dirty_locked()`，避免快照读到 stale 状态
+
+`write_candidates_in_session()` 是 caller-owned transaction 入口，供 `SessionConsolidationWorker` 在自己的事务内复用统一写入 pipeline；该方法不提交事务。
 
 ---
 

@@ -2,6 +2,8 @@
 date: 2026-04-29
 status: draft
 topic: single-instance-scheduler
+integrated_to: core/single-instance-scheduler.md
+integrated_at: 2026-05-03
 ---
 
 # Single-Instance Scheduler

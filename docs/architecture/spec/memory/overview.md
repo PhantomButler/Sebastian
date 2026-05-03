@@ -1,6 +1,6 @@
 ---
-version: "1.2"
-last_updated: 2026-04-30
+version: "1.3"
+last_updated: 2026-05-03
 status: in-progress
 ---
 
@@ -78,7 +78,7 @@ Sebastian 的长期记忆采用三层逻辑模型：
 
 ### 5.0 MemoryService — 顶层访问边界
 
-`MemoryService`（`sebastian/memory/services/memory_service.py`）是记忆系统对外的**唯一访问边界**。所有外部调用方均通过 `MemoryService` 接入，不直接调用 `retrieval.py` 或 `pipeline.py` 的内部函数。
+`MemoryService`（`sebastian/memory/services/memory_service.py`）是记忆系统对外的**唯一访问边界**。所有外部调用方均通过 `MemoryService` 接入，不直接调用 `stores/`、`retrieval/` 或 `writing/` 内部实现。
 
 ```
 外部调用方
@@ -92,36 +92,49 @@ Sebastian 的长期记忆采用三层逻辑模型：
               MemoryWriteService          封装 process_candidates()
                          │
                          ▼
-              retrieval.py / pipeline.py  P0 内部实现（原地保留）
+              retrieval/ / writing/       内部实现子包
 ```
 
 `contracts/` 子包（`contracts/retrieval.py`、`contracts/writing.py`）定义服务边界的 Pydantic 入参与返回值模型，与内部实现解耦。
 
 图路由检索（graph-routed retrieval）为 P1/P2 后续工作，当前不实现。
 
+### 5.0.1 Memory 内部包结构
+
+当前 `sebastian/memory/` 已按 facade 后的内部职责拆分：
+
+```text
+memory/
+├── contracts/       # PromptMemoryRequest / ExplicitMemorySearchRequest / MemoryWriteRequest
+├── services/        # MemoryService / MemoryRetrievalService / MemoryWriteService
+├── stores/          # ProfileMemoryStore / EpisodeMemoryStore / EntityRegistry / SlotDefinitionStore
+├── writing/         # process_candidates / resolver / write_router / decision_log / slots
+├── retrieval/       # RetrievalPlanner / Assembler / lexicon / depth guard / segmentation
+├── consolidation/   # MemoryExtractor / MemoryConsolidator / SessionConsolidationWorker
+└── resident/        # ResidentMemorySnapshotRefresher / resident_dedupe
+```
+
+根目录只保留跨链路基础模块：`types.py`、`subject.py`、`trace.py`、`constants.py`、`errors.py`、`startup.py`、`store.py`、`working_memory.py`。
+
+依赖方向：
+
+```text
+external callers
+  → memory.contracts / memory.services
+      → memory.retrieval / memory.writing / memory.consolidation / memory.resident / memory.stores
+```
+
+Gateway startup 是运行时装配层，允许直接 import memory 内部组件做初始化（storage、slot registry、planner entity triggers、consolidation scheduler、resident snapshot、MemoryService 创建），但请求处理路径和工具路径不得绕过 `MemoryService` 直接读写 memory 业务数据。
+
 ### 5.1 WorkingMemory
 
 `WorkingMemory`（工作记忆）继续作为进程内、任务级临时状态，不纳入长期记忆体系。
 
-### 5.2 现有 EpisodicMemory
+### 5.2 SessionStore 与 Episode Store
 
-现有 `sebastian/memory/episodic_memory.py` 继续保留为 session history compatibility layer（会话历史兼容层），但不再等同于完整回忆系统。
+会话对话历史由 `SessionStore` 直接管理；`BaseAgent` 通过 `SessionStore.get_context_messages()` 读取上下文，通过 `append_message()` / timeline 写入消息与 blocks。主对话历史不经过 Memory 模块。
 
-它当前实际职责是：
-
-- 从 `SessionStore` 读取当前 session（会话）的最近消息，供 BaseAgent 构造 LLM 上下文
-- 把 user / assistant turn（轮次消息）追加回 session 消息历史
-- 支撑 cancel partial flush（取消时保存部分输出）和 assistant blocks（助手消息块）持久化
-
-因此它更接近 `SessionHistory`（会话历史）适配器，而不是新设计中的 `Episode Store`（经历存储）。
-
-新的 `Episode Store`（经历存储）应作为“在 session 历史之上建立的可检索回忆层”新增，而不是直接替换现有主对话历史链路。
-
-实现时建议：
-
-- 首期保留现有 `EpisodicMemory` 以降低 BaseAgent 主链路风险
-- 新增真正的 `Episode Store` 存储 `episode`（经历）/ `summary`（摘要）等 artifacts（记忆产物）
-- 后续可在不影响行为的前提下，将现有类重命名为 `SessionHistory` 或 `ConversationHistory`，避免概念混淆
+`EpisodeMemoryStore`（`sebastian/memory/stores/episode_store.py`）是长期可检索回忆层，存储 `episode` / `summary` artifacts，并通过 FTS 与时间排序支撑 Episode Lane 检索。它建立在 session history 之上，不替代 `SessionStore`。
 
 ### 5.3 BaseAgent Memory 入口
 

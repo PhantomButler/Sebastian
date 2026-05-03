@@ -1,6 +1,6 @@
 ---
-version: "1.3"
-last_updated: 2026-04-30
+version: "1.4"
+last_updated: 2026-05-03
 status: in-progress
 ---
 
@@ -27,6 +27,15 @@ Sebastian 不做”统一 search top-k 然后塞进 prompt”，而做：
 `retrieve_memory_section()`（`sebastian/memory/retrieval/retrieval.py`）是内部实现，不对外直接暴露。
 
 图路由检索（graph-routed retrieval）为 P1/P2 后续工作，当前 Relation Lane 仍基于 SQLite FTS，不引入向量检索或图数据库。
+
+`retrieval/` 子包边界：
+
+| 文件 | 职责 |
+|------|------|
+| `retrieval.py` | `RetrievalContext`、`MemoryRetrievalPlanner`、lane 查询调度、`MemorySectionAssembler` |
+| `retrieval_lexicon.py` | 静态 lane 触发词 |
+| `depth_guard.py` | depth >= 2 时跳过长期记忆注入 |
+| `segmentation.py` | jieba FTS 分词、查询 term、实体词注入 |
 
 ---
 
