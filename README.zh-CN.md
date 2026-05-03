@@ -68,13 +68,33 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统。你只需告诉
 
 ## ⚡ 快速开始
 
-### 安装服务端（macOS / Linux）
+### 让 AI Agent 帮你安装（推荐）
+
+把下面这段复制给 Codex、Claude Code、Sebastian 或其他本机 AI Agent：
+
+```text
+请按照 Sebastian 官方 Agentic 部署指南，在这台机器上帮我安装和部署 Sebastian：
+
+https://raw.githubusercontent.com/PhantomButler/Sebastian/main/docs/AGENTIC_DEPLOYMENT.md
+
+请先读取这份指南，再按步骤执行。你可以检查我的本机环境，在说明原因后安装缺失的开发/运行依赖，为 Sebastian 创建隔离的 Python/Conda 环境，运行 Sebastian 安装器，初始化 owner 账号，注册开机自启服务，并帮我配置 Android App 可以访问的 Server URL。
+
+不要因为简单的环境缺失就停止。只要操作安全、可恢复，就请你顺手修复。只有遇到账号登录、付款、sudo/admin 授权、DNS/域名所有权、浏览器验证码，或网络/服务商故障这类你无法自行解决的问题时，才停下来问我。
+```
+
+Agent 会读取 [Agentic 部署指南](docs/AGENTIC_DEPLOYMENT.md)，帮你补齐
+Python/Conda 等基础环境，运行 Sebastian 安装器，设置开机自启，并引导你完成
+Cloudflare / Tailscale / 局域网访问配置。
+
+### 手动安装服务端（macOS / Linux）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
 ```
 
-这条命令安装的是 Sebastian 后端服务——自动下载最新 Release、校验 SHA256 指纹、安装依赖、启动首次初始化向导。打开终端显示的 URL，设置主人名字和密码即可。
+这条命令安装的是 Sebastian 后端服务——自动下载最新 Release、校验 SHA256
+指纹、安装依赖、启动首次初始化向导。如果你的电脑已经有基础环境，或者你更想自己
+执行安装器，可以走这条路径。
 
 ### 安装 Android App
 
@@ -192,6 +212,7 @@ sudo loginctl enable-linger $USER
 
 | 文档 | 说明 |
 |------|------|
+| [Agentic 部署指南](docs/AGENTIC_DEPLOYMENT.md) | 交给本机 AI Agent 执行的安装、开机自启与联网配置指南 |
 | [架构设计](docs/architecture/spec/INDEX.md) | 完整系统设计 — 数据模型、协议、Agent 层级 |
 | [后端指南](sebastian/README.md) | Python 后端模块地图与开发入口 |
 | [Android App 指南](ui/mobile-android/README.md) | Kotlin App 架构、导航、SSE 连接机制 |
