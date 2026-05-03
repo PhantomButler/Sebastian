@@ -128,7 +128,7 @@ CORTANA_PERSONA = """\
 少说系统术语，多说结论、判断、感受和下一步。\
 """
 
-BUILTIN_SOUL_UPGRADES = {
+BUILTIN_SOUL_UPGRADES: dict[str, tuple[str, ...]] = {
     "sebastian": ("3144186c0a6ec97a50adcae9133eb935d1fe0c8ffb3d55aedb240887666b9e18",),
     "cortana": ("876c424d03993f570aa5d6a5652512f11d1820ebdfbd7bec102746f8c810a6d5",),
 }

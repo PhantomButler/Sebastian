@@ -62,7 +62,9 @@ async def _restore_active_soul(
     try:
         async with db_factory() as session:
             store = AppSettingsStore(session)
-            active = await store.get(APP_SETTING_ACTIVE_SOUL, "sebastian")
+            active = await store.get(APP_SETTING_ACTIVE_SOUL)
+        if active is None:
+            active = "sebastian"
         if active == soul_loader.current_soul:
             return
         content = soul_loader.load(active)
