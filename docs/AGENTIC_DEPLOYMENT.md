@@ -106,6 +106,12 @@ short explanation so a non-technical user understands what they are choosing:
    - Why it matters: auto-start keeps Sebastian available after the machine
      restarts. On macOS this uses LaunchAgent; on Linux this uses a user-level
      systemd service and may need linger for reboot-time startup.
+6. Is the user in mainland China or another region?
+   - Why it matters: package downloads from Anaconda and PyPI may be slow or
+     unreliable from mainland China. If the user is in mainland China, configure
+     Conda and pip to use a domestic mirror before creating environments or
+     installing dependencies. If the user is elsewhere, keep the default upstream
+     sources unless they explicitly request a mirror.
 
 Recommended default for non-technical users:
 
@@ -181,6 +187,19 @@ test -x "$HOME/anaconda3/bin/conda" && echo "$HOME/anaconda3/bin/conda" || true
 conda env list || true
 ```
 
+If the user is in mainland China, configure Conda and pip mirrors before
+creating the environment. Prefer a well-known domestic mirror such as Tsinghua
+TUNA. If a mirror is unavailable, explain the network issue and ask whether to
+try another mirror.
+
+```bash
+conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
+conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge
+conda config --set show_channel_urls yes
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
 If a `sebastian` environment already exists, use it after verifying Python 3.12+.
 If it does not exist, create it:
 
@@ -222,8 +241,11 @@ Fallback path when Python is missing or unsuitable:
    Python runtime to avoid changing system Python.
 2. Prefer Miniforge on macOS Apple Silicon and Linux. Miniconda is acceptable
    when Miniforge is unavailable.
-3. Install it under the user's home directory.
-4. Create and activate an environment named `sebastian` with Python 3.12.
+3. If the user is in mainland China, download the installer from a domestic
+   mirror when available, or warn that the official installer may be slow.
+4. Install it under the user's home directory.
+5. Configure Conda/pip mirrors first when the user is in mainland China.
+6. Create and activate an environment named `sebastian` with Python 3.12.
 
 Example Conda environment commands after Conda is installed:
 
