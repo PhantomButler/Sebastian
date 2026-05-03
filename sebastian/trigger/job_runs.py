@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ulid import ULID
 
@@ -68,13 +68,17 @@ class ScheduledJobRunStore:
     async def get_last_success_at(self, job_id: str) -> datetime | None:
         async with self._db_factory() as session:
             async with session.begin():
+                success_at = func.coalesce(
+                    ScheduledJobRunRecord.finished_at,
+                    ScheduledJobRunRecord.started_at,
+                )
                 result = await session.execute(
-                    select(ScheduledJobRunRecord.finished_at)
+                    select(success_at)
                     .where(
                         ScheduledJobRunRecord.job_id == job_id,
                         ScheduledJobRunRecord.status == "success",
                     )
-                    .order_by(ScheduledJobRunRecord.finished_at.desc())
+                    .order_by(success_at.desc())
                     .limit(1)
                 )
                 return result.scalar_one_or_none()

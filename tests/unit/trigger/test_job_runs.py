@@ -120,6 +120,27 @@ async def test_get_last_success_at_returns_most_recently_finished(run_store) -> 
     assert result == run_a_end
 
 
+async def test_get_last_success_at_falls_back_to_started_at_for_legacy_success(
+    run_store, db_factory
+) -> None:
+    legacy_started_at = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
+    async with db_factory() as session:
+        async with session.begin():
+            session.add(
+                ScheduledJobRunRecord(
+                    id="legacy-success",
+                    job_id="test.job",
+                    status="success",
+                    started_at=legacy_started_at,
+                    finished_at=None,
+                )
+            )
+
+    result = await run_store.get_last_success_at("test.job")
+
+    assert result == legacy_started_at
+
+
 async def test_get_last_success_at_ignores_running_failed_timeout(run_store):
     t_success_start = datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC)
     t_success_end = datetime(2024, 1, 1, 10, 5, 0, tzinfo=UTC)
