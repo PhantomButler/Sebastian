@@ -32,6 +32,7 @@ async def switch_soul(soul_name: str) -> ToolResult:
     try:
         state = _get_state()
         soul_loader = state.soul_loader
+        soul_loader.ensure_defaults()
 
         if soul_name == "list":
             souls = soul_loader.list_souls()

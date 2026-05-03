@@ -78,6 +78,21 @@ async def test_switch_soul_list(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_switch_soul_list_restores_deleted_builtin_souls(tmp_path: Path) -> None:
+    from sebastian.capabilities.tools.switch_soul import switch_soul
+
+    state = _make_state(tmp_path, current_soul="sebastian")
+    (tmp_path / "cortana.md").unlink()
+
+    with patch("sebastian.capabilities.tools.switch_soul._get_state", return_value=state):
+        result = await switch_soul("list")
+
+    assert result.ok is True
+    assert result.output == {"current": "sebastian", "available": ["cortana", "sebastian"]}
+    assert (tmp_path / "cortana.md").read_text(encoding="utf-8") == "You are Cortana."
+
+
+@pytest.mark.asyncio
 async def test_switch_soul_already_active(tmp_path: Path) -> None:
     from sebastian.capabilities.tools.switch_soul import switch_soul
 
