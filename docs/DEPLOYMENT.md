@@ -3,6 +3,11 @@
 本指南帮你把 Sebastian 后端跑起来并让手机 App 连上。
 按你的需求选场景，跟着步骤走就行。
 
+> **推荐给新用户**：如果你不熟悉 Python、Conda、系统服务、DNS 或 Cloudflare，
+> 优先把 [Agentic 部署指南](AGENTIC_DEPLOYMENT.md) 交给 Codex / Claude Code /
+> Sebastian 这类本机 AI Agent，让 Agent 读取文档后帮你检查环境、安装依赖、部署
+> Sebastian、设置开机自启，并配置 Android App 可访问的地址。
+
 ---
 
 ## 前置：安装 Sebastian 后端
