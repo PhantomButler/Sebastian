@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Added
+- 新增 `docs/AGENTIC_DEPLOYMENT.md`，提供面向 Codex / Claude Code / Sebastian 等本机 AI Agent 的部署 Runbook，覆盖环境补齐、安装、开机自启和 Cloudflare Tunnel 等联网方案。
+
+### Changed
+- README 快速开始改为优先推荐复制 Agentic 部署提示词给本机 AI Agent，传统 `bootstrap.sh` 安装命令保留为手动路径。
+
 ## [0.5.5] - 2026-05-03
 
 ### Added

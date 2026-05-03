@@ -69,13 +69,43 @@ Sebastian is a goal-driven personal AI butler system. Tell it what you want — 
 
 ## ⚡ Quick Start
 
-### Install Server (macOS / Linux)
+### Agent-Assisted Install (Recommended)
+
+Paste this into Codex, Claude Code, Sebastian, or another local AI agent:
+
+```text
+Please install and deploy Sebastian on this machine by following the official
+agentic deployment guide:
+
+https://raw.githubusercontent.com/PhantomButler/Sebastian/main/docs/AGENTIC_DEPLOYMENT.md
+
+Read the guide first, then execute it step by step. You may inspect my local
+environment, install missing developer/runtime dependencies after explaining
+what you are about to do, create an isolated Python/Conda environment for
+Sebastian, run the Sebastian installer, initialize the owner account, register
+Sebastian as a startup service, and help me set up a reachable server URL for
+the Android app.
+
+Do not stop on simple missing-environment problems. Fix them when they are safe
+and reversible. Stop and ask me only when an action needs my account login,
+payment, sudo/admin approval, DNS/domain ownership, a browser verification code,
+or when a network/provider outage prevents progress.
+```
+
+The agent will read [the deployment guide](docs/AGENTIC_DEPLOYMENT.md), install
+missing basics such as Python/Conda when needed, run the Sebastian installer,
+set up auto-start, and guide you through Cloudflare/Tailscale/LAN access.
+
+### Manual Server Install (macOS / Linux)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PhantomButler/Sebastian/main/bootstrap.sh | bash
 ```
 
-This installs the Sebastian backend service on your machine — downloads the latest release, verifies SHA256 checksums, installs dependencies, and launches the setup wizard. Open the URL it prints, set your name and password, and you're done.
+This installs the Sebastian backend service on your machine — downloads the
+latest release, verifies SHA256 checksums, installs dependencies, and launches
+the setup wizard. Use this path if your machine already has the required basics
+or you prefer to run the installer yourself.
 
 ### Install Android App
 
@@ -178,6 +208,7 @@ For the full architecture spec, see [docs/architecture/spec/](docs/architecture/
 
 | Document | Description |
 |----------|-------------|
+| [Agentic Deployment Guide](docs/AGENTIC_DEPLOYMENT.md) | Give this to a local AI agent for assisted install, startup service, and network setup |
 | [Architecture Spec](docs/architecture/spec/INDEX.md) | Full system design — data models, protocols, agent hierarchy |
 | [Backend Guide](sebastian/README.md) | Python backend module map and development entry points |
 | [Android App Guide](ui/mobile-android/README.md) | Kotlin app architecture, navigation, SSE connection details |
