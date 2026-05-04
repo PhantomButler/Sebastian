@@ -48,6 +48,10 @@ config/
 | `sebastian_browser_headless` | `SEBASTIAN_BROWSER_HEADLESS` | `true` | 浏览器运行是否使用 headless 模式 |
 | `sebastian_browser_viewport` | `SEBASTIAN_BROWSER_VIEWPORT` | `1280x900` | 浏览器默认 viewport 字符串 |
 | `sebastian_browser_timeout_ms` | `SEBASTIAN_BROWSER_TIMEOUT_MS` | `30000` | 浏览器操作默认超时时间（毫秒） |
+| `sebastian_browser_dns_mode` | `SEBASTIAN_BROWSER_DNS_MODE` | `auto` | 浏览器安全解析模式：`auto` / `system` / `doh` |
+| `sebastian_browser_doh_endpoint` | `SEBASTIAN_BROWSER_DOH_ENDPOINT` | `https://dns.alidns.com/resolve` | `doh` 或代理 Fake-IP fallback 使用的 DoH endpoint |
+| `sebastian_browser_doh_timeout_ms` | `SEBASTIAN_BROWSER_DOH_TIMEOUT_MS` | `5000` | 浏览器 DoH 查询超时时间（毫秒） |
+| `sebastian_browser_upstream_proxy` | `SEBASTIAN_BROWSER_UPSTREAM_PROXY` | `""` | 可选浏览器上游 HTTP 代理；为空时直连公网目标 |
 
 ## 修改导航
 

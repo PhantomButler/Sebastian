@@ -215,6 +215,10 @@ Add configuration entries equivalent to:
 SEBASTIAN_BROWSER_HEADLESS=true
 SEBASTIAN_BROWSER_VIEWPORT=1280x900
 SEBASTIAN_BROWSER_TIMEOUT_MS=30000
+SEBASTIAN_BROWSER_DNS_MODE=auto
+SEBASTIAN_BROWSER_DOH_ENDPOINT=https://dns.alidns.com/resolve
+SEBASTIAN_BROWSER_DOH_TIMEOUT_MS=5000
+SEBASTIAN_BROWSER_UPSTREAM_PROXY=
 ```
 
 Visible browser mode is a debugging option, not the default product mode.
@@ -277,6 +281,24 @@ The application-layer resolver still needs a concrete algorithm:
 - If resolution fails, times out, or returns an empty answer, block by default.
 - Apply the same checks to IPv4 literals, IPv6 literals, bracketed IPv6, IDNA hostnames, and
   redirect targets.
+
+Some users run system-level proxies whose DNS layer returns Fake-IP addresses from reserved
+ranges such as `198.18.0.0/15`. Those addresses are proxy routing placeholders, not the real
+public destination, so the resolver should support `auto`, `system`, and `doh` modes. The
+default `auto` mode should use system DNS first, fall back to DoH only when the system answer
+is a proxy Fake-IP, and still reject ordinary loopback, private, link-local, metadata, or
+other reserved answers without fallback. Sebastian must never treat a Fake-IP itself as
+allowed. DNS validation and network egress remain separate concerns: Sebastian may use DoH to
+decide whether the requested hostname resolves to public addresses, while the operating
+system or user's proxy may still handle the actual outbound route.
+
+When the user's proxy is not a full network-route proxy, Sebastian must also support an
+explicit browser upstream proxy. The Playwright browser still talks only to Sebastian's local
+filtering proxy. After Sebastian validates the URL and resolved destination, the local
+filtering proxy may forward allowed HTTP/HTTPS traffic to the configured upstream HTTP proxy.
+This preserves the Sebastian safety boundary while allowing public web traffic to use the
+user's chosen proxy route. The upstream proxy setting must be explicit; Sebastian should not
+silently trust arbitrary open local ports.
 
 Permission tiers:
 

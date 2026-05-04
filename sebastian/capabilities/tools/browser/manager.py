@@ -13,7 +13,11 @@ from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from sebastian.capabilities.tools.browser.network import BrowserDNSResolver
-from sebastian.capabilities.tools.browser.proxy import FilteringProxy, ProxyConfig
+from sebastian.capabilities.tools.browser.proxy import (
+    FilteringProxy,
+    ProxyConfig,
+    UpstreamProxyConfig,
+)
 from sebastian.capabilities.tools.browser.safety import BrowserSafetyError, validate_public_http_url
 from sebastian.config import Settings
 
@@ -139,8 +143,20 @@ class BrowserSessionManager:
         self.downloads_dir: Path = settings.browser_downloads_dir
         self.screenshots_dir: Path = settings.browser_screenshots_dir
         self._playwright_factory = playwright_factory or _default_playwright_factory
-        self._filtering_proxy = filtering_proxy or FilteringProxy()
-        self._dns_resolver = dns_resolver or BrowserDNSResolver()
+        self._configuration_error: str | None = None
+        try:
+            upstream_proxy = UpstreamProxyConfig.parse(settings.sebastian_browser_upstream_proxy)
+        except ValueError as exc:
+            self._configuration_error = f"Browser upstream proxy is invalid: {exc}"
+            upstream_proxy = None
+        self._dns_resolver = dns_resolver or _browser_dns_resolver_from_settings(
+            settings,
+            upstream_proxy,
+        )
+        self._filtering_proxy = filtering_proxy or FilteringProxy(
+            self._dns_resolver,
+            upstream_proxy=upstream_proxy,
+        )
         self._startup_lock = asyncio.Lock()
         self._navigation_lock = asyncio.Lock()
         self._operation_lock = asyncio.Lock()
@@ -157,6 +173,8 @@ class BrowserSessionManager:
             requested = validate_public_http_url(url)
         except BrowserSafetyError as exc:
             return BrowserOpenResult(ok=False, error=str(exc))
+        if self._configuration_error is not None:
+            return BrowserOpenResult(ok=False, error=self._configuration_error)
 
         async with self._operation_lock:
             async with self._navigation_lock:
@@ -720,6 +738,18 @@ def _playwright_error_message(exc: Exception) -> str | None:
             "python -m playwright install-deps chromium"
         )
     return None
+
+
+def _browser_dns_resolver_from_settings(
+    settings: Settings,
+    upstream_proxy: UpstreamProxyConfig | None,
+) -> BrowserDNSResolver:
+    return BrowserDNSResolver(
+        dns_mode=settings.sebastian_browser_dns_mode,
+        doh_endpoint=settings.sebastian_browser_doh_endpoint,
+        doh_proxy=upstream_proxy.url if upstream_proxy is not None else None,
+        doh_timeout_seconds=settings.sebastian_browser_doh_timeout_ms / 1000,
+    )
 
 
 def _is_proxy_block_response(response: object) -> bool:

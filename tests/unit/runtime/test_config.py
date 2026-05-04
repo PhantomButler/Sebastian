@@ -86,6 +86,10 @@ def test_browser_settings_defaults() -> None:
     assert s.sebastian_browser_headless is True
     assert s.sebastian_browser_viewport == "1280x900"
     assert s.sebastian_browser_timeout_ms == 30000
+    assert s.sebastian_browser_dns_mode == "auto"
+    assert s.sebastian_browser_doh_endpoint.startswith("https://")
+    assert s.sebastian_browser_doh_timeout_ms == 5000
+    assert s.sebastian_browser_upstream_proxy == ""
 
 
 def test_browser_directory_properties_use_data_dir(tmp_path: Path) -> None:

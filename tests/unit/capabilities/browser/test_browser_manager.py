@@ -30,17 +30,25 @@ class _FakeFilteringProxy:
 
 
 class _FakeDNSResolver:
-    def __init__(self, blocked_hosts: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        blocked_hosts: set[str] | None = None,
+        *,
+        answer: str = "93.184.216.34",
+    ) -> None:
         self.blocked_hosts = blocked_hosts or set()
+        self.answer = answer
+        self.hosts: list[str] = []
 
     async def resolve_public(self, host: str) -> list[str]:
         from sebastian.capabilities.tools.browser.safety import BrowserSafetyError
 
+        self.hosts.append(host)
         if host in self.blocked_hosts or host in {"localhost", "127.0.0.1", "169.254.169.254"}:
             raise BrowserSafetyError(
                 f"Browser destination blocked: {host} resolves to forbidden IP 127.0.0.1"
             )
-        return ["93.184.216.34"]
+        return [self.answer]
 
 
 class _FakeResponse:
@@ -378,6 +386,58 @@ async def test_open_launches_persistent_context_with_profile_dir_and_proxy(
 
 
 @pytest.mark.asyncio
+async def test_open_uses_shared_resolver_for_requested_and_final_hosts(
+    tmp_path: Path,
+) -> None:
+    from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
+
+    calls: list[str] = []
+    resolver = _FakeDNSResolver()
+    context = _FakeContext(
+        calls,
+        page=_FakePage(calls, final_url="https://final.example/"),
+    )
+    manager = BrowserSessionManager(
+        settings=_settings(tmp_path),
+        playwright_factory=_FakePlaywrightFactory(calls, context),
+        filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=resolver,
+    )
+
+    result = await manager.open("https://start.example/")
+
+    assert result.ok is True
+    assert resolver.hosts == ["start.example", "final.example"]
+
+
+@pytest.mark.asyncio
+async def test_open_succeeds_when_auto_dns_falls_back_from_fake_ip_to_doh(
+    tmp_path: Path,
+) -> None:
+    from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
+    from sebastian.capabilities.tools.browser.network import BrowserDNSResolver
+
+    calls: list[str] = []
+    context = _FakeContext(calls)
+    resolver = BrowserDNSResolver(
+        resolve=lambda host: ["198.18.0.17"],
+        doh_resolve=lambda host: ["93.184.216.34"],
+        dns_mode="auto",
+    )
+    manager = BrowserSessionManager(
+        settings=_settings(tmp_path),
+        playwright_factory=_FakePlaywrightFactory(calls, context),
+        filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=resolver,
+    )
+
+    result = await manager.open("https://example.com/")
+
+    assert result.ok is True
+    assert result.url == "https://example.com/"
+
+
+@pytest.mark.asyncio
 async def test_aclose_closes_proxy_after_browser_resources(tmp_path: Path) -> None:
     from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
 
@@ -658,6 +718,38 @@ def test_parse_viewport_rejects_invalid_setting(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Invalid browser viewport"):
         manager.parse_viewport()
+
+
+def test_default_manager_wires_upstream_proxy_from_settings(tmp_path: Path) -> None:
+    from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
+
+    manager = BrowserSessionManager(
+        _settings(tmp_path).model_copy(
+            update={"sebastian_browser_upstream_proxy": "http://127.0.0.1:7890"}
+        )
+    )
+
+    assert manager._filtering_proxy._upstream_proxy is not None
+    assert manager._filtering_proxy._upstream_proxy.url == "http://127.0.0.1:7890"
+    assert manager._dns_resolver._doh_proxy == "http://127.0.0.1:7890"
+
+
+@pytest.mark.asyncio
+async def test_open_reports_invalid_upstream_proxy_without_crashing_gateway(
+    tmp_path: Path,
+) -> None:
+    from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
+
+    manager = BrowserSessionManager(
+        _settings(tmp_path).model_copy(
+            update={"sebastian_browser_upstream_proxy": "socks5://127.0.0.1:1080"}
+        )
+    )
+
+    result = await manager.open("https://example.com/")
+
+    assert result.ok is False
+    assert "Browser upstream proxy is invalid" in result.error
 
 
 @pytest.mark.asyncio

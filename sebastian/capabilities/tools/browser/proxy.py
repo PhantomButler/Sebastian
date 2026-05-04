@@ -60,6 +60,33 @@ class ProxyConfig:
 
 
 @dataclass(frozen=True)
+class UpstreamProxyConfig:
+    scheme: str
+    host: str
+    port: int
+
+    @property
+    def url(self) -> str:
+        return f"{self.scheme}://{self.host}:{self.port}"
+
+    @classmethod
+    def parse(cls, raw: str | None) -> UpstreamProxyConfig | None:
+        value = (raw or "").strip()
+        if not value:
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme != "http":
+            raise ValueError("Browser upstream proxy currently supports http:// URLs only")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("Browser upstream proxy must not include credentials")
+        if not parsed.hostname or parsed.port is None:
+            raise ValueError("Browser upstream proxy must include host and port")
+        if parsed.path not in {"", "/"} or parsed.params or parsed.query or parsed.fragment:
+            raise ValueError("Browser upstream proxy must be a plain proxy URL")
+        return cls(scheme="http", host=parsed.hostname, port=parsed.port)
+
+
+@dataclass(frozen=True)
 class ProxyDecision:
     allowed: bool
     host: str
@@ -80,11 +107,17 @@ class FilteringProxy:
         host: str = "127.0.0.1",
         port: int = 0,
         open_connection: OpenConnectionFn | None = None,
+        upstream_proxy: UpstreamProxyConfig | str | None = None,
     ) -> None:
         self._resolver = resolver or BrowserDNSResolver()
         self._host = host
         self._port = port
         self._open_connection = open_connection or asyncio.open_connection
+        self._upstream_proxy = (
+            UpstreamProxyConfig.parse(upstream_proxy)
+            if isinstance(upstream_proxy, str) or upstream_proxy is None
+            else upstream_proxy
+        )
         self._server: asyncio.AbstractServer | None = None
         self._config: ProxyConfig | None = None
         self._active_writers: set[asyncio.StreamWriter] = set()
@@ -206,7 +239,10 @@ class FilteringProxy:
             await _write_response(client_writer, _BLOCKED_RESPONSE)
             return
         try:
-            upstream_reader, upstream_writer = await self._open_connection(upstream, request.port)
+            upstream_reader, upstream_writer = await self._connect_for_request(
+                request,
+                decision,
+            )
         except OSError:
             await _write_response(client_writer, _BAD_GATEWAY_RESPONSE)
             return
@@ -237,14 +273,20 @@ class FilteringProxy:
             await _write_response(client_writer, _BLOCKED_RESPONSE)
             return
         try:
-            upstream_reader, upstream_writer = await self._open_connection(upstream, request.port)
+            upstream_reader, upstream_writer = await self._connect_for_request(
+                request,
+                decision,
+            )
         except OSError:
             await _write_response(client_writer, _BAD_GATEWAY_RESPONSE)
             return
 
         self._active_writers.add(upstream_writer)
         try:
-            upstream_writer.write(request.to_origin_form_header())
+            if self._upstream_proxy is None:
+                upstream_writer.write(request.to_origin_form_header())
+            else:
+                upstream_writer.write(request.to_proxy_form_header())
             await upstream_writer.drain()
             await _pipe_bidirectional(
                 client_reader, client_writer, upstream_reader, upstream_writer
@@ -255,6 +297,29 @@ class FilteringProxy:
             _close_writer(client_writer)
             await _wait_writer_closed(upstream_writer)
             await _wait_writer_closed(client_writer)
+
+    async def _connect_for_request(
+        self,
+        request: _ProxyRequest,
+        decision: ProxyDecision,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        if self._upstream_proxy is None:
+            upstream = decision.upstream_ip
+            if upstream is None:
+                raise OSError("missing validated upstream IP")
+            return await self._open_connection(upstream, request.port)
+
+        proxy = self._upstream_proxy
+        upstream_reader, upstream_writer = await self._open_connection(proxy.host, proxy.port)
+        if request.method == "CONNECT":
+            upstream_writer.write(request.to_connect_proxy_header())
+            await upstream_writer.drain()
+            response = await self._read_header(upstream_reader)
+            if not _is_successful_connect_response(response):
+                _close_writer(upstream_writer)
+                await _wait_writer_closed(upstream_writer)
+                raise OSError("upstream proxy rejected CONNECT")
+        return upstream_reader, upstream_writer
 
 
 @dataclass(frozen=True)
@@ -321,6 +386,18 @@ class _ProxyRequest:
         lines.extend(self.header_lines[1:])
         return b"\r\n".join(lines)
 
+    def to_proxy_form_header(self) -> bytes:
+        return b"\r\n".join(self.header_lines)
+
+    def to_connect_proxy_header(self) -> bytes:
+        target = f"{self.host}:{self.port}"
+        return (
+            f"CONNECT {target} {self.version}\r\n"
+            f"Host: {target}\r\n"
+            "Proxy-Connection: keep-alive\r\n"
+            "\r\n"
+        ).encode("ascii")
+
 
 def _split_host_port(target: str, *, default_port: int) -> tuple[str, int]:
     if target.startswith("["):
@@ -343,6 +420,18 @@ async def _write_response(writer: asyncio.StreamWriter, response: bytes) -> None
         await writer.drain()
     _close_writer(writer)
     await _wait_writer_closed(writer)
+
+
+def _is_successful_connect_response(response: bytes) -> bool:
+    first_line = response.split(b"\r\n", maxsplit=1)[0]
+    parts = first_line.split()
+    if len(parts) < 2:
+        return False
+    try:
+        status = int(parts[1])
+    except ValueError:
+        return False
+    return 200 <= status < 300
 
 
 async def _pipe_bidirectional(

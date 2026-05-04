@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     sebastian_browser_headless: bool = True
     sebastian_browser_viewport: str = "1280x900"
     sebastian_browser_timeout_ms: int = 30000
+    sebastian_browser_dns_mode: str = "auto"
+    sebastian_browser_doh_endpoint: str = "https://dns.alidns.com/resolve"
+    sebastian_browser_doh_timeout_ms: int = 5000
+    sebastian_browser_upstream_proxy: str = ""
 
     @property
     def data_dir(self) -> Path:
