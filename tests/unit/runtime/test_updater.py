@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sebastian.cli import updater
+from sebastian.cli import service, updater
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -247,6 +247,27 @@ def test_try_restart_daemon_restarts_active_service(
 
     restart.assert_called_once_with()
     assert any("系统服务已重启" in message for message in messages)
+
+
+def test_try_restart_daemon_reports_service_restart_failure_without_pid_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    messages: list[str] = []
+
+    def fail_if_pid_fallback_is_attempted(path: Path) -> int | None:
+        raise AssertionError(f"legacy PID fallback should not be attempted: {path}")
+
+    monkeypatch.setattr("sebastian.cli.service.is_service_active", lambda: True)
+    monkeypatch.setattr(
+        "sebastian.cli.service.restart",
+        lambda: (_ for _ in ()).throw(service.ServiceError("boom")),
+    )
+    monkeypatch.setattr("sebastian.cli.daemon.read_pid", fail_if_pid_fallback_is_attempted)
+
+    updater._try_restart_daemon(messages.append)
+
+    assert any("系统服务重启失败" in message for message in messages)
+    assert any("sebastian service restart" in message for message in messages)
 
 
 def test_try_restart_daemon_falls_back_to_pid_daemon(
