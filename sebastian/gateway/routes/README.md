@@ -17,7 +17,7 @@ routes/
 ├── llm_accounts.py          # LLM Account 管理（Account CRUD + Custom Model CRUD + Catalog 查询 + Default Binding）
 ├── memory_components.py     # 记忆组件 LLM 绑定管理（GET/PUT/DELETE /memory/components）
 ├── memory_settings.py       # 记忆功能运行时开关（GET/PUT /memory/settings）
-├── attachments.py           # 附件上传/下载（POST /attachments、GET /attachments/{id}/content）
+├── attachments.py           # 附件上传/下载（POST /attachments、GET /attachments/{id}）
 ├── sessions.py              # 会话与 Task 生命周期管理（创建/查询/暂停/取消）
 ├── stream.py                # SSE 事件流推送（全局流 + 单会话流）
 └── turns.py                 # 主对话入口（登录、发送消息触发 Sebastian 对话轮次）
@@ -53,8 +53,8 @@ routes/
 | `DELETE /llm/custom-models/{id}` — 删除自定义模型 | [llm_accounts.py](llm_accounts.py) |
 | `GET /llm/bindings/default` — 获取默认绑定 | [llm_accounts.py](llm_accounts.py) |
 | `PUT /llm/bindings/default` — 设置默认绑定（account_id + model_id） | [llm_accounts.py](llm_accounts.py) |
-| `POST /attachments` — 上传附件（图片 / 文本文件）| [attachments.py](attachments.py) |
-| `GET /attachments/{id}/content` — 下载附件内容 | [attachments.py](attachments.py) |
+| `POST /attachments` — 上传附件（图片 / 文本文件 / 通用下载文件）| [attachments.py](attachments.py) |
+| `GET /attachments/{id}` — 下载附件内容 | [attachments.py](attachments.py) |
 | `GET /sessions` — 列出会话（支持过滤/分页） | [sessions.py](sessions.py) |
 | `GET /sessions/{id}` — 查询单个会话及其消息 | [sessions.py](sessions.py) |
 | `DELETE /sessions/{id}` — 删除会话 | [sessions.py](sessions.py) |
@@ -71,6 +71,12 @@ routes/
 | `GET /sessions/{id}/stream` — 订阅单会话 SSE 事件流 | [stream.py](stream.py) |
 | `POST /auth/login` — 密码登录，获取 JWT | [turns.py](turns.py) |
 | `POST /turns` — 发送消息，触发主对话轮次（effort 由 binding 决定） | [turns.py](turns.py) |
+
+## Artifact / 附件语义
+
+- `POST /attachments` 的 `kind` 支持 `image`、`text_file`、`download`。其中 `download` 用于浏览器下载等通用文件，不要求能被 Android 预览。
+- 工具返回 `ToolResult.output["artifact"]` 时，stream helper 会把 artifact 原样写入 timeline 的 `tool_result.artifact`，因此 `GET /sessions/{id}` 的 `timeline_items` 能恢复同一个附件入口。
+- 同一个 artifact 也会透传到实时 SSE `tool.executed.artifact`，客户端可在不重新拉取整段 history 的情况下把工具卡替换为图片或文件块。
 
 ---
 

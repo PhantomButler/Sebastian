@@ -37,7 +37,13 @@ async def test_policy_gate_low_tier_end_to_end(tmp_path) -> None:
         result = await gate.call(
             "file_read",
             {"path": str(target_file)},
-            ToolCallContext(task_goal="Read file", session_id="s1", task_id=None),
+            ToolCallContext(
+                task_goal="Read file",
+                session_id="s1",
+                task_id=None,
+                agent_type="sebastian",
+                allowed_tools={"file_read"},
+            ),
         )
 
     assert result.ok
@@ -140,7 +146,13 @@ async def test_policy_gate_model_decides_full_escalate_grant_flow() -> None:
             gate.call(
                 "shell",
                 {"command": "rm /tmp/old.log", "reason": "Remove stale log file"},
-                ToolCallContext(task_goal="Clean up logs", session_id="s1", task_id="t1"),
+                ToolCallContext(
+                    task_goal="Clean up logs",
+                    session_id="s1",
+                    task_id="t1",
+                    agent_type="sebastian",
+                    allowed_tools={"shell"},
+                ),
             )
         )
 

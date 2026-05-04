@@ -16,6 +16,12 @@ tools/
 ├── _path_utils.py           # 统一文件路径解析（相对路径 → workspace_dir，所有工具必须使用）
 ├── _session_lock.py         # Session 级 asyncio.Lock，防止并发 turn 冲突
 ├── _session_permission.py   # stop/resume 操作的 depth 边界权限校验（被 stop_agent/resume_agent 调用）
+├── browser/                 # 浏览器运行时 + Sebastian 内置 browser_* 工具
+│   ├── __init__.py          # @tool: browser_open / observe / act / capture / downloads
+│   ├── artifacts.py         # 浏览器截图 / 下载 artifact 上传与发送
+│   ├── downloads.py         # 下载列表与发送 helper
+│   ├── manager.py           # BrowserSessionManager：Playwright context / 下载 / 截图 / action helper
+│   └── observe.py           # 当前页面内容观察与敏感表单脱敏
 │
 │   # ── 能力工具（manifest allowed_tools 白名单管控）────────────────
 ├── bash/                    # Shell 命令执行工具（permission_tier: MODEL_DECIDES）
@@ -67,6 +73,7 @@ tools/
 | 如果要修改… | 看这里 |
 |------------|--------|
 | 新增工具 | 本目录新建子目录 + `__init__.py` + `@tool` 装饰器，重启自动注册 |
+| 修改浏览器运行时 manager | [browser/manager.py](browser/manager.py) |
 | 修改工具自动扫描逻辑 | [_loader.py](_loader.py) |
 | 修改文件读取状态保护 | [_file_state.py](_file_state.py) |
 | 修改路径解析基准（workspace_dir） | [_path_utils.py](_path_utils.py) |
@@ -127,14 +134,34 @@ return ToolResult(
 
 | 类别 | 工具 | 控制方式 | 说明 |
 |------|------|---------|------|
-| **能力工具** | Read / Write / Edit / Bash / Glob / Grep / todo_write / todo_read / send_file / capture_screenshot_and_send 等 | manifest `allowed_tools` 白名单 | 决定 Agent 的领域执行范围 |
+| **能力工具** | Read / Write / Edit / Bash / Glob / Grep / todo_write / todo_read / send_file / browser_* / capture_screenshot_and_send 等 | manifest `allowed_tools` 白名单 | 决定 Agent 的领域执行范围 |
 | **协议工具** | ask_parent / resume_agent / stop_agent / spawn_sub_agent / check_sub_agents / inspect_session（sub-agent 自动注入）；delegate_to_agent（Sebastian 手工配置） | 按 Agent 层级角色分配 | 决定 Agent 在层级中的通信与监控方式 |
 
-`capture_screenshot_and_send` 当前只加入 `Sebastian.allowed_tools`，不要加入 sub-agent manifest。
+`capture_screenshot_and_send` 与 `browser_*` 当前只加入 `Sebastian.allowed_tools`，不要加入 sub-agent manifest。
 
 **`manifest.toml` 的 `allowed_tools` 只需声明能力工具。**
 协议工具由 `_loader.py` 根据 Agent 角色自动追加，无需手动填写。
 当前自动注入规则见 `sebastian/agents/_loader.py` 的 `_SUBAGENT_PROTOCOL_TOOLS`。
+
+## `allowed_tools` 白名单语义
+
+`allowed_tools` 是工具可见性和执行校验的唯一边界，不要为单个工具再引入第二套 audience 标记（例如 `sebastian_only=True`）。
+
+推荐语义：
+
+| 值 | 含义 |
+|----|------|
+| `None` | 不允许任何能力工具。 |
+| `set()` / `[]` | 不允许任何能力工具。 |
+| `{"Read", "Bash"}` / `["Read", "Bash"]` | 只允许列出的能力工具。 |
+| `ALL_TOOLS` / manifest 显式 all-tools sentinel | 允许全量工具。必须显式写出，不能用 `None` 代替。 |
+
+Sub-agent manifest 省略 `allowed_tools` 时，应解析为「协议工具 only」，不是 unrestricted all tools。若某个扩展 Agent 确实需要全量工具，manifest 必须使用明确的 all-tools sentinel，并在代码审查中确认风险。
+
+这条规则需要在两层同时成立：
+
+1. **LLM 可见性层**：`get_callable_specs()` 不应在 `allowed_tools=None` 时返回全量能力工具。
+2. **执行校验层**：`PolicyGate.call()` 应拒绝不在有效白名单内的工具名，即使模型或调用方直接传入工具名。
 
 ## 三档权限详解
 

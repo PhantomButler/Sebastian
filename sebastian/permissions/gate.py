@@ -6,7 +6,7 @@ import logging
 import re
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from sebastian.capabilities.registry import CapabilityRegistry
 from sebastian.capabilities.tools._path_utils import resolve_path
@@ -16,7 +16,14 @@ from sebastian.core.tool import get_tool
 from sebastian.core.tool_context import _current_tool_ctx
 from sebastian.core.types import ToolResult
 from sebastian.permissions.reviewer import PermissionReviewer
-from sebastian.permissions.types import PermissionTier, ToolCallContext
+from sebastian.permissions.types import (
+    ALL_TOOLS,
+    AllToolsSentinel,
+    PermissionTier,
+    ToolAllowlist,
+    ToolCallContext,
+    ToolReviewPreflight,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +105,7 @@ class PolicyGate:
     # Public interface
     # ------------------------------------------------------------------
 
-    def get_tool_specs(self, allowed: set[str] | None = None) -> list[dict[str, Any]]:
+    def get_tool_specs(self, allowed: ToolAllowlist = None) -> list[dict[str, Any]]:
         """Delegate to registry for native + MCP tool specs (excluding skills)."""
         return self._registry.get_tool_specs(allowed)
 
@@ -108,7 +115,7 @@ class PolicyGate:
 
     def get_callable_specs(
         self,
-        allowed_tools: set[str] | None = None,
+        allowed_tools: ToolAllowlist = None,
         allowed_skills: set[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Filtered tool+skill specs for LLM API calls.
@@ -136,7 +143,7 @@ class PolicyGate:
 
     def get_all_tool_specs(self) -> list[dict[str, Any]]:
         """Backward-compat shim for ToolSpecProvider protocol."""
-        return self.get_callable_specs(None, None)
+        return self.get_callable_specs(ALL_TOOLS, None)
 
     async def call(
         self,
@@ -147,7 +154,7 @@ class PolicyGate:
         """Execute a tool after enforcing its permission tier."""
         # Stage 0: agent 身份白名单校验
         # 防止 LLM 幻觉工具名绕过 LLM 可见性层的过滤。
-        if context.allowed_tools is not None and tool_name not in context.allowed_tools:
+        if not _tool_allowed(tool_name, context.allowed_tools):
             return ToolResult(
                 ok=False,
                 error=(f"Tool {tool_name!r} not in allowed_tools for agent {context.agent_type!r}"),
@@ -230,6 +237,10 @@ class PolicyGate:
     ) -> ToolResult:
         """MODEL_DECIDES 审批流：静态检查优先，通过后再交 LLM 审查。"""
         reason = inputs.pop("reason", "")
+        preflight = await self._review_preflight(tool_name, inputs, context)
+        if not preflight.ok:
+            return ToolResult(ok=False, error=preflight.error or "Tool review preflight blocked.")
+        review_input = preflight.review_input if preflight.review_input is not None else inputs
 
         # Step 1: 静态高危模式匹配（仅 Bash）
         if tool_name == "Bash":
@@ -247,7 +258,7 @@ class PolicyGate:
         # Step 2: LLM PermissionReviewer 审查
         decision = await self._reviewer.review(
             tool_name=tool_name,
-            tool_input=inputs,
+            tool_input=review_input,
             reason=reason,
             task_goal=context.task_goal,
         )
@@ -283,3 +294,29 @@ class PolicyGate:
         if granted:
             return await self._registry.call(tool_name, **inputs)
         return ToolResult(ok=False, error=denied_error)
+
+    async def _review_preflight(
+        self,
+        tool_name: str,
+        inputs: dict[str, Any],
+        context: ToolCallContext,
+    ) -> ToolReviewPreflight:
+        """Run registry preflight with a copy of execution inputs."""
+        method = getattr(self._registry, "review_preflight", None)
+        if method is None or not _registry_implements_review_preflight(self._registry):
+            return ToolReviewPreflight(ok=True)
+        return cast(ToolReviewPreflight, await method(tool_name, copy.deepcopy(inputs), context))
+
+
+def _registry_implements_review_preflight(registry: CapabilityRegistry) -> bool:
+    if "review_preflight" in getattr(registry, "__dict__", {}):
+        return True
+    return any("review_preflight" in cls.__dict__ for cls in type(registry).__mro__)
+
+
+def _tool_allowed(tool_name: str, allowed_tools: ToolAllowlist) -> bool:
+    if isinstance(allowed_tools, AllToolsSentinel):
+        return True
+    if not allowed_tools:
+        return False
+    return tool_name in allowed_tools

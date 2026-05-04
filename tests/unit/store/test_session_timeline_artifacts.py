@@ -84,6 +84,47 @@ async def test_tool_result_artifact_persisted_in_timeline_payload(store, session
 
 
 @pytest.mark.asyncio
+async def test_download_artifact_persisted_in_timeline_payload_unchanged(
+    store, session_in_db
+) -> None:
+    artifact = {
+        "kind": "download",
+        "attachment_id": "att-download",
+        "filename": "report.pdf",
+        "mime_type": "application/pdf",
+        "size_bytes": 1234,
+        "download_url": "/api/v1/attachments/att-download",
+    }
+    blocks = [
+        {
+            "type": "tool_result",
+            "tool_call_id": "toolu_download",
+            "tool_name": "browser_download",
+            "model_content": "已向用户发送文件 report.pdf",
+            "display": "已向用户发送文件 report.pdf",
+            "ok": True,
+            "artifact": artifact,
+            "assistant_turn_id": "turn-download",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+    ]
+
+    await store.append_message(
+        session_in_db.id,
+        "assistant",
+        "",
+        agent_type="sebastian",
+        blocks=blocks,
+    )
+
+    items = await store.get_timeline_items(session_in_db.id, "sebastian")
+    result_items = [i for i in items if i["kind"] == "tool_result"]
+    assert len(result_items) == 1
+    assert result_items[0]["payload"]["artifact"] == artifact
+
+
+@pytest.mark.asyncio
 async def test_tool_result_without_artifact_has_no_artifact_in_payload(
     store, session_in_db
 ) -> None:

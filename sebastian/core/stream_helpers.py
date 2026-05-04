@@ -181,7 +181,7 @@ async def dispatch_tool_call(
     publish: Any,
     current_task_goals: dict[str, str],
     current_depth: dict[str, int],
-    allowed_tools: list[str] | None,
+    allowed_tools: Any,
     pending_blocks: dict[str, list[dict[str, Any]]],
 ) -> tuple[StreamToolResult, int]:
     """Execute one ``ToolCallReady`` event and append result blocks.
@@ -228,7 +228,7 @@ async def dispatch_tool_call(
     pending_blocks[session_id] = assistant_blocks
     await update_activity(session_id, agent_context)
 
-    from sebastian.permissions.types import ToolCallContext
+    from sebastian.permissions.types import ALL_TOOLS, ToolCallContext
 
     try:
         context = ToolCallContext(
@@ -237,7 +237,13 @@ async def dispatch_tool_call(
             task_id=task_id,
             agent_type=agent_context,
             depth=current_depth.get(session_id, 1),
-            allowed_tools=(frozenset(allowed_tools) if allowed_tools is not None else None),
+            allowed_tools=(
+                ALL_TOOLS
+                if allowed_tools is ALL_TOOLS
+                else frozenset(allowed_tools)
+                if allowed_tools is not None
+                else None
+            ),
             progress_cb=functools.partial(publish, session_id, EventType.TOOL_RUNNING),
         )
         result = await gate_call(event.name, event.inputs, context)

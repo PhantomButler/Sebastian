@@ -171,7 +171,8 @@ uvicorn sebastian.gateway.app:app --host 127.0.0.1 --port 8823 --reload
 - `context_summary` 类型映射为 `ContentBlock.SummaryBlock`，在消息列表中以折叠卡片"Compressed summary"展示（由 `StreamingMessage.kt` 中的 `SummaryCard` 渲染）
 - `TimelineItemDto` 携带 `exchange_id`（`String?`）和 `exchange_index`（`Long?`）字段，标识该 timeline 行所属的上下文压缩交换轮次；可选字段，旧 timeline 行为 `null`
 - 上下文压缩（`POST /api/v1/sessions/{id}/compact`）目前仅支持通过后端 API 直接调用；Android App 暂无调试入口，如需手动触发请直接调用该接口
-- Agent 通过 `send_file` 发送的图片/文本文件以 `tool_result.payload.artifact` 进入 timeline；`TimelineMapper` 将其显示为 assistant-side `ImageBlock` / `FileBlock`。实时 SSE 通过 `tool.executed.artifact` 原地替换工具卡，不全量刷新消息列表。
+- Agent 通过 `send_file` 或浏览器工具发送的图片/文本/下载 artifact 进入 timeline 的 `tool_result.artifact`；`TimelineMapper` 将图片显示为 assistant-side `ImageBlock`，将 `text_file` / `download` 显示为 `FileBlock` 文件附件入口。实时 SSE 通过 `tool.executed.artifact` 原地替换工具卡，不全量刷新消息列表。
+- `download` artifact 当前只渲染为文件附件入口；保存到手机本地仍是后续功能，不要把它描述为已支持本地保存。
 - 新 Session 使用客户端生成的 ID（`UUID`）：App 先开 SSE，再以同一 `session_id` POST 首条 turn，确保流事件不丢失
 
 ## SSE 连接机制

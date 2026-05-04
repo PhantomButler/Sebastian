@@ -308,7 +308,7 @@ private fun artifactMapToBlock(
             downloadUrl = absoluteUrl(artifact["download_url"] as? String),
             thumbnailUrl = (artifact["thumbnail_url"] as? String)?.let { absoluteUrl(it) }?.takeIf { it.isNotBlank() },
         )
-        "text_file" -> ContentBlock.FileBlock(
+        "text_file", "download" -> ContentBlock.FileBlock(
             blockId = "timeline-$sessionId-artifact-$attId",
             attachmentId = attId,
             filename = filename,

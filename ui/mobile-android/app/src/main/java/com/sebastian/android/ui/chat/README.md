@@ -68,7 +68,7 @@ UI 映射：FAB 显示 = `userAway`（绑意图而非事实 —— 流式中 `at
 | `ToolBlock` | `ToolCallCard` |
 | `SummaryBlock` | `SummaryCard`（折叠卡片，标题"Compressed summary"） |
 | `ImageBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` artifact） |
-| `FileBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` artifact） |
+| `FileBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` 的 `text_file` / `download` artifact） |
 
 `SummaryCard` 是对话上下文被压缩的视觉标记，表示其之前的内容已被归档压缩；被归档的原始块仍正常显示，不做置灰或隐藏。
 
@@ -77,7 +77,7 @@ UI 映射：FAB 显示 = `userAway`（绑意图而非事实 —— 流式中 `at
 用户上传附件和 Agent `send_file` artifact 共用的附件渲染组件：
 
 - `ImageAttachmentBlock` 使用最大预览尺寸和 `ContentScale.Fit`，按图片原始宽高比自适应，保证图片完整显示、不裁切；点击进入全屏查看原图。
-- `FileAttachmentBlock` 只显示文件图标、文件名和大小，不渲染文本 excerpt；后续保存到本地或系统打开能力应在此组件上扩展交互入口。
+- `FileAttachmentBlock` 只显示文件图标、文件名和大小，不渲染文本 excerpt；用于渲染 `text_file` 和通用 `download` artifact，后续保存到本地或系统打开能力应在此组件上扩展交互入口。
 - 用户消息和 assistant 消息通过调用侧传入不同布局约束：用户侧保持消息气泡下方的当前视觉密度，assistant 侧使用紧凑宽度，避免附件卡片满宽铺开。
 
 ### `ThinkingCard`

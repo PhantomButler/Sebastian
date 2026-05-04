@@ -49,6 +49,7 @@ from sebastian.core.stream_helpers import (
 from sebastian.memory.retrieval.depth_guard import is_memory_eligible
 from sebastian.memory.working_memory import WorkingMemory
 from sebastian.permissions.gate import PolicyGate
+from sebastian.permissions.types import ALL_TOOLS, AllToolsSentinel, ToolAllowlist
 from sebastian.protocol.events.bus import EventBus
 from sebastian.protocol.events.types import Event, EventType
 from sebastian.store.session_store import SessionStore
@@ -56,6 +57,7 @@ from sebastian.store.session_store import SessionStore
 logger = logging.getLogger(__name__)
 
 CancelIntent = Literal["cancel", "stop"]
+AgentAllowedTools = list[str] | AllToolsSentinel | None
 
 
 BASE_PERSONA = (
@@ -75,10 +77,18 @@ _STREAM_EVENT_TYPES: dict[type[object], EventType] = {
 }
 
 
+def _normalize_allowed_tools(allowed_tools: AgentAllowedTools) -> ToolAllowlist:
+    if isinstance(allowed_tools, AllToolsSentinel):
+        return ALL_TOOLS
+    if allowed_tools is None:
+        return None
+    return set(allowed_tools)
+
+
 class BaseAgent(ABC):
     name: str = "base_agent"
     persona: str = BASE_PERSONA
-    allowed_tools: list[str] | None = None
+    allowed_tools: AgentAllowedTools = None
     allowed_skills: list[str] | None = None
     system_prompt: str = ""  # populated by build_system_prompt in __init__
     _active_streams: dict[str, asyncio.Task[Any]]
@@ -90,7 +100,7 @@ class BaseAgent(ABC):
         event_bus: EventBus | None = None,
         provider: LLMProvider | None = None,
         model: str | None = None,
-        allowed_tools: list[str] | None = None,
+        allowed_tools: AgentAllowedTools = None,
         allowed_skills: list[str] | None = None,
         llm_registry: LLMProviderRegistry | None = None,
         db_factory: async_sessionmaker[AsyncSession] | None = None,
@@ -133,7 +143,7 @@ class BaseAgent(ABC):
             provider,
             gate,
             resolved_model,
-            allowed_tools=(set(self.allowed_tools) if self.allowed_tools is not None else None),
+            allowed_tools=_normalize_allowed_tools(self.allowed_tools),
             allowed_skills=(set(self.allowed_skills) if self.allowed_skills is not None else None),
         )
         self.system_prompt = self.build_system_prompt(gate)
@@ -157,7 +167,7 @@ class BaseAgent(ABC):
         )
 
     def _tools_section(self, gate: PolicyGate) -> str:
-        allowed = set(self.allowed_tools) if self.allowed_tools is not None else None
+        allowed = _normalize_allowed_tools(self.allowed_tools)
         specs = gate.get_tool_specs(allowed)
         if not specs:
             return ""

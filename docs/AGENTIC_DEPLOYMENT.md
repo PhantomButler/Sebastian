@@ -349,6 +349,38 @@ Verify installation:
 If you start `serve` in the foreground for verification, stop it with Ctrl+C
 after confirming the setup page or server starts correctly.
 
+### Playwright Browser Runtime Setup
+
+Sebastian's browser tools use the Playwright Python package plus a local
+Chromium runtime. The Python dependency is installed with Sebastian, but the
+browser binary must be installed once in the same Python environment that runs
+Sebastian:
+
+```bash
+~/.sebastian/app/.venv/bin/python -m playwright install chromium
+```
+
+On Ubuntu or Debian-like Linux hosts, Chromium may also need system libraries.
+Ask for user approval before this step because Playwright's dependency installer
+may need sudo:
+
+```bash
+~/.sebastian/app/.venv/bin/python -m playwright install-deps chromium
+```
+
+Do not run sudo yourself by default. If `install-deps` asks for elevated
+privileges, print the exact command, explain that it installs OS packages needed
+by Chromium, ask the user to run it in their own terminal, and continue only
+after they paste back the result.
+
+If the Chromium download fails, treat it as a network/runtime setup blocker
+rather than a Sebastian application failure. Check whether the host can reach
+Playwright's download endpoints, then retry once after confirming the network is
+stable. For users in mainland China or other restricted networks, explain that
+the download may be slow or blocked and ask whether they want to retry later,
+use their own proxy/VPN, or configure a reachable mirror according to their local
+environment. Do not promise a specific mirror will work.
+
 ## Phase 4: Enable Startup Service
 
 If the user wants Sebastian to start automatically:

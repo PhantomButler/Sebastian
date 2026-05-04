@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Added
+- Sebastian 新增内置浏览器工具，可通过 Playwright Chromium 打开页面、观察页面、执行操作、截图，并把下载结果作为 artifact 返回。
+
+### Changed
+- 附件 artifact 支持通用下载文件，Android App 可将浏览器下载结果渲染为文件附件入口。
+- 浏览器工具 DNS 安全校验新增 `auto/system/doh` 模式，默认在检测到系统代理 Fake-IP 时通过 DoH 重新解析公网目标，减少代理环境下的误拦截。
+- 浏览器工具新增可选上游 HTTP 代理配置，安全检查通过后的公网网页流量可转发到用户指定的本机代理端口。
+
 ## [0.5.7] - 2026-05-03
 
 ### Fixed

@@ -77,3 +77,43 @@ def test_log_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     s = Settings()
     assert s.sebastian_log_llm_stream is True
     assert s.sebastian_log_sse is True
+
+
+def test_browser_settings_defaults() -> None:
+    from sebastian.config import Settings
+
+    s = Settings(_env_file=None)
+    assert s.sebastian_browser_headless is True
+    assert s.sebastian_browser_viewport == "1280x900"
+    assert s.sebastian_browser_timeout_ms == 30000
+    assert s.sebastian_browser_dns_mode == "auto"
+    assert s.sebastian_browser_doh_endpoint.startswith("https://")
+    assert s.sebastian_browser_doh_timeout_ms == 5000
+    assert s.sebastian_browser_upstream_proxy == ""
+
+
+def test_browser_directory_properties_use_data_dir(tmp_path: Path) -> None:
+    from sebastian.config import Settings
+
+    s = Settings(sebastian_data_dir=str(tmp_path))
+
+    assert s.browser_dir == tmp_path / "data" / "browser"
+    assert s.browser_profile_dir == s.browser_dir / "profile"
+    assert s.browser_downloads_dir == s.browser_dir / "downloads"
+    assert s.browser_screenshots_dir == s.browser_dir / "screenshots"
+
+
+def test_ensure_data_dir_creates_browser_directories(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import sebastian.config as config
+    from sebastian.config import Settings
+
+    monkeypatch.setattr(config, "settings", Settings(sebastian_data_dir=str(tmp_path)))
+
+    config.ensure_data_dir()
+
+    assert config.settings.browser_profile_dir.is_dir()
+    assert config.settings.browser_downloads_dir.is_dir()
+    assert config.settings.browser_screenshots_dir.is_dir()

@@ -89,7 +89,8 @@ def test_load_agents_defaults_allowed_to_none_when_not_declared(tmp_path: Path) 
 
     configs = load_agents(extra_dirs=[tmp_path])
     cfg = next(c for c in configs if c.agent_type == "myagent2")
-    assert cfg.allowed_tools is None
+    assert cfg.allowed_tools is not None
+    assert set(cfg.allowed_tools) == PROTOCOL_TOOLS
     assert cfg.allowed_skills is None
 
 
@@ -147,8 +148,8 @@ def _write_agent(tmp_path: Path, agent_name: str, class_name: str, toml_body: st
     (agent_dir / "__init__.py").write_text(f"class {class_name}: pass\n")
 
 
-def test_allowed_tools_unset_stays_none(tmp_path: Path) -> None:
-    """未声明 allowed_tools → final 为 None（不限制）。"""
+def test_allowed_tools_unset_injects_protocol_only(tmp_path: Path) -> None:
+    """未声明 allowed_tools → protocol tools only."""
     from sebastian.agents._loader import load_agents
 
     _write_agent(
@@ -158,7 +159,9 @@ def test_allowed_tools_unset_stays_none(tmp_path: Path) -> None:
         '[agent]\nclass_name = "NoscopeAgent"\ndescription = "no scope"\n',
     )
     configs = {c.agent_type: c for c in load_agents(extra_dirs=[tmp_path])}
-    assert configs["noscope"].allowed_tools is None
+    final = configs["noscope"].allowed_tools
+    assert final is not None
+    assert set(final) == PROTOCOL_TOOLS
 
 
 def test_allowed_tools_empty_list_injects_protocol_only(tmp_path: Path) -> None:
@@ -192,3 +195,18 @@ def test_allowed_tools_list_appends_protocol(tmp_path: Path) -> None:
     assert final is not None
     assert set(final) == {"Read"} | PROTOCOL_TOOLS
     assert len(final) == len(set(final))
+
+
+def test_allowed_tools_all_string_uses_explicit_all_sentinel(tmp_path: Path) -> None:
+    """allowed_tools='ALL' is the only manifest spelling for unrestricted tools."""
+    from sebastian.agents._loader import load_agents
+    from sebastian.permissions.types import ALL_TOOLS
+
+    _write_agent(
+        tmp_path,
+        "allscope",
+        "AllscopeAgent",
+        '[agent]\nclass_name = "AllscopeAgent"\ndescription = "all"\nallowed_tools = "ALL"\n',
+    )
+    configs = {c.agent_type: c for c in load_agents(extra_dirs=[tmp_path])}
+    assert configs["allscope"].allowed_tools is ALL_TOOLS

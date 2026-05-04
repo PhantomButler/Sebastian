@@ -424,6 +424,43 @@ class TimelineMapperTest {
     }
 
     @Test
+    fun `send_file download artifact produces assistant FileBlock with absolute download url`() {
+        val items = listOf(
+            item(
+                seq = 1, kind = "tool_call", content = "{}",
+                assistantTurnId = "t1", blockIndex = 0,
+                payload = mapOf("tool_call_id" to "tc-sf-download", "tool_name" to "send_file"),
+            ),
+            item(
+                seq = 2, kind = "tool_result", content = null,
+                assistantTurnId = "t1",
+                payload = mapOf(
+                    "tool_call_id" to "tc-sf-download",
+                    "ok" to true,
+                    "artifact" to mapOf(
+                        "kind" to "download",
+                        "attachment_id" to "att-1",
+                        "filename" to "report.pdf",
+                        "mime_type" to "application/pdf",
+                        "size_bytes" to 1234.0,
+                        "download_url" to "/api/v1/attachments/att-1",
+                    ),
+                ),
+            ),
+        )
+        val msg = items.toMessagesFromTimeline(baseUrl = "http://server").single()
+        assertEquals(MessageRole.ASSISTANT, msg.role)
+        assertTrue(msg.blocks.none { it is ContentBlock.ToolBlock })
+        val file = msg.blocks.single() as ContentBlock.FileBlock
+        assertEquals("att-1", file.attachmentId)
+        assertEquals("report.pdf", file.filename)
+        assertEquals("application/pdf", file.mimeType)
+        assertEquals(1234L, file.sizeBytes)
+        assertEquals("http://server/api/v1/attachments/att-1", file.downloadUrl)
+        assertEquals(null, file.textExcerpt)
+    }
+
+    @Test
     fun `failed send_file still produces ToolBlock with FAILED status`() {
         val items = listOf(
             item(

@@ -115,6 +115,76 @@ def test_download_attachment_returns_original_bytes(client) -> None:
     assert "text/markdown" in get_resp.headers.get("content-type", "")
 
 
+def test_upload_download_artifact_and_streams_exact_binary_bytes(client) -> None:
+    http_client, token = client
+    content = b"PK\x03\x04\x00binary zip-ish bytes\x00\xff"
+
+    upload_resp = http_client.post(
+        "/api/v1/attachments",
+        files={"file": ("archive.zip", content, "application/zip")},
+        data={"kind": "download"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert upload_resp.status_code == 201, upload_resp.text
+    body = upload_resp.json()
+    assert body["kind"] == "download"
+    assert body["filename"] == "archive.zip"
+    assert body["mime_type"] == "application/zip"
+    assert body["size_bytes"] == len(content)
+    assert body["text_excerpt"] is None
+
+    get_resp = http_client.get(
+        f"/api/v1/attachments/{body['attachment_id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert get_resp.status_code == 200, get_resp.text
+    assert get_resp.content == content
+    assert "application/zip" in get_resp.headers.get("content-type", "")
+
+
+def test_upload_download_requires_missing_multipart_filename(client) -> None:
+    http_client, token = client
+
+    response = http_client.post(
+        "/api/v1/attachments",
+        files={"file": (None, b"download bytes", "application/octet-stream")},
+        data={"kind": "download"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Download filename is required"
+
+
+def test_upload_download_requires_non_empty_multipart_filename(client) -> None:
+    http_client, token = client
+    boundary = "sebastian-test-boundary"
+    body = (
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="kind"\r\n'
+        "\r\n"
+        "download\r\n"
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="file"; filename=""\r\n'
+        "Content-Type: application/octet-stream\r\n"
+        "\r\n"
+        "download bytes\r\n"
+        f"--{boundary}--\r\n"
+    ).encode()
+
+    response = http_client.post(
+        "/api/v1/attachments",
+        content=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Download filename is required"
+
+
 def test_download_nonexistent_attachment_returns_404(client) -> None:
     http_client, token = client
 
@@ -396,6 +466,71 @@ def test_send_file_tool_result_artifact_hydrates_without_model_content_leak(clie
     assert "text_excerpt" not in result_item["content"]
     assert "text_excerpt" not in payload
     assert "model_content" not in payload
+
+
+def test_download_tool_result_artifact_hydrates_unchanged(client) -> None:
+    import sebastian.gateway.state as state
+
+    http_client, token = client
+    headers = {"Authorization": f"Bearer {token}"}
+
+    artifact = {
+        "kind": "download",
+        "attachment_id": "att-download",
+        "filename": "report.pdf",
+        "mime_type": "application/pdf",
+        "size_bytes": 1234,
+        "download_url": "/api/v1/attachments/att-download",
+    }
+    blocks = [
+        {
+            "type": "tool_result",
+            "tool_call_id": "toolu_download",
+            "tool_name": "browser_download",
+            "model_content": "已向用户发送文件 report.pdf",
+            "display": "已向用户发送文件 report.pdf",
+            "ok": True,
+            "artifact": artifact,
+            "assistant_turn_id": "turn-download",
+            "provider_call_index": 0,
+            "block_index": 0,
+        },
+    ]
+
+    async def fake_run_streaming(content: str, session_id: str, **_kwargs) -> str:
+        await state.session_store.append_message(
+            session_id,
+            "assistant",
+            "",
+            agent_type="sebastian",
+            blocks=blocks,
+        )
+        return ""
+
+    with patch("sebastian.gateway.state.sebastian.run_streaming", side_effect=fake_run_streaming):
+        turn_resp = http_client.post(
+            "/api/v1/turns",
+            json={"content": "download the report"},
+            headers=headers,
+        )
+    assert turn_resp.status_code == 200, turn_resp.text
+    session_id = turn_resp.json()["session_id"]
+
+    timeline = []
+    for _ in range(20):
+        detail_resp = http_client.get(
+            f"/api/v1/sessions/{session_id}?include_archived=true",
+            headers=headers,
+        )
+        assert detail_resp.status_code == 200, detail_resp.text
+        timeline = detail_resp.json()["timeline_items"]
+        if any(item["kind"] == "tool_result" for item in timeline):
+            break
+        time.sleep(0.05)
+
+    result_items = [item for item in timeline if item["kind"] == "tool_result"]
+    assert len(result_items) == 1
+    assert result_items[0]["payload"]["artifact"] == artifact
 
 
 # ─────────────────────────────────────────────────────────────────────────────

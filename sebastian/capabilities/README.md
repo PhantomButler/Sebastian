@@ -22,6 +22,7 @@ capabilities/
 │   ├── _session_permission.py  # stop/resume 权限校验（depth 边界）
 │   ├── ask_parent/      # 子代理主动暂停并向上级请求指示（状态置 WAITING）
 │   ├── bash/            # Shell 命令执行工具
+│   ├── browser/         # BrowserSessionManager + Sebastian 内置 browser_* 工具
 │   ├── check_sub_agents/  # 查询当前 Sub-Agent 会话状态
 │   ├── delegate_to_agent/ # Sebastian 委派任务给 Sub-Agent（工具调用形式）
 │   ├── edit/            # 文件精准替换工具
@@ -50,6 +51,7 @@ capabilities/
 | 如果要修改… | 看这里 |
 |------------|--------|
 | 新增 Native 工具 | [tools/](tools/README.md) 下新建目录 + `@tool` 装饰器 |
+| 修改 Sebastian 浏览器工具 | [tools/browser/](tools/browser/) 的注册入口、页面观察、下载、截图 artifact helper |
 | 修改工具调用优先级/错误处理 | [registry.py](registry.py) 的 `call()` |
 | 修改工具自动加载逻辑 | [tools/_loader.py](tools/_loader.py) |
 | 新增 MCP Server 连接 | `mcps/<name>/config.toml`，重启自动连接 |
@@ -63,12 +65,15 @@ from sebastian.capabilities.registry import CapabilityRegistry
 
 registry = CapabilityRegistry()
 
-# 获取所有工具 spec（直接传给 Anthropic API）
+# 获取所有工具 spec（兼容入口，显式按 ALL_TOOLS 取全量工具）
 tool_specs = registry.get_all_tool_specs()
 
 # 调用工具
 result = await registry.call("file_read", path="/foo/bar.txt")
 # result.ok, result.output, result.error
+
+# 按白名单获取工具；allowed_tools=None 表示不暴露能力工具，ALL_TOOLS 表示全量能力工具
+tool_specs = registry.get_callable_specs(allowed_tools={"Read"}, allowed_skills=None)
 
 # 注入 MCP 工具（由 app.py lifespan 调用）
 await registry.register_mcp_tools(mcp_client)

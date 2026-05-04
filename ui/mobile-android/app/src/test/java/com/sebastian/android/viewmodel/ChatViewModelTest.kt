@@ -1395,6 +1395,38 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `send_file tool executed with download artifact replaces tool block with file block`() = vmTest {
+        activateSession()
+        emitEvent(StreamEvent.TurnReceived("s1"))
+        emitEvent(StreamEvent.ToolBlockStart("s1", "block-tool", "toolu_download", "send_file"))
+        emitEvent(StreamEvent.ToolExecuted(
+            sessionId = "s1",
+            toolId = "toolu_download",
+            name = "send_file",
+            resultSummary = "已向用户发送文件 report.pdf",
+            artifact = AttachmentArtifact(
+                kind = "download",
+                attachmentId = "att-1",
+                filename = "report.pdf",
+                mimeType = "application/pdf",
+                sizeBytes = 1234L,
+                downloadUrl = "/api/v1/attachments/att-1",
+            ),
+        ))
+        dispatcher.scheduler.runCurrent()
+
+        val blocks = viewModel.uiState.value.messages.last().blocks
+        assertTrue(blocks.none { it is ContentBlock.ToolBlock })
+        val file = blocks.filterIsInstance<ContentBlock.FileBlock>().single()
+        assertEquals("att-1", file.attachmentId)
+        assertEquals("report.pdf", file.filename)
+        assertEquals("application/pdf", file.mimeType)
+        assertEquals(1234L, file.sizeBytes)
+        assertEquals("http://test.local:8823/api/v1/attachments/att-1", file.downloadUrl)
+        assertEquals(null, file.textExcerpt)
+    }
+
+    @Test
     fun `fetchInitialSoulIfNeeded keeps default activeSoulName when network fails`() = vmTest {
         // fetchActiveSoul fails with a network error; readActiveSoul() returns "" (from setup)
         whenever(settingsRepository.fetchActiveSoul()).thenReturn(Result.failure(RuntimeException("network error")))

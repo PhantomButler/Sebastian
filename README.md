@@ -95,6 +95,9 @@ or when a network/provider outage prevents progress.
 The agent will read [the deployment guide](docs/AGENTIC_DEPLOYMENT.md), install
 missing basics such as Python/Conda when needed, run the Sebastian installer,
 set up auto-start, and guide you through Cloudflare/Tailscale/LAN access.
+Sebastian includes the Playwright Python dependency for browser tools, but the
+local Chromium runtime is installed separately by running
+`python -m playwright install chromium` inside Sebastian's runtime environment.
 
 ### Manual Server Install (macOS / Linux)
 

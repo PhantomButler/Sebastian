@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from sebastian.agents._loader import AgentConfig
+    from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
     from sebastian.context.compaction import (
         SessionContextCompactionWorker,
         TurnEndCompactionScheduler,
@@ -54,6 +55,7 @@ agent_registry: dict[str, AgentConfig] = {}
 attachment_store: AttachmentStore | None = None
 scheduler: SchedulerRunner | None = None
 soul_loader: SoulLoader
+browser_manager: BrowserSessionManager | None = None
 
 
 def get_owner_store() -> OwnerStore:

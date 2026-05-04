@@ -18,6 +18,7 @@ from sebastian.core.stream_events import (
     ToolResult,
     TurnDone,
 )
+from sebastian.permissions.types import ToolAllowlist
 
 if TYPE_CHECKING:
     from sebastian.llm.provider import LLMProvider
@@ -89,7 +90,7 @@ class AgentLoop:
         tool_provider: ToolSpecProvider,
         model: str = "claude-opus-4-6",
         max_tokens: int | None = None,
-        allowed_tools: set[str] | None = None,
+        allowed_tools: ToolAllowlist = None,
         allowed_skills: set[str] | None = None,
     ) -> None:
         self._provider = provider

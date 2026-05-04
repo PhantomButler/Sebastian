@@ -126,6 +126,102 @@ async def test_text_file_rejects_unsupported_mime_even_with_supported_extension(
         )
 
 
+async def test_download_upload_accepts_binary_artifact_without_text_excerpt(attachment_store):
+    content = b"%PDF-1.7\nbinary bytes\n"
+
+    result = await attachment_store.upload_bytes(
+        filename="report.pdf",
+        content_type="application/pdf",
+        kind="download",
+        data=content,
+    )
+
+    assert result.kind == "download"
+    assert result.filename == "report.pdf"
+    assert result.mime_type == "application/pdf"
+    assert result.size_bytes == len(content)
+    assert result.text_excerpt is None
+
+    record = await attachment_store.get(result.id)
+    assert record is not None
+    assert record.kind == "download"
+    assert record.text_excerpt is None
+    assert attachment_store.blob_absolute_path(record).read_bytes() == content
+
+
+async def test_download_accepts_common_binary_mime_types(attachment_store):
+    cases = [
+        ("report.pdf", "application/pdf"),
+        ("archive.zip", "application/zip"),
+        (
+            "workbook.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
+        (
+            "document.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ),
+        ("payload.bin", "application/octet-stream"),
+    ]
+
+    for filename, mime_type in cases:
+        result = await attachment_store.upload_bytes(
+            filename=filename,
+            content_type=mime_type,
+            kind="download",
+            data=f"bytes for {filename}".encode(),
+        )
+        assert result.kind == "download"
+        assert result.mime_type == mime_type
+
+
+async def test_download_rejects_missing_filename_empty_data_and_over_size(
+    attachment_store, monkeypatch
+):
+    from sebastian.store import attachments
+
+    with pytest.raises(AttachmentValidationError, match="filename"):
+        await attachment_store.upload_bytes(
+            filename="",
+            content_type="application/pdf",
+            kind="download",
+            data=b"x",
+        )
+
+    with pytest.raises(AttachmentValidationError, match="empty"):
+        await attachment_store.upload_bytes(
+            filename="report.pdf",
+            content_type="application/pdf",
+            kind="download",
+            data=b"",
+        )
+
+    monkeypatch.setattr(attachments, "MAX_DOWNLOAD_BYTES", 4)
+    with pytest.raises(AttachmentValidationError, match="Download exceeds"):
+        await attachment_store.upload_bytes(
+            filename="report.pdf",
+            content_type="application/pdf",
+            kind="download",
+            data=b"12345",
+        )
+
+
+async def test_download_rejects_unsupported_mime_type(attachment_store):
+    with pytest.raises(AttachmentValidationError, match="Unsupported download MIME"):
+        await attachment_store.upload_bytes(
+            filename="script.sh",
+            content_type="application/x-sh",
+            kind="download",
+            data=b"echo no",
+        )
+
+
+async def test_max_download_bytes_constant_is_50_mb() -> None:
+    from sebastian.store.attachments import MAX_DOWNLOAD_BYTES
+
+    assert MAX_DOWNLOAD_BYTES == 50 * 1024 * 1024
+
+
 # Step 4：图片 MIME 白名单
 async def test_image_upload_jpeg_success(attachment_store):
     # 最小有效 JPEG header

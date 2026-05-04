@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from sebastian.permissions.types import ToolAllowlist
+
 
 class ApprovalManagerProtocol(Protocol):
     """Protocol satisfied by ConversationManager without explicit inheritance."""
@@ -27,6 +29,6 @@ class ToolSpecProvider(Protocol):
 
     def get_callable_specs(
         self,
-        allowed_tools: set[str] | None = None,
+        allowed_tools: ToolAllowlist = None,
         allowed_skills: set[str] | None = None,
     ) -> list[dict[str, Any]]: ...

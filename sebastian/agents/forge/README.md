@@ -34,7 +34,7 @@ allowed_skills            = []
 
 - `max_children`：允许同时运行的 depth=3 子任务上限
 - `stalled_threshold_minutes`：超过此时长无 tool 调用则被 watchdog 标记为 stalled
-- `allowed_tools`：Agent 可调用的基础工具白名单（不写则不限制）
+- `allowed_tools`：Agent 可调用的基础工具白名单；不写则仅自动注入协议工具，若需全量工具必须显式写 `"ALL"`
 - `class_name`：对应 `__init__.py` 中实际的 Agent 类名
 
 ## knowledge/ 目录

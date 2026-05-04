@@ -78,12 +78,27 @@ async def _restore_active_soul(
         logger.warning("soul restore failed at startup, keeping default persona", exc_info=True)
 
 
+async def _close_browser_before_database_dispose(state: Any) -> None:
+    try:
+        if state.browser_manager is not None:
+            await state.browser_manager.aclose()
+            state.browser_manager = None
+    finally:
+        state.context_compaction_scheduler = None
+        state.context_compaction_worker = None
+        from sebastian.store.database import get_engine
+
+        await get_engine().dispose()
+        await asyncio.sleep(0)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     import sebastian.gateway.state as state
     from sebastian.capabilities.mcps._loader import connect_all, load_mcps
     from sebastian.capabilities.registry import registry
     from sebastian.capabilities.tools._loader import load_tools
+    from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
     from sebastian.config import ensure_data_dir, settings
     from sebastian.core.task_manager import TaskManager
     from sebastian.gateway.sse import SSEManager
@@ -102,6 +117,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sebastian.store.todo_store import TodoStore
 
     ensure_data_dir()
+    state.browser_manager = BrowserSessionManager(settings)
     setup_logging(
         logs_dir=settings.logs_dir,
         llm_stream=settings.sebastian_log_llm_stream,
@@ -395,12 +411,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await state.resident_snapshot_refresher.aclose()
             state.resident_snapshot_refresher = None
     finally:
-        state.context_compaction_scheduler = None
-        state.context_compaction_worker = None
-        from sebastian.store.database import get_engine
-
-        await get_engine().dispose()
-        await asyncio.sleep(0)
+        await _close_browser_before_database_dispose(state)
     logger.info("Sebastian gateway shutdown")
 
 

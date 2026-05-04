@@ -7,11 +7,21 @@ import pytest
 
 from sebastian.core.types import ToolResult
 from sebastian.permissions.gate import PolicyGate
-from sebastian.permissions.types import PermissionTier, ReviewDecision, ToolCallContext
+from sebastian.permissions.types import (
+    ALL_TOOLS,
+    PermissionTier,
+    ReviewDecision,
+    ToolCallContext,
+)
 
 
 def _make_context(task_goal: str = "test goal") -> ToolCallContext:
-    return ToolCallContext(task_goal=task_goal, session_id="s1", task_id="t1")
+    return ToolCallContext(
+        task_goal=task_goal,
+        session_id="s1",
+        task_id="t1",
+        allowed_tools=ALL_TOOLS,
+    )
 
 
 @pytest.mark.asyncio
@@ -532,7 +542,9 @@ def _make_gate_with_specs(
     registry = MagicMock()
     registry.get_callable_specs = MagicMock(
         side_effect=lambda allowed_tools, allowed_skills: [
-            spec for spec in native_specs if allowed_tools is None or spec["name"] in allowed_tools
+            spec
+            for spec in native_specs
+            if allowed_tools is ALL_TOOLS or spec["name"] in (allowed_tools or set())
         ]
     )
     reviewer = MagicMock()
@@ -579,7 +591,7 @@ def test_get_callable_specs_injects_reason_for_model_decides() -> None:
         mock_spec.permission_tier = PermissionTier.MODEL_DECIDES
         mock_get_tool.return_value = (mock_spec, MagicMock())
 
-        result = gate.get_callable_specs(allowed_tools=None, allowed_skills=None)
+        result = gate.get_callable_specs(allowed_tools=ALL_TOOLS, allowed_skills=None)
 
     assert len(result) == 1
     schema = result[0]["input_schema"]
@@ -588,7 +600,7 @@ def test_get_callable_specs_injects_reason_for_model_decides() -> None:
 
 
 def test_get_all_tool_specs_still_works_as_shim() -> None:
-    """get_all_tool_specs() 调用 get_callable_specs(None, None)，行为保持不变。"""
+    """get_all_tool_specs() uses the explicit all-tools sentinel."""
     specs = [
         {"name": "Read", "description": "read", "input_schema": {"properties": {}}},
     ]
@@ -692,18 +704,13 @@ async def test_call_allows_tool_inside_allowed_tools(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_call_none_allowed_tools_means_unrestricted(tmp_path) -> None:
-    """context.allowed_tools=None 表示不限制，任意合法工具可调用（回归）。"""
+async def test_call_none_allowed_tools_rejects_capability_tool() -> None:
+    """context.allowed_tools=None means no capability tools are executable."""
     from sebastian.permissions.gate import PolicyGate
 
-    inside_path = tmp_path / "notes.txt"
-
     registry = MagicMock()
-    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="ok"))
-    reviewer = MagicMock()
-    approval_manager = MagicMock()
-
-    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+    registry.call = AsyncMock()
+    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
 
     context = ToolCallContext(
         task_goal="test",
@@ -712,6 +719,54 @@ async def test_call_none_allowed_tools_means_unrestricted(tmp_path) -> None:
         agent_type="forge",
         depth=2,
         allowed_tools=None,
+    )
+
+    result = await gate.call("file_read", {"path": "notes.txt"}, context)
+
+    assert not result.ok
+    assert "not in allowed_tools" in (result.error or "")
+    registry.call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_call_empty_allowed_tools_rejects_capability_tool() -> None:
+    """context.allowed_tools=frozenset() also means no capability tools."""
+    registry = MagicMock()
+    registry.call = AsyncMock()
+    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
+
+    context = ToolCallContext(
+        task_goal="test",
+        session_id="s1",
+        task_id="t1",
+        agent_type="forge",
+        depth=2,
+        allowed_tools=frozenset(),
+    )
+
+    result = await gate.call("file_read", {"path": "notes.txt"}, context)
+
+    assert not result.ok
+    assert "not in allowed_tools" in (result.error or "")
+    registry.call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_call_all_tools_sentinel_allows_any_tool(tmp_path) -> None:
+    """Only ALL_TOOLS gives unrestricted capability tool execution."""
+    inside_path = tmp_path / "notes.txt"
+
+    registry = MagicMock()
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="ok"))
+    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
+
+    context = ToolCallContext(
+        task_goal="test",
+        session_id="s1",
+        task_id="t1",
+        agent_type="forge",
+        depth=2,
+        allowed_tools=ALL_TOOLS,
     )
 
     with (
@@ -727,3 +782,153 @@ async def test_call_none_allowed_tools_means_unrestricted(tmp_path) -> None:
         result = await gate.call("file_read", {"path": str(inside_path)}, context)
 
     assert result.ok
+    registry.call.assert_awaited_once_with("file_read", path=str(inside_path))
+
+
+@pytest.mark.asyncio
+async def test_model_decides_preflight_enriches_reviewer_input() -> None:
+    """review_preflight can provide enriched input only for reviewer review."""
+    registry = MagicMock()
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="ok"))
+    registry.review_preflight = AsyncMock(
+        return_value=MagicMock(ok=True, review_input={"command": "ls", "risk": "readonly"})
+    )
+    reviewer = MagicMock()
+    reviewer.review = AsyncMock(return_value=ReviewDecision(decision="proceed", explanation="ok"))
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=MagicMock())
+
+    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.MODEL_DECIDES
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = await gate.call(
+            "Bash",
+            {"command": "ls", "reason": "inspect workspace"},
+            ToolCallContext(
+                task_goal="inspect",
+                session_id="s1",
+                task_id="t1",
+                allowed_tools=ALL_TOOLS,
+            ),
+        )
+
+    assert result.ok
+    reviewer.review.assert_awaited_once_with(
+        tool_name="Bash",
+        tool_input={"command": "ls", "risk": "readonly"},
+        reason="inspect workspace",
+        task_goal="inspect",
+    )
+    registry.call.assert_awaited_once_with("Bash", command="ls")
+
+
+@pytest.mark.asyncio
+async def test_model_decides_preflight_block_stops_before_reviewer() -> None:
+    """A blocking preflight stops before reviewer and before tool execution."""
+    registry = MagicMock()
+    registry.call = AsyncMock()
+    registry.review_preflight = AsyncMock(return_value=MagicMock(ok=False, error="blocked"))
+    reviewer = MagicMock()
+    reviewer.review = AsyncMock()
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=MagicMock())
+
+    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.MODEL_DECIDES
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        result = await gate.call(
+            "Bash",
+            {"command": "curl http://example.test", "reason": "fetch"},
+            ToolCallContext(
+                task_goal="fetch",
+                session_id="s1",
+                task_id="t1",
+                allowed_tools=ALL_TOOLS,
+            ),
+        )
+
+    assert not result.ok
+    assert result.error == "blocked"
+    reviewer.review.assert_not_awaited()
+    registry.call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_model_decides_preflight_metadata_does_not_reach_tool_call() -> None:
+    """Only original execution input reaches the real tool call."""
+    registry = MagicMock()
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="ok"))
+    registry.review_preflight = AsyncMock(
+        return_value=MagicMock(
+            ok=True,
+            review_input={"command": "ls", "risk": "readonly", "_preflight": {"score": 1}},
+        )
+    )
+    reviewer = MagicMock()
+    reviewer.review = AsyncMock(return_value=ReviewDecision(decision="proceed", explanation="ok"))
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=MagicMock())
+
+    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.MODEL_DECIDES
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        await gate.call(
+            "Bash",
+            {"command": "ls", "reason": "inspect"},
+            ToolCallContext(
+                task_goal="inspect",
+                session_id="s1",
+                task_id="t1",
+                allowed_tools=ALL_TOOLS,
+            ),
+        )
+
+    registry.call.assert_awaited_once_with("Bash", command="ls")
+
+
+@pytest.mark.asyncio
+async def test_model_decides_preflight_nested_mutation_does_not_reach_tool_call() -> None:
+    """Preflight receives a deep copy, so nested mutation cannot affect execution input."""
+    original_options = {"flags": ["a"]}
+
+    async def mutate_preflight(tool_name: str, inputs: dict, context: ToolCallContext):
+        inputs["options"]["flags"].append("preflight")
+        return MagicMock(ok=True, review_input=inputs)
+
+    registry = MagicMock()
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="ok"))
+    registry.review_preflight = AsyncMock(side_effect=mutate_preflight)
+    reviewer = MagicMock()
+    reviewer.review = AsyncMock(return_value=ReviewDecision(decision="proceed", explanation="ok"))
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=MagicMock())
+
+    with patch("sebastian.permissions.gate.get_tool") as mock_get_tool:
+        mock_spec = MagicMock()
+        mock_spec.permission_tier = PermissionTier.MODEL_DECIDES
+        mock_get_tool.return_value = (mock_spec, MagicMock())
+
+        await gate.call(
+            "Bash",
+            {
+                "command": "ls",
+                "options": original_options,
+                "reason": "inspect",
+            },
+            ToolCallContext(
+                task_goal="inspect",
+                session_id="s1",
+                task_id="t1",
+                allowed_tools=ALL_TOOLS,
+            ),
+        )
+
+    reviewer.review.assert_awaited_once()
+    assert reviewer.review.await_args.kwargs["tool_input"]["options"]["flags"] == [
+        "a",
+        "preflight",
+    ]
+    registry.call.assert_awaited_once_with("Bash", command="ls", options={"flags": ["a"]})
+    assert original_options == {"flags": ["a"]}

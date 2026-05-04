@@ -56,6 +56,34 @@ def test_append_tool_result_block_preserves_artifact() -> None:
     assert "private excerpt" not in blocks[0]["model_content"]
 
 
+def test_append_tool_result_block_preserves_download_artifact_unchanged() -> None:
+    from sebastian.core.stream_helpers import append_tool_result_block
+
+    artifact = {
+        "kind": "download",
+        "attachment_id": "att-download",
+        "filename": "report.pdf",
+        "mime_type": "application/pdf",
+        "size_bytes": 1234,
+        "download_url": "/api/v1/attachments/att-download",
+    }
+    result = _make_stream_result(output={"artifact": artifact})
+    blocks: list = []
+    append_tool_result_block(
+        blocks,
+        tool_id="toolu_1",
+        tool_name="browser_download",
+        result=result,
+        display="",
+        assistant_turn_id="turn-1",
+        provider_call_index=0,
+        block_index=0,
+    )
+
+    assert blocks[0]["artifact"] == artifact
+    assert blocks[0]["model_content"] == "已向用户发送文件 report.pdf"
+
+
 def test_append_tool_result_block_artifact_fallback_model_content() -> None:
     from sebastian.core.stream_helpers import append_tool_result_block
 
@@ -207,6 +235,66 @@ async def test_dispatch_tool_call_publishes_artifact_on_tool_executed() -> None:
     assert len(running_events) == 1
     _, _, running_data = running_events[0]
     assert running_data["display_name"] == "Send File"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_tool_call_publishes_download_artifact_unchanged() -> None:
+    from sebastian.core.stream_helpers import dispatch_tool_call
+    from sebastian.protocol.events.types import EventType
+
+    artifact = {
+        "kind": "download",
+        "attachment_id": "att-download",
+        "filename": "report.pdf",
+        "mime_type": "application/pdf",
+        "size_bytes": 1234,
+        "download_url": "/api/v1/attachments/att-download",
+    }
+
+    gate_call = AsyncMock(
+        return_value=MagicMock(
+            ok=True,
+            output={"artifact": artifact},
+            error=None,
+            empty_hint=None,
+            display=None,
+        )
+    )
+    update_activity = AsyncMock()
+    published: list[tuple] = []
+
+    async def publish(session_id: str, event_type: EventType, data: object) -> None:
+        published.append((session_id, event_type, data))
+
+    mock_spec = MagicMock()
+    mock_spec.display_name = "Browser Download"
+
+    blocks: list = []
+    with patch("sebastian.core.stream_helpers.get_tool", return_value=(mock_spec, MagicMock())):
+        await dispatch_tool_call(
+            _make_event(),
+            session_id="sess-1",
+            task_id=None,
+            agent_context="sebastian",
+            assistant_turn_id="turn-1",
+            assistant_blocks=blocks,
+            current_pci=0,
+            block_index=1,
+            gate_call=gate_call,
+            update_activity=update_activity,
+            publish=publish,
+            current_task_goals={},
+            current_depth={},
+            allowed_tools=None,
+            pending_blocks={},
+        )
+
+    executed = [data for _, event_type, data in published if event_type == EventType.TOOL_EXECUTED]
+    assert len(executed) == 1
+    assert executed[0]["artifact"] == artifact
+    tool_results = [block for block in blocks if block["type"] == "tool_result"]
+    assert len(tool_results) == 1
+    assert tool_results[0]["artifact"] == artifact
 
 
 @pytest.mark.asyncio

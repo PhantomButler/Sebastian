@@ -9,7 +9,7 @@
 ```text
 permissions/
 ├── __init__.py    # 包定义
-├── types.py       # PermissionTier 枚举、ToolCallContext、ReviewDecision
+├── types.py       # PermissionTier、ALL_TOOLS、ToolCallContext、ToolReviewPreflight、ReviewDecision
 ├── gate.py        # PolicyGate：权限执行代理
 └── reviewer.py    # PermissionReviewer：LLM 审查器
 ```
@@ -28,11 +28,12 @@ permissions/
 
 CapabilityRegistry 的权限执行代理，所有工具调用经过此 gate：
 
-1. **reason 注入**：`get_all_tool_specs()` 对 MODEL_DECIDES 工具的 schema 注入必填 `reason` 字段
-2. **workspace 边界检查**：MODEL_DECIDES 工具含 `file_path` 参数时，路径在 workspace 外直接请求用户审批（跳过 LLM reviewer）
-3. **tier 分支执行**：
+1. **工具白名单检查**：`None` / 空集合表示不允许能力工具，只有 `ALL_TOOLS` 表示全量工具。
+2. **reason 注入**：`get_all_tool_specs()` 对 MODEL_DECIDES 工具的 schema 注入必填 `reason` 字段。
+3. **workspace 边界检查**：含 `file_path` / `path` 参数时，路径在 workspace 外直接请求用户审批（跳过 LLM reviewer）。
+4. **tier 分支执行**：
    - LOW → 直接调用 registry
-   - MODEL_DECIDES → PermissionReviewer 审查 → proceed 则执行，escalate 则请求用户审批
+   - MODEL_DECIDES → 可选 `review_preflight` → PermissionReviewer 审查 → proceed 则执行，escalate 则请求用户审批
    - HIGH_RISK → 直接请求用户审批
 
 依赖：
@@ -59,7 +60,9 @@ CapabilityRegistry 的权限执行代理，所有工具调用经过此 gate：
 | 类型 | 说明 |
 |------|------|
 | `PermissionTier` | `StrEnum`：LOW / MODEL_DECIDES / HIGH_RISK |
-| `ToolCallContext` | 工具调用上下文：task_goal、session_id、task_id、agent_type、depth |
+| `ALL_TOOLS` | 显式全量工具 sentinel；替代旧的 `allowed_tools=None` 全量语义 |
+| `ToolCallContext` | 工具调用上下文：task_goal、session_id、task_id、agent_type、depth、allowed_tools |
+| `ToolReviewPreflight` | MODEL_DECIDES 审查前的工具动态上下文结果；只进入 reviewer input，不进入真实工具参数 |
 | `ReviewDecision` | 审查结果：decision（proceed/escalate）+ explanation |
 
 ## 修改导航

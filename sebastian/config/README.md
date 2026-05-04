@@ -18,7 +18,7 @@ config/
 ```
 ~/.sebastian/
   app/         # 安装树（sebastian update 只动这里）
-  data/        # 用户数据：sebastian.db / secret.key / workspace / extensions
+  data/        # 用户数据：sebastian.db / secret.key / workspace / extensions / browser
   logs/        # 日志
   run/         # PID + update 回滚备份
   .layout-v2   # 迁移标记
@@ -38,16 +38,27 @@ config/
 | `database_url`（property） | `SEBASTIAN_DB_URL` | 自动派生 | SQLite 连接串，路径为 `<user_data_dir>/sebastian.db` |
 | `extensions_dir`（property） | — | `<user_data_dir>/extensions` | 动态工具扩展目录 |
 | `workspace_dir`（property） | — | `<user_data_dir>/workspace` | 沙箱工作区目录 |
+| `browser_dir`（property） | — | `<user_data_dir>/browser` | 浏览器运行数据根目录 |
+| `browser_profile_dir`（property） | — | `<browser_dir>/profile` | Playwright 持久化 profile 目录 |
+| `browser_downloads_dir`（property） | — | `<browser_dir>/downloads` | 浏览器下载文件目录 |
+| `browser_screenshots_dir`（property） | — | `<browser_dir>/screenshots` | 浏览器截图输出目录 |
 | `sebastian_secret_key_path` | `SEBASTIAN_SECRET_KEY_PATH` | `""` | 显式覆盖 secret.key 路径；空时使用 `<user_data_dir>/secret.key` |
 | `sebastian_model` | `SEBASTIAN_MODEL` | `claude-opus-4-6` | 默认 LLM 模型 |
 | `sebastian_sandbox_enabled` | `SEBASTIAN_SANDBOX_ENABLED` | `false` | 是否启用代码沙箱 |
+| `sebastian_browser_headless` | `SEBASTIAN_BROWSER_HEADLESS` | `true` | 浏览器运行是否使用 headless 模式 |
+| `sebastian_browser_viewport` | `SEBASTIAN_BROWSER_VIEWPORT` | `1280x900` | 浏览器默认 viewport 字符串 |
+| `sebastian_browser_timeout_ms` | `SEBASTIAN_BROWSER_TIMEOUT_MS` | `30000` | 浏览器操作默认超时时间（毫秒） |
+| `sebastian_browser_dns_mode` | `SEBASTIAN_BROWSER_DNS_MODE` | `auto` | 浏览器安全解析模式：`auto` / `system` / `doh` |
+| `sebastian_browser_doh_endpoint` | `SEBASTIAN_BROWSER_DOH_ENDPOINT` | `https://dns.alidns.com/resolve` | `doh` 或代理 Fake-IP fallback 使用的 DoH endpoint |
+| `sebastian_browser_doh_timeout_ms` | `SEBASTIAN_BROWSER_DOH_TIMEOUT_MS` | `5000` | 浏览器 DoH 查询超时时间（毫秒） |
+| `sebastian_browser_upstream_proxy` | `SEBASTIAN_BROWSER_UPSTREAM_PROXY` | `""` | 可选浏览器上游 HTTP 代理；为空时直连公网目标 |
 
 ## 修改导航
 
 | 如果要修改… | 看这里 |
 |------------|--------|
 | 新增配置字段 | [__init__.py](__init__.py) — 在 `Settings` 类添加字段 |
-| 数据目录结构（extensions/workspace 等） | [__init__.py](__init__.py) — `ensure_data_dir()` 函数 |
+| 数据目录结构（extensions/workspace/browser 等） | [__init__.py](__init__.py) — `ensure_data_dir()` 函数 |
 | 修改 JWT 过期时间 / 算法 | [__init__.py](__init__.py) — `sebastian_jwt_*` 字段 |
 | LLM 默认模型或 max tokens | [__init__.py](__init__.py) — `sebastian_model` / `llm_max_tokens` |
 

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from sebastian.permissions.types import ALL_TOOLS, AllToolsSentinel
+
 if TYPE_CHECKING:
     from sebastian.core.base_agent import BaseAgent
 
@@ -34,7 +36,7 @@ class AgentConfig:
     max_children: int  # max concurrent depth=3 sessions
     stalled_threshold_minutes: int  # stalled detection threshold in minutes
     agent_class: type[BaseAgent]
-    allowed_tools: list[str] | None = None
+    allowed_tools: list[str] | AllToolsSentinel | None = None
     allowed_skills: list[str] | None = None
 
 
@@ -82,17 +84,18 @@ def load_agents(extra_dirs: list[Path] | None = None) -> list[AgentConfig]:
                 logging.getLogger(__name__).warning("Failed to load agent %r: %s", agent_type, exc)
                 continue
 
-            # allowed_tools / allowed_skills: None if not declared, list if declared
+            # allowed_tools / allowed_skills: missing tools mean protocol-only.
             raw_tools = agent_section.get("allowed_tools")
             raw_skills = agent_section.get("allowed_skills")
 
-            # 若声明了 capability 白名单，自动追加协议工具（去重）。
-            # None 表示不限制，不需要追加（全量工具已包含协议工具）。
-            if raw_tools is not None:
-                protocol_extra = [t for t in _SUBAGENT_PROTOCOL_TOOLS if t not in raw_tools]
-                effective_tools: list[str] | None = list(raw_tools) + protocol_extra
+            if raw_tools == "ALL":
+                effective_tools: list[str] | AllToolsSentinel = ALL_TOOLS
+            elif isinstance(raw_tools, str):
+                raise ValueError(f"{manifest_path}: allowed_tools string must be 'ALL'")
             else:
-                effective_tools = None
+                capability_tools = list(raw_tools or [])
+                protocol_extra = [t for t in _SUBAGENT_PROTOCOL_TOOLS if t not in capability_tools]
+                effective_tools = capability_tools + protocol_extra
 
             configs[agent_type] = AgentConfig(
                 agent_type=agent_type,

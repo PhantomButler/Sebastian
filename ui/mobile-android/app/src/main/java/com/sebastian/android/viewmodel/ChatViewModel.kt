@@ -1031,7 +1031,7 @@ class ChatViewModel @Inject constructor(
                 downloadUrl = absolute(artifact.downloadUrl),
                 thumbnailUrl = artifact.thumbnailUrl?.let(::absolute),
             )
-            "text_file" -> ContentBlock.FileBlock(
+            "text_file", "download" -> ContentBlock.FileBlock(
                 blockId = "stream-$sessionId-artifact-${artifact.attachmentId}",
                 attachmentId = artifact.attachmentId,
                 filename = artifact.filename,

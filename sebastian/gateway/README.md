@@ -47,8 +47,16 @@ gateway/
 | 手动触发上下文压缩 | `POST /api/v1/sessions/{id}/compact`（routes/sessions.py） |
 | 查询 session 压缩状态 | `GET /api/v1/sessions/{id}/compaction/status`（routes/sessions.py） |
 | LLM Account / Catalog / Custom Model / Binding 管理 | [routes/llm_accounts.py](routes/llm_accounts.py) |
-| 附件上传/下载（`POST /attachments`、`GET /attachments/{id}/content`） | [routes/attachments.py](routes/attachments.py) |
+| 附件上传/下载（`POST /attachments` 支持 image / text_file / download，`GET /attachments/{id}`） | [routes/attachments.py](routes/attachments.py) |
 | Session turn 附件（`POST /sessions/{id}/turns` 接受 `attachment_ids`，复用与 `POST /turns` 相同的校验与写入路径） | [routes/sessions.py](routes/sessions.py) |
+
+### Artifact 透传语义
+
+工具返回 `ToolResult.output["artifact"]` 时，Gateway 不改写 artifact 内容：
+
+- 持久化 timeline 时写入 `tool_result.artifact`，由 `GET /api/v1/sessions/{id}` 的 `timeline_items` 原样返回。
+- 实时 SSE 成功事件写入 `tool.executed.artifact`，客户端可用同一个 payload 原地更新工具卡。
+- 附件 artifact 的 `kind` 支持 `image` / `text_file` / `download`；`download` 表示通用下载文件，通过 `download_url` 指向 `GET /api/v1/attachments/{id}`。
 
 ## 子模块
 
@@ -71,6 +79,7 @@ state.db_factory                       # SQLAlchemy async session factory
 state.llm_registry                     # LLMProviderRegistry 实例
 state.memory_extractor                 # MemoryExtractor 实例（memory_save 后台任务使用；None 表示未初始化）
 state.resident_snapshot_refresher      # ResidentMemorySnapshotRefresher 单例（startup 重建快照，shutdown 时清理）
+state.browser_manager                  # BrowserSessionManager 单例（shutdown 时在 DB dispose 前清理）
 state.get_owner_store()                # OwnerStore（需要 DB session）
 # 注：state.todo_store 和 state.index_store 已从运行时移除
 
@@ -120,6 +129,7 @@ async def foo(_auth: dict = Depends(require_auth)): ...
 - `app.py` 的 `lifespan` 初始化顺序有严格要求，不可调换：`DB → Store → EventBus → Agent → SSE`
 - `state.context_compaction_worker` 在 lifespan 初始化时赋值，在路由中通过 `state.context_compaction_worker.compact_session(...)` 调用
 - `state.resident_snapshot_refresher` 在 lifespan startup 时调用 `rebuild()` 触发初始快照重建；shutdown 时调用 `cleanup()` 释放资源
+- `state.browser_manager` 在 lifespan startup 创建，shutdown 时必须在 `get_engine().dispose()` 前 `aclose()` 并清空引用
 
 ---
 

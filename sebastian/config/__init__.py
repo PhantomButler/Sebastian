@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     sebastian_log_llm_stream: bool = False
     sebastian_log_sse: bool = False
 
+    sebastian_browser_headless: bool = True
+    sebastian_browser_viewport: str = "1280x900"
+    sebastian_browser_timeout_ms: int = 30000
+    sebastian_browser_dns_mode: str = "auto"
+    sebastian_browser_doh_endpoint: str = "https://dns.alidns.com/resolve"
+    sebastian_browser_doh_timeout_ms: int = 5000
+    sebastian_browser_upstream_proxy: str = ""
+
     @property
     def data_dir(self) -> Path:
         """Root install / data directory (~/.sebastian by default)."""
@@ -82,6 +90,22 @@ class Settings(BaseSettings):
     def souls_dir(self) -> Path:
         return self.user_data_dir / "souls"
 
+    @property
+    def browser_dir(self) -> Path:
+        return self.user_data_dir / "browser"
+
+    @property
+    def browser_profile_dir(self) -> Path:
+        return self.browser_dir / "profile"
+
+    @property
+    def browser_downloads_dir(self) -> Path:
+        return self.browser_dir / "downloads"
+
+    @property
+    def browser_screenshots_dir(self) -> Path:
+        return self.browser_dir / "screenshots"
+
     def resolved_secret_key_path(self) -> Path:
         if self.sebastian_secret_key_path:
             return Path(self.sebastian_secret_key_path).expanduser()
@@ -111,6 +135,9 @@ def ensure_data_dir() -> None:
         settings.attachments_dir / "thumbs",
         settings.attachments_dir / "tmp",
         settings.souls_dir,
+        settings.browser_profile_dir,
+        settings.browser_downloads_dir,
+        settings.browser_screenshots_dir,
     ):
         sub.mkdir(parents=True, exist_ok=True)
 

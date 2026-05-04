@@ -10,11 +10,14 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from sebastian.core.types import ToolResult
-from sebastian.permissions.types import PermissionTier
+from sebastian.permissions.types import PermissionTier, ToolReviewPreflight
 
 logger = logging.getLogger(__name__)
 
 ToolFn = Callable[..., Awaitable[ToolResult]]
+
+
+ToolReviewPreflightFn = Callable[[dict[str, Any], Any], Awaitable[ToolReviewPreflight]]
 
 _TYPE_MAP: dict[type, str] = {
     str: "string",
@@ -29,7 +32,14 @@ _NoneType = type(None)
 class ToolSpec:
     """Specification and metadata for a registered tool."""
 
-    __slots__ = ("name", "description", "parameters", "permission_tier", "display_name")
+    __slots__ = (
+        "name",
+        "description",
+        "parameters",
+        "permission_tier",
+        "display_name",
+        "review_preflight",
+    )
 
     def __init__(
         self,
@@ -38,12 +48,14 @@ class ToolSpec:
         parameters: dict[str, Any],
         permission_tier: PermissionTier = PermissionTier.LOW,
         display_name: str | None = None,
+        review_preflight: ToolReviewPreflightFn | None = None,
     ) -> None:
         self.name = name
         self.description = description
         self.parameters = parameters
         self.permission_tier = permission_tier
         self.display_name = display_name
+        self.review_preflight = review_preflight
 
 
 # Module-level registry: tool name → (spec, async callable)
@@ -164,6 +176,7 @@ def tool(
     description: str,
     permission_tier: PermissionTier = PermissionTier.MODEL_DECIDES,
     display_name: str | None = None,
+    review_preflight: ToolReviewPreflightFn | None = None,
 ) -> Callable[[ToolFn], ToolFn]:
     """Decorator that registers an async function as a callable tool."""
 
@@ -174,6 +187,7 @@ def tool(
             parameters=_infer_json_schema(fn),
             permission_tier=permission_tier,
             display_name=display_name,
+            review_preflight=review_preflight,
         )
 
         @functools.wraps(fn)

@@ -130,6 +130,25 @@ def test_tool_display_name_stored_in_spec() -> None:
     assert spec.display_name == "Fancy Tool"
 
 
+def test_tool_review_preflight_stored_in_spec() -> None:
+    from sebastian.core import tool as tool_module
+    from sebastian.core.tool import tool
+    from sebastian.core.types import ToolResult
+    from sebastian.permissions.types import ToolReviewPreflight
+
+    tool_module._tools.clear()
+
+    async def preflight(inputs, context):  # type: ignore[no-untyped-def]
+        return ToolReviewPreflight(ok=True, review_input={"x": inputs["x"]})
+
+    @tool(name="guarded_tool", description="test", review_preflight=preflight)
+    async def guarded(x: str) -> ToolResult:
+        return ToolResult(ok=True, output=x)
+
+    spec, _ = tool_module._tools["guarded_tool"]
+    assert spec.review_preflight is preflight
+
+
 def test_tool_display_name_defaults_to_none() -> None:
     from sebastian.core import tool as tool_module
     from sebastian.core.tool import tool

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sebastian.capabilities.registry import CapabilityRegistry
 from sebastian.core.types import ToolResult
+from sebastian.permissions.types import ALL_TOOLS
 
 
 def _make_registry() -> CapabilityRegistry:
@@ -34,9 +35,9 @@ def _make_registry() -> CapabilityRegistry:
     return reg
 
 
-def test_get_tool_specs_returns_only_tools_not_skills() -> None:
+def test_get_tool_specs_all_tools_returns_only_tools_not_skills() -> None:
     reg = _make_registry()
-    specs = reg.get_tool_specs()
+    specs = reg.get_tool_specs(allowed=ALL_TOOLS)
     names = {s["name"] for s in specs}
     assert "mcp_tool_a" in names
     assert "mcp_tool_b" in names
@@ -59,6 +60,16 @@ def test_get_tool_specs_with_allowed_filter() -> None:
     assert "mcp_tool_b" not in names
 
 
+def test_get_tool_specs_none_allows_no_tools() -> None:
+    reg = _make_registry()
+    assert reg.get_tool_specs(allowed=None) == []
+
+
+def test_get_tool_specs_empty_set_allows_no_tools() -> None:
+    reg = _make_registry()
+    assert reg.get_tool_specs(allowed=set()) == []
+
+
 def test_get_skill_specs_with_allowed_empty_set() -> None:
     reg = _make_registry()
     specs = reg.get_skill_specs(allowed=set())
@@ -75,10 +86,24 @@ def test_get_callable_specs_combines_filtered_tools_and_skills() -> None:
     assert names == {"mcp_tool_a", "research_skill"}
 
 
-def test_get_callable_specs_none_means_all() -> None:
+def test_get_callable_specs_none_allows_no_tools_but_keeps_skill_default() -> None:
     reg = _make_registry()
     specs = reg.get_callable_specs(allowed_tools=None, allowed_skills=None)
     names = {s["name"] for s in specs}
-    assert "mcp_tool_a" in names
-    assert "mcp_tool_b" in names
-    assert "research_skill" in names
+    assert names == {"research_skill"}
+
+
+def test_get_callable_specs_all_tools_sentinel_means_all_tools() -> None:
+    reg = _make_registry()
+    specs = reg.get_callable_specs(allowed_tools=ALL_TOOLS, allowed_skills=None)
+    names = {s["name"] for s in specs}
+    assert {"mcp_tool_a", "mcp_tool_b", "research_skill"} <= names
+    assert "unknown_tool" not in names
+
+
+def test_get_all_tool_specs_uses_all_tools_sentinel() -> None:
+    reg = _make_registry()
+    specs = reg.get_all_tool_specs()
+    names = {s["name"] for s in specs}
+    assert {"mcp_tool_a", "mcp_tool_b", "research_skill"} <= names
+    assert "unknown_tool" not in names

@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from sebastian.gateway.auth import require_auth
 from sebastian.store.attachments import AttachmentValidationError
@@ -15,8 +16,8 @@ JSONDict = dict[str, Any]
 
 @router.post("/attachments", status_code=201)
 async def upload_attachment(
-    kind: Literal["image", "text_file"] = Form(...),
-    file: UploadFile = File(...),
+    kind: Literal["image", "text_file", "download"] = Form(...),
+    file: UploadFile | str = File(...),
     _auth: AuthPayload = Depends(require_auth),
 ) -> JSONDict:
     import sebastian.gateway.state as state
@@ -24,11 +25,20 @@ async def upload_attachment(
     store = state.attachment_store
     if store is None:
         raise HTTPException(status_code=503, detail="Attachment store not initialized")
-    data = await file.read()
+    if isinstance(file, StarletteUploadFile):
+        data = await file.read()
+        filename = (file.filename or "") if kind == "download" else file.filename or "upload"
+        content_type = file.content_type or "application/octet-stream"
+    else:
+        if kind != "download":
+            raise HTTPException(status_code=422, detail="Expected uploaded file")
+        data = file.encode("utf-8")
+        filename = ""
+        content_type = "application/octet-stream"
     try:
         uploaded = await store.upload_bytes(
-            filename=file.filename or "upload",
-            content_type=file.content_type or "application/octet-stream",
+            filename=filename,
+            content_type=content_type,
             kind=kind,
             data=data,
         )
@@ -62,8 +72,7 @@ async def download_attachment(
     blob_path = store.blob_absolute_path(record)
     if not blob_path.exists():
         raise HTTPException(status_code=404, detail="Attachment blob not found")
-    data = blob_path.read_bytes()
-    return Response(content=data, media_type=record.mime_type)
+    return FileResponse(blob_path, media_type=record.mime_type)
 
 
 @router.get("/attachments/{attachment_id}/thumbnail")

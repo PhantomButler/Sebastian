@@ -21,6 +21,7 @@ from sebastian.core.stream_events import (
     TurnDone,
 )
 from sebastian.llm.provider import LLMProvider
+from sebastian.permissions.types import ALL_TOOLS
 
 
 class MockLLMProvider(LLMProvider):
@@ -455,8 +456,8 @@ async def test_agent_loop_passes_allowed_tools_to_provider() -> None:
 
 
 @pytest.mark.asyncio
-async def test_agent_loop_none_allowed_tools_means_unrestricted() -> None:
-    """allowed_tools=None 表示不限制，registry 收到 None。"""
+async def test_agent_loop_none_allowed_tools_means_no_capability_tools() -> None:
+    """allowed_tools=None is forwarded as no capability-tool allowlist."""
     from unittest.mock import MagicMock
 
     from sebastian.core.agent_loop import AgentLoop
@@ -476,6 +477,32 @@ async def test_agent_loop_none_allowed_tools_means_unrestricted() -> None:
     await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
 
     registry.get_callable_specs.assert_called_once_with(allowed_tools=None, allowed_skills=None)
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_all_tools_sentinel_means_unrestricted() -> None:
+    """ALL_TOOLS is the explicit unrestricted sentinel passed to the registry."""
+    from unittest.mock import MagicMock
+
+    from sebastian.core.agent_loop import AgentLoop
+
+    registry = MagicMock()
+    registry.get_callable_specs = MagicMock(return_value=[])
+
+    provider = MockLLMProvider(
+        [
+            TextBlockStart(block_id="b0_0"),
+            TextBlockStop(block_id="b0_0", text="ok"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ]
+    )
+
+    loop = AgentLoop(provider, registry, model="test", allowed_tools=ALL_TOOLS)
+    await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
+
+    registry.get_callable_specs.assert_called_once_with(
+        allowed_tools=ALL_TOOLS, allowed_skills=None
+    )
 
 
 @pytest.mark.asyncio

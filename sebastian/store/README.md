@@ -23,7 +23,7 @@ store/
 ├── session_todos.py         # SessionTodoStore：per-session todos 的 SQLite 读写
 ├── event_log.py             # EventLog：将 Event 对象追加写入 SQLite events 表，用于历史查询
 ├── task_store.py            # [DEPRECATED] TaskStore：原文件系统 task 写入辅助，已由 session_tasks.py 替代
-├── attachments.py           # AttachmentStore：附件 blob 存储与状态管理（upload / mark_attached / mark_session_orphaned / cleanup，含 tmp/ 孤文件 GC）
+├── attachments.py           # AttachmentStore：附件 blob 存储与状态管理（image / text_file / download，upload / mark_attached / mark_session_orphaned / cleanup，含 tmp/ 孤文件 GC）
 ├── todo_store.py            # TodoStore：per-session todos，委托给 SessionTodoStore（SQLite-only）
 └── migrations/
     └── __init__.py          # Alembic 迁移脚本目录（schema 变更在此新增 migration）

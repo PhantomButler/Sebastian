@@ -42,8 +42,18 @@ ALLOWED_TEXT_MIME_TYPES = frozenset(
         "application/octet-stream",
     }
 )
+ALLOWED_DOWNLOAD_MIME_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/zip",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/octet-stream",
+    }
+)
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_TEXT_BYTES = 2 * 1024 * 1024
+MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024
 TEXT_EXCERPT_CHARS = 2000
 _UPLOADED_TTL = timedelta(hours=24)  # status="uploaded" blobs expire after 24 h if never referenced
 _ORPHAN_TTL = timedelta(hours=24)  # orphaned blobs expire (can differ from uploaded in future)
@@ -176,6 +186,8 @@ class AttachmentStore:
             self._validate_image(filename, content_type, data)
         elif kind == "text_file":
             self._validate_text_file(filename, content_type, data)
+        elif kind == "download":
+            self._validate_download(filename, content_type, data)
         else:
             raise AttachmentValidationError(f"Unknown kind: {kind!r}")
 
@@ -514,3 +526,13 @@ class AttachmentStore:
             data.decode("utf-8")
         except UnicodeDecodeError as e:
             raise AttachmentValidationError("Text file is not valid UTF-8") from e
+
+    def _validate_download(self, filename: str, content_type: str, data: bytes) -> None:
+        if not filename:
+            raise AttachmentValidationError("Download filename is required")
+        if not data:
+            raise AttachmentValidationError("Download data cannot be empty")
+        if len(data) > MAX_DOWNLOAD_BYTES:
+            raise AttachmentValidationError("Download exceeds 50 MB limit")
+        if content_type not in ALLOWED_DOWNLOAD_MIME_TYPES:
+            raise AttachmentValidationError(f"Unsupported download MIME: {content_type!r}")

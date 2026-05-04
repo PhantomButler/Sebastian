@@ -67,7 +67,7 @@ description = "做什么用的一句话描述"
 class_name = "MyAgent"                     # __init__.py 中的类名（必须精确匹配）
 max_children = 5                           # 最大并发 depth=3 子任务数（默认 5）
 stalled_threshold_minutes = 5             # 多少分钟无活动判定为 stalled（默认 5）
-allowed_tools = ["Read", "Bash", "Glob"]  # 能力工具白名单；不写则不限制（见下）
+allowed_tools = ["Read", "Bash", "Glob"]  # 能力工具白名单；不写则仅协议工具（见下）
 allowed_skills = []                        # 允许使用的 skill 列表
 ```
 
@@ -78,7 +78,8 @@ allowed_skills = []                        # 允许使用的 skill 列表
 | **能力工具**（领域执行） | Read / Write / Edit / Bash / Glob / Grep / todo_read / send_file 等 | 在 `allowed_tools` 里显式列出 |
 | **协议工具**（层级通信） | `ask_parent` 等 | `_loader.py` 自动追加，**无需写入 manifest** |
 
-`allowed_tools = null`（不写此字段）表示不限制，Agent 可用所有工具（含协议工具）。
+不写 `allowed_tools` 或写 `allowed_tools = []` 表示仅自动注入协议工具，不允许任何能力工具。
+如果确实需要全量能力工具，必须显式写 `allowed_tools = "ALL"`。
 
 `spawn_sub_agent` 和 `ask_parent` 同为协议工具，均自动注入，无需手动声明。
 
@@ -90,13 +91,14 @@ Sub-agent 在 `manifest.toml` 中通过 `allowed_tools` 声明能力边界。
 1. **LLM 可见性层**：传给 LLM 的 `tools` 参数按白名单过滤，LLM 看不到白名单外的工具。
 2. **执行校验层**：`PolicyGate.call()` Stage 0 前置校验 `tool_name`，即使 LLM 幻觉出白名单外的工具名也会被拒绝。
 
-### 三种取值
+### 四种取值
 
 | manifest 声明 | Sub-agent 最终白名单 | 含义 |
 |---|---|---|
-| 未声明（缺省） | `None` | 不限制，可用全量工具（含协议工具） |
+| 未声明（缺省） | 6 个协议工具 | 仅具备通信能力，无领域工具 |
 | `allowed_tools = []` | 6 个协议工具 | 仅具备通信能力，无领域工具 |
 | `allowed_tools = ["Read"]` | `Read` + 6 个协议工具 | Read + 通信能力 |
+| `allowed_tools = "ALL"` | `ALL_TOOLS` | 显式允许全量工具 |
 
 ### 协议工具（6 个，由 `_loader.py` 自动追加）
 

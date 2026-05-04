@@ -5,6 +5,9 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from sebastian.capabilities.tools import (
+    browser as _browser_tools,  # noqa: F401  # registers browser_* tools
+)
+from sebastian.capabilities.tools import (
     delegate_to_agent as _delegate_tools,  # noqa: F401  # registers delegate_to_agent tool
 )
 from sebastian.capabilities.tools import (
@@ -153,6 +156,11 @@ class Sebastian(BaseAgent):
         "memory_save",
         "memory_search",
         "switch_soul",
+        "browser_open",
+        "browser_observe",
+        "browser_act",
+        "browser_capture",
+        "browser_downloads",
         "Read",
         "Write",
         "Edit",
