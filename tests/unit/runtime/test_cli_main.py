@@ -11,6 +11,24 @@ from sebastian.main import app
 runner = CliRunner()
 
 
+def test_version_command_prints_installed_version(monkeypatch) -> None:
+    monkeypatch.setattr("sebastian.main._resolve_version", lambda: "9.8.7")
+
+    result = runner.invoke(app, ["version"])
+
+    assert result.exit_code == 0
+    assert "9.8.7" in result.output
+
+
+def test_global_version_option_prints_installed_version(monkeypatch) -> None:
+    monkeypatch.setattr("sebastian.main._resolve_version", lambda: "9.8.7")
+
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert "9.8.7" in result.output
+
+
 def test_status_reports_active_service(monkeypatch) -> None:
     monkeypatch.setattr(
         "sebastian.cli.service.get_service_state",

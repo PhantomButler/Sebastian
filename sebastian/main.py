@@ -9,8 +9,47 @@ import uvicorn
 from sebastian.cli import service
 from sebastian.cli.service import app as service_app
 
+
+def _resolve_version() -> str:
+    import importlib.metadata
+    import tomllib
+    from pathlib import Path
+
+    pyproject = Path(__file__).parent.parent / "pyproject.toml"
+    if pyproject.exists():
+        with pyproject.open("rb") as file:
+            project_version = tomllib.load(file)["project"]["version"]
+            return str(project_version)
+    return importlib.metadata.version("sebastian")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"Sebastian v{_resolve_version()}")
+        raise typer.Exit()
+
+
 app = typer.Typer(name="sebastian", help="Sebastian — Personal AI Butler")
 app.add_typer(service_app, name="service")
+
+
+@app.callback()
+def main(
+    _show_version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show installed version and exit.",
+    ),
+) -> None:
+    """Sebastian command line interface."""
+
+
+@app.command()
+def version() -> None:
+    """Print the installed Sebastian version."""
+    typer.echo(f"Sebastian v{_resolve_version()}")
 
 
 @app.command()
@@ -21,8 +60,6 @@ def serve(
     daemon: bool = typer.Option(False, "--daemon", "-d", help="以后台模式运行"),
 ) -> None:
     """Start the Sebastian gateway server."""
-    import importlib.metadata
-
     from sebastian.cli.daemon import is_running, pid_path, read_pid, write_pid
     from sebastian.config import ensure_data_dir, settings
 
@@ -30,19 +67,11 @@ def serve(
 
     h = host or settings.sebastian_gateway_host
     p = port or settings.sebastian_gateway_port
-    import tomllib
-    from pathlib import Path
-
-    _pyproject = Path(__file__).parent.parent / "pyproject.toml"
-    if _pyproject.exists():
-        with _pyproject.open("rb") as _f:
-            version = tomllib.load(_f)["project"]["version"]
-    else:
-        version = importlib.metadata.version("sebastian")
+    installed_version = _resolve_version()
     log_file = settings.logs_dir / "main.log"
 
     # --- startup banner ---
-    typer.echo(f"Sebastian v{version}")
+    typer.echo(f"Sebastian v{installed_version}")
     typer.echo(f"  数据目录: {settings.data_dir}")
     typer.echo(f"  日志文件: {log_file}")
     typer.echo(f"  监听地址: http://{h}:{p}")
