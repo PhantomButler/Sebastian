@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `sebastian status`, `sebastian update`, and version reporting match the service modes users actually install, especially systemd/launchd auto-start services.
+**Goal:** Make `sebastian status`, `sebastian update`, version reporting, and user-level runtime configuration match the service modes users actually install, especially systemd/launchd auto-start services.
 
-**Architecture:** Keep one source of truth for service-manager detection in `sebastian.cli.service`, then have `sebastian status` and `sebastian update` consult it before falling back to legacy PID-file daemon behavior. Add a lightweight version helper used by both `sebastian version` and `sebastian --version` so users have a stable way to confirm what is installed and what is running.
+**Architecture:** Keep one source of truth for service-manager detection in `sebastian.cli.service`, then have `sebastian status` and `sebastian update` consult it before falling back to legacy PID-file daemon behavior. Add a stable user config file at `~/.sebastian/.env`, make service units load it explicitly, and add a lightweight version helper used by both `sebastian version` and `sebastian --version`.
 
 **Tech Stack:** Python 3.12, Typer CLI, user-level systemd, launchd, pytest, unittest.mock.
 
@@ -22,6 +22,7 @@ This causes three user-visible issues:
 - `sebastian status` says "Sebastian 未在运行" while `systemctl --user status sebastian` shows the service is running.
 - `sebastian update` only checks the PID file, so it does not restart a running systemd/launchd service after replacing the installed files.
 - Users expect `sebastian --version` or `sebastian version`, but no stable version command exists.
+- Runtime config is ambiguous: `.env` is currently read relative to the process working directory, normal installs do not create one, and service-managed installs do not explicitly load a user config file. Users cannot reliably find where to put settings such as `SEBASTIAN_BROWSER_UPSTREAM_PROXY`.
 
 Do not change the service template to use `serve --daemon`. systemd/launchd should supervise the foreground process directly. The fix is to make CLI status/update service-aware.
 
@@ -30,6 +31,14 @@ Do not change the service template to use `serve --daemon`. systemd/launchd shou
 - Modify `sebastian/cli/service.py`
   - Own service manager detection and restart operations.
   - Add non-Typer helpers for `is_installed`, `is_active`, `restart`, and structured status.
+- Modify `sebastian/cli/service_templates.py`
+  - Make systemd load `~/.sebastian/.env` through `EnvironmentFile=-...`.
+  - Make launchd start with a stable working directory and explicit config path environment where practical.
+- Modify `sebastian/config/__init__.py`
+  - Teach Settings to load a stable user config file, not only cwd `.env`.
+  - Keep environment variables as highest priority.
+- Modify `scripts/install.sh`
+  - Create `~/.sebastian/.env` if missing, using conservative defaults and comments.
 - Modify `sebastian/cli/updater.py`
   - Replace PID-only auto-restart with service-aware restart: active service first, legacy daemon second.
   - Print precise post-update guidance when no running process is detected.
@@ -41,16 +50,211 @@ Do not change the service template to use `serve --daemon`. systemd/launchd shou
   - Document service-aware status/update behavior and version commands.
 - Modify `README.md`
   - Update user-facing operational commands: status, restart, update, version.
+  - Document `~/.sebastian/.env` as the stable installed-runtime config file.
+- Modify `.env.example`
+  - Keep development defaults and add installed-runtime comments that point users to `~/.sebastian/.env`.
 - Modify `docs/AGENTIC_DEPLOYMENT.md`
   - Update deployment agent instructions so agents use `sebastian service status` or top-level `sebastian status`, and know update restarts service-managed installs.
+  - Tell deployment agents to create or edit `~/.sebastian/.env` for installed runtime settings such as browser proxy configuration.
 - Test `tests/unit/test_service_install.py`
   - Extend service tests for status/restart helpers on Linux and macOS.
+- Test `tests/unit/runtime/test_config.py`
+  - Add Settings tests for stable user `.env` loading and environment override precedence.
+- Test `tests/unit/runtime/test_install_script.py`
+  - Add installer tests for user config file creation if this script is already covered there.
 - Test `tests/unit/runtime/test_updater.py`
   - Add update restart tests for active systemd/launchd service, legacy daemon fallback, and no-running-process guidance.
 - Test `tests/unit/runtime/test_cli_main.py`
   - Add CLI-level tests for `version`, `--version`, and service-aware top-level `status`.
 
-## Task 1: Add Service State Helpers
+## Task 1: Add Stable User Runtime Config
+
+**Files:**
+- Modify: `sebastian/config/__init__.py`
+- Modify: `sebastian/cli/service_templates.py`
+- Modify: `scripts/install.sh`
+- Test: `tests/unit/runtime/test_config.py`
+- Test: `tests/unit/test_service_install.py`
+- Test: `tests/unit/runtime/test_install_script.py`
+
+- [ ] **Step 1: Write failing Settings test for user `.env`**
+
+Add a test in `tests/unit/runtime/test_config.py` that creates a fake home directory and verifies Settings can load a stable user config file:
+
+```python
+def test_settings_loads_user_env_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sebastian.config import Settings
+
+    home = tmp_path / "home"
+    env_file = home / ".sebastian" / ".env"
+    env_file.parent.mkdir(parents=True)
+    env_file.write_text(
+        "SEBASTIAN_BROWSER_UPSTREAM_PROXY=http://127.0.0.1:1082\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    settings = Settings(_env_file=None).with_user_env()
+
+    assert settings.sebastian_browser_upstream_proxy == "http://127.0.0.1:1082"
+```
+
+If Pydantic settings construction makes `with_user_env()` awkward, the implementation may instead expose a module helper such as `settings_customise_sources`; the core assertion remains the same: `~/.sebastian/.env` is read without relying on cwd.
+
+- [ ] **Step 2: Write failing precedence test**
+
+Add:
+
+```python
+def test_environment_overrides_user_env_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sebastian.config import Settings
+
+    home = tmp_path / "home"
+    env_file = home / ".sebastian" / ".env"
+    env_file.parent.mkdir(parents=True)
+    env_file.write_text(
+        "SEBASTIAN_BROWSER_UPSTREAM_PROXY=http://127.0.0.1:1082\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("SEBASTIAN_BROWSER_UPSTREAM_PROXY", "http://127.0.0.1:7890")
+
+    settings = Settings(_env_file=None).with_user_env()
+
+    assert settings.sebastian_browser_upstream_proxy == "http://127.0.0.1:7890"
+```
+
+The exact helper name may change during implementation, but the behavior must not: real environment variables beat file values.
+
+- [ ] **Step 3: Write failing systemd template test**
+
+Update `test_systemd_unit_contains_exec_start` in `tests/unit/test_service_install.py`:
+
+```python
+assert "EnvironmentFile=-%h/.sebastian/.env" in unit
+```
+
+This keeps user config outside the install tree and lets users edit one stable file.
+
+- [ ] **Step 4: Write failing launchd template test**
+
+Update `test_launchd_plist_renders_paths`:
+
+```python
+assert "<key>WorkingDirectory</key><string>" in plist
+assert "SEBASTIAN_ENV_FILE" in plist
+assert ".sebastian/.env" in plist
+```
+
+Launchd cannot load an EnvironmentFile like systemd. The service should either set `SEBASTIAN_ENV_FILE` for the app to read explicitly or set a stable working directory that contains `.env`. Prefer explicit `SEBASTIAN_ENV_FILE`.
+
+- [ ] **Step 5: Write failing install script test**
+
+If `tests/unit/runtime/test_install_script.py` already tests installer output, extend it to assert a fresh install creates or announces:
+
+```text
+~/.sebastian/.env
+```
+
+The test can run the script in a temp `HOME` with commands mocked if existing test helpers support it. If shell-script testing becomes too brittle, document this as a manual verification in Task 9 and keep unit coverage at config/template level.
+
+- [ ] **Step 6: Run tests to verify they fail**
+
+Run:
+
+```bash
+pytest tests/unit/runtime/test_config.py tests/unit/test_service_install.py tests/unit/runtime/test_install_script.py -q
+```
+
+Expected: FAIL for missing user config loading and service template environment hooks.
+
+- [ ] **Step 7: Implement stable config file loading**
+
+In `sebastian/config/__init__.py`, support this source order:
+
+1. Real environment variables.
+2. Explicit `SEBASTIAN_ENV_FILE` if set.
+3. Stable user config: `~/.sebastian/.env`.
+4. Cwd `.env` for local development compatibility.
+5. Defaults.
+
+Keep this implementation small. Do not introduce a new config format.
+
+One acceptable implementation is:
+
+```python
+def _user_env_file() -> Path:
+    explicit = os.environ.get("SEBASTIAN_ENV_FILE")
+    if explicit:
+        return Path(explicit).expanduser()
+    return Path.home() / ".sebastian" / ".env"
+```
+
+Then configure Pydantic settings to read both user env and cwd env. If using `SettingsConfigDict(env_file=...)`, make sure the list order gives real environment variables highest priority and does not make cwd `.env` override `~/.sebastian/.env` in service mode.
+
+- [ ] **Step 8: Implement service template environment hooks**
+
+In `sebastian/cli/service_templates.py`, update systemd:
+
+```ini
+EnvironmentFile=-%h/.sebastian/.env
+```
+
+Update launchd plist to include:
+
+```xml
+<key>EnvironmentVariables</key>
+<dict>
+  <key>SEBASTIAN_ENV_FILE</key><string>{env_file}</string>
+</dict>
+```
+
+Add `env_file` to render function arguments or derive it from `Path.home()` inside `service.py` and pass it into the template. Keep paths explicit.
+
+- [ ] **Step 9: Implement installer `.env` creation**
+
+In `scripts/install.sh`, after `DATA_ROOT` is computed, create `${DATA_ROOT}/.env` if it does not exist:
+
+```bash
+ENV_FILE="${DATA_ROOT}/.env"
+if [[ ! -f "${ENV_FILE}" ]]; then
+  cat > "${ENV_FILE}" <<'EOF'
+# Sebastian user runtime config.
+# This file is loaded by service-managed installs.
+#
+# Browser proxy example:
+# SEBASTIAN_BROWSER_UPSTREAM_PROXY=http://127.0.0.1:1082
+# SEBASTIAN_BROWSER_DNS_MODE=auto
+EOF
+  color_grn "✓ 已创建用户配置文件 ${ENV_FILE}"
+else
+  color_grn "✓ 用户配置文件已存在 ${ENV_FILE}"
+fi
+```
+
+If repository rules discourage heredoc writes in implementation, use a shell-safe `printf` block in the script. The script itself may write files; this plan is describing the final script behavior.
+
+- [ ] **Step 10: Run focused tests**
+
+Run:
+
+```bash
+pytest tests/unit/runtime/test_config.py tests/unit/test_service_install.py tests/unit/runtime/test_install_script.py -q
+```
+
+Expected: PASS.
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add sebastian/config/__init__.py sebastian/cli/service_templates.py scripts/install.sh tests/unit/runtime/test_config.py tests/unit/test_service_install.py tests/unit/runtime/test_install_script.py
+git commit -m "feat(config): add stable user env file"
+```
+
+## Task 2: Add Service State Helpers
 
 **Files:**
 - Modify: `sebastian/cli/service.py`
@@ -248,7 +452,7 @@ git add sebastian/cli/service.py tests/unit/test_service_install.py
 git commit -m "feat(cli): expose service state helpers"
 ```
 
-## Task 2: Add Service Restart Helper
+## Task 3: Add Service Restart Helper
 
 **Files:**
 - Modify: `sebastian/cli/service.py`
@@ -363,7 +567,7 @@ git add sebastian/cli/service.py tests/unit/test_service_install.py
 git commit -m "feat(cli): add service restart command"
 ```
 
-## Task 3: Make `sebastian update` Restart Service-Managed Installs
+## Task 4: Make `sebastian update` Restart Service-Managed Installs
 
 **Files:**
 - Modify: `sebastian/cli/updater.py`
@@ -502,7 +706,7 @@ git add sebastian/cli/updater.py tests/unit/runtime/test_updater.py
 git commit -m "fix(cli): update restarts service-managed installs"
 ```
 
-## Task 4: Make Top-Level `sebastian status` Service-Aware
+## Task 5: Make Top-Level `sebastian status` Service-Aware
 
 **Files:**
 - Modify: `sebastian/main.py`
@@ -609,7 +813,7 @@ git add sebastian/main.py tests/unit/runtime/test_cli_main.py
 git commit -m "fix(cli): make status service-aware"
 ```
 
-## Task 5: Add Version Commands
+## Task 6: Add Version Commands
 
 **Files:**
 - Modify: `sebastian/main.py`
@@ -712,7 +916,7 @@ git add sebastian/main.py tests/unit/runtime/test_cli_main.py
 git commit -m "feat(cli): add version commands"
 ```
 
-## Task 6: Polish Service Command Output
+## Task 7: Polish Service Command Output
 
 **Files:**
 - Modify: `sebastian/cli/service.py`
@@ -796,12 +1000,13 @@ git add sebastian/cli/service.py tests/unit/test_service_install.py
 git commit -m "chore(cli): clarify service status output"
 ```
 
-## Task 7: Update Docs And README Indexes
+## Task 8: Update Docs And README Indexes
 
 **Files:**
 - Modify: `sebastian/cli/README.md`
 - Modify: `sebastian/README.md`
 - Modify: `README.md`
+- Modify: `.env.example`
 - Modify: `docs/AGENTIC_DEPLOYMENT.md`
 - Modify: `CHANGELOG.md`
 
@@ -842,7 +1047,28 @@ sebastian update
 
 State that service-managed installs restart automatically after update.
 
-- [ ] **Step 4: Update agentic deployment guide**
+Also add a short config note:
+
+```text
+Installed runtime config lives at ~/.sebastian/.env.
+Edit that file for settings used by the service, such as SEBASTIAN_BROWSER_UPSTREAM_PROXY.
+Repository .env remains for local source-tree development only.
+```
+
+- [ ] **Step 4: Update `.env.example`**
+
+In `.env.example`, keep it as a development template, but add comments that make the installed path explicit:
+
+```dotenv
+# For installed Sebastian services, put runtime overrides in:
+#   ~/.sebastian/.env
+# Example:
+#   SEBASTIAN_BROWSER_UPSTREAM_PROXY=http://127.0.0.1:1082
+```
+
+Do not commit a real `.env` file with local secrets or machine-specific proxy values.
+
+- [ ] **Step 5: Update agentic deployment guide**
 
 In `docs/AGENTIC_DEPLOYMENT.md`, replace any instruction that treats `sebastian status` as PID-only. Add:
 
@@ -850,21 +1076,23 @@ In `docs/AGENTIC_DEPLOYMENT.md`, replace any instruction that treats `sebastian 
 If auto-start service was installed, prefer `sebastian service status` for service diagnostics.
 After `sebastian update`, Sebastian restarts an active systemd/launchd service automatically.
 If the service is installed but inactive, run `sebastian service start`.
+For installed runtime configuration, create or edit ~/.sebastian/.env. Do not rely on the repository working directory .env after installation.
 ```
 
-- [ ] **Step 5: Update CHANGELOG**
+- [ ] **Step 6: Update CHANGELOG**
 
 Add under `[Unreleased]`:
 
 ```markdown
 ### Changed
 - `sebastian status` 和 `sebastian update` 现在识别 systemd/launchd 服务模式，避免开机自启服务运行中却显示未运行，升级后也会自动重启 active 服务。
+- 已安装服务会读取稳定配置文件 `~/.sebastian/.env`，避免用户把运行时配置误写到源码仓库 `.env` 后服务不生效。
 
 ### Added
 - 新增 `sebastian version` / `sebastian --version`，方便部署和升级后确认当前版本。
 ```
 
-- [ ] **Step 6: Run docs grep sanity check**
+- [ ] **Step 7: Run docs grep sanity check**
 
 Run:
 
@@ -874,20 +1102,22 @@ from pathlib import Path
 for path in [Path("README.md"), Path("docs/AGENTIC_DEPLOYMENT.md"), Path("sebastian/cli/README.md")]:
     text = path.read_text()
     assert "sebastian version" in text or path.name == "AGENTIC_DEPLOYMENT.md"
+    if path.name in {"README.md", "AGENTIC_DEPLOYMENT.md"}:
+        assert "~/.sebastian/.env" in text
 print("docs sanity ok")
 PY
 ```
 
 Expected: `docs sanity ok`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add README.md docs/AGENTIC_DEPLOYMENT.md sebastian/README.md sebastian/cli/README.md CHANGELOG.md
+git add .env.example README.md docs/AGENTIC_DEPLOYMENT.md sebastian/README.md sebastian/cli/README.md CHANGELOG.md
 git commit -m "docs(cli): clarify service update workflow"
 ```
 
-## Task 8: Full Verification
+## Task 9: Full Verification
 
 **Files:**
 - No code changes unless verification reveals a bug.
@@ -985,6 +1215,8 @@ git commit -m "fix(cli): address service update verification"
 - Legacy `sebastian serve --daemon` PID-file restart still works.
 - If a service is installed but inactive, update prints `sebastian service start` guidance.
 - `sebastian version` and `sebastian --version` both work.
+- Fresh installs create or preserve `~/.sebastian/.env`; service-managed installs load that file explicitly.
+- Real environment variables override `~/.sebastian/.env`; source-tree `.env` remains a local development fallback, not the installed service config source of truth.
 - Service status output includes the correct command family, preventing confusion with `service sebastian update`.
 - Docs teach users and deployment agents the correct operational commands.
 - Focused tests, lint, mypy, full Python tests, and graphify rebuild pass.
@@ -994,5 +1226,5 @@ git commit -m "fix(cli): address service update verification"
 - Do not introduce sudo flows. `sebastian service` manages user-level systemd units and launchd agents only.
 - Do not make systemd run `serve --daemon`; service managers should supervise foreground processes.
 - Do not rely on `service sebastian ...`; that is a different Linux command family and is not the Sebastian CLI.
-- Keep this feature CLI-only. It should not touch gateway, Android, browser tools, memory, or LLM code.
+- Keep this feature limited to CLI, installer, runtime config loading, tests, and docs. It should not touch gateway, Android, browser tool behavior, memory, or LLM code.
 - Use exact-file `git add`; do not use `git add .`.
