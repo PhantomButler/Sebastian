@@ -82,7 +82,7 @@ def test_log_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_browser_settings_defaults() -> None:
     from sebastian.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.sebastian_browser_headless is True
     assert s.sebastian_browser_viewport == "1280x900"
     assert s.sebastian_browser_timeout_ms == 30000

@@ -60,9 +60,7 @@ class _FakeManager:
     ) -> dict[str, Any]:
         if is_blocked is not None and is_blocked(self.target_metadata_result):
             raise RuntimeError("blocked")
-        self.acted.append(
-            {"action": action, "target": target, "value": value}
-        )
+        self.acted.append({"action": action, "target": target, "value": value})
         return {"action": action, "download": None}
 
     async def target_metadata(self, target: str) -> dict[str, str]:
@@ -264,9 +262,7 @@ async def test_browser_act_delegates_small_action_surface_to_manager() -> None:
 
     assert result.ok is True
     assert result.output == {"action": "click", "download": None}
-    assert manager.acted == [
-        {"action": "click", "target": "text=Open menu", "value": None}
-    ]
+    assert manager.acted == [{"action": "click", "target": "text=Open menu", "value": None}]
 
 
 @pytest.mark.asyncio

@@ -28,7 +28,7 @@ class _FakeDownload:
 
 
 class _FakeDNSResolver:
-    async def resolve_public(self, _host: str) -> list[str]:
+    async def resolve_public(self, _host: str, **_kwargs: object) -> list[str]:
         return ["93.184.216.34"]
 
 
@@ -129,9 +129,7 @@ async def test_manager_save_download_sanitizes_name_and_writes_manifest(tmp_path
     assert record.source_url == "https://example.com/report.pdf"
 
     manifest_lines = (
-        (manager.downloads_dir / "downloads.jsonl")
-        .read_text(encoding="utf-8")
-        .splitlines()
+        (manager.downloads_dir / "downloads.jsonl").read_text(encoding="utf-8").splitlines()
     )
     manifest = json.loads(manifest_lines[-1])
     assert manifest["filename"] == "Quarterly Report.pdf"

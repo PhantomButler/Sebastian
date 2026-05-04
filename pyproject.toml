@@ -44,6 +44,8 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "types-aiofiles>=24.1",
+    "types-passlib>=1.7",
+    "types-python-jose>=3.5",
 ]
 
 [project.scripts]

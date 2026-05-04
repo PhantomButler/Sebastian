@@ -149,6 +149,7 @@ class BrowserSessionManager:
         except ValueError as exc:
             self._configuration_error = f"Browser upstream proxy is invalid: {exc}"
             upstream_proxy = None
+        self._has_upstream_proxy = upstream_proxy is not None
         self._dns_resolver = dns_resolver or _browser_dns_resolver_from_settings(
             settings,
             upstream_proxy,
@@ -180,7 +181,7 @@ class BrowserSessionManager:
             async with self._navigation_lock:
                 page: _GotoPage | None = None
                 try:
-                    await self._dns_resolver.resolve_public(requested.hostname)
+                    await self._resolve_browser_destination(requested.hostname)
                     page = await self.page()
                     response = await page.goto(
                         requested.url,
@@ -191,7 +192,7 @@ class BrowserSessionManager:
                             "Browser URL blocked: proxy rejected the main navigation"
                         )
                     final = validate_public_http_url(str(page.url))
-                    await self._dns_resolver.resolve_public(final.hostname)
+                    await self._resolve_browser_destination(final.hostname)
                 except BrowserSafetyError as exc:
                     async with self.lock:
                         if page is not None and self._page is page:
@@ -557,7 +558,7 @@ class BrowserSessionManager:
             return
         try:
             final = validate_public_http_url(str(getattr(page, "url", "") or ""))
-            await self._dns_resolver.resolve_public(final.hostname)
+            await self._resolve_browser_destination(final.hostname)
         except BrowserSafetyError:
             async with self.lock:
                 if self._page is page:
@@ -565,6 +566,12 @@ class BrowserSessionManager:
                 self._current_page_owned_by_browser_tool = False
             await self._close_page_after_block(page)
             raise
+
+    async def _resolve_browser_destination(self, host: str) -> list[str]:
+        return await self._dns_resolver.resolve_public(
+            host,
+            allow_proxy_fake_ip=self._has_upstream_proxy,
+        )
 
     async def _close_runtime_resources(self) -> None:
         async with self.lock:
@@ -625,8 +632,7 @@ class BrowserSessionManager:
             proxy_config = self._filtering_proxy.playwright_proxy_config()
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(
-                "Browser proxy failed to start; refusing direct network fallback: "
-                f"{exc}"
+                f"Browser proxy failed to start; refusing direct network fallback: {exc}"
             ) from exc
 
         server = proxy_config.get("server", "")
@@ -711,7 +717,7 @@ class BrowserSessionManager:
 
 def _default_playwright_factory() -> _PlaywrightStarter:
     try:
-        from playwright.async_api import async_playwright  # type: ignore[import-not-found]
+        from playwright.async_api import async_playwright
     except ImportError as exc:
         raise RuntimeError(
             "Playwright is not installed. Ask the user to run: "

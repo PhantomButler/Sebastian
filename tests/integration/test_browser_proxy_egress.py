@@ -156,9 +156,7 @@ async def test_http_absolute_form_request_to_forbidden_upstream_is_blocked(
         proxy,
         upstream,
         lambda port: (
-            f"GET http://evil.test:{port}/secret HTTP/1.1\r\n"
-            f"Host: evil.test:{port}\r\n"
-            "\r\n"
+            f"GET http://evil.test:{port}/secret HTTP/1.1\r\nHost: evil.test:{port}\r\n\r\n"
         ).encode(),
     )
 
@@ -189,9 +187,7 @@ async def test_connect_request_to_forbidden_upstream_is_blocked(
         proxy,
         upstream,
         lambda port: (
-            f"CONNECT evil.test:{port} HTTP/1.1\r\n"
-            f"Host: evil.test:{port}\r\n"
-            "\r\n"
+            f"CONNECT evil.test:{port} HTTP/1.1\r\nHost: evil.test:{port}\r\n\r\n"
         ).encode(),
     )
 
@@ -260,9 +256,7 @@ async def test_redirect_to_forbidden_upstream_is_blocked_before_forbidden_connec
         response = await _send_raw_proxy_request(
             filtering_proxy,
             (
-                f"GET {headers['location']} HTTP/1.1\r\n"
-                f"Host: evil.test:{upstream.port}\r\n"
-                "\r\n"
+                f"GET {headers['location']} HTTP/1.1\r\nHost: evil.test:{upstream.port}\r\n\r\n"
             ).encode(),
         )
 
@@ -275,4 +269,3 @@ async def test_redirect_to_forbidden_upstream_is_blocked_before_forbidden_connec
     finally:
         await filtering_proxy.aclose()
         await redirect_server.aclose()
-

@@ -170,7 +170,10 @@ class FilteringProxy:
                 reason="Browser proxy blocked invalid upstream port",
             )
         try:
-            resolved_ips = await self._resolver.resolve_public(host)
+            resolved_ips = await self._resolver.resolve_public(
+                host,
+                allow_proxy_fake_ip=self._upstream_proxy is not None,
+            )
         except BrowserSafetyError as exc:
             return ProxyDecision(
                 allowed=False,
@@ -184,7 +187,11 @@ class FilteringProxy:
             host=host,
             port=port,
             resolved_ips=resolved_ips,
-            reason="Browser proxy allowed upstream",
+            reason=(
+                "Browser proxy allowed upstream; upstream proxy will resolve hostname"
+                if not resolved_ips and self._upstream_proxy is not None
+                else "Browser proxy allowed upstream"
+            ),
         )
 
     def playwright_proxy_config(self) -> dict[str, str]:
@@ -208,7 +215,9 @@ class FilteringProxy:
             return
         try:
             decision = await self.check_connect(request.host, request.port)
-            if not decision.allowed or decision.upstream_ip is None:
+            if not decision.allowed or (
+                decision.upstream_ip is None and self._upstream_proxy is None
+            ):
                 await _write_response(client_writer, _BLOCKED_RESPONSE)
                 return
 
@@ -235,7 +244,7 @@ class FilteringProxy:
         decision: ProxyDecision,
     ) -> None:
         upstream = decision.upstream_ip
-        if upstream is None:
+        if upstream is None and self._upstream_proxy is None:
             await _write_response(client_writer, _BLOCKED_RESPONSE)
             return
         try:
@@ -269,7 +278,7 @@ class FilteringProxy:
         decision: ProxyDecision,
     ) -> None:
         upstream = decision.upstream_ip
-        if upstream is None:
+        if upstream is None and self._upstream_proxy is None:
             await _write_response(client_writer, _BLOCKED_RESPONSE)
             return
         try:

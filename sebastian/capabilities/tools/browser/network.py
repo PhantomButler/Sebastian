@@ -43,7 +43,12 @@ class BrowserDNSResolver:
         self._timeout_seconds = timeout_seconds
         self._doh_timeout_seconds = doh_timeout_seconds
 
-    async def resolve_public(self, host: str) -> list[str]:
+    async def resolve_public(
+        self,
+        host: str,
+        *,
+        allow_proxy_fake_ip: bool = False,
+    ) -> list[str]:
         normalized_host = normalize_hostname(host)
         literal = _ip_literal_or_none(normalized_host)
         if literal is not None:
@@ -72,6 +77,8 @@ class BrowserDNSResolver:
         try:
             normalized_answers = self._normalize_answers(normalized_host, answers)
         except _ProxyFakeIPOnly as exc:
+            if allow_proxy_fake_ip:
+                return []
             if self._dns_mode != "auto":
                 raise BrowserSafetyError(
                     f"Browser destination blocked: {normalized_host} resolves to proxy Fake-IP"

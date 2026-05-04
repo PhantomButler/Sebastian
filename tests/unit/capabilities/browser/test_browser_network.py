@@ -199,6 +199,22 @@ async def test_proxy_check_connect_uses_auto_dns_fake_ip_fallback() -> None:
 
 
 @pytest.mark.asyncio
+async def test_proxy_check_connect_allows_fake_ip_when_upstream_proxy_is_configured() -> None:
+    resolver = BrowserDNSResolver(
+        resolve=lambda host: ["198.18.0.17"],
+        doh_resolve=lambda host: (_ for _ in ()).throw(socket.gaierror()),
+        dns_mode="auto",
+    )
+    proxy = FilteringProxy(resolver, upstream_proxy="http://127.0.0.1:7890")
+
+    decision = await proxy.check_connect("www.google.com", 443)
+
+    assert decision.allowed is True
+    assert decision.resolved_ips == []
+    assert "upstream proxy will resolve hostname" in decision.reason
+
+
+@pytest.mark.asyncio
 async def test_proxy_check_connect_still_blocks_private_destinations() -> None:
     resolver = BrowserDNSResolver(
         resolve=lambda host: ["10.0.0.5"],

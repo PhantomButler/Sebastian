@@ -40,7 +40,7 @@ class _FakeDNSResolver:
         self.answer = answer
         self.hosts: list[str] = []
 
-    async def resolve_public(self, host: str) -> list[str]:
+    async def resolve_public(self, host: str, **_kwargs: object) -> list[str]:
         from sebastian.capabilities.tools.browser.safety import BrowserSafetyError
 
         self.hosts.append(host)

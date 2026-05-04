@@ -300,6 +300,12 @@ This preserves the Sebastian safety boundary while allowing public web traffic t
 user's chosen proxy route. The upstream proxy setting must be explicit; Sebastian should not
 silently trust arbitrary open local ports.
 
+In upstream proxy mode, a system DNS Fake-IP answer should not force Sebastian's own DoH
+lookup to succeed before navigation. Sebastian should still block explicit IP literals and
+ordinary private/loopback/link-local DNS answers, but hostnames that only resolve to proxy
+Fake-IP placeholders may be allowed so the configured upstream proxy can perform the final
+hostname resolution and connection.
+
 Permission tiers:
 
 - `browser_observe`: `MODEL_DECIDES`

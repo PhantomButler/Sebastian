@@ -1,10 +1,8 @@
-# mypy: disable-error-code=import-untyped
-
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -16,11 +14,11 @@ _bearer = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
-    return cast(str, _pwd_context.hash(password))
+    return _pwd_context.hash(password)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return cast(bool, _pwd_context.verify(plain, hashed))
+    return _pwd_context.verify(plain, hashed)
 
 
 class JwtSigner:
@@ -46,14 +44,11 @@ class JwtSigner:
     def encode(self, payload: dict[str, Any]) -> str:
         data = payload.copy()
         data["exp"] = datetime.now(UTC) + timedelta(minutes=self._expire_minutes)
-        return cast(str, jwt.encode(data, self._secret, algorithm=self._algorithm))
+        return jwt.encode(data, self._secret, algorithm=self._algorithm)
 
     def decode(self, token: str) -> dict[str, Any]:
         try:
-            return cast(
-                dict[str, Any],
-                jwt.decode(token, self._secret, algorithms=[self._algorithm]),
-            )
+            return jwt.decode(token, self._secret, algorithms=[self._algorithm])
         except JWTError as exc:
             raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
 
