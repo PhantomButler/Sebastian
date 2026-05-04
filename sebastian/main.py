@@ -6,6 +6,7 @@ import sys
 import typer
 import uvicorn
 
+from sebastian.cli import service
 from sebastian.cli.service import app as service_app
 
 app = typer.Typer(name="sebastian", help="Sebastian — Personal AI Butler")
@@ -94,6 +95,17 @@ def status() -> None:
     """Check whether Sebastian is running."""
     from sebastian.cli.daemon import is_running, pid_path, read_pid, remove_pid
     from sebastian.config import settings
+
+    try:
+        service_state = service.get_service_state()
+    except service.ServiceError as e:
+        typer.echo(f"⚠ 无法读取系统服务状态: {e}", err=True)
+    else:
+        if service_state.installed:
+            typer.echo(service_state.status_text)
+            if service_state.active:
+                return
+            typer.echo("提示：系统服务已安装但未运行；继续检查 legacy daemon。")
 
     pf = pid_path(settings.run_dir)
     pid = read_pid(pf)
