@@ -286,6 +286,29 @@ async def test_browser_act_blocks_high_impact_target_metadata() -> None:
 
 
 @pytest.mark.asyncio
+async def test_browser_act_blocks_form_submit_metadata() -> None:
+    from sebastian.capabilities.tools.browser import browser_act
+
+    manager = _FakeManager(_Metadata("https://example.com/", "Home", True))
+    manager.target_metadata_result = {
+        "tag": "button",
+        "text": "Continue",
+        "isSubmitControl": "true",
+        "formHasFields": "true",
+        "formInputTypes": "email password",
+        "formInputNames": "email password current-password",
+    }
+    fake_state = MagicMock(browser_manager=manager)
+
+    with patch.dict("sys.modules", {"sebastian.gateway.state": fake_state}):
+        result = await browser_act("click", target="button.continue")
+
+    assert result.ok is False
+    assert "blocked" in (result.error or "")
+    assert manager.acted == []
+
+
+@pytest.mark.asyncio
 async def test_browser_act_press_blocks_sensitive_target_metadata() -> None:
     from sebastian.capabilities.tools.browser import browser_act
 

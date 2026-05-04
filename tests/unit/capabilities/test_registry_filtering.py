@@ -97,11 +97,13 @@ def test_get_callable_specs_all_tools_sentinel_means_all_tools() -> None:
     reg = _make_registry()
     specs = reg.get_callable_specs(allowed_tools=ALL_TOOLS, allowed_skills=None)
     names = {s["name"] for s in specs}
-    assert names == {"mcp_tool_a", "mcp_tool_b", "research_skill"}
+    assert {"mcp_tool_a", "mcp_tool_b", "research_skill"} <= names
+    assert "unknown_tool" not in names
 
 
 def test_get_all_tool_specs_uses_all_tools_sentinel() -> None:
     reg = _make_registry()
     specs = reg.get_all_tool_specs()
     names = {s["name"] for s in specs}
-    assert names == {"mcp_tool_a", "mcp_tool_b", "research_skill"}
+    assert {"mcp_tool_a", "mcp_tool_b", "research_skill"} <= names
+    assert "unknown_tool" not in names

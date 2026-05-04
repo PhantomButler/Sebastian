@@ -27,6 +27,23 @@ class _FakeDownload:
         Path(path).write_bytes(b"%PDF-1.7\nreport")
 
 
+class _DownloadClickPage:
+    url = "https://example.com/download"
+
+    def __init__(self, manager: BrowserSessionManager) -> None:
+        self.manager = manager
+
+    async def click(self, target: str, *, timeout: int) -> object:
+        await self.manager.save_download(_FakeDownload("clicked.pdf"))
+        return object()
+
+    async def close(self) -> None:
+        return None
+
+    async def title(self) -> str:
+        return "Download"
+
+
 class _Upload:
     id = "att-1"
     size_bytes = 15
@@ -145,6 +162,25 @@ async def test_browser_downloads_list_omits_local_paths(tmp_path: Path) -> None:
     assert result
     assert result[0]["filename"] == "Quarterly Report.pdf"
     assert "path" not in result[0]
+
+
+@pytest.mark.asyncio
+async def test_manager_act_reports_download_triggered_by_action(tmp_path: Path) -> None:
+    manager = BrowserSessionManager(_settings(tmp_path))
+    manager._page = _DownloadClickPage(manager)  # type: ignore[assignment]
+    manager._current_page_owned_by_browser_tool = True
+
+    result = await manager.act(action="click", target="a.download")
+
+    assert result["download"] == {
+        "filename": "clicked.pdf",
+        "mime": "application/pdf",
+        "size": 15,
+        "mtime": result["download"]["mtime"],
+        "original": "clicked.pdf",
+        "source_url": "https://example.com/report.pdf",
+        "created_at": result["download"]["created_at"],
+    }
 
 
 @pytest.mark.asyncio

@@ -29,18 +29,45 @@ class _FakeFilteringProxy:
         return self.config.playwright_proxy_config()
 
 
+class _FakeDNSResolver:
+    def __init__(self, blocked_hosts: set[str] | None = None) -> None:
+        self.blocked_hosts = blocked_hosts or set()
+
+    async def resolve_public(self, host: str) -> list[str]:
+        from sebastian.capabilities.tools.browser.safety import BrowserSafetyError
+
+        if host in self.blocked_hosts or host in {"localhost", "127.0.0.1", "169.254.169.254"}:
+            raise BrowserSafetyError(
+                f"Browser destination blocked: {host} resolves to forbidden IP 127.0.0.1"
+            )
+        return ["93.184.216.34"]
+
+
+class _FakeResponse:
+    def __init__(self, status: int, headers: dict[str, str] | None = None) -> None:
+        self.status = status
+        self.headers = headers or {}
+
+
 class _FakePage:
-    def __init__(self, calls: list[str], *, final_url: str = "https://example.com/") -> None:
+    def __init__(
+        self,
+        calls: list[str],
+        *,
+        final_url: str = "https://example.com/",
+        goto_response: object | None = None,
+    ) -> None:
         self.calls = calls
         self.url = "about:blank"
         self.final_url = final_url
+        self.goto_response = goto_response
         self.closed = False
         self.handlers: dict[str, Any] = {}
 
     async def goto(self, url: str, *, timeout: int) -> object:
         self.calls.append(f"goto:{url}:{timeout}")
         self.url = self.final_url
-        return object()
+        return self.goto_response or object()
 
     async def click(self, target: str, *, timeout: int) -> object:
         self.calls.append(f"click:{target}:{timeout}")
@@ -308,6 +335,7 @@ async def test_open_launches_persistent_context_with_profile_dir_and_proxy(
         settings=settings,
         playwright_factory=_FakePlaywrightFactory(calls, context),
         filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     result = await manager.open("https://example.com/")
@@ -345,6 +373,7 @@ async def test_aclose_closes_proxy_after_browser_resources(tmp_path: Path) -> No
         settings=_settings(tmp_path),
         playwright_factory=_FakePlaywrightFactory(calls, context),
         filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(),
     )
     await manager.open("https://example.com/")
 
@@ -368,6 +397,7 @@ async def test_open_validates_requested_url_before_launch(tmp_path: Path) -> Non
         settings=_settings(tmp_path),
         playwright_factory=_FakePlaywrightFactory(calls, context),
         filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     result = await manager.open("http://127.0.0.1:8823/")
@@ -388,6 +418,7 @@ async def test_open_fails_closed_when_proxy_cannot_start(tmp_path: Path) -> None
         settings=_settings(tmp_path),
         playwright_factory=_FakePlaywrightFactory(calls, context),
         filtering_proxy=_FakeFilteringProxy(calls, fail_start=True),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     result = await manager.open("https://example.com/")
@@ -397,6 +428,55 @@ async def test_open_fails_closed_when_proxy_cannot_start(tmp_path: Path) -> None
     assert calls == ["proxy_start"]
     assert manager._context is None
     assert manager._page is None
+
+
+@pytest.mark.asyncio
+async def test_open_rejects_hostname_that_resolves_to_forbidden_ip(tmp_path: Path) -> None:
+    from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
+
+    calls: list[str] = []
+    context = _FakeContext(calls)
+    manager = BrowserSessionManager(
+        settings=_settings(tmp_path),
+        playwright_factory=_FakePlaywrightFactory(calls, context),
+        filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(blocked_hosts={"evil.test"}),
+    )
+
+    result = await manager.open("https://evil.test/")
+
+    assert result.ok is False
+    assert "blocked" in result.error.lower()
+    assert calls == []
+    assert manager._page is None
+
+
+@pytest.mark.asyncio
+async def test_open_rejects_proxy_block_response_for_main_navigation(tmp_path: Path) -> None:
+    from sebastian.capabilities.tools.browser.manager import BrowserSessionManager
+
+    calls: list[str] = []
+    page = _FakePage(
+        calls,
+        goto_response=_FakeResponse(
+            403,
+            {"x-sebastian-proxy-blocked": "1"},
+        ),
+    )
+    context = _FakeContext(calls, page=page)
+    manager = BrowserSessionManager(
+        settings=_settings(tmp_path),
+        playwright_factory=_FakePlaywrightFactory(calls, context),
+        filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(),
+    )
+
+    result = await manager.open("https://example.com/")
+
+    assert result.ok is False
+    assert "proxy rejected" in result.error
+    assert manager._page is None
+    assert page.closed is True
 
 
 @pytest.mark.asyncio
@@ -410,6 +490,7 @@ async def test_open_rejects_forbidden_final_url_after_redirect(tmp_path: Path) -
         settings=_settings(tmp_path),
         playwright_factory=_FakePlaywrightFactory(calls, context),
         filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     result = await manager.open("https://example.com/redirect")
@@ -431,6 +512,7 @@ async def test_concurrent_open_shares_single_context_and_page(tmp_path: Path) ->
         settings=_settings(tmp_path),
         playwright_factory=_FakePlaywrightFactory(calls, context),
         filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     first, second = await asyncio.gather(
@@ -457,6 +539,7 @@ async def test_concurrent_open_serializes_navigation_on_shared_page(tmp_path: Pa
         settings=_settings(tmp_path),
         playwright_factory=_FakePlaywrightFactory(calls, context),
         filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     first_task = asyncio.create_task(manager.open("https://example.com/one"))
@@ -499,6 +582,7 @@ async def test_open_returns_deterministic_missing_browser_message(tmp_path: Path
         settings=_settings(tmp_path),
         playwright_factory=_MissingBrowserFactory(),
         filtering_proxy=_FakeFilteringProxy([]),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     result = await manager.open("https://example.com/")
@@ -532,6 +616,7 @@ async def test_open_returns_deterministic_missing_deps_message(tmp_path: Path) -
         settings=_settings(tmp_path),
         playwright_factory=_MissingDepsFactory(),
         filtering_proxy=_FakeFilteringProxy([]),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     result = await manager.open("https://example.com/")
@@ -571,6 +656,7 @@ async def test_download_recorder_uses_page_download_event(tmp_path: Path) -> Non
         settings=_settings(tmp_path),
         playwright_factory=_FakePlaywrightFactory(calls, context),
         filtering_proxy=_FakeFilteringProxy(calls),
+        dns_resolver=_FakeDNSResolver(),
     )
 
     await manager.open("https://example.com/")

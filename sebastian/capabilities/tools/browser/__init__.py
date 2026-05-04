@@ -35,7 +35,15 @@ _ALLOWED_ACTIONS = {
     "reload",
 }
 _CREDENTIAL_PATTERN = re.compile(
-    r"(password|passwd|passcode|secret|token|api[_-]?key|credential|auth)",
+    r"(password|passwd|passcode|secret|token|api[_-]?key|credential|auth|login|signin|sign in)",
+    re.IGNORECASE,
+)
+_PAYMENT_PATTERN = re.compile(
+    r"\b(pay|payment|purchase|buy|checkout|card|credit|cc-number|cvv|billing|iban)\b",
+    re.IGNORECASE,
+)
+_ACCOUNT_SETTINGS_PATTERN = re.compile(
+    r"\b(account|settings|profile|email|phone|address|delete|remove|destroy|transfer)\b",
     re.IGNORECASE,
 )
 
@@ -267,8 +275,14 @@ def _target_metadata_sensitive(action: str, metadata: dict[str, str] | None) -> 
     haystack = " ".join(str(value) for value in metadata.values() if value)
     if _CREDENTIAL_PATTERN.search(haystack):
         return True
+    if _PAYMENT_PATTERN.search(haystack) or _ACCOUNT_SETTINGS_PATTERN.search(haystack):
+        return True
     input_type = metadata.get("type", "").lower()
     if action in {"type", "press", "select"} and input_type in {"password", "hidden"}:
+        return True
+    if action == "click" and metadata.get("isSubmitControl", "").lower() == "true":
+        return True
+    if action == "click" and metadata.get("formHasFields", "").lower() == "true":
         return True
     if action == "click" and re.search(
         r"\b(delete|remove|destroy|pay|purchase|buy|checkout|send|submit|transfer|confirm)\b",

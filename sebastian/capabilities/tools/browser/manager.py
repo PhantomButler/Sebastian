@@ -12,6 +12,7 @@ from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
+from sebastian.capabilities.tools.browser.network import BrowserDNSResolver
 from sebastian.capabilities.tools.browser.proxy import FilteringProxy, ProxyConfig
 from sebastian.capabilities.tools.browser.safety import BrowserSafetyError, validate_public_http_url
 from sebastian.config import Settings
@@ -130,6 +131,7 @@ class BrowserSessionManager:
         *,
         playwright_factory: _PlaywrightFactory | None = None,
         filtering_proxy: _FilteringProxyHandle | None = None,
+        dns_resolver: BrowserDNSResolver | None = None,
     ) -> None:
         self.lock = asyncio.Lock()
         self.settings = settings
@@ -138,6 +140,7 @@ class BrowserSessionManager:
         self.screenshots_dir: Path = settings.browser_screenshots_dir
         self._playwright_factory = playwright_factory or _default_playwright_factory
         self._filtering_proxy = filtering_proxy or FilteringProxy()
+        self._dns_resolver = dns_resolver or BrowserDNSResolver()
         self._startup_lock = asyncio.Lock()
         self._navigation_lock = asyncio.Lock()
         self._operation_lock = asyncio.Lock()
@@ -159,12 +162,18 @@ class BrowserSessionManager:
             async with self._navigation_lock:
                 page: _GotoPage | None = None
                 try:
+                    await self._dns_resolver.resolve_public(requested.hostname)
                     page = await self.page()
-                    await page.goto(
+                    response = await page.goto(
                         requested.url,
                         timeout=self.settings.sebastian_browser_timeout_ms,
                     )
+                    if _is_proxy_block_response(response):
+                        raise BrowserSafetyError(
+                            "Browser URL blocked: proxy rejected the main navigation"
+                        )
                     final = validate_public_http_url(str(page.url))
+                    await self._dns_resolver.resolve_public(final.hostname)
                 except BrowserSafetyError as exc:
                     async with self.lock:
                         if page is not None and self._page is page:
@@ -264,6 +273,8 @@ class BrowserSessionManager:
                     "Browser action blocked because the target looks sensitive or high-impact"
                 )
             timeout = self.settings.sebastian_browser_timeout_ms
+            previous_downloads = await self.list_download_records()
+            previous_tasks = set(self._download_tasks)
             if action == "click":
                 if not target:
                     raise ValueError("click requires target")
@@ -299,7 +310,11 @@ class BrowserSessionManager:
                 await page.reload(timeout=timeout)
             else:
                 raise ValueError(f"Unknown browser action: {action}")
-        return {"action": action, "download": None}
+            downloads = await self._collect_downloads_after_action(
+                previous_tasks,
+                previous_downloads,
+            )
+        return {"action": action, "download": downloads[0] if downloads else None}
 
     async def target_metadata(self, target: str) -> dict[str, str]:
         async with self._operation_lock:
@@ -484,6 +499,32 @@ class BrowserSessionManager:
                 formAction: el.form ? (el.form.getAttribute('action') || '') : '',
                 formMethod: el.form ? (el.form.getAttribute('method') || '') : '',
                 buttonType: (el.getAttribute('type') || '').toLowerCase(),
+                isSubmitControl: !!el.form && (
+                    (el.tagName || '').toLowerCase() === 'button'
+                        ? ((el.getAttribute('type') || 'submit').toLowerCase() === 'submit')
+                        : ((el.getAttribute('type') || '').toLowerCase() === 'submit')
+                ),
+                formInputTypes: el.form
+                    ? Array.from(el.form.querySelectorAll('input, textarea, select'))
+                        .map(input => (
+                            input.getAttribute('type') || input.tagName || ''
+                        ).toLowerCase())
+                        .join(' ')
+                    : '',
+                formInputNames: el.form
+                    ? Array.from(el.form.querySelectorAll('input, textarea, select'))
+                        .map(input => [
+                            input.getAttribute('name') || '',
+                            input.id || '',
+                            input.getAttribute('autocomplete') || '',
+                            input.getAttribute('aria-label') || '',
+                            input.getAttribute('placeholder') || '',
+                        ].join(' '))
+                        .join(' ')
+                    : '',
+                formHasFields: el.form
+                    ? String(el.form.querySelectorAll('input, textarea, select').length > 0)
+                    : '',
             })"""
         )
         if not isinstance(data, dict):
@@ -528,6 +569,20 @@ class BrowserSessionManager:
                 logger.warning("playwright stop failed during shutdown: %s", exc)
         if download_tasks:
             await asyncio.gather(*download_tasks, return_exceptions=True)
+
+    async def _collect_downloads_after_action(
+        self,
+        previous_tasks: set[asyncio.Task[BrowserDownloadRecord | None]],
+        previous_downloads: list[BrowserDownloadRecord],
+    ) -> list[dict[str, object]]:
+        await asyncio.sleep(0)
+        new_tasks = set(self._download_tasks) - previous_tasks
+        if new_tasks:
+            await asyncio.gather(*new_tasks, return_exceptions=True)
+        previous_names = {record.filename for record in previous_downloads}
+        records = await self.list_download_records()
+        downloads = [record for record in records if record.filename not in previous_names]
+        return [_public_download(record) for record in downloads]
 
     async def _start_proxy_fail_closed(self) -> dict[str, str]:
         try:
@@ -648,6 +703,34 @@ def _playwright_error_message(exc: Exception) -> str | None:
             "python -m playwright install-deps chromium"
         )
     return None
+
+
+def _is_proxy_block_response(response: object) -> bool:
+    if response is None:
+        return False
+    status = getattr(response, "status", None)
+    if callable(status):
+        status = status()
+    if status != 403:
+        return False
+    headers = getattr(response, "headers", None)
+    if callable(headers):
+        headers = headers()
+    if not isinstance(headers, dict):
+        return False
+    return str(headers.get("x-sebastian-proxy-blocked", "")).lower() in {"1", "true", "yes"}
+
+
+def _public_download(record: BrowserDownloadRecord) -> dict[str, object]:
+    return {
+        "filename": record.filename,
+        "mime": record.mime,
+        "size": record.size,
+        "mtime": record.mtime,
+        "original": record.original,
+        "source_url": record.source_url,
+        "created_at": record.created_at,
+    }
 
 
 def _sanitize_filename(filename: str) -> str:

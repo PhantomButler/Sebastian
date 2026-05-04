@@ -21,6 +21,7 @@ _MAX_HEADER_BYTES = 64 * 1024
 _BLOCKED_RESPONSE = (
     b"HTTP/1.1 403 Forbidden\r\n"
     b"Content-Type: text/plain; charset=utf-8\r\n"
+    b"X-Sebastian-Proxy-Blocked: 1\r\n"
     b"Connection: close\r\n"
     b"Content-Length: 46\r\n"
     b"\r\n"
