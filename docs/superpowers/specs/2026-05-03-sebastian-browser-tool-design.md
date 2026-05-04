@@ -53,14 +53,13 @@ The package has three internal layers:
   cannot bypass safety rules.
 - Native tools: expose a small set of registered tools to the model.
 
-The browser tools are globally registered by the existing tool loader, but they must be marked
-with explicit Sebastian-only visibility/execution metadata, for example `sebastian_only=True`
-or an equivalent `visible_to_agent_types={"sebastian"}` rule. Sebastian also receives them in
-its `allowed_tools` list in `sebastian/orchestrator/sebas.py`, but `allowed_tools` is not the
-security boundary by itself: extension sub-agents currently get `allowed_tools=None` when their
-manifest omits the field, which means unrestricted by the normal loader rules. Therefore
-PolicyGate/spec generation must hide browser tools from any non-Sebastian context and execution
-must reject direct non-Sebastian browser tool calls even when `allowed_tools is None`.
+The browser tools are globally registered by the existing tool loader, but only Sebastian
+receives them in its `allowed_tools` list in `sebastian/orchestrator/sebas.py`. The allowlist
+model should remain the single tool visibility/execution mechanism. To avoid accidental
+unrestricted extension sub-agents, the meaning of missing allowlists must be tightened:
+`allowed_tools=None` should mean no capability tools at the registry/PolicyGate boundary, and
+an explicit `ALL` sentinel should be required for all tools. Sub-agent manifests that omit
+`allowed_tools` should resolve to protocol tools only, not all globally registered tools.
 
 Because persistent browser state can contain the owner's authenticated sessions, the first
 version should be owner-only. Guest or family identities must not be able to drive the shared
@@ -447,8 +446,9 @@ as test-authorized.
 ## Acceptance Criteria
 
 - Sebastian can use the browser tools; Aide, Forge, built-in sub-agents, and extension
-  sub-agents cannot see or execute them, including the `allowed_tools=None` unrestricted
-  extension-agent case.
+  sub-agents cannot see or execute them. Missing `allowed_tools` resolves to no capability
+  tools/protocol-only for sub-agents, and unrestricted access requires an explicit all-tools
+  sentinel rather than `None`.
 - Under the current single-owner auth model, only authenticated owner turns can reach browser
   tools. Before guest/family users exist, browser access must either remain owner-only or
   `ToolCallContext` must carry user identity for an explicit owner gate.

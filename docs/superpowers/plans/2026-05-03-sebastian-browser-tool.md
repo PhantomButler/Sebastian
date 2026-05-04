@@ -506,40 +506,52 @@ def tool(..., review_preflight: ToolReviewPreflightFn | None = None) -> Callable
 
 Existing tool registrations must continue to work.
 
-- [ ] **Step 4.5: Add Sebastian-only tool visibility metadata**
+- [ ] **Step 4.5: Make unrestricted tool access explicit**
 
-Browser tools must be hidden from and denied to all non-Sebastian agents, including extension sub-agents whose manifest omits `allowed_tools` and therefore currently gets `allowed_tools=None`.
+Do not add a second browser-specific permission system such as `sebastian_only=True`. Browser tools should stay governed by the existing `allowed_tools` visibility/execution model. The safety gap is that the current model treats `allowed_tools=None` as unrestricted, so extension sub-agents whose manifests omit `allowed_tools` can accidentally see every globally registered tool.
 
-Add a small metadata field such as:
+Change the tool allowlist semantics to be explicit:
 
-```python
-visible_to_agent_types: frozenset[str] | None = None
-```
+- `allowed_tools=None`: no capability tools are allowed at the registry/PolicyGate boundary.
+- `allowed_tools=set()`: no capability tools are allowed.
+- `allowed_tools={"Read", ...}`: only those tools are allowed.
+- `allowed_tools=ALL_TOOLS` or an equivalent explicit sentinel: all tools are allowed.
 
-or a narrower boolean such as:
+Manifest loading should preserve sub-agent protocol behavior without reopening the unrestricted hole:
 
-```python
-sebastian_only: bool = False
-```
+- Missing `allowed_tools` in a sub-agent manifest should become protocol tools only, not unrestricted all tools.
+- `allowed_tools = []` should remain protocol tools only.
+- `allowed_tools = ["Read"]` should remain `Read` plus protocol tools.
+- If an agent truly needs every tool, require an explicit manifest value such as `allowed_tools = "ALL"` or another documented sentinel.
 
-If this metadata lives on `ToolSpec`, update `ToolSpec.__slots__`, constructor, and `@tool(...)` decorator arguments together. `sebastian_only=True` is not supported by the current `@tool` decorator; it is introduced by this task if that boolean design is chosen. If the implementation chooses `visible_to_agent_types` instead, all browser tool declarations in Task 7 must use that final API name consistently.
+Implementation notes:
+
+- Add a small typed sentinel/alias, for example `ALL_TOOLS`, rather than using `None` to mean all.
+- Update `ToolSpecProvider.get_callable_specs()`, `CapabilityRegistry.get_tool_specs()`, `CapabilityRegistry.get_callable_specs()`, `PolicyGate.get_callable_specs()`, and `PolicyGate.call()` to use the new semantics consistently.
+- Keep `get_all_tool_specs()` as the compatibility helper that explicitly passes `ALL_TOOLS`.
+- Update `sebastian/agents/_loader.py`, `sebastian/agents/README.md`, and tests that currently assert `None` means unrestricted.
 
 Visibility requirements:
 
-- Spec generation must not expose browser tools when `agent_type != "sebastian"`, even if `allowed_tools is None`.
-- `PolicyGate.call()` must also reject browser tool execution when `context.agent_type != "sebastian"`, as a defense against direct/hallucinated calls.
-- Sebastian remains the only agent that may see and call browser tools after Task 7 adds them to `Sebastian.allowed_tools`.
+- Spec generation must not expose browser tools to any agent unless that agent's effective `allowed_tools` explicitly contains the browser tool names or explicitly uses the all-tools sentinel.
+- `PolicyGate.call()` must reject browser tool execution when the effective allowlist is missing, empty, or does not include the requested browser tool.
+- Sebastian remains the only built-in agent that may see and call browser tools because Task 7 adds them only to `Sebastian.allowed_tools`.
 
-Implementation may thread `agent_type` through `ToolSpecProvider.get_callable_specs()` / `PolicyGate.get_callable_specs()` / `AgentLoop`, or use an equivalent explicit deny/visibility hook. Do not implement this as only an Aide/Forge manifest change.
+Do not implement a separate `ToolSpec.sebastian_only` or `visible_to_agent_types` system unless a later product requirement needs per-tool audience metadata beyond allowlists.
 
 Add tests:
 
 ```python
-def test_subagent_with_unrestricted_allowed_tools_cannot_see_browser_tools():
-    specs = gate.get_callable_specs(allowed_tools=None, allowed_skills=None, agent_type="custom_subagent")
+def test_get_callable_specs_none_means_no_tools():
+    specs = gate.get_callable_specs(allowed_tools=None, allowed_skills=set())
     assert "browser_open" not in {s["name"] for s in specs}
+    assert all(s["name"] not in ALL_NATIVE_TOOL_NAMES for s in specs)
 
-async def test_non_sebastian_context_cannot_call_browser_tool_even_when_allowed_tools_none():
+def test_subagent_missing_allowed_tools_gets_protocol_tools_only(tmp_path):
+    configs = load_agents(extra_dirs=[tmp_path])
+    assert set(configs["noscope"].allowed_tools) == PROTOCOL_TOOLS
+
+async def test_context_with_none_allowed_tools_cannot_call_browser_tool():
     ctx = ToolCallContext(agent_type="custom_subagent", allowed_tools=None, ...)
     result = await gate.call("browser_open", {"url": "https://example.com", "reason": "browse"}, ctx)
     assert result.ok is False
@@ -1235,7 +1247,6 @@ In `__init__.py`, register:
     description=...,
     permission_tier=PermissionTier.MODEL_DECIDES,
     display_name="Browser Open",
-    sebastian_only=True,  # or visible_to_agent_types={"sebastian"} if Task 3 chose that API
 )
 async def browser_open(url: str) -> ToolResult: ...
 
@@ -1245,12 +1256,11 @@ async def browser_open(url: str) -> ToolResult: ...
     permission_tier=PermissionTier.MODEL_DECIDES,
     display_name="Browser Observe",
     review_preflight=browser_observe_review_preflight,
-    sebastian_only=True,  # or visible_to_agent_types={"sebastian"} if Task 3 chose that API
 )
 async def browser_observe(max_chars: int = 4000) -> ToolResult: ...
 ```
 
-Also implement `browser_act`, `browser_capture`, and `browser_downloads` with the same Sebastian-only metadata and explicit `display_name` values. Suggested display names:
+Also implement `browser_act`, `browser_capture`, and `browser_downloads` with explicit `display_name` values. Access is controlled by the effective `allowed_tools` set, not by tool-decorator audience metadata. Suggested display names:
 
 - `Browser Act`
 - `Browser Capture`
@@ -1346,8 +1356,8 @@ Do not add them to sub-agent manifests.
 Add focused visibility tests at this point with the real browser tool specs registered:
 
 - Sebastian sees `browser_open` when `Sebastian.allowed_tools` includes it.
-- A custom/extension sub-agent with `allowed_tools=None` does not see any `browser_*` specs.
-- A non-Sebastian `ToolCallContext` cannot execute `browser_open` even if it calls the tool name directly.
+- A custom/extension sub-agent whose manifest omits `allowed_tools` resolves to protocol tools only and does not see any `browser_*` specs.
+- A `ToolCallContext` with `allowed_tools=None` cannot execute `browser_open`; unrestricted execution requires the explicit all-tools sentinel.
 - All five browser tool specs have non-empty `display_name` values.
 - Browser tools return readable `ToolResult(ok=False, error=...)` messages for missing manager, missing Chromium/deps, blocked URL/action, timeout, download failure, and unexpected Playwright/runtime exceptions.
 
@@ -1517,7 +1527,7 @@ mypy sebastian/
 ./gradlew :app:testDebugUnitTest --tests "*TimelineMapperTest*" --tests "*ChatViewModelTest*"
 ```
 
-- [ ] Confirm browser tools are only visible/executable in Sebastian context: not in Aide/Forge, not in built-in sub-agents, and not visible or callable by unrestricted extension sub-agents with `allowed_tools=None`.
+- [ ] Confirm browser tools are only visible/executable through explicit `allowed_tools`: Sebastian lists them, Aide/Forge and built-in sub-agents do not, missing extension-agent `allowed_tools` resolves to protocol tools only, and `allowed_tools=None` does not mean unrestricted.
 
 - [ ] Confirm hard egress tests prove a forbidden upstream server receives no request when DNS resolves to loopback/private/link-local/metadata destinations.
 
