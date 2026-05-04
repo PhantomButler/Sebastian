@@ -262,17 +262,33 @@ def reinstall_editable(install_dir: Path) -> None:
 
 def _try_restart_daemon(printer: Callable[[str], None]) -> None:
     """If a Sebastian daemon is running, stop it and start a new one."""
-    from sebastian.cli.daemon import is_running, pid_path, read_pid, stop_process
+    from sebastian.cli import daemon, service
     from sebastian.config import settings
 
-    pf = pid_path(settings.run_dir)
-    pid = read_pid(pf)
-    if pid is None or not is_running(pid):
+    if service.is_service_active():
+        printer("→ 检测到 Sebastian 系统服务，正在重启...")
+        try:
+            service.restart()
+        except service.ServiceError as e:
+            printer(f"⚠ 系统服务重启失败：{e}，请手动运行 `sebastian service restart`。")
+            return
+        printer("✓ Sebastian 系统服务已重启")
+        return
+
+    pf = daemon.pid_path(settings.run_dir)
+    pid = daemon.read_pid(pf)
+    if pid is None or not daemon.is_running(pid):
+        if service.is_service_installed():
+            printer(
+                "提示：检测到 Sebastian 系统服务已安装但未运行，"
+                "请运行 `sebastian service start`。"
+            )
+            return
         printer("提示：未检测到后台进程，请手动运行 `sebastian serve`。")
         return
 
     printer(f"→ 检测到后台进程 (PID {pid})，正在重启...")
-    stop_process(pf)
+    daemon.stop_process(pf)
 
     cmd = [sys.executable, "-m", "sebastian", "serve", "--daemon"]
     proc = subprocess.run(cmd, check=False)

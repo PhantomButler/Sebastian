@@ -11,6 +11,7 @@ import io
 import os
 import tarfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -231,6 +232,64 @@ def test_prune_backups_keeps_newest(tmp_path: Path, _patch_backup_parent: Path) 
 # ---------------------------------------------------------------------------
 # orchestration
 # ---------------------------------------------------------------------------
+
+
+def test_try_restart_daemon_restarts_active_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    messages: list[str] = []
+
+    monkeypatch.setattr("sebastian.cli.service.is_service_active", lambda: True)
+    restart = MagicMock()
+    monkeypatch.setattr("sebastian.cli.service.restart", restart)
+
+    updater._try_restart_daemon(messages.append)
+
+    restart.assert_called_once_with()
+    assert any("系统服务已重启" in message for message in messages)
+
+
+def test_try_restart_daemon_falls_back_to_pid_daemon(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    messages: list[str] = []
+
+    monkeypatch.setattr("sebastian.cli.service.is_service_active", lambda: False)
+    monkeypatch.setattr(
+        "sebastian.cli.daemon.pid_path",
+        lambda run_dir: tmp_path / "sebastian.pid",
+    )
+    monkeypatch.setattr("sebastian.cli.daemon.read_pid", lambda path: 123)
+    monkeypatch.setattr("sebastian.cli.daemon.is_running", lambda pid: True)
+    stop = MagicMock()
+    monkeypatch.setattr("sebastian.cli.daemon.stop_process", stop)
+    run = MagicMock(return_value=MagicMock(returncode=0))
+    monkeypatch.setattr(updater.subprocess, "run", run)
+
+    updater._try_restart_daemon(messages.append)
+
+    stop.assert_called_once()
+    assert run.call_args.args[0][-3:] == ["sebastian", "serve", "--daemon"]
+
+
+def test_try_restart_daemon_prints_service_guidance_when_service_installed_but_inactive(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    messages: list[str] = []
+
+    monkeypatch.setattr("sebastian.cli.service.is_service_active", lambda: False)
+    monkeypatch.setattr("sebastian.cli.service.is_service_installed", lambda: True)
+    monkeypatch.setattr(
+        "sebastian.cli.daemon.pid_path",
+        lambda run_dir: tmp_path / "sebastian.pid",
+    )
+    monkeypatch.setattr("sebastian.cli.daemon.read_pid", lambda path: None)
+
+    updater._try_restart_daemon(messages.append)
+
+    assert any("sebastian service start" in message for message in messages)
 
 
 def test_run_update_already_latest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
