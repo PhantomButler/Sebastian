@@ -6,6 +6,16 @@
 
 集中管理全局运行时配置。基于 `pydantic-settings` 将环境变量（`.env` 文件或系统环境）映射为强类型的 `Settings` 对象，并提供 `ensure_data_dir()` 初始化数据目录结构。全局单例 `settings` 在进程启动时创建，其他模块统一从此处 import，不直接读取 `os.environ`。
 
+## 配置来源顺序
+
+运行时配置按以下顺序覆盖，越靠前优先级越高：
+
+1. Real process environment variables.
+2. `SEBASTIAN_ENV_FILE`, when set by launchd or manually.
+3. `<SEBASTIAN_DATA_DIR>/.env`, defaulting to `~/.sebastian/.env`.
+4. Repository working-directory `.env` for source-tree development.
+5. Settings defaults.
+
 ## 目录结构
 
 ```

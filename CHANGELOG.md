@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added
+- 新增 `sebastian version` / `sebastian --version`，方便部署和升级后确认当前版本。
+
+### Changed
+- `sebastian status` 和 `sebastian update` 现在识别 systemd/launchd 服务模式，避免开机自启服务运行中却显示未运行，升级后也会自动重启 active 服务。
+- 已安装服务会读取稳定配置文件 `<SEBASTIAN_DATA_DIR>/.env`，默认路径为 `~/.sebastian/.env`，避免用户把运行时配置误写到源码仓库 `.env` 后服务不生效。
+
 ## [0.5.8] - 2026-05-04
 
 ### Added

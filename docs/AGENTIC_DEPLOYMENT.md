@@ -332,6 +332,14 @@ cd ~/.sebastian/app
 .venv/bin/sebastian update
 ```
 
+After `sebastian update`, Sebastian restarts an active systemd/launchd service
+automatically. If the service is installed but inactive, run
+`sebastian service start`.
+
+For installed runtime configuration, create or edit
+`${SEBASTIAN_DATA_DIR:-$HOME/.sebastian}/.env`. Do not rely on repository
+working directory `.env` after installation.
+
 If setup opens a browser, ask the user to complete the owner name and password.
 If the machine is headless, use:
 
@@ -345,6 +353,9 @@ Verify installation:
 ~/.sebastian/app/.venv/bin/sebastian status
 ~/.sebastian/app/.venv/bin/sebastian serve --host 127.0.0.1 --port 8823
 ```
+
+If auto-start service was installed, prefer
+`~/.sebastian/app/.venv/bin/sebastian service status` for service diagnostics.
 
 If you start `serve` in the foreground for verification, stop it with Ctrl+C
 after confirming the setup page or server starts correctly.

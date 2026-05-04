@@ -178,6 +178,8 @@ Typer CLI 子命令与进程守护工具。
 
 - `daemon.py`：PID 文件管理与进程存活检测
 - `init_wizard.py`：无头初始化向导（`sebastian init --headless`）
+- `main.py`：Typer CLI 入口；`serve/status/update/version` 顶层命令；挂载 `service` 子命令。
+- `cli/service.py`：systemd/launchd 服务安装、状态、重启。
 - `updater.py`：自升级逻辑（`sebastian update`），含 SHA256 校验、原子替换、失败回滚
 
 适合在以下场景进入：

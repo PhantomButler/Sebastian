@@ -11,6 +11,8 @@ cli/
 ├── __init__.py       # 包定义
 ├── daemon.py         # PID 文件管理与进程生命周期
 ├── init_wizard.py    # 无头初始化向导（sebastian init --headless）
+├── service.py        # systemd/launchd 服务安装、状态、重启
+├── service_templates.py # systemd unit / launchd plist 模板渲染
 └── updater.py        # 自升级逻辑（sebastian update）
 ```
 
@@ -49,7 +51,7 @@ cli/
 6. 解压到 staging 目录，原子交换 `MANAGED_ENTRIES`（sebastian/、pyproject.toml、scripts/ 等）
 7. `pip install -e .` 更新依赖
 8. 失败自动回滚到备份，成功后清理旧备份
-9. 若检测到后台进程在运行，自动重启
+9. 若检测到 active systemd/launchd 服务，优先自动重启服务；其次重启 legacy PID daemon；否则打印精确的手动启动指引
 
 关键常量：
 - `MANAGED_ENTRIES`：更新时替换的顶层条目，`.venv`/`.env`/`secret.key` 等不会被触碰
@@ -61,8 +63,13 @@ cli/
 |------|------|------|
 | `sebastian serve` | 启动 Gateway（检测 setup mode） | `main.py` |
 | `sebastian stop` | 终止后台进程 | `daemon.stop_process()` |
+| `sebastian status` | 查看运行状态（识别 service / daemon） | `main.py` |
 | `sebastian init --headless` | 无头服务器初始化 | `init_wizard.run_interactive_headless_cli()` |
 | `sebastian update` | 自升级到最新 release | `updater.run_update()` |
+| `sebastian version` | 输出当前 Sebastian 版本 | `main.py` |
+| `sebastian --version` | 输出当前 Sebastian 版本 | `main.py` |
+| `sebastian service restart` | 重启 systemd/launchd 服务 | `service.restart()` |
+| `sebastian service status` | 查看 systemd/launchd 服务状态与日志提示 | `service.status()` |
 
 ## 修改导航
 

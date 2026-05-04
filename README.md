@@ -123,12 +123,33 @@ After setup, open the Android app and go to **Settings → Providers**. Add your
 ## 🧭 Common Commands
 
 ```bash
+sebastian version          # Show the installed Sebastian version
 sebastian serve              # Start the server (first launch opens setup wizard)
 sebastian serve --host 0.0.0.0 --port 8823   # Custom bind address
 sebastian init --headless    # Initialize without browser (for headless servers)
+sebastian status             # Check process/service status
+sebastian service status     # Check system service diagnostics
 sebastian update             # Update to latest release (auto-rollback on failure)
 sebastian update --check     # Check for updates without installing
 ```
+
+Typical deployment operations:
+
+```bash
+sebastian version
+sebastian status
+sebastian service status
+sebastian update
+```
+
+For service-managed installs, `sebastian update` automatically restarts an
+active systemd/launchd service after the update completes.
+
+Installed runtime config lives at `~/.sebastian/.env`. If
+`SEBASTIAN_DATA_DIR` is customized, runtime config lives at
+`<SEBASTIAN_DATA_DIR>/.env`. Edit that file for settings used by the service,
+such as `SEBASTIAN_BROWSER_UPSTREAM_PROXY`. Repository `.env` remains for local
+source-tree development only.
 
 ## 🖥️ Running as a System Service
 
