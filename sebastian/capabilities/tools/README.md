@@ -136,6 +136,26 @@ return ToolResult(
 协议工具由 `_loader.py` 根据 Agent 角色自动追加，无需手动填写。
 当前自动注入规则见 `sebastian/agents/_loader.py` 的 `_SUBAGENT_PROTOCOL_TOOLS`。
 
+## `allowed_tools` 白名单语义
+
+`allowed_tools` 是工具可见性和执行校验的唯一边界，不要为单个工具再引入第二套 audience 标记（例如 `sebastian_only=True`）。
+
+推荐语义：
+
+| 值 | 含义 |
+|----|------|
+| `None` | 不允许任何能力工具。 |
+| `set()` / `[]` | 不允许任何能力工具。 |
+| `{"Read", "Bash"}` / `["Read", "Bash"]` | 只允许列出的能力工具。 |
+| `ALL_TOOLS` / manifest 显式 all-tools sentinel | 允许全量工具。必须显式写出，不能用 `None` 代替。 |
+
+Sub-agent manifest 省略 `allowed_tools` 时，应解析为「协议工具 only」，不是 unrestricted all tools。若某个扩展 Agent 确实需要全量工具，manifest 必须使用明确的 all-tools sentinel，并在代码审查中确认风险。
+
+这条规则需要在两层同时成立：
+
+1. **LLM 可见性层**：`get_callable_specs()` 不应在 `allowed_tools=None` 时返回全量能力工具。
+2. **执行校验层**：`PolicyGate.call()` 应拒绝不在有效白名单内的工具名，即使模型或调用方直接传入工具名。
+
 ## 三档权限详解
 
 | 档位 | 常量 | 行为 | 适用场景 |
