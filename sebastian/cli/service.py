@@ -253,9 +253,7 @@ def _uninstall_launchd() -> None:
 def _launchd_state() -> ServiceState:
     plist = _launchd_plist_path()
     command_hints = (
-        "\n"
-        "  status:  launchctl list com.sebastian\n"
-        "  restart: sebastian service restart"
+        "\n  status:  launchctl list com.sebastian\n  restart: sebastian service restart"
     )
     if not plist.exists():
         return ServiceState(

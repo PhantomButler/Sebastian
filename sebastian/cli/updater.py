@@ -285,10 +285,7 @@ def _try_restart_daemon(printer: Callable[[str], None]) -> None:
         return
 
     if service_state.installed:
-        printer(
-            "提示：检测到 Sebastian 系统服务已安装但未运行，"
-            "请运行 `sebastian service start`。"
-        )
+        printer("提示：检测到 Sebastian 系统服务已安装但未运行，请运行 `sebastian service start`。")
         return
 
     pf = daemon.pid_path(settings.run_dir)
