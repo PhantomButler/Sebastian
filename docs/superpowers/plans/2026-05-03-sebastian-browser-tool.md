@@ -1486,7 +1486,7 @@ mypy sebastian/
 ./gradlew :app:testDebugUnitTest --tests "*TimelineMapperTest*" --tests "*ChatViewModelTest*"
 ```
 
-- [ ] Confirm browser tools are only in Sebastian's `allowed_tools`, not Aide/Forge.
+- [ ] Confirm browser tools are only visible/executable in Sebastian context: not in Aide/Forge, not in built-in sub-agents, and not visible or callable by unrestricted extension sub-agents with `allowed_tools=None`.
 
 - [ ] Confirm hard egress tests prove a forbidden upstream server receives no request when DNS resolves to loopback/private/link-local/metadata destinations.
 
