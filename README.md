@@ -40,6 +40,16 @@ Sebastian is a goal-driven personal AI butler system. Tell it what you want — 
       <br><sub><b>Memory system — remembers you across sessions</b></sub>
     </td>
   </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/asset/switch_butler.gif" alt="Switching between different AI butlers in the app">
+      <br><sub><b>Butler switching — move between specialized agents</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/asset/browser_search.gif" alt="Browser search capability in the Sebastian app">
+      <br><sub><b>Browser capability — search and inspect the web</b></sub>
+    </td>
+  </tr>
 </table>
 
 ---
