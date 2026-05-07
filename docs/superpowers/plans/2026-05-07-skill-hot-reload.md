@@ -33,8 +33,22 @@
 - Modify `sebastian/core/base_agent.py`
   - Add `_skill_prompt_version`.
   - Add `rebuild_system_prompt()` and `mark_skill_prompt_version()`.
-  - Add first-session skill reload check using an in-memory `(agent_context, session_id)` set.
-  - Call the check after resolving `worker_session` and before assembling the effective prompt.
+  - Add first-session skill reload check using per-session locks and an in-memory
+    `(agent_context, session_id)` completed set.
+  - Capture a `system_prompt_snapshot` after hot reload and pass it into `_stream_inner()`.
+  - Pass `allowed_skills` into tool dispatch.
+
+- Modify `sebastian/core/stream_helpers.py`
+  - Accept `allowed_skills` in `dispatch_tool_call()`.
+  - Include `allowed_skills` in `ToolCallContext`.
+
+- Modify `sebastian/permissions/types.py`
+  - Add `SkillAllowlist` and `allowed_skills` to `ToolCallContext`.
+
+- Modify `sebastian/permissions/gate.py`
+  - Stage 0 checks native/MCP tools against `allowed_tools`.
+  - Stage 0 checks skills against `allowed_skills`.
+  - Full skill names are required, e.g. `skill__flight_search`.
 
 - Modify `sebastian/orchestrator/sebas.py`
   - Keep/adjust the Sebastian override of `rebuild_system_prompt()`.
@@ -47,10 +61,17 @@
   - New tests for fingerprinting, changed/unchanged reloads, deletion, scripts ignored, startup seed, concurrency.
 
 - Test `tests/unit/core/test_base_agent.py` or `tests/unit/core/test_prompt_builder.py`
-  - Add agent lifecycle tests for new-session check, stale version catch-up, subsequent-turn skip, and current-agent-only rebuild.
+  - Add agent lifecycle tests for new-session check, stale version catch-up, subsequent-turn skip, current-agent-only rebuild, prompt snapshot, and same-session concurrency.
 
-- Optional docs update
-  - Update `sebastian/capabilities/skills/README.md` only if implementation changes the documented extension behavior materially.
+- Test `tests/unit/core/test_stream_helpers.py`
+  - Add coverage that `allowed_skills` is copied into `ToolCallContext`.
+
+- Test `tests/unit/identity/test_policy_gate.py`
+  - Add Stage 0 skill allowlist tests.
+
+- Required docs update
+  - Update `sebastian/capabilities/skills/README.md` with the new-session hot reload lifecycle and full-name `allowed_skills = ["skill__name"]` convention.
+  - Update `sebastian/capabilities/README.md` to mention skills refresh at new-session boundaries.
 
 ---
 
@@ -172,6 +193,32 @@ def test_replace_skill_specs_does_not_delete_colliding_mcp_tool() -> None:
     assert "skill__travel" in {s["name"] for s in reg.get_tool_specs(ALL_TOOLS)}
     assert "skill__travel" not in {s["name"] for s in reg.get_skill_specs()}
 ```
+
+Add call priority test:
+
+```python
+@pytest.mark.asyncio
+async def test_call_priority_is_native_then_mcp_then_skill() -> None:
+    reg = CapabilityRegistry()
+
+    async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
+        return ToolResult(ok=True, output="mcp")
+
+    reg.register_mcp_tool(
+        "skill__travel",
+        {"name": "skill__travel", "description": "mcp travel", "input_schema": {}},
+        mcp_fn,
+    )
+    reg.register_skill_specs(
+        [{"name": "skill__travel", "description": "skill travel", "input_schema": {}}]
+    )
+
+    result = await reg.call("skill__travel")
+
+    assert result.output == "mcp"
+```
+
+If the file does not already import `pytest`, add it at the top.
 
 - [ ] **Step 2: Run tests and verify they fail**
 
@@ -367,6 +414,7 @@ class SkillReloadResult:
     changed: bool
     version: int
     fingerprint: SkillFingerprint
+    error: str | None = None
 ```
 
 Add scanner:
@@ -463,7 +511,12 @@ class SkillHotReloader:
                 self._registry.replace_skill_specs(specs)
             except Exception:
                 logger.warning("Skill hot reload failed", exc_info=True)
-                return SkillReloadResult(False, self._version, self._fingerprint)
+                return SkillReloadResult(
+                    changed=False,
+                    version=self._version,
+                    fingerprint=self._fingerprint,
+                    error="Skill hot reload failed",
+                )
 
             self._fingerprint = latest
             self._version += 1
@@ -479,6 +532,7 @@ Add tests for:
 - adding or editing `_ignored/SKILL.md` does not trigger reload
 - concurrent `maybe_reload()` calls
 - startup seed catches edits made after seed but before first `maybe_reload()`
+- reload failure leaves the fingerprint/version unchanged and the next call retries
 
 Use:
 
@@ -581,7 +635,186 @@ git commit -m "feat(gateway): 启动时初始化 Skill 热加载器" -m "Co-Auth
 
 ---
 
-## Task 4: Add Agent Prompt Versioning and New-Session Check
+## Task 4: Close Skill Execution Allowlist Loop
+
+**Files:**
+- Modify: `sebastian/capabilities/registry.py`
+- Modify: `sebastian/permissions/types.py`
+- Modify: `sebastian/permissions/gate.py`
+- Modify: `sebastian/core/stream_helpers.py`
+- Modify: `sebastian/core/base_agent.py`
+- Test: `tests/unit/identity/test_policy_gate.py`
+- Test: `tests/unit/core/test_stream_helpers.py`
+
+- [ ] **Step 1: Write failing PolicyGate skill allowlist tests**
+
+In `tests/unit/identity/test_policy_gate.py`, add:
+
+```python
+@pytest.mark.asyncio
+async def test_call_allows_skill_from_allowed_skills() -> None:
+    from sebastian.permissions.gate import PolicyGate
+
+    registry = MagicMock()
+    registry.is_skill = MagicMock(return_value=True)
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="skill"))
+    reviewer = MagicMock()
+    approval_manager = MagicMock()
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
+
+    context = ToolCallContext(
+        task_goal="",
+        session_id="s1",
+        task_id=None,
+        agent_type="sebastian",
+        allowed_tools=None,
+        allowed_skills=frozenset({"skill__flight_search"}),
+    )
+
+    result = await gate.call("skill__flight_search", {}, context)
+
+    assert result.ok is True
+    registry.call.assert_awaited_once()
+```
+
+Add rejection test:
+
+```python
+@pytest.mark.asyncio
+async def test_call_rejects_skill_outside_allowed_skills() -> None:
+    from sebastian.permissions.gate import PolicyGate
+
+    registry = MagicMock()
+    registry.is_skill = MagicMock(return_value=True)
+    registry.call = AsyncMock()
+    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
+
+    context = ToolCallContext(
+        task_goal="",
+        session_id="s1",
+        task_id=None,
+        agent_type="sebastian",
+        allowed_tools=ALL_TOOLS,
+        allowed_skills=frozenset(),
+    )
+
+    result = await gate.call("skill__flight_search", {}, context)
+
+    assert result.ok is False
+    assert "allowed_skills" in (result.error or "")
+    registry.call.assert_not_called()
+```
+
+- [ ] **Step 2: Write failing stream helper propagation test**
+
+In `tests/unit/core/test_stream_helpers.py`, add or extend a dispatch test so fake
+`gate_call` captures `context.allowed_skills`.
+
+Expected assertion:
+
+```python
+assert captured_context.allowed_skills == frozenset({"skill__flight_search"})
+```
+
+- [ ] **Step 3: Add `allowed_skills` to `ToolCallContext`**
+
+In `sebastian/permissions/types.py`:
+
+```python
+SkillAllowlist = Set[str] | None
+...
+allowed_skills: SkillAllowlist = None
+```
+
+Use an immutable `frozenset` at call sites when constructing the context, matching existing
+`allowed_tools` behavior.
+
+- [ ] **Step 4: Add registry skill predicate**
+
+In `CapabilityRegistry`, add:
+
+```python
+def is_skill(self, name: str) -> bool:
+    return name in self._skill_tools and not self._name_collides_with_tool(name)
+```
+
+This lets `PolicyGate` decide whether Stage 0 should use `allowed_tools` or
+`allowed_skills`.
+
+- [ ] **Step 5: Update PolicyGate Stage 0**
+
+In `PolicyGate.call()`:
+
+```python
+is_skill = self._registry.is_skill(tool_name)
+if is_skill:
+    if not _skill_allowed(tool_name, context.allowed_skills):
+        return ToolResult(
+            ok=False,
+            error=f"Skill {tool_name!r} not in allowed_skills for agent {context.agent_type!r}",
+        )
+else:
+    if not _tool_allowed(tool_name, context.allowed_tools):
+        return ToolResult(
+            ok=False,
+            error=f"Tool {tool_name!r} not in allowed_tools for agent {context.agent_type!r}",
+        )
+```
+
+Add helper:
+
+```python
+def _skill_allowed(name: str, allowed: set[str] | None) -> bool:
+    return allowed is None or name in allowed
+```
+
+Do not accept bare skill names such as `flight_search`. Full registered names like
+`skill__flight_search` are required.
+
+- [ ] **Step 6: Thread `allowed_skills` through dispatch**
+
+In `dispatch_tool_call()` signature, add:
+
+```python
+allowed_skills: Any,
+```
+
+When constructing `ToolCallContext`, add:
+
+```python
+allowed_skills=(
+    frozenset(allowed_skills)
+    if allowed_skills is not None
+    else None
+),
+```
+
+In `BaseAgent._stream_inner`, pass:
+
+```python
+allowed_skills=self.allowed_skills,
+```
+
+- [ ] **Step 7: Run focused permission tests**
+
+Run:
+
+```bash
+pytest tests/unit/identity/test_policy_gate.py tests/unit/core/test_stream_helpers.py -q
+```
+
+Expected: pass.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add sebastian/capabilities/registry.py sebastian/permissions/types.py sebastian/permissions/gate.py sebastian/core/stream_helpers.py sebastian/core/base_agent.py tests/unit/identity/test_policy_gate.py tests/unit/core/test_stream_helpers.py
+git commit -m "feat(permissions): 打通 Skill 执行白名单" -m "Co-Authored-By: gpt 5.5 <noreply@openai.com>"
+```
+
+---
+
+## Task 5: Add Agent Prompt Versioning and New-Session Check
 
 **Files:**
 - Modify: `sebastian/core/base_agent.py`
@@ -632,6 +865,7 @@ In `BaseAgent.__init__`, initialize:
 ```python
 self._skill_prompt_version = 0
 self._skill_reload_checked_sessions: set[tuple[str, str]] = set()
+self._skill_reload_locks: dict[tuple[str, str], asyncio.Lock] = {}
 ```
 
 Add methods near `build_system_prompt()`:
@@ -733,6 +967,22 @@ assert "## Available Sub-Agents" in obj.system_prompt
 assert "- forge:" in obj.system_prompt
 ```
 
+Add test: running turn uses prompt snapshot captured before async memory/todo waits.
+
+Use a fake `_stream_inner()` or captured `_loop.stream` call. Arrange:
+
+1. `agent.system_prompt = "old prompt"`.
+2. `run_streaming()` performs the hot reload check and captures snapshot.
+3. During a later awaited memory/todo hook, mutate `agent.system_prompt = "new prompt"`.
+4. Assert the provider receives `"old prompt"` in the effective system prompt.
+
+Add test: concurrent first turns for the same `(agent_context, session_id)` do not skip the
+reload check while the first one is in flight.
+
+Use a fake reloader whose `maybe_reload()` waits on an `asyncio.Event`. Start two
+`run_streaming()` calls for the same session. Assert the second call waits for the first
+check to complete and does not proceed with a stale prompt.
+
 - [ ] **Step 5: Implement `_maybe_refresh_skills_for_new_session()`**
 
 In `BaseAgent`, add:
@@ -746,31 +996,50 @@ async def _maybe_refresh_skills_for_new_session(
     key = (agent_context, session_id)
     if key in self._skill_reload_checked_sessions:
         return
-    self._skill_reload_checked_sessions.add(key)
+    lock = self._skill_reload_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        if key in self._skill_reload_checked_sessions:
+            return
 
-    try:
-        import sebastian.gateway.state as state
+        try:
+            import sebastian.gateway.state as state
 
-        reloader = getattr(state, "skill_hot_reloader", None)
-    except ImportError:
-        return
+            reloader = getattr(state, "skill_hot_reloader", None)
+        except ImportError:
+            return
 
-    if reloader is None:
-        return
+        if reloader is None:
+            self._skill_reload_checked_sessions.add(key)
+            return
 
-    result = await reloader.maybe_reload()
-    if self._skill_prompt_version != result.version:
-        self.rebuild_system_prompt()
-        self.mark_skill_prompt_version(result.version)
+        result = await reloader.maybe_reload()
+        if self._skill_prompt_version != result.version:
+            self.rebuild_system_prompt()
+            self.mark_skill_prompt_version(result.version)
+
+        if result.error is None:
+            self._skill_reload_checked_sessions.add(key)
 ```
+
+If `maybe_reload()` fails, it returns the last-known-good version without advancing. The
+implementation must avoid finalizing the checked key when `result.error is not None`.
 
 In `run_streaming()`, after `worker_session` is resolved and before `TURN_RECEIVED` or before prompt assembly, call:
 
 ```python
 await self._maybe_refresh_skills_for_new_session(session_id, agent_context)
+system_prompt_snapshot = self.system_prompt
 ```
 
 Prefer before `TURN_RECEIVED` so the turn's entire execution sees a settled capability state.
+
+Then pass `system_prompt_snapshot` into `_stream_inner()` and change `_stream_inner()` to use:
+
+```python
+sections = [system_prompt_snapshot]
+```
+
+Do not read `self.system_prompt` inside `_stream_inner()` after awaits.
 
 - [ ] **Step 6: Run focused core tests**
 
@@ -791,29 +1060,38 @@ git commit -m "feat(core): 新会话首轮刷新 Skill prompt" -m "Co-Authored-B
 
 ---
 
-## Task 5: Documentation and Regression Run
+## Task 6: Documentation and Regression Run
 
 **Files:**
-- Modify if needed: `sebastian/capabilities/skills/README.md`
-- Modify if needed: `sebastian/capabilities/README.md`
+- Modify: `sebastian/capabilities/skills/README.md`
+- Modify: `sebastian/capabilities/README.md`
 - Modify if needed: `docs/architecture/spec/capabilities/INDEX.md` or relevant spec index only if project convention requires integrating this planned spec now
 
-- [ ] **Step 1: Check whether README needs update**
+- [ ] **Step 1: Update capabilities README files**
 
 Read:
 
 ```bash
 sed -n '1,180p' sebastian/capabilities/skills/README.md
+sed -n '1,140p' sebastian/capabilities/README.md
 ```
 
-If it still says skills are loaded only at startup, update it. If it already describes dynamic user extension loading without lifecycle specifics, keep it unchanged.
+Update `sebastian/capabilities/skills/README.md` to document:
+
+- Skills load at gateway startup and refresh at new-session first-turn boundaries.
+- Only `SKILL.md` participates in hot reload fingerprinting.
+- Scripts under a skill directory are naturally fresh because `Bash` executes files each time.
+- `allowed_skills` entries must use full registered names, e.g. `skill__flight_search`.
+
+Update `sebastian/capabilities/README.md` to mention the new-session skill refresh lifecycle
+instead of implying skills are only startup-scanned.
 
 - [ ] **Step 2: Run focused unit suites**
 
 Run:
 
 ```bash
-pytest tests/unit/capabilities/test_registry_filtering.py tests/unit/capabilities/test_skills_loader.py tests/unit/capabilities/test_skill_hot_reload.py tests/unit/core/test_prompt_builder.py tests/unit/core/test_base_agent.py -q
+pytest tests/unit/capabilities/test_registry_filtering.py tests/unit/capabilities/test_skills_loader.py tests/unit/capabilities/test_skill_hot_reload.py tests/unit/identity/test_policy_gate.py tests/unit/core/test_stream_helpers.py tests/unit/core/test_prompt_builder.py tests/unit/core/test_base_agent.py -q
 ```
 
 Expected: pass.
@@ -823,7 +1101,7 @@ Expected: pass.
 Run:
 
 ```bash
-ruff check sebastian/capabilities/registry.py sebastian/capabilities/skills/hot_reload.py sebastian/gateway/state.py sebastian/gateway/app.py sebastian/core/base_agent.py sebastian/orchestrator/sebas.py tests/unit/capabilities/test_registry_filtering.py tests/unit/capabilities/test_skill_hot_reload.py tests/unit/core/test_base_agent.py tests/unit/core/test_prompt_builder.py
+ruff check sebastian/capabilities/registry.py sebastian/capabilities/skills/hot_reload.py sebastian/gateway/state.py sebastian/gateway/app.py sebastian/core/base_agent.py sebastian/core/stream_helpers.py sebastian/orchestrator/sebas.py sebastian/permissions/types.py sebastian/permissions/gate.py tests/unit/capabilities/test_registry_filtering.py tests/unit/capabilities/test_skill_hot_reload.py tests/unit/identity/test_policy_gate.py tests/unit/core/test_stream_helpers.py tests/unit/core/test_base_agent.py tests/unit/core/test_prompt_builder.py
 ```
 
 Expected: pass.
@@ -833,7 +1111,7 @@ Expected: pass.
 Run:
 
 ```bash
-ruff format --check sebastian/capabilities/registry.py sebastian/capabilities/skills/hot_reload.py sebastian/gateway/state.py sebastian/gateway/app.py sebastian/core/base_agent.py sebastian/orchestrator/sebas.py tests/unit/capabilities/test_registry_filtering.py tests/unit/capabilities/test_skill_hot_reload.py tests/unit/core/test_base_agent.py tests/unit/core/test_prompt_builder.py
+ruff format --check sebastian/capabilities/registry.py sebastian/capabilities/skills/hot_reload.py sebastian/gateway/state.py sebastian/gateway/app.py sebastian/core/base_agent.py sebastian/core/stream_helpers.py sebastian/orchestrator/sebas.py sebastian/permissions/types.py sebastian/permissions/gate.py tests/unit/capabilities/test_registry_filtering.py tests/unit/capabilities/test_skill_hot_reload.py tests/unit/identity/test_policy_gate.py tests/unit/core/test_stream_helpers.py tests/unit/core/test_base_agent.py tests/unit/core/test_prompt_builder.py
 ```
 
 Expected: pass. If it fails, run the same command without `--check`, then re-run tests.
@@ -850,10 +1128,8 @@ Expected: command completes successfully.
 
 - [ ] **Step 6: Commit docs or formatting follow-up if needed**
 
-Only if Task 5 changed files:
-
 ```bash
-git add <specific changed files>
+git add sebastian/capabilities/skills/README.md sebastian/capabilities/README.md
 git commit -m "docs(capabilities): 更新 Skill 热加载说明" -m "Co-Authored-By: gpt 5.5 <noreply@openai.com>"
 ```
 
@@ -888,4 +1164,6 @@ Summarize:
 - New/edited/deleted `SKILL.md` under user extensions is picked up before a new session's first turn.
 - Existing sessions do not scan every turn.
 - No model-visible refresh tool was added.
+- Skill visibility and execution use the same `allowed_skills` full-name allowlist.
+- Running turns use a prompt snapshot and cannot observe another session's later prompt rebuild.
 - Script files remain naturally hot because `Bash` executes them fresh.

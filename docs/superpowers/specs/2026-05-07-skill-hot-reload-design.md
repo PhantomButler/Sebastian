@@ -46,6 +46,8 @@ a new Sebastian version or growing the internal native tool list.
 6. Keep tool specs and the `## Available Skills` prompt section consistent within a turn.
 7. Preserve script-backed skill behavior: scripts are executed fresh by `Bash` and do not
    need skill registry reload when their contents change.
+8. Keep skill visibility and execution permissions aligned: if a model can see an allowed
+   skill, the permission gate must allow that same skill call.
 
 ## Non-Goals
 
@@ -79,6 +81,21 @@ new-session check catches the current agent up before its provider request start
 
 ## Components
 
+### Skill Naming and Allowlists
+
+Skill names are model-visible tool names. A `SKILL.md` with `name: flight_search` registers
+as `skill__flight_search`.
+
+All allowlists must use the full registered tool name:
+
+```toml
+allowed_skills = ["skill__flight_search"]
+```
+
+Do not accept both `flight_search` and `skill__flight_search` in this phase. Using one
+spelling avoids hidden normalization rules and keeps prompt filtering, tool specs, and
+execution checks aligned.
+
 ### `SkillHotReloader`
 
 Responsibility: detect `SKILL.md` changes and refresh registry skill specs.
@@ -107,6 +124,7 @@ class SkillReloadResult:
     changed: bool
     version: int
     fingerprint: SkillFingerprint
+    error: str | None = None
 ```
 
 Fingerprint input:
@@ -147,6 +165,13 @@ class CapabilityRegistry:
 
 `get_tool_specs()` reads native + MCP tools. `get_skill_specs()` reads only `_skill_tools`.
 This removes skill/MCP collision ambiguity and makes replacement a pure skill operation.
+
+Collision rule:
+
+- Native and MCP tools win over skills.
+- `get_skill_specs()` must hide skills whose names collide with native or MCP tool names.
+- `get_callable_specs()` must never return duplicate tool names.
+- `call()` keeps execution priority as native → MCP → skill.
 
 If a broader refactor is deferred, `replace_skill_specs()` must still explicitly preserve
 non-skill MCP entries and include collision tests.
@@ -199,6 +224,58 @@ sessions for the same agent type, but it does not rebuild other agent type singl
 Concurrent turns already running on the same singleton continue with the effective prompt
 they assembled before their provider request. A rebuild affects later turns only.
 
+To make that true, `BaseAgent.run_streaming()` must capture a `system_prompt_snapshot`
+immediately after the new-session hot reload check and before scheduling `_stream_inner()`.
+`_stream_inner()` must accept that immutable snapshot and build the effective prompt from
+it. It must not read `self.system_prompt` after awaiting todo, resident memory, or dynamic
+memory retrieval, because another session may rebuild the singleton prompt during those
+awaits.
+
+Pseudo-flow:
+
+```python
+await self._maybe_refresh_skills_for_new_session(session_id, agent_context)
+system_prompt_snapshot = self.system_prompt
+...
+await self._stream_inner(..., system_prompt_snapshot=system_prompt_snapshot)
+```
+
+Inside `_stream_inner()`:
+
+```python
+sections = [system_prompt_snapshot]
+```
+
+### Skill Execution Allowlist
+
+Skill visibility and execution must share the same allowlist semantics.
+
+Current LLM visibility path:
+
+```text
+AgentLoop → PolicyGate.get_callable_specs(allowed_tools, allowed_skills)
+```
+
+Execution path must be extended to match:
+
+```text
+BaseAgent._stream_inner
+→ dispatch_tool_call(..., allowed_tools, allowed_skills)
+→ ToolCallContext(allowed_tools=..., allowed_skills=...)
+→ PolicyGate.call() Stage 0
+```
+
+Stage 0 rules:
+
+- Native/MCP tools are checked against `allowed_tools`.
+- Skills are checked against `allowed_skills`.
+- `allowed_skills=None` means all registered skills are executable.
+- `allowed_skills=set()` means no skills are executable.
+- Full skill names are required, for example `skill__flight_search`.
+
+This closes the failure mode where the model can see a skill spec but the permission gate
+rejects the call because the name is not present in `allowed_tools`.
+
 ### New-Session Trigger
 
 Invoke skill hot reload before the first LLM turn of a new agent/session pair.
@@ -221,6 +298,22 @@ Preferred first-turn detection:
 The in-memory fallback is acceptable because the reloader's fingerprint check is cheap and
 idempotent. After process restart, an old session may be treated as unseen once, but reload
 still happens only if `SKILL.md` files changed.
+
+The in-memory check must be concurrency-safe per `(agent_context, session_id)`. Do not mark
+a key as checked before the reload and prompt-version catch-up complete. Otherwise, two
+near-simultaneous first turns for the same session can let the second turn skip the check
+and continue with a stale prompt.
+
+Use a per-key async lock:
+
+```python
+_skill_reload_locks: dict[tuple[str, str], asyncio.Lock]
+```
+
+Inside the lock, re-check whether the key has already completed. Only add the key to
+`_skill_reload_checked_sessions` after `maybe_reload()` and any required prompt rebuild
+finish. If `maybe_reload()` fails and returns the last known version, keep the key unchecked
+so a later attempt can retry.
 
 Pseudo-flow:
 
@@ -298,6 +391,9 @@ If reload fails:
 - Continue the current turn using the last known good registry and prompt.
 - Return the last known good version so agents do not mark prompts as refreshed against a
   failed registry update.
+- Set `SkillReloadResult.error` to a human-readable failure summary.
+- The session-side first-turn marker must not be finalized on failure, so a later attempt
+  can retry the reload.
 
 Invalid individual skills should follow existing `load_skills()` behavior. This spec does
 not add validation beyond the current loader rules.
@@ -315,17 +411,32 @@ Unit coverage:
 - Concurrent `maybe_reload()` calls do not produce duplicate or partial registry state.
 - `CapabilityRegistry.replace_skill_specs()` removes deleted skills and preserves non-skill MCP/native entries.
 - Skill/MCP name collisions are deterministic and do not delete or misclassify MCP tools.
+- `CapabilityRegistry.call()` priority remains native → MCP → skill.
 - Startup seeds the initial fingerprint, so changes made after gateway startup but before
   the first new session are detected.
+- `maybe_reload()` failure keeps the old fingerprint/version and a later call retries.
 
 Agent-level coverage:
 
 - New session first turn invokes hot reload check.
 - Existing session subsequent turn does not invoke hot reload check.
+- Concurrent first turns for the same `(agent_context, session_id)` do not skip reload
+  before the first check completes.
 - When reload changes specs, only the current agent type singleton's prompt is rebuilt.
 - If another agent type already advanced the skill version, a later new session on this
   agent type rebuilds its prompt even when `maybe_reload()` returns `changed=False`.
+- A running turn uses the `system_prompt_snapshot` captured before `_stream_inner()` awaits
+  memory/todo sections, even if another session rebuilds the singleton prompt.
 - Sebastian's prompt rebuild keeps its sub-agent section.
+- A skill visible through `allowed_skills` can execute through `PolicyGate.call()`.
+- A skill not in `allowed_skills` is rejected even if it is not governed by `allowed_tools`.
+
+Docs coverage:
+
+- `sebastian/capabilities/skills/README.md` must document the new-session hot reload
+  lifecycle and the full-name `allowed_skills = ["skill__name"]` convention.
+- `sebastian/capabilities/README.md` must mention that skills are refreshed at new-session
+  boundaries rather than only at gateway startup.
 
 ## Future Work
 
