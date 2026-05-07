@@ -2,9 +2,248 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+class FakeSkillReloader:
+    def __init__(self, version: int = 0) -> None:
+        self.version = version
+        self.calls = 0
+
+    async def maybe_reload(self):
+        from sebastian.capabilities.skills.hot_reload import SkillReloadResult
+
+        self.calls += 1
+        return SkillReloadResult(
+            changed=False,
+            version=self.version,
+            fingerprint=(),
+        )
+
+
+async def _create_session_agent(tmp_path: Path, session_id: str = "skill-session"):
+    from sebastian.capabilities.registry import CapabilityRegistry
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+        allowed_tools: list[str] | None = []
+        allowed_skills: list[str] | None = None
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id=session_id, agent_type="sebastian", title="t"))
+    agent = TestAgent(CapabilityRegistry(), store)
+    return agent, store
+
+
+def _install_done_stream(agent) -> None:
+    from sebastian.core.stream_events import TurnDone
+
+    async def done_stream(*args, **kwargs):
+        yield TurnDone(full_text="done")
+
+    agent._loop.stream = done_stream  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_skill_hot_reload_new_session_first_turn_calls_reloader_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sebastian.gateway.state as state
+
+    agent, _ = await _create_session_agent(tmp_path)
+    _install_done_stream(agent)
+    reloader = FakeSkillReloader()
+    monkeypatch.setattr(state, "skill_hot_reloader", reloader)
+
+    await agent.run_streaming("hello", "skill-session")
+
+    assert reloader.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_skill_hot_reload_same_session_second_turn_does_not_call_again(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sebastian.gateway.state as state
+
+    agent, _ = await _create_session_agent(tmp_path)
+    _install_done_stream(agent)
+    reloader = FakeSkillReloader()
+    monkeypatch.setattr(state, "skill_hot_reloader", reloader)
+
+    await agent.run_streaming("hello", "skill-session")
+    await agent.run_streaming("again", "skill-session")
+
+    assert reloader.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_skill_hot_reload_stale_prompt_version_rebuilds_when_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sebastian.gateway.state as state
+
+    agent, _ = await _create_session_agent(tmp_path)
+    _install_done_stream(agent)
+    reloader = FakeSkillReloader(version=2)
+    monkeypatch.setattr(state, "skill_hot_reloader", reloader)
+    agent.rebuild_system_prompt = MagicMock(wraps=agent.rebuild_system_prompt)
+
+    await agent.run_streaming("hello", "skill-session")
+
+    agent.rebuild_system_prompt.assert_called_once()
+    assert agent._skill_prompt_version == 2
+
+
+@pytest.mark.asyncio
+async def test_skill_hot_reload_rebuilds_only_current_agent_instance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sebastian.gateway.state as state
+
+    agent_a, _ = await _create_session_agent(tmp_path / "a", "session-a")
+    agent_b, _ = await _create_session_agent(tmp_path / "b", "session-b")
+    _install_done_stream(agent_a)
+    _install_done_stream(agent_b)
+    reloader = FakeSkillReloader(version=2)
+    monkeypatch.setattr(state, "skill_hot_reloader", reloader)
+    agent_a.rebuild_system_prompt = MagicMock(wraps=agent_a.rebuild_system_prompt)
+    agent_b.rebuild_system_prompt = MagicMock(wraps=agent_b.rebuild_system_prompt)
+
+    await agent_a.run_streaming("hello", "session-a")
+
+    agent_a.rebuild_system_prompt.assert_called_once()
+    agent_b.rebuild_system_prompt.assert_not_called()
+
+
+def test_sebastian_rebuild_system_prompt_keeps_sub_agent_section() -> None:
+    from sebastian.orchestrator.sebas import Sebastian
+
+    gate = MagicMock()
+    gate.get_tool_specs.return_value = []
+    gate.get_skill_specs.return_value = []
+    obj = Sebastian.__new__(Sebastian)
+    obj._gate = gate
+    obj._agent_registry = {
+        "forge": SimpleNamespace(agent_type="forge", description="编写代码"),
+    }
+
+    with patch("sebastian.core.base_agent.settings") as mock_settings:
+        mock_settings.workspace_dir = Path("/fake/ws")
+        obj.rebuild_system_prompt()
+
+    assert "## Available Sub-Agents" in obj.system_prompt
+    assert "- forge:" in obj.system_prompt
+
+
+@pytest.mark.asyncio
+async def test_run_streaming_uses_prompt_and_tool_snapshots_before_async_waits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sebastian.gateway.state as state
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.core.stream_events import TurnDone
+    from sebastian.core.types import Session
+    from sebastian.store.session_store import SessionStore
+
+    class TestAgent(BaseAgent):
+        name = "sebastian"
+        allowed_tools: list[str] | None = []
+        allowed_skills: list[str] | None = None
+
+    gate = MagicMock()
+    gate.get_tool_specs.return_value = []
+    gate.get_skill_specs.return_value = []
+    old_tools = [{"name": "skill__old", "description": "old", "input_schema": {}}]
+    new_tools = [{"name": "skill__new", "description": "new", "input_schema": {}}]
+    gate.get_callable_specs.return_value = old_tools
+
+    store = SessionStore(tmp_path / "sessions")
+    await store.create_session(Session(id="snapshot-session", agent_type="sebastian", title="t"))
+    agent = TestAgent(gate, store)
+    agent.system_prompt = "old prompt"
+    monkeypatch.setattr(state, "skill_hot_reloader", FakeSkillReloader())
+    captured: dict[str, object] = {}
+
+    async def mutating_todos(session_id: str, agent_context: str) -> str:
+        agent.system_prompt = "new prompt"
+        gate.get_callable_specs.return_value = new_tools
+        return ""
+
+    async def fake_stream(system_prompt, messages, **kwargs):
+        captured["system_prompt"] = system_prompt
+        captured["tools_snapshot"] = kwargs.get("tools_snapshot")
+        yield TurnDone(full_text="done")
+
+    agent._session_todos_section = mutating_todos  # type: ignore[method-assign]
+    agent._loop.stream = fake_stream  # type: ignore[attr-defined]
+
+    await agent.run_streaming("hello", "snapshot-session")
+
+    assert captured["system_prompt"] == "old prompt"
+    assert captured["tools_snapshot"] == old_tools
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_turns_wait_for_skill_reload_before_streaming(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sebastian.gateway.state as state
+    from sebastian.capabilities.skills.hot_reload import SkillReloadResult
+    from sebastian.core.stream_events import TurnDone
+
+    class BlockingSkillReloader:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.entered = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def maybe_reload(self):
+            self.calls += 1
+            self.entered.set()
+            await self.release.wait()
+            return SkillReloadResult(changed=False, version=1, fingerprint=())
+
+    agent, _ = await _create_session_agent(tmp_path)
+    reloader = BlockingSkillReloader()
+    monkeypatch.setattr(state, "skill_hot_reloader", reloader)
+    captured_prompts: list[str] = []
+
+    def rebuild_prompt() -> None:
+        agent.system_prompt = "fresh prompt"
+
+    async def fake_stream(system_prompt, messages, **kwargs):
+        captured_prompts.append(system_prompt)
+        yield TurnDone(full_text="done")
+
+    agent.system_prompt = "stale prompt"
+    agent.rebuild_system_prompt = MagicMock(side_effect=rebuild_prompt)
+    agent._loop.stream = fake_stream  # type: ignore[attr-defined]
+
+    first = asyncio.create_task(agent.run_streaming("hello", "skill-session"))
+    second = asyncio.create_task(agent.run_streaming("again", "skill-session"))
+    await reloader.entered.wait()
+    await asyncio.sleep(0.05)
+
+    assert captured_prompts == []
+
+    reloader.release.set()
+    await asyncio.gather(first, second)
+
+    assert reloader.calls == 1
+    assert captured_prompts == ["fresh prompt", "fresh prompt"]
 
 
 @pytest.mark.asyncio

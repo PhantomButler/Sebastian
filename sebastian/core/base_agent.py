@@ -131,6 +131,9 @@ class BaseAgent(ABC):
         self._pending_cancel_timers: dict[str, asyncio.TimerHandle] = {}
         self._partial_buffer: dict[str, str] = {}
         self._pending_blocks: dict[str, list[dict[str, Any]]] = {}
+        self._skill_prompt_version = 0
+        self._skill_reload_checked_sessions: set[tuple[str, str]] = set()
+        self._skill_reload_locks: dict[tuple[str, str], asyncio.Lock] = {}
 
         # instance-level overrides class-level defaults
         if allowed_tools is not None:
@@ -346,6 +349,48 @@ class BaseAgent(ABC):
         ]
         return "\n\n".join(s for s in sections if s)
 
+    def rebuild_system_prompt(self) -> None:
+        self.system_prompt = self.build_system_prompt(self._gate)
+
+    def mark_skill_prompt_version(self, version: int) -> None:
+        self._skill_prompt_version = version
+
+    async def _maybe_refresh_skills_for_new_session(
+        self,
+        session_id: str,
+        agent_context: str,
+    ) -> None:
+        key = (agent_context, session_id)
+        if key in self._skill_reload_checked_sessions:
+            return
+
+        lock = self._skill_reload_locks.setdefault(key, asyncio.Lock())
+        try:
+            async with lock:
+                if key in self._skill_reload_checked_sessions:
+                    return
+
+                try:
+                    import sebastian.gateway.state as state
+                except ImportError:
+                    self._skill_reload_checked_sessions.add(key)
+                    return
+
+                reloader = getattr(state, "skill_hot_reloader", None)
+                if reloader is None:
+                    self._skill_reload_checked_sessions.add(key)
+                    return
+
+                result = await reloader.maybe_reload()
+                if self._skill_prompt_version != result.version:
+                    self.rebuild_system_prompt()
+                    self.mark_skill_prompt_version(result.version)
+
+                if result.error is None:
+                    self._skill_reload_checked_sessions.add(key)
+        finally:
+            self._skill_reload_locks.pop(key, None)
+
     async def run(
         self,
         user_message: str,
@@ -411,6 +456,13 @@ class BaseAgent(ABC):
 
         self._current_depth[session_id] = worker_session.depth
 
+        await self._maybe_refresh_skills_for_new_session(session_id, agent_context)
+        system_prompt_snapshot = self.system_prompt
+        tool_specs_snapshot = self._gate.get_callable_specs(
+            _normalize_allowed_tools(self.allowed_tools),
+            set(self.allowed_skills) if self.allowed_skills is not None else None,
+        )
+
         await self._publish(
             session_id,
             EventType.TURN_RECEIVED,
@@ -471,6 +523,8 @@ class BaseAgent(ABC):
                 supports_image_input=supports_image_input_for_tools,
                 exchange_id=exchange_id,
                 exchange_index=exchange_index,
+                system_prompt_snapshot=system_prompt_snapshot,
+                tool_specs_snapshot=tool_specs_snapshot,
             )
         )
         self._active_streams[session_id] = current_stream
@@ -545,8 +599,18 @@ class BaseAgent(ABC):
         supports_image_input: bool = False,
         exchange_id: str | None = None,
         exchange_index: int | None = None,
+        system_prompt_snapshot: str | None = None,
+        tool_specs_snapshot: list[dict[str, Any]] | None = None,
     ) -> str:
         from sebastian.context.usage import TokenUsage
+
+        if system_prompt_snapshot is None:
+            system_prompt_snapshot = self.system_prompt
+        if tool_specs_snapshot is None:
+            tool_specs_snapshot = self._gate.get_callable_specs(
+                _normalize_allowed_tools(self.allowed_tools),
+                set(self.allowed_skills) if self.allowed_skills is not None else None,
+            )
 
         full_text = ""
         assistant_blocks: list[dict[str, Any]] = []
@@ -565,7 +629,7 @@ class BaseAgent(ABC):
             resident_dedupe_keys=resident.rendered_dedupe_keys,
             resident_canonical_bullets=resident.rendered_canonical_bullets,
         )
-        sections = [self.system_prompt]
+        sections = [system_prompt_snapshot]
         if resident.content:
             sections.append(resident.content)
         if memory_section:
@@ -574,7 +638,11 @@ class BaseAgent(ABC):
             sections.append(todo_section)
         effective_system_prompt = "\n\n".join(sections)
         gen = self._loop.stream(
-            effective_system_prompt, messages, task_id=task_id, thinking_effort=thinking_effort
+            effective_system_prompt,
+            messages,
+            task_id=task_id,
+            thinking_effort=thinking_effort,
+            tools_snapshot=tool_specs_snapshot,
         )
         _thinking_start: dict[str, float] = {}
         send_value: StreamToolResult | None = None

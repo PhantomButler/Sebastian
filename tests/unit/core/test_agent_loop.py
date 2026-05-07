@@ -456,6 +456,46 @@ async def test_agent_loop_passes_allowed_tools_to_provider() -> None:
 
 
 @pytest.mark.asyncio
+async def test_agent_loop_uses_tools_snapshot_without_querying_registry() -> None:
+    from unittest.mock import MagicMock
+
+    from sebastian.core.agent_loop import AgentLoop
+
+    registry = MagicMock()
+    registry.get_callable_specs = MagicMock(side_effect=AssertionError("registry queried"))
+
+    provider = MockLLMProvider(
+        [
+            TextBlockStart(block_id="b0_0"),
+            TextBlockStop(block_id="b0_0", text="ok"),
+            ProviderCallEnd(stop_reason="end_turn"),
+        ]
+    )
+    captured_tools: list[Any] = []
+    original_stream = provider.stream
+
+    async def spy_stream(**kwargs: Any) -> Any:
+        captured_tools.append(kwargs["tools"])
+        async for event in original_stream(**kwargs):
+            yield event
+
+    provider.stream = spy_stream  # type: ignore[method-assign]
+    tools_snapshot = [{"name": "skill__old", "description": "old", "input_schema": {}}]
+
+    loop = AgentLoop(provider, registry, model="test")
+    await _collect(
+        loop.stream(
+            system_prompt="sys",
+            messages=[{"role": "user", "content": "hi"}],
+            tools_snapshot=tools_snapshot,
+        )
+    )
+
+    registry.get_callable_specs.assert_not_called()
+    assert captured_tools == [tools_snapshot]
+
+
+@pytest.mark.asyncio
 async def test_agent_loop_none_allowed_tools_means_no_capability_tools() -> None:
     """allowed_tools=None is forwarded as no capability-tool allowlist."""
     from unittest.mock import MagicMock

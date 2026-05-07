@@ -55,6 +55,36 @@ async def test_persona_section_appears_in_system_prompt(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_base_agent_rebuild_system_prompt_refreshes_skills(tmp_path: Path) -> None:
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.store.session_store import SessionStore
+
+    class MyAgent(BaseAgent):
+        name = "test"
+        persona = "I am your butler."
+        allowed_tools: list[str] | None = []
+        allowed_skills: list[str] | None = None
+
+    store = SessionStore(tmp_path / "sessions")
+    reg = CapabilityRegistry()
+
+    with patch("sebastian.core.base_agent.settings") as mock_settings:
+        mock_settings.sebastian_model = "claude-opus-4-6"
+        mock_settings.llm_max_tokens = 16000
+        mock_settings.workspace_dir = tmp_path / "workspace"
+        agent = MyAgent(reg, store)
+
+    assert "skill__travel" not in agent.system_prompt
+    reg.replace_skill_specs(
+        [{"name": "skill__travel", "description": "Travel skill", "input_schema": {}}]
+    )
+
+    agent.rebuild_system_prompt()
+
+    assert "skill__travel" in agent.system_prompt
+
+
+@pytest.mark.asyncio
 async def test_sebastian_agents_section_renders_agent_type_only(tmp_path: Path) -> None:
     from dataclasses import dataclass
 

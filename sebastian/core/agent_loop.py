@@ -152,14 +152,20 @@ class AgentLoop:
         messages: list[dict[str, Any]],
         task_id: str | None = None,
         thinking_effort: str | None = None,
+        *,
+        tools_snapshot: list[dict[str, Any]] | None = None,
     ) -> AsyncGenerator[LLMStreamEvent, ToolResult | None]:
         """Yield LLM stream events; accept tool results injected via asend()."""
         if self._provider is None:
             raise RuntimeError("No LLM provider configured. Add one via the Settings page.")
         working = list(messages)
-        tools = self._registry.get_callable_specs(
-            allowed_tools=self._allowed_tools,
-            allowed_skills=self._allowed_skills,
+        tools = (
+            tools_snapshot
+            if tools_snapshot is not None
+            else self._registry.get_callable_specs(
+                allowed_tools=self._allowed_tools,
+                allowed_skills=self._allowed_skills,
+            )
         )
         full_text_parts: list[str] = []
         is_openai = self._provider.message_format == "openai"
