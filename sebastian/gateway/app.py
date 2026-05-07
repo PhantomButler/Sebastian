@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
@@ -185,12 +186,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     load_tools()
 
+    from sebastian.capabilities import skills as skills_pkg
     from sebastian.capabilities.skills._loader import load_skills
+    from sebastian.capabilities.skills.hot_reload import SkillHotReloader
 
-    skill_specs = load_skills(
-        extra_dirs=[settings.skills_extensions_dir],
+    skill_extra_dirs = [settings.skills_extensions_dir]
+    skill_specs = load_skills(extra_dirs=skill_extra_dirs)
+    registry.replace_skill_specs(skill_specs)
+    state.skill_hot_reloader = SkillHotReloader.seeded(
+        registry=registry,
+        builtin_dir=Path(skills_pkg.__file__).parent,
+        extra_dirs=skill_extra_dirs,
     )
-    registry.register_skill_specs(skill_specs)
     logger.info("Loaded %d skills", len(skill_specs))
 
     mcp_clients = load_mcps()
