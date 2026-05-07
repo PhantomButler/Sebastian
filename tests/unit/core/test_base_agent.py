@@ -247,13 +247,26 @@ async def test_concurrent_first_turns_wait_for_skill_reload_before_streaming(
     reloader = BlockingSkillReloader()
     monkeypatch.setattr(state, "skill_hot_reloader", reloader)
     captured_prompts: list[str] = []
+    running_streams = 0
+    max_running_streams = 0
+    finish_first_stream = asyncio.Event()
 
     def rebuild_prompt() -> None:
         agent.system_prompt = "fresh prompt"
 
     async def fake_stream(system_prompt, messages, **kwargs):
+        nonlocal running_streams, max_running_streams
+        running_streams += 1
+        max_running_streams = max(max_running_streams, running_streams)
         captured_prompts.append(system_prompt)
-        yield TurnDone(full_text="done")
+        try:
+            if messages[-1]["content"] == "hello":
+                await finish_first_stream.wait()
+            else:
+                finish_first_stream.set()
+            yield TurnDone(full_text="done")
+        finally:
+            running_streams -= 1
 
     agent.system_prompt = "stale prompt"
     agent.rebuild_system_prompt = MagicMock(side_effect=rebuild_prompt)
@@ -267,10 +280,13 @@ async def test_concurrent_first_turns_wait_for_skill_reload_before_streaming(
     assert captured_prompts == []
 
     reloader.release.set()
-    await asyncio.gather(first, second)
+    results = await asyncio.gather(first, second, return_exceptions=True)
 
     assert reloader.calls == 1
-    assert captured_prompts == ["fresh prompt", "fresh prompt"]
+    assert max_running_streams == 1
+    assert any(isinstance(result, asyncio.CancelledError) for result in results)
+    assert captured_prompts
+    assert set(captured_prompts) == {"fresh prompt"}
 
 
 @pytest.mark.asyncio

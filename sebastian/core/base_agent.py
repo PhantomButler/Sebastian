@@ -134,6 +134,7 @@ class BaseAgent(ABC):
         self._skill_prompt_version = 0
         self._skill_reload_checked_sessions: set[tuple[str, str]] = set()
         self._skill_reload_locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self._run_stream_locks: dict[str, asyncio.Lock] = {}
 
         # instance-level overrides class-level defaults
         if allowed_tools is not None:
@@ -415,9 +416,6 @@ class BaseAgent(ABC):
         persist_user_message: bool = True,
         preallocated_exchange: tuple[str, int] | None = None,
     ) -> str:
-        self._completed_cancel_intents.pop(session_id, None)
-        self._current_task_goals[session_id] = user_message
-
         thinking_effort_for_llm: str | None = None
         supports_image_input_for_tools = bool(self._provider_supports_image_input)
         if not self._provider_injected and self._llm_registry is not None:
@@ -437,118 +435,124 @@ class BaseAgent(ABC):
             )
 
         agent_context = agent_name or self.name
-        existing_stream = self._active_streams.get(session_id)
-        if existing_stream is not None and not existing_stream.done():
-            existing_stream.cancel()
-            try:
-                await existing_stream
-            except (asyncio.CancelledError, Exception):
-                pass  # Previous stream has ended; ignore its result (M5).
-
-        worker_session = await self._session_store.get_session_for_agent_type(
-            session_id,
-            agent_context,
-        )
-        if worker_session is None:
-            raise FileNotFoundError(
-                f"Session {session_id!r} not found for agent_type {agent_context!r}"
-            )
-
-        self._current_depth[session_id] = worker_session.depth
-
-        await self._maybe_refresh_skills_for_new_session(session_id, agent_context)
-        system_prompt_snapshot = self.system_prompt
-        allowed_skills_snapshot = (
-            set(self.allowed_skills) if self.allowed_skills is not None else None
-        )
-        tool_specs_snapshot = self._gate.get_callable_specs(
-            _normalize_allowed_tools(self.allowed_tools),
-            allowed_skills_snapshot,
-        )
-        skill_specs_snapshot = {
-            spec["name"]: spec for spec in self._gate.get_skill_specs(allowed_skills_snapshot)
-        }
-
-        await self._publish(
-            session_id,
-            EventType.TURN_RECEIVED,
-            {
-                "agent_type": worker_session.agent_type,
-                "message": user_message[:200],
-            },
-        )
-        await self._update_activity(session_id, agent_context)
-
-        # _llm_registry resolution above guarantees _provider is set in production;
-        # "anthropic" is the fallback for test-only agents with no provider injected.
-        provider_format = "anthropic"
-        if self._loop._provider is not None:
-            provider_format = self._loop._provider.message_format
-
-        if self._db_factory is not None:
-            messages = await self._session_store.get_context_messages(
-                session_id,
-                agent_context,
-                provider_format,
-                attachment_store=self._attachment_store,
-                require_attachments=self._attachment_store is not None,
-            )
-        else:
-            raw = await self._session_store.get_messages(session_id, agent_context, limit=50)
-            messages = [{"role": m["role"], "content": m["content"]} for m in raw]
-
-        if persist_user_message:
-            messages.append({"role": "user", "content": user_message})
-
         exchange_id: str | None = None
         exchange_index: int | None = None
-        if preallocated_exchange is not None:
-            exchange_id, exchange_index = preallocated_exchange
-        elif self._db_factory is not None and persist_user_message:
-            exchange_id, exchange_index = await allocate_exchange_for_turn(
-                self._session_store, session_id, agent_context
-            )
+        setup_lock = self._run_stream_locks.setdefault(session_id, asyncio.Lock())
+        async with setup_lock:
+            self._completed_cancel_intents.pop(session_id, None)
+            self._current_task_goals[session_id] = user_message
 
-        if persist_user_message:
-            await self._session_store.append_message(
+            existing_stream = self._active_streams.get(session_id)
+            if existing_stream is not None and not existing_stream.done():
+                existing_stream.cancel()
+                try:
+                    await existing_stream
+                except (asyncio.CancelledError, Exception):
+                    pass  # Previous stream has ended; ignore its result (M5).
+
+            worker_session = await self._session_store.get_session_for_agent_type(
                 session_id,
-                "user",
-                user_message,
-                agent_type=agent_context,
-                exchange_id=exchange_id,
-                exchange_index=exchange_index,
+                agent_context,
             )
+            if worker_session is None:
+                raise FileNotFoundError(
+                    f"Session {session_id!r} not found for agent_type {agent_context!r}"
+                )
 
-        current_stream = asyncio.create_task(
-            self._stream_inner(
-                messages=messages,
-                session_id=session_id,
-                task_id=task_id,
-                agent_context=agent_context,
-                thinking_effort=thinking_effort_for_llm,
-                supports_image_input=supports_image_input_for_tools,
-                exchange_id=exchange_id,
-                exchange_index=exchange_index,
-                system_prompt_snapshot=system_prompt_snapshot,
-                tool_specs_snapshot=tool_specs_snapshot,
-                skill_specs_snapshot=skill_specs_snapshot,
+            self._current_depth[session_id] = worker_session.depth
+
+            await self._maybe_refresh_skills_for_new_session(session_id, agent_context)
+            system_prompt_snapshot = self.system_prompt
+            allowed_skills_snapshot = (
+                set(self.allowed_skills) if self.allowed_skills is not None else None
             )
-        )
-        self._active_streams[session_id] = current_stream
-        # Consume pre-cancel: user clicked stop before we finished setup.
-        pending_intent = self._pending_cancel_intents.pop(session_id, None)
-        pending_timer = self._pending_cancel_timers.pop(session_id, None)
-        if pending_timer is not None:
-            pending_timer.cancel()
-        if pending_intent is not None:
-            self._cancel_requested[session_id] = pending_intent
-            current_stream.cancel()
+            tool_specs_snapshot = self._gate.get_callable_specs(
+                _normalize_allowed_tools(self.allowed_tools),
+                allowed_skills_snapshot,
+            )
+            skill_specs_snapshot = {
+                spec["name"]: spec for spec in self._gate.get_skill_specs(allowed_skills_snapshot)
+            }
+
+            await self._publish(
+                session_id,
+                EventType.TURN_RECEIVED,
+                {
+                    "agent_type": worker_session.agent_type,
+                    "message": user_message[:200],
+                },
+            )
+            await self._update_activity(session_id, agent_context)
+
+            # _llm_registry resolution above guarantees _provider is set in production;
+            # "anthropic" is the fallback for test-only agents with no provider injected.
+            provider_format = "anthropic"
+            if self._loop._provider is not None:
+                provider_format = self._loop._provider.message_format
+
+            if self._db_factory is not None:
+                messages = await self._session_store.get_context_messages(
+                    session_id,
+                    agent_context,
+                    provider_format,
+                    attachment_store=self._attachment_store,
+                    require_attachments=self._attachment_store is not None,
+                )
+            else:
+                raw = await self._session_store.get_messages(session_id, agent_context, limit=50)
+                messages = [{"role": m["role"], "content": m["content"]} for m in raw]
+
+            if persist_user_message:
+                messages.append({"role": "user", "content": user_message})
+
+            if preallocated_exchange is not None:
+                exchange_id, exchange_index = preallocated_exchange
+            elif self._db_factory is not None and persist_user_message:
+                exchange_id, exchange_index = await allocate_exchange_for_turn(
+                    self._session_store, session_id, agent_context
+                )
+
+            if persist_user_message:
+                await self._session_store.append_message(
+                    session_id,
+                    "user",
+                    user_message,
+                    agent_type=agent_context,
+                    exchange_id=exchange_id,
+                    exchange_index=exchange_index,
+                )
+
+            current_stream = asyncio.create_task(
+                self._stream_inner(
+                    messages=messages,
+                    session_id=session_id,
+                    task_id=task_id,
+                    agent_context=agent_context,
+                    thinking_effort=thinking_effort_for_llm,
+                    supports_image_input=supports_image_input_for_tools,
+                    exchange_id=exchange_id,
+                    exchange_index=exchange_index,
+                    system_prompt_snapshot=system_prompt_snapshot,
+                    tool_specs_snapshot=tool_specs_snapshot,
+                    skill_specs_snapshot=skill_specs_snapshot,
+                )
+            )
+            self._active_streams[session_id] = current_stream
+            # Consume pre-cancel: user clicked stop before we finished setup.
+            pending_intent = self._pending_cancel_intents.pop(session_id, None)
+            pending_timer = self._pending_cancel_timers.pop(session_id, None)
+            if pending_timer is not None:
+                pending_timer.cancel()
+            if pending_intent is not None:
+                self._cancel_requested[session_id] = pending_intent
+                current_stream.cancel()
         try:
             return await current_stream
         finally:
             cancel_intent = self._cancel_requested.pop(session_id, None)
             was_cancelled = cancel_intent is not None
-            self._active_streams.pop(session_id, None)
+            if self._active_streams.get(session_id) is current_stream:
+                self._active_streams.pop(session_id, None)
             self._current_task_goals.pop(session_id, None)
             self._current_depth.pop(session_id, None)
 
