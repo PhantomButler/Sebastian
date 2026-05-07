@@ -40,6 +40,16 @@ Sebastian 是一个目标驱动的个人全能 AI 管家系统。你只需告诉
       <br><sub><b>记忆系统 — 跨会话记住你的偏好</b></sub>
     </td>
   </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/asset/switch_butler.gif" alt="在 App 中切换不同 AI 管家">
+      <br><sub><b>管家切换 — 在不同专业代理间切换</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/asset/browser_search.gif" alt="Sebastian App 浏览器搜索能力演示">
+      <br><sub><b>浏览器能力 — 搜索并查看网页内容</b></sub>
+    </td>
+  </tr>
 </table>
 
 ---
