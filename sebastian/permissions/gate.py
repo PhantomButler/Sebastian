@@ -159,7 +159,8 @@ class PolicyGate:
         """Execute a tool after enforcing its permission tier."""
         # Stage 0: agent 身份白名单校验
         # 防止 LLM 幻觉工具名绕过 LLM 可见性层的过滤。
-        if self._registry.is_skill(tool_name):
+        skill_snapshot = _skill_snapshot(tool_name, context)
+        if skill_snapshot is not None or self._registry.is_skill(tool_name):
             if not _skill_allowed(tool_name, context.allowed_skills):
                 return ToolResult(
                     ok=False,
@@ -170,6 +171,8 @@ class PolicyGate:
                 )
             token = _current_tool_ctx.set(context)
             try:
+                if skill_snapshot is not None:
+                    return ToolResult(ok=True, output=skill_snapshot.get("description", ""))
                 return await self._registry.call(tool_name, **inputs)
             finally:
                 _current_tool_ctx.reset(token)
@@ -344,3 +347,9 @@ def _tool_allowed(tool_name: str, allowed_tools: ToolAllowlist) -> bool:
 
 def _skill_allowed(name: str, allowed: SkillAllowlist) -> bool:
     return allowed is None or name in allowed
+
+
+def _skill_snapshot(tool_name: str, context: ToolCallContext) -> dict[str, Any] | None:
+    if context.skill_specs_snapshot is None:
+        return None
+    return context.skill_specs_snapshot.get(tool_name)

@@ -186,6 +186,7 @@ async def dispatch_tool_call(
     allowed_tools: Any,
     pending_blocks: dict[str, list[dict[str, Any]]],
     allowed_skills: Any = None,
+    skill_specs_snapshot: dict[str, dict[str, Any]] | None = None,
     supports_image_input: bool = False,
 ) -> tuple[StreamToolResult, int]:
     """Execute one ``ToolCallReady`` event and append result blocks.
@@ -249,6 +250,7 @@ async def dispatch_tool_call(
                 else None
             ),
             allowed_skills=(frozenset(allowed_skills) if allowed_skills is not None else None),
+            skill_specs_snapshot=skill_specs_snapshot,
             supports_image_input=supports_image_input,
             progress_cb=functools.partial(publish, session_id, EventType.TOOL_RUNNING),
         )

@@ -840,6 +840,66 @@ async def test_call_allows_skill_from_allowed_skills() -> None:
 
 
 @pytest.mark.asyncio
+async def test_call_uses_skill_snapshot_before_live_registry() -> None:
+    registry = _make_registry_mock()
+    registry.is_skill.return_value = True
+    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="new live skill"))
+    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
+
+    context = ToolCallContext(
+        task_goal="",
+        session_id="s1",
+        task_id=None,
+        agent_type="sebastian",
+        allowed_tools=None,
+        allowed_skills=frozenset({"skill__flight_search"}),
+        skill_specs_snapshot={
+            "skill__flight_search": {
+                "name": "skill__flight_search",
+                "description": "old snapshot skill",
+                "input_schema": {},
+            }
+        },
+    )
+
+    result = await gate.call("skill__flight_search", {"ignored": "input"}, context)
+
+    assert result.ok is True
+    assert result.output == "old snapshot skill"
+    registry.call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_call_allows_snapshot_skill_removed_from_live_registry() -> None:
+    registry = _make_registry_mock()
+    registry.is_skill.return_value = False
+    registry.call = AsyncMock(return_value=ToolResult(ok=False, error="Unknown tool"))
+    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
+
+    context = ToolCallContext(
+        task_goal="",
+        session_id="s1",
+        task_id=None,
+        agent_type="sebastian",
+        allowed_tools=None,
+        allowed_skills=frozenset({"skill__flight_search"}),
+        skill_specs_snapshot={
+            "skill__flight_search": {
+                "name": "skill__flight_search",
+                "description": "old snapshot skill",
+                "input_schema": {},
+            }
+        },
+    )
+
+    result = await gate.call("skill__flight_search", {}, context)
+
+    assert result.ok is True
+    assert result.output == "old snapshot skill"
+    registry.call.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_call_rejects_skill_outside_allowed_skills() -> None:
     registry = _make_registry_mock()
     registry.is_skill.return_value = True

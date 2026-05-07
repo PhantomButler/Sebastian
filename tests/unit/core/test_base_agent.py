@@ -153,7 +153,8 @@ async def test_run_streaming_uses_prompt_and_tool_snapshots_before_async_waits(
 ) -> None:
     import sebastian.gateway.state as state
     from sebastian.core.base_agent import BaseAgent
-    from sebastian.core.stream_events import TurnDone
+    from sebastian.core.stream_events import ToolCallReady, TurnDone
+    from sebastian.core.stream_events import ToolResult as StreamToolResult
     from sebastian.core.types import Session
     from sebastian.store.session_store import SessionStore
 
@@ -164,7 +165,9 @@ async def test_run_streaming_uses_prompt_and_tool_snapshots_before_async_waits(
 
     gate = MagicMock()
     gate.get_tool_specs.return_value = []
-    gate.get_skill_specs.return_value = []
+    old_skill_specs = [{"name": "skill__old", "description": "old", "input_schema": {}}]
+    new_skill_specs = [{"name": "skill__new", "description": "new", "input_schema": {}}]
+    gate.get_skill_specs.return_value = old_skill_specs
     old_tools = [{"name": "skill__old", "description": "old", "input_schema": {}}]
     new_tools = [{"name": "skill__new", "description": "new", "input_schema": {}}]
     gate.get_callable_specs.return_value = old_tools
@@ -179,20 +182,44 @@ async def test_run_streaming_uses_prompt_and_tool_snapshots_before_async_waits(
     async def mutating_todos(session_id: str, agent_context: str) -> str:
         agent.system_prompt = "new prompt"
         gate.get_callable_specs.return_value = new_tools
+        gate.get_skill_specs.return_value = new_skill_specs
         return ""
 
     async def fake_stream(system_prompt, messages, **kwargs):
         captured["system_prompt"] = system_prompt
         captured["tools_snapshot"] = kwargs.get("tools_snapshot")
+        yield ToolCallReady(
+            block_id="b0",
+            tool_id="toolu_1",
+            name="skill__old",
+            inputs={},
+        )
         yield TurnDone(full_text="done")
+
+    async def fake_dispatch(event, **kwargs):
+        captured["skill_specs_snapshot"] = kwargs.get("skill_specs_snapshot")
+        return (
+            StreamToolResult(
+                tool_id=event.tool_id,
+                name=event.name,
+                ok=True,
+                output="old",
+                error=None,
+            ),
+            kwargs["block_index"],
+        )
+
+    import sebastian.core.base_agent as base_agent_module
 
     agent._session_todos_section = mutating_todos  # type: ignore[method-assign]
     agent._loop.stream = fake_stream  # type: ignore[attr-defined]
+    monkeypatch.setattr(base_agent_module, "_dispatch_tool_call_fn", fake_dispatch)
 
     await agent.run_streaming("hello", "snapshot-session")
 
     assert captured["system_prompt"] == "old prompt"
     assert captured["tools_snapshot"] == old_tools
+    assert captured["skill_specs_snapshot"] == {"skill__old": old_skill_specs[0]}
 
 
 @pytest.mark.asyncio

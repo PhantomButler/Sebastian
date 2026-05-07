@@ -458,10 +458,16 @@ class BaseAgent(ABC):
 
         await self._maybe_refresh_skills_for_new_session(session_id, agent_context)
         system_prompt_snapshot = self.system_prompt
+        allowed_skills_snapshot = (
+            set(self.allowed_skills) if self.allowed_skills is not None else None
+        )
         tool_specs_snapshot = self._gate.get_callable_specs(
             _normalize_allowed_tools(self.allowed_tools),
-            set(self.allowed_skills) if self.allowed_skills is not None else None,
+            allowed_skills_snapshot,
         )
+        skill_specs_snapshot = {
+            spec["name"]: spec for spec in self._gate.get_skill_specs(allowed_skills_snapshot)
+        }
 
         await self._publish(
             session_id,
@@ -525,6 +531,7 @@ class BaseAgent(ABC):
                 exchange_index=exchange_index,
                 system_prompt_snapshot=system_prompt_snapshot,
                 tool_specs_snapshot=tool_specs_snapshot,
+                skill_specs_snapshot=skill_specs_snapshot,
             )
         )
         self._active_streams[session_id] = current_stream
@@ -601,16 +608,29 @@ class BaseAgent(ABC):
         exchange_index: int | None = None,
         system_prompt_snapshot: str | None = None,
         tool_specs_snapshot: list[dict[str, Any]] | None = None,
+        skill_specs_snapshot: dict[str, dict[str, Any]] | None = None,
     ) -> str:
         from sebastian.context.usage import TokenUsage
 
         if system_prompt_snapshot is None:
             system_prompt_snapshot = self.system_prompt
         if tool_specs_snapshot is None:
+            allowed_skills_snapshot = (
+                set(self.allowed_skills) if self.allowed_skills is not None else None
+            )
             tool_specs_snapshot = self._gate.get_callable_specs(
                 _normalize_allowed_tools(self.allowed_tools),
-                set(self.allowed_skills) if self.allowed_skills is not None else None,
+                allowed_skills_snapshot,
             )
+            skill_specs_snapshot = {
+                spec["name"]: spec for spec in self._gate.get_skill_specs(allowed_skills_snapshot)
+            }
+        elif skill_specs_snapshot is None:
+            skill_specs_snapshot = {
+                spec["name"]: spec
+                for spec in tool_specs_snapshot
+                if spec["name"].startswith("skill__")
+            }
 
         full_text = ""
         assistant_blocks: list[dict[str, Any]] = []
@@ -732,6 +752,7 @@ class BaseAgent(ABC):
                         allowed_tools=self.allowed_tools,
                         pending_blocks=self._pending_blocks,
                         allowed_skills=self.allowed_skills,
+                        skill_specs_snapshot=skill_specs_snapshot,
                         supports_image_input=supports_image_input,
                     )
                     continue

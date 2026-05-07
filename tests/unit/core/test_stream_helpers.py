@@ -266,6 +266,13 @@ async def test_dispatch_tool_call_passes_allowed_skills_to_tool_context() -> Non
         return None
 
     blocks: list = []
+    skill_specs_snapshot = {
+        "skill__flight_search": {
+            "name": "skill__flight_search",
+            "description": "Flight search",
+            "input_schema": {},
+        }
+    }
     with patch("sebastian.core.stream_helpers.get_tool", return_value=None):
         await dispatch_tool_call(
             _make_event(),
@@ -283,11 +290,13 @@ async def test_dispatch_tool_call_passes_allowed_skills_to_tool_context() -> Non
             current_depth={},
             allowed_tools=None,
             allowed_skills=["skill__flight_search"],
+            skill_specs_snapshot=skill_specs_snapshot,
             pending_blocks={},
         )
 
     assert captured_context is not None
     assert captured_context.allowed_skills == frozenset({"skill__flight_search"})
+    assert captured_context.skill_specs_snapshot == skill_specs_snapshot
 
 
 @pytest.mark.asyncio
