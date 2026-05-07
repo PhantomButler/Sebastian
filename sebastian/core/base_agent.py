@@ -663,6 +663,7 @@ class BaseAgent(ABC):
                         current_depth=self._current_depth,
                         allowed_tools=self.allowed_tools,
                         pending_blocks=self._pending_blocks,
+                        allowed_skills=self.allowed_skills,
                         supports_image_input=supports_image_input,
                     )
                     continue

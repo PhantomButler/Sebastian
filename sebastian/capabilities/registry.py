@@ -128,6 +128,9 @@ class CapabilityRegistry:
         self._skill_tools.clear()
         self.register_skill_specs(specs)
 
+    def is_skill(self, name: str) -> bool:
+        return name in self._skill_tools and not self._name_collides_with_tool(name)
+
     def _name_collides_with_tool(self, name: str) -> bool:
         return get_tool(name) is not None or name in self._mcp_tools
 

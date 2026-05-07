@@ -238,6 +238,59 @@ async def test_dispatch_tool_call_publishes_artifact_on_tool_executed() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dispatch_tool_call_passes_allowed_skills_to_tool_context() -> None:
+    from sebastian.core.stream_helpers import dispatch_tool_call
+    from sebastian.permissions.types import ToolCallContext
+    from sebastian.protocol.events.types import EventType
+
+    captured_context: ToolCallContext | None = None
+
+    async def gate_call(
+        tool_name: str,
+        inputs: dict,
+        context: ToolCallContext,
+    ) -> MagicMock:
+        nonlocal captured_context
+        captured_context = context
+        return MagicMock(
+            ok=True,
+            output="done",
+            error=None,
+            empty_hint=None,
+            display=None,
+        )
+
+    update_activity = AsyncMock()
+
+    async def publish(session_id: str, event_type: EventType, data: object) -> None:
+        return None
+
+    blocks: list = []
+    with patch("sebastian.core.stream_helpers.get_tool", return_value=None):
+        await dispatch_tool_call(
+            _make_event(),
+            session_id="sess-1",
+            task_id=None,
+            agent_context="sebastian",
+            assistant_turn_id="turn-1",
+            assistant_blocks=blocks,
+            current_pci=0,
+            block_index=1,
+            gate_call=gate_call,
+            update_activity=update_activity,
+            publish=publish,
+            current_task_goals={},
+            current_depth={},
+            allowed_tools=None,
+            allowed_skills=["skill__flight_search"],
+            pending_blocks={},
+        )
+
+    assert captured_context is not None
+    assert captured_context.allowed_skills == frozenset({"skill__flight_search"})
+
+
+@pytest.mark.asyncio
 async def test_dispatch_tool_call_publishes_download_artifact_unchanged() -> None:
     from sebastian.core.stream_helpers import dispatch_tool_call
     from sebastian.protocol.events.types import EventType
