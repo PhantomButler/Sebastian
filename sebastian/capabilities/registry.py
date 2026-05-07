@@ -24,7 +24,7 @@ class CapabilityRegistry:
 
     def __init__(self) -> None:
         self._mcp_tools: dict[str, tuple[dict[str, Any], McpToolFn]] = {}
-        self._skill_names: set[str] = set()
+        self._skill_tools: dict[str, tuple[dict[str, Any], ToolFn]] = {}
 
     def get_all_tool_specs(self) -> list[dict[str, Any]]:
         """Return all tool specs in Anthropic API `tools` format (backward compat)."""
@@ -33,6 +33,7 @@ class CapabilityRegistry:
     def get_tool_specs(self, allowed: ToolAllowlist = None) -> list[dict[str, Any]]:
         """Return native + MCP tool specs (excluding skills). ALL_TOOLS means all."""
         specs: list[dict[str, Any]] = []
+        seen: set[str] = set()
         for spec in list_tool_specs():
             if _tool_allowed(spec.name, allowed):
                 specs.append(
@@ -42,8 +43,9 @@ class CapabilityRegistry:
                         "input_schema": spec.parameters,
                     }
                 )
+                seen.add(spec.name)
         for name, (spec_dict, _) in self._mcp_tools.items():
-            if name in self._skill_names:
+            if name in seen:
                 continue
             if _tool_allowed(name, allowed):
                 specs.append(spec_dict)
@@ -52,8 +54,9 @@ class CapabilityRegistry:
     def get_skill_specs(self, allowed: set[str] | None = None) -> list[dict[str, Any]]:
         """Return skill specs only. For skills, allowed=None means all."""
         specs: list[dict[str, Any]] = []
-        for name, (spec_dict, _) in self._mcp_tools.items():
-            if name not in self._skill_names:
+        for name, (spec_dict, _) in self._skill_tools.items():
+            if self._name_collides_with_tool(name):
+                logger.warning("Skill %r hidden because it collides with a tool", name)
                 continue
             if allowed is None or name in allowed:
                 specs.append(spec_dict)
@@ -92,13 +95,17 @@ class CapabilityRegistry:
         if mcp_entry is not None:
             _, fn = mcp_entry
             return await fn(**kwargs)
+        skill_entry = self._skill_tools.get(tool_name)
+        if skill_entry is not None:
+            _, fn = skill_entry
+            return await fn(**kwargs)
         return ToolResult(ok=False, error=f"Unknown tool: {tool_name}")
 
     def register_mcp_tool(
         self,
         name: str,
         spec: dict[str, Any],
-        fn: ToolFn,
+        fn: McpToolFn,
     ) -> None:
         """Register a tool sourced from MCP."""
         self._mcp_tools[name] = (spec, fn)
@@ -110,15 +117,19 @@ class CapabilityRegistry:
             name = spec["name"]
             description = spec["description"]
 
-            if name in self._mcp_tools and name not in self._skill_names:
-                logger.warning("Skill %r overwrites existing MCP tool registration", name)
-
             async def _skill_fn(instructions: str = "", _desc: str = description) -> ToolResult:
                 return ToolResult(ok=True, output=_desc)
 
-            self._mcp_tools[name] = (spec, _skill_fn)
-            self._skill_names.add(name)
+            self._skill_tools[name] = (spec, _skill_fn)
             logger.info("Skill registered: %s", name)
+
+    def replace_skill_specs(self, specs: list[dict[str, Any]]) -> None:
+        """Replace all registered skill specs without touching native or MCP tools."""
+        self._skill_tools.clear()
+        self.register_skill_specs(specs)
+
+    def _name_collides_with_tool(self, name: str) -> bool:
+        return get_tool(name) is not None or name in self._mcp_tools
 
 
 # Global singleton shared by all agents

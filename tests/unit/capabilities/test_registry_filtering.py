@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from sebastian.capabilities.registry import CapabilityRegistry
 from sebastian.core.types import ToolResult
 from sebastian.permissions.types import ALL_TOOLS
@@ -107,3 +109,89 @@ def test_get_all_tool_specs_uses_all_tools_sentinel() -> None:
     names = {s["name"] for s in specs}
     assert {"mcp_tool_a", "mcp_tool_b", "research_skill"} <= names
     assert "unknown_tool" not in names
+
+
+def test_replace_skill_specs_removes_deleted_skills() -> None:
+    reg = CapabilityRegistry()
+    reg.register_skill_specs(
+        [
+            {"name": "skill_a", "description": "A", "input_schema": {}},
+            {"name": "skill_b", "description": "B", "input_schema": {}},
+        ]
+    )
+
+    reg.replace_skill_specs(
+        [{"name": "skill_b", "description": "B2", "input_schema": {}}]
+    )
+
+    names = {s["name"] for s in reg.get_skill_specs()}
+    assert names == {"skill_b"}
+    assert next(s for s in reg.get_skill_specs() if s["name"] == "skill_b")[
+        "description"
+    ] == "B2"
+
+
+def test_skill_name_collision_hides_skill_spec_and_preserves_mcp_tool() -> None:
+    reg = CapabilityRegistry()
+
+    async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
+        return ToolResult(ok=True, output="mcp")
+
+    reg.register_mcp_tool(
+        "skill__travel",
+        {"name": "skill__travel", "description": "mcp travel", "input_schema": {}},
+        mcp_fn,
+    )
+    reg.register_skill_specs(
+        [{"name": "skill__travel", "description": "skill travel", "input_schema": {}}]
+    )
+
+    callable_names = [s["name"] for s in reg.get_callable_specs(ALL_TOOLS, None)]
+    tool_names = {s["name"] for s in reg.get_tool_specs(ALL_TOOLS)}
+    skill_names = {s["name"] for s in reg.get_skill_specs()}
+
+    assert callable_names.count("skill__travel") == 1
+    assert "skill__travel" in tool_names
+    assert "skill__travel" not in skill_names
+
+
+def test_replace_skill_specs_does_not_delete_colliding_mcp_tool() -> None:
+    reg = CapabilityRegistry()
+
+    async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
+        return ToolResult(ok=True, output="mcp")
+
+    reg.register_mcp_tool(
+        "skill__travel",
+        {"name": "skill__travel", "description": "mcp travel", "input_schema": {}},
+        mcp_fn,
+    )
+    reg.register_skill_specs(
+        [{"name": "skill__travel", "description": "skill travel", "input_schema": {}}]
+    )
+
+    reg.replace_skill_specs([])
+
+    assert "skill__travel" in {s["name"] for s in reg.get_tool_specs(ALL_TOOLS)}
+    assert "skill__travel" not in {s["name"] for s in reg.get_skill_specs()}
+
+
+@pytest.mark.asyncio
+async def test_call_priority_is_native_then_mcp_then_skill() -> None:
+    reg = CapabilityRegistry()
+
+    async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
+        return ToolResult(ok=True, output="mcp")
+
+    reg.register_mcp_tool(
+        "skill__travel",
+        {"name": "skill__travel", "description": "mcp travel", "input_schema": {}},
+        mcp_fn,
+    )
+    reg.register_skill_specs(
+        [{"name": "skill__travel", "description": "skill travel", "input_schema": {}}]
+    )
+
+    result = await reg.call("skill__travel")
+
+    assert result.output == "mcp"
