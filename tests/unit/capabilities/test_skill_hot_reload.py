@@ -123,12 +123,16 @@ async def test_startup_seed_catches_edit_before_first_reload_check(tmp_path: Pat
     reg.replace_skill_specs(load_skills(builtin_dir=tmp_path, extra_dirs=[]))
     reloader = SkillHotReloader.seeded(registry=reg, builtin_dir=tmp_path, extra_dirs=[])
 
-    write_skill(tmp_path, "travel", "---\nname: travel\ndescription: Edited\n---\nEdited.")
+    write_skill(
+        tmp_path,
+        "travel",
+        "---\nname: travel\ndescription: Edited and longer\n---\nEdited body grew.",
+    )
     result = await reloader.maybe_reload()
 
     assert result.changed is True
     assert result.version == 1
-    assert "Edited" in reg.get_skill_specs()[0]["description"]
+    assert "Edited and longer" in reg.get_skill_specs()[0]["description"]
 
 
 @pytest.mark.asyncio
@@ -153,7 +157,11 @@ async def test_reload_failure_keeps_old_state_and_next_call_retries(
             raise RuntimeError("loader unavailable")
         return load_skills(builtin_dir=builtin_dir, extra_dirs=extra_dirs)
 
-    write_skill(tmp_path, "travel", "---\nname: travel\ndescription: New\n---\nNew.")
+    write_skill(
+        tmp_path,
+        "travel",
+        "---\nname: travel\ndescription: New and longer\n---\nNew body grew.",
+    )
     monkeypatch.setattr(hot_reload, "load_skills", fail_once)
 
     failed = await reloader.maybe_reload()
@@ -168,4 +176,49 @@ async def test_reload_failure_keeps_old_state_and_next_call_retries(
     assert retried.changed is True
     assert retried.version == 1
     assert calls == 2
-    assert "New" in reg.get_skill_specs()[0]["description"]
+    assert "New and longer" in reg.get_skill_specs()[0]["description"]
+
+
+@pytest.mark.asyncio
+async def test_fingerprint_failure_keeps_old_state_and_next_call_retries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_skill(tmp_path, "travel", "---\nname: travel\ndescription: Old\n---\nOld.")
+    reg = CapabilityRegistry()
+    reg.replace_skill_specs(load_skills(builtin_dir=tmp_path, extra_dirs=[]))
+    reloader = SkillHotReloader.seeded(registry=reg, builtin_dir=tmp_path, extra_dirs=[])
+
+    calls = 0
+    original_compute = hot_reload.compute_skill_fingerprint
+
+    def fail_once(
+        builtin_dir: Path,
+        extra_dirs: list[Path] | None = None,
+    ) -> hot_reload.SkillFingerprint:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("transient scan failure")
+        return original_compute(builtin_dir, extra_dirs)
+
+    write_skill(
+        tmp_path,
+        "travel",
+        "---\nname: travel\ndescription: New and longer\n---\nNew body grew.",
+    )
+    monkeypatch.setattr(hot_reload, "compute_skill_fingerprint", fail_once)
+
+    failed = await reloader.maybe_reload()
+
+    assert failed.changed is False
+    assert failed.version == 0
+    assert failed.error == "Skill hot reload failed"
+    assert "Old" in reg.get_skill_specs()[0]["description"]
+
+    retried = await reloader.maybe_reload()
+
+    assert retried.changed is True
+    assert retried.version == 1
+    assert calls == 2
+    assert "New and longer" in reg.get_skill_specs()[0]["description"]

@@ -102,7 +102,16 @@ class SkillHotReloader:
 
     async def maybe_reload(self) -> SkillReloadResult:
         async with self._lock:
-            latest = compute_skill_fingerprint(self._builtin_dir, self._extra_dirs)
+            try:
+                latest = compute_skill_fingerprint(self._builtin_dir, self._extra_dirs)
+            except Exception:
+                logger.warning("Skill hot reload failed", exc_info=True)
+                return SkillReloadResult(
+                    changed=False,
+                    version=self._version,
+                    fingerprint=self._fingerprint,
+                    error="Skill hot reload failed",
+                )
             if latest == self._fingerprint:
                 return SkillReloadResult(
                     changed=False,
