@@ -10,7 +10,6 @@ from sebastian.permissions.types import ALL_TOOLS
 def _make_registry() -> CapabilityRegistry:
     reg = CapabilityRegistry()
 
-    # 注册两个普通 MCP tool
     async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
         return ToolResult(ok=True, output="ok")
 
@@ -24,34 +23,27 @@ def _make_registry() -> CapabilityRegistry:
         {"name": "mcp_tool_b", "description": "tool b", "input_schema": {}},
         mcp_fn,
     )
-    # 注册一个 Skill
-    reg.register_skill_specs(
-        [
-            {
-                "name": "research_skill",
-                "description": "do research",
-                "input_schema": {"type": "object", "properties": {}, "required": []},
-            }
-        ]
-    )
     return reg
 
 
-def test_get_tool_specs_all_tools_returns_only_tools_not_skills() -> None:
+def test_skill_registration_apis_do_not_exist() -> None:
     reg = _make_registry()
-    specs = reg.get_tool_specs(allowed=ALL_TOOLS)
+
+    assert not hasattr(reg, "_skill_tools")
+    assert not hasattr(reg, "register_skill_specs")
+    assert not hasattr(reg, "replace_skill_specs")
+    assert not hasattr(reg, "get_skill_specs")
+    assert not hasattr(reg, "is_skill")
+
+
+def test_get_callable_specs_all_tools_returns_only_native_and_mcp_tools() -> None:
+    reg = _make_registry()
+    specs = reg.get_callable_specs(allowed_tools=ALL_TOOLS)
     names = {s["name"] for s in specs}
-    assert "mcp_tool_a" in names
-    assert "mcp_tool_b" in names
+
+    assert {"mcp_tool_a", "mcp_tool_b"} <= names
     assert "research_skill" not in names
-
-
-def test_get_skill_specs_returns_only_skills() -> None:
-    reg = _make_registry()
-    specs = reg.get_skill_specs()
-    names = {s["name"] for s in specs}
-    assert "research_skill" in names
-    assert "mcp_tool_a" not in names
+    assert "skill__research" not in names
 
 
 def test_get_tool_specs_with_allowed_filter() -> None:
@@ -72,34 +64,23 @@ def test_get_tool_specs_empty_set_allows_no_tools() -> None:
     assert reg.get_tool_specs(allowed=set()) == []
 
 
-def test_get_skill_specs_with_allowed_empty_set() -> None:
+def test_get_callable_specs_with_allowed_filter() -> None:
     reg = _make_registry()
-    specs = reg.get_skill_specs(allowed=set())
-    assert specs == []
-
-
-def test_get_callable_specs_combines_filtered_tools_and_skills() -> None:
-    reg = _make_registry()
-    specs = reg.get_callable_specs(
-        allowed_tools={"mcp_tool_a"},
-        allowed_skills={"research_skill"},
-    )
+    specs = reg.get_callable_specs(allowed_tools={"mcp_tool_a"})
     names = {s["name"] for s in specs}
-    assert names == {"mcp_tool_a", "research_skill"}
+    assert names == {"mcp_tool_a"}
 
 
-def test_get_callable_specs_none_allows_no_tools_but_keeps_skill_default() -> None:
+def test_get_callable_specs_none_allows_no_tools() -> None:
     reg = _make_registry()
-    specs = reg.get_callable_specs(allowed_tools=None, allowed_skills=None)
-    names = {s["name"] for s in specs}
-    assert names == {"research_skill"}
+    assert reg.get_callable_specs(allowed_tools=None) == []
 
 
 def test_get_callable_specs_all_tools_sentinel_means_all_tools() -> None:
     reg = _make_registry()
-    specs = reg.get_callable_specs(allowed_tools=ALL_TOOLS, allowed_skills=None)
+    specs = reg.get_callable_specs(allowed_tools=ALL_TOOLS)
     names = {s["name"] for s in specs}
-    assert {"mcp_tool_a", "mcp_tool_b", "research_skill"} <= names
+    assert {"mcp_tool_a", "mcp_tool_b"} <= names
     assert "unknown_tool" not in names
 
 
@@ -107,27 +88,11 @@ def test_get_all_tool_specs_uses_all_tools_sentinel() -> None:
     reg = _make_registry()
     specs = reg.get_all_tool_specs()
     names = {s["name"] for s in specs}
-    assert {"mcp_tool_a", "mcp_tool_b", "research_skill"} <= names
+    assert {"mcp_tool_a", "mcp_tool_b"} <= names
     assert "unknown_tool" not in names
 
 
-def test_replace_skill_specs_removes_deleted_skills() -> None:
-    reg = CapabilityRegistry()
-    reg.register_skill_specs(
-        [
-            {"name": "skill_a", "description": "A", "input_schema": {}},
-            {"name": "skill_b", "description": "B", "input_schema": {}},
-        ]
-    )
-
-    reg.replace_skill_specs([{"name": "skill_b", "description": "B2", "input_schema": {}}])
-
-    names = {s["name"] for s in reg.get_skill_specs()}
-    assert names == {"skill_b"}
-    assert next(s for s in reg.get_skill_specs() if s["name"] == "skill_b")["description"] == "B2"
-
-
-def test_skill_name_collision_hides_skill_spec_and_preserves_mcp_tool() -> None:
+def test_mcp_tool_with_skill_like_name_is_regular_tool() -> None:
     reg = CapabilityRegistry()
 
     async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
@@ -138,42 +103,26 @@ def test_skill_name_collision_hides_skill_spec_and_preserves_mcp_tool() -> None:
         {"name": "skill__travel", "description": "mcp travel", "input_schema": {}},
         mcp_fn,
     )
-    reg.register_skill_specs(
-        [{"name": "skill__travel", "description": "skill travel", "input_schema": {}}]
-    )
 
-    callable_names = [s["name"] for s in reg.get_callable_specs(ALL_TOOLS, None)]
+    callable_names = [s["name"] for s in reg.get_callable_specs(ALL_TOOLS)]
     tool_names = {s["name"] for s in reg.get_tool_specs(ALL_TOOLS)}
-    skill_names = {s["name"] for s in reg.get_skill_specs()}
 
     assert callable_names.count("skill__travel") == 1
     assert "skill__travel" in tool_names
-    assert "skill__travel" not in skill_names
-
-
-def test_replace_skill_specs_does_not_delete_colliding_mcp_tool() -> None:
-    reg = CapabilityRegistry()
-
-    async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
-        return ToolResult(ok=True, output="mcp")
-
-    reg.register_mcp_tool(
-        "skill__travel",
-        {"name": "skill__travel", "description": "mcp travel", "input_schema": {}},
-        mcp_fn,
-    )
-    reg.register_skill_specs(
-        [{"name": "skill__travel", "description": "skill travel", "input_schema": {}}]
-    )
-
-    reg.replace_skill_specs([])
-
-    assert "skill__travel" in {s["name"] for s in reg.get_tool_specs(ALL_TOOLS)}
-    assert "skill__travel" not in {s["name"] for s in reg.get_skill_specs()}
 
 
 @pytest.mark.asyncio
-async def test_call_priority_is_native_then_mcp_then_skill() -> None:
+async def test_skill_like_name_is_unknown_without_native_or_mcp_tool() -> None:
+    reg = CapabilityRegistry()
+
+    result = await reg.call("skill__travel")
+
+    assert result.ok is False
+    assert result.error == "Unknown tool: skill__travel"
+
+
+@pytest.mark.asyncio
+async def test_call_uses_mcp_for_skill_like_name_when_registered() -> None:
     reg = CapabilityRegistry()
 
     async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
@@ -183,9 +132,6 @@ async def test_call_priority_is_native_then_mcp_then_skill() -> None:
         "skill__travel",
         {"name": "skill__travel", "description": "mcp travel", "input_schema": {}},
         mcp_fn,
-    )
-    reg.register_skill_specs(
-        [{"name": "skill__travel", "description": "skill travel", "input_schema": {}}]
     )
 
     result = await reg.call("skill__travel")

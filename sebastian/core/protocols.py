@@ -30,5 +30,4 @@ class ToolSpecProvider(Protocol):
     def get_callable_specs(
         self,
         allowed_tools: ToolAllowlist = None,
-        allowed_skills: set[str] | None = None,
     ) -> list[dict[str, Any]]: ...

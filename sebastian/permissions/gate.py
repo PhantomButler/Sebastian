@@ -20,7 +20,6 @@ from sebastian.permissions.types import (
     ALL_TOOLS,
     AllToolsSentinel,
     PermissionTier,
-    SkillAllowlist,
     ToolAllowlist,
     ToolCallContext,
     ToolReviewPreflight,
@@ -110,27 +109,18 @@ class PolicyGate:
         """Delegate to registry for native + MCP tool specs (excluding skills)."""
         return self._registry.get_tool_specs(allowed)
 
-    def get_skill_specs(self, allowed: set[str] | None = None) -> list[dict[str, Any]]:
-        """Delegate to registry for skill specs."""
-        return self._registry.get_skill_specs(allowed)
-
     def get_callable_specs(
         self,
         allowed_tools: ToolAllowlist = None,
-        allowed_skills: set[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Filtered tool+skill specs for LLM API calls.
+        """Filtered native/MCP tool specs for LLM API calls.
 
         For MODEL_DECIDES tools (including unrecognised MCP tools), inject
         a required `reason` field so the LLM must state its intent.
         """
         specs: list[dict[str, Any]] = []
-        for spec_dict in self._registry.get_callable_specs(allowed_tools, allowed_skills):
+        for spec_dict in self._registry.get_callable_specs(allowed_tools):
             tool_name = spec_dict["name"]
-            if self._is_skill(tool_name):
-                specs.append(spec_dict)
-                continue
-
             native = get_tool(tool_name)
             tier = native[0].permission_tier if native else PermissionTier.MODEL_DECIDES
 
@@ -148,7 +138,7 @@ class PolicyGate:
 
     def get_all_tool_specs(self) -> list[dict[str, Any]]:
         """Backward-compat shim for ToolSpecProvider protocol."""
-        return self.get_callable_specs(ALL_TOOLS, None)
+        return self.get_callable_specs(ALL_TOOLS)
 
     async def call(
         self,
@@ -159,24 +149,6 @@ class PolicyGate:
         """Execute a tool after enforcing its permission tier."""
         # Stage 0: agent 身份白名单校验
         # 防止 LLM 幻觉工具名绕过 LLM 可见性层的过滤。
-        skill_snapshot = _skill_snapshot(tool_name, context)
-        if skill_snapshot is not None or self._is_skill(tool_name):
-            if not _skill_allowed(tool_name, context.allowed_skills):
-                return ToolResult(
-                    ok=False,
-                    error=(
-                        f"Skill {tool_name!r} not in allowed_skills "
-                        f"for agent {context.agent_type!r}"
-                    ),
-                )
-            token = _current_tool_ctx.set(context)
-            try:
-                if skill_snapshot is not None:
-                    return ToolResult(ok=True, output=skill_snapshot.get("description", ""))
-                return await self._registry.call(tool_name, **inputs)
-            finally:
-                _current_tool_ctx.reset(token)
-
         if not _tool_allowed(tool_name, context.allowed_tools):
             return ToolResult(
                 ok=False,
@@ -218,9 +190,6 @@ class PolicyGate:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
-
-    def _is_skill(self, tool_name: str) -> bool:
-        return self._registry.is_skill(tool_name) is True
 
     async def _check_workspace_boundary(
         self,
@@ -346,13 +315,3 @@ def _tool_allowed(tool_name: str, allowed_tools: ToolAllowlist) -> bool:
     if not allowed_tools:
         return False
     return tool_name in allowed_tools
-
-
-def _skill_allowed(name: str, allowed: SkillAllowlist) -> bool:
-    return allowed is None or name in allowed
-
-
-def _skill_snapshot(tool_name: str, context: ToolCallContext) -> dict[str, Any] | None:
-    if context.skill_specs_snapshot is None:
-        return None
-    return context.skill_specs_snapshot.get(tool_name)

@@ -26,7 +26,6 @@ def _make_context(task_goal: str = "test goal") -> ToolCallContext:
 
 def _make_registry_mock() -> MagicMock:
     registry = MagicMock()
-    registry.is_skill = MagicMock(return_value=False)
     return registry
 
 
@@ -547,7 +546,7 @@ def _make_gate_with_specs(
     """构造一个 PolicyGate，注入 registry 返回指定 native_specs。"""
     registry = _make_registry_mock()
     registry.get_callable_specs = MagicMock(
-        side_effect=lambda allowed_tools, allowed_skills: [
+        side_effect=lambda allowed_tools=None: [
             spec
             for spec in native_specs
             if allowed_tools is ALL_TOOLS or spec["name"] in (allowed_tools or set())
@@ -572,7 +571,7 @@ def test_get_callable_specs_filters_by_allowed_tools() -> None:
         mock_spec.permission_tier = PermissionTier.LOW
         mock_get_tool.return_value = (mock_spec, MagicMock())
 
-        result = gate.get_callable_specs(allowed_tools={"Read"}, allowed_skills=None)
+        result = gate.get_callable_specs(allowed_tools={"Read"})
 
     names = [s["name"] for s in result]
     assert names == ["Read"]
@@ -597,7 +596,7 @@ def test_get_callable_specs_injects_reason_for_model_decides() -> None:
         mock_spec.permission_tier = PermissionTier.MODEL_DECIDES
         mock_get_tool.return_value = (mock_spec, MagicMock())
 
-        result = gate.get_callable_specs(allowed_tools=ALL_TOOLS, allowed_skills=None)
+        result = gate.get_callable_specs(allowed_tools=ALL_TOOLS)
 
     assert len(result) == 1
     schema = result[0]["input_schema"]
@@ -605,8 +604,8 @@ def test_get_callable_specs_injects_reason_for_model_decides() -> None:
     assert "reason" in schema["required"]
 
 
-def test_get_callable_specs_does_not_inject_reason_for_skills() -> None:
-    """Skill spec 不应被注入工具审查用的 reason 参数。"""
+def test_get_callable_specs_injects_reason_for_skill_like_mcp_tools() -> None:
+    """skill__ 前缀不再特殊；未知 MCP 工具仍按 MODEL_DECIDES 注入 reason。"""
     specs = [
         {
             "name": "skill__flight_search",
@@ -618,17 +617,14 @@ def test_get_callable_specs_does_not_inject_reason_for_skills() -> None:
         },
     ]
     gate = _make_gate_with_specs(specs)
-    gate._registry.is_skill.return_value = True
 
-    result = gate.get_callable_specs(
-        allowed_tools=ALL_TOOLS,
-        allowed_skills={"skill__flight_search"},
-    )
+    with patch("sebastian.permissions.gate.get_tool", return_value=None):
+        result = gate.get_callable_specs(allowed_tools=ALL_TOOLS)
 
     assert len(result) == 1
     schema = result[0]["input_schema"]
-    assert "reason" not in schema["properties"]
-    assert "reason" not in schema["required"]
+    assert "reason" in schema["properties"]
+    assert "reason" in schema["required"]
 
 
 def test_get_all_tool_specs_still_works_as_shim() -> None:
@@ -648,8 +644,8 @@ def test_get_all_tool_specs_still_works_as_shim() -> None:
     assert [s["name"] for s in result] == ["Read"]
 
 
-def test_get_callable_specs_forwards_allowed_skills() -> None:
-    """PolicyGate.get_callable_specs 应把 allowed_skills 如实转发给 registry。"""
+def test_get_callable_specs_forwards_only_allowed_tools() -> None:
+    """PolicyGate.get_callable_specs only forwards allowed_tools to registry."""
     from sebastian.permissions.gate import PolicyGate
 
     registry = _make_registry_mock()
@@ -658,13 +654,10 @@ def test_get_callable_specs_forwards_allowed_skills() -> None:
     approval_manager = MagicMock()
     gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=approval_manager)
 
-    result = gate.get_callable_specs(
-        allowed_tools={"Read"},
-        allowed_skills={"code-review"},
-    )
+    result = gate.get_callable_specs(allowed_tools={"Read"})
 
     assert result == []
-    registry.get_callable_specs.assert_called_once_with({"Read"}, {"code-review"})
+    registry.get_callable_specs.assert_called_once_with({"Read"})
 
 
 @pytest.mark.asyncio
@@ -818,91 +811,76 @@ async def test_call_all_tools_sentinel_allows_any_tool(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_call_allows_skill_from_allowed_skills() -> None:
-    registry = _make_registry_mock()
-    registry.is_skill.return_value = True
-    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="skill"))
-    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
+async def test_call_skill_like_name_is_unknown_without_registered_tool() -> None:
+    from sebastian.capabilities.registry import CapabilityRegistry
+
+    registry = CapabilityRegistry()
+    reviewer = MagicMock()
+    reviewer.review = AsyncMock(return_value=ReviewDecision(decision="proceed", explanation="ok"))
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=MagicMock())
 
     context = ToolCallContext(
-        task_goal="",
+        task_goal="try skill-like name",
         session_id="s1",
         task_id=None,
         agent_type="sebastian",
-        allowed_tools=None,
-        allowed_skills=frozenset({"skill__flight_search"}),
+        allowed_tools=ALL_TOOLS,
     )
 
-    result = await gate.call("skill__flight_search", {}, context)
+    with patch("sebastian.permissions.gate.get_tool", return_value=None):
+        result = await gate.call(
+            "skill__flight_search",
+            {"reason": "try unregistered skill-like name"},
+            context,
+        )
 
-    assert result.ok is True
-    registry.call.assert_awaited_once()
+    assert result.ok is False
+    assert result.error == "Unknown tool: skill__flight_search"
 
 
 @pytest.mark.asyncio
-async def test_call_uses_skill_snapshot_before_live_registry() -> None:
-    registry = _make_registry_mock()
-    registry.is_skill.return_value = True
-    registry.call = AsyncMock(return_value=ToolResult(ok=True, output="new live skill"))
-    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
+async def test_call_allows_skill_like_mcp_tool_when_registered() -> None:
+    from sebastian.capabilities.registry import CapabilityRegistry
 
-    context = ToolCallContext(
-        task_goal="",
-        session_id="s1",
-        task_id=None,
-        agent_type="sebastian",
-        allowed_tools=None,
-        allowed_skills=frozenset({"skill__flight_search"}),
-        skill_specs_snapshot={
-            "skill__flight_search": {
-                "name": "skill__flight_search",
-                "description": "old snapshot skill",
-                "input_schema": {},
-            }
+    async def mcp_fn(**kwargs):  # type: ignore[no-untyped-def]
+        return ToolResult(ok=True, output="mcp skill-like tool")
+
+    registry = CapabilityRegistry()
+    registry.register_mcp_tool(
+        "skill__flight_search",
+        {
+            "name": "skill__flight_search",
+            "description": "search flights",
+            "input_schema": {"properties": {}, "required": []},
         },
+        mcp_fn,
     )
-
-    result = await gate.call("skill__flight_search", {"ignored": "input"}, context)
-
-    assert result.ok is True
-    assert result.output == "old snapshot skill"
-    registry.call.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_call_allows_snapshot_skill_removed_from_live_registry() -> None:
-    registry = _make_registry_mock()
-    registry.is_skill.return_value = False
-    registry.call = AsyncMock(return_value=ToolResult(ok=False, error="Unknown tool"))
-    gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
+    reviewer = MagicMock()
+    reviewer.review = AsyncMock(return_value=ReviewDecision(decision="proceed", explanation="ok"))
+    gate = PolicyGate(registry=registry, reviewer=reviewer, approval_manager=MagicMock())
 
     context = ToolCallContext(
         task_goal="",
         session_id="s1",
         task_id=None,
         agent_type="sebastian",
-        allowed_tools=None,
-        allowed_skills=frozenset({"skill__flight_search"}),
-        skill_specs_snapshot={
-            "skill__flight_search": {
-                "name": "skill__flight_search",
-                "description": "old snapshot skill",
-                "input_schema": {},
-            }
-        },
+        allowed_tools=ALL_TOOLS,
     )
 
-    result = await gate.call("skill__flight_search", {}, context)
+    with patch("sebastian.permissions.gate.get_tool", return_value=None):
+        result = await gate.call(
+            "skill__flight_search",
+            {"reason": "call registered mcp"},
+            context,
+        )
 
     assert result.ok is True
-    assert result.output == "old snapshot skill"
-    registry.call.assert_not_called()
+    assert result.output == "mcp skill-like tool"
 
 
 @pytest.mark.asyncio
-async def test_call_rejects_skill_outside_allowed_skills() -> None:
+async def test_call_rejects_skill_like_name_outside_allowed_tools() -> None:
     registry = _make_registry_mock()
-    registry.is_skill.return_value = True
     registry.call = AsyncMock()
     gate = PolicyGate(registry=registry, reviewer=MagicMock(), approval_manager=MagicMock())
 
@@ -911,14 +889,13 @@ async def test_call_rejects_skill_outside_allowed_skills() -> None:
         session_id="s1",
         task_id=None,
         agent_type="sebastian",
-        allowed_tools=ALL_TOOLS,
-        allowed_skills=frozenset(),
+        allowed_tools=frozenset(),
     )
 
     result = await gate.call("skill__flight_search", {}, context)
 
     assert result.ok is False
-    assert "allowed_skills" in (result.error or "")
+    assert "allowed_tools" in (result.error or "")
     registry.call.assert_not_called()
 
 

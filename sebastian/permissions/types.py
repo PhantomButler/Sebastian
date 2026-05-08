@@ -1,7 +1,7 @@
 # sebastian/permissions/types.py
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping, Set
+from collections.abc import Awaitable, Callable, Set
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Literal
@@ -24,8 +24,6 @@ class AllToolsSentinel:
 
 ALL_TOOLS = AllToolsSentinel()
 ToolAllowlist = Set[str] | AllToolsSentinel | None
-SkillAllowlist = Set[str] | None
-SkillSpecSnapshot = Mapping[str, dict[str, Any]] | None
 
 
 @dataclass(frozen=True)
@@ -43,8 +41,6 @@ class ToolCallContext:
     agent_type: str = ""
     depth: int = 1
     allowed_tools: ToolAllowlist = None
-    allowed_skills: SkillAllowlist = None
-    skill_specs_snapshot: SkillSpecSnapshot = None
     supports_image_input: bool = False
     progress_cb: Callable[[dict[str, Any]], Awaitable[None]] | None = field(
         default=None, repr=False

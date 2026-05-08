@@ -5,7 +5,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from sebastian.core.tool import ToolFn, get_tool, list_tool_specs
+from sebastian.core.tool import get_tool, list_tool_specs
 from sebastian.core.types import ToolResult
 from sebastian.permissions.types import (
     ALL_TOOLS,
@@ -24,11 +24,10 @@ class CapabilityRegistry:
 
     def __init__(self) -> None:
         self._mcp_tools: dict[str, tuple[dict[str, Any], McpToolFn]] = {}
-        self._skill_tools: dict[str, tuple[dict[str, Any], ToolFn]] = {}
 
     def get_all_tool_specs(self) -> list[dict[str, Any]]:
         """Return all tool specs in Anthropic API `tools` format (backward compat)."""
-        return self.get_callable_specs(allowed_tools=ALL_TOOLS, allowed_skills=None)
+        return self.get_callable_specs(allowed_tools=ALL_TOOLS)
 
     def get_tool_specs(self, allowed: ToolAllowlist = None) -> list[dict[str, Any]]:
         """Return native + MCP tool specs (excluding skills). ALL_TOOLS means all."""
@@ -51,24 +50,12 @@ class CapabilityRegistry:
                 specs.append(spec_dict)
         return specs
 
-    def get_skill_specs(self, allowed: set[str] | None = None) -> list[dict[str, Any]]:
-        """Return skill specs only. For skills, allowed=None means all."""
-        specs: list[dict[str, Any]] = []
-        for name, (spec_dict, _) in self._skill_tools.items():
-            if self._name_collides_with_tool(name):
-                logger.warning("Skill %r hidden because it collides with a tool", name)
-                continue
-            if allowed is None or name in allowed:
-                specs.append(spec_dict)
-        return specs
-
     def get_callable_specs(
         self,
         allowed_tools: ToolAllowlist = None,
-        allowed_skills: set[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Return combined filtered tool + skill specs for LLM API calls."""
-        return self.get_tool_specs(allowed_tools) + self.get_skill_specs(allowed_skills)
+        """Return filtered native + MCP tool specs for LLM API calls."""
+        return self.get_tool_specs(allowed_tools)
 
     async def review_preflight(
         self,
@@ -95,10 +82,6 @@ class CapabilityRegistry:
         if mcp_entry is not None:
             _, fn = mcp_entry
             return await fn(**kwargs)
-        skill_entry = self._skill_tools.get(tool_name)
-        if skill_entry is not None:
-            _, fn = skill_entry
-            return await fn(**kwargs)
         return ToolResult(ok=False, error=f"Unknown tool: {tool_name}")
 
     def register_mcp_tool(
@@ -110,29 +93,6 @@ class CapabilityRegistry:
         """Register a tool sourced from MCP."""
         self._mcp_tools[name] = (spec, fn)
         logger.info("MCP tool registered: %s", name)
-
-    def register_skill_specs(self, specs: list[dict[str, Any]]) -> None:
-        """Register skill tool specs (read-only — LLM uses description as instructions)."""
-        for spec in specs:
-            name = spec["name"]
-            description = spec["description"]
-
-            async def _skill_fn(instructions: str = "", _desc: str = description) -> ToolResult:
-                return ToolResult(ok=True, output=_desc)
-
-            self._skill_tools[name] = (spec, _skill_fn)
-            logger.info("Skill registered: %s", name)
-
-    def replace_skill_specs(self, specs: list[dict[str, Any]]) -> None:
-        """Replace all registered skill specs without touching native or MCP tools."""
-        self._skill_tools.clear()
-        self.register_skill_specs(specs)
-
-    def is_skill(self, name: str) -> bool:
-        return name in self._skill_tools and not self._name_collides_with_tool(name)
-
-    def _name_collides_with_tool(self, name: str) -> bool:
-        return get_tool(name) is not None or name in self._mcp_tools
 
 
 # Global singleton shared by all agents
