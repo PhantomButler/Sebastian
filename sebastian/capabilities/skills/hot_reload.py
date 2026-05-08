@@ -5,9 +5,6 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from sebastian.capabilities.registry import CapabilityRegistry
-from sebastian.capabilities.skills._loader import load_skills
-
 logger = logging.getLogger(__name__)
 
 
@@ -63,13 +60,11 @@ class SkillHotReloader:
     def __init__(
         self,
         *,
-        registry: CapabilityRegistry,
         builtin_dir: Path,
         extra_dirs: list[Path] | None = None,
         fingerprint: SkillFingerprint | None = None,
         version: int = 0,
     ) -> None:
-        self._registry = registry
         self._builtin_dir = builtin_dir
         self._extra_dirs = extra_dirs or []
         self._fingerprint = (
@@ -84,12 +79,10 @@ class SkillHotReloader:
     def seeded(
         cls,
         *,
-        registry: CapabilityRegistry,
         builtin_dir: Path,
         extra_dirs: list[Path] | None = None,
     ) -> SkillHotReloader:
         return cls(
-            registry=registry,
             builtin_dir=builtin_dir,
             extra_dirs=extra_dirs,
             fingerprint=compute_skill_fingerprint(builtin_dir, extra_dirs or []),
@@ -117,21 +110,6 @@ class SkillHotReloader:
                     changed=False,
                     version=self._version,
                     fingerprint=latest,
-                )
-
-            try:
-                specs = load_skills(
-                    builtin_dir=self._builtin_dir,
-                    extra_dirs=self._extra_dirs,
-                )
-                self._registry.replace_skill_specs(specs)
-            except Exception:
-                logger.warning("Skill hot reload failed", exc_info=True)
-                return SkillReloadResult(
-                    changed=False,
-                    version=self._version,
-                    fingerprint=self._fingerprint,
-                    error="Skill hot reload failed",
                 )
 
             self._fingerprint = latest

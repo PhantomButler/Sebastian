@@ -42,7 +42,6 @@ def _initialize_agent_instances(
             event_bus=event_bus,
             llm_registry=llm_registry,
             allowed_tools=cfg.allowed_tools,
-            allowed_skills=cfg.allowed_skills,
             db_factory=db_factory,
             compaction_scheduler=compaction_scheduler,
             attachment_store=attachment_store,
@@ -187,18 +186,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     load_tools()
 
     from sebastian.capabilities import skills as skills_pkg
-    from sebastian.capabilities.skills._loader import load_skills
     from sebastian.capabilities.skills.hot_reload import SkillHotReloader
 
     skill_extra_dirs = [settings.skills_extensions_dir]
-    skill_specs = load_skills(extra_dirs=skill_extra_dirs)
-    registry.replace_skill_specs(skill_specs)
     state.skill_hot_reloader = SkillHotReloader.seeded(
-        registry=registry,
         builtin_dir=Path(skills_pkg.__file__).parent,
         extra_dirs=skill_extra_dirs,
     )
-    logger.info("Loaded %d skills", len(skill_specs))
+    logger.info("Initialized Skill catalog watcher")
 
     mcp_clients = load_mcps()
     if mcp_clients:
