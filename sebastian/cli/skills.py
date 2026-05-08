@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from enum import StrEnum
 
 import httpx
 import typer
@@ -14,6 +15,7 @@ from sebastian.skills_registry.client import (
 from sebastian.skills_registry.installer import (
     SkillInstallError,
     install_skill,
+    read_local_skill_file,
     remove_installed_skill,
     show_local_skill,
     update_skill,
@@ -33,6 +35,12 @@ app = typer.Typer(
     name="skills",
     help="Search, show, install, update, and remove Sebastian Skills",
 )
+
+
+class SearchSource(StrEnum):
+    LOCAL = "local"
+    REGISTRY = "registry"
+    ALL = "all"
 
 
 def search_registry(query: str, registry: str | None = None) -> list[tuple[str, str]]:
@@ -99,14 +107,47 @@ def _print_detail(detail: SkillDetail) -> None:
     typer.echo(f"SHA256: {_format_optional(detail.sha256)}")
 
 
-def _print_local_detail(detail: LocalSkillDetail) -> None:
+def _matches_local_skill(skill: InstalledSkill, query: str) -> bool:
+    normalized_query = query.casefold()
+    fields = (
+        skill.slug,
+        skill.registered_name,
+        str(getattr(skill, "name", "")),
+    )
+    return any(normalized_query in field.casefold() for field in fields)
+
+
+def _search_local(query: str) -> list[InstalledSkill]:
+    return [skill for skill in list_installed() if _matches_local_skill(skill, query)]
+
+
+def _print_local_search_rows(rows: list[InstalledSkill]) -> None:
+    typer.echo("LOCAL")
+    for skill in rows:
+        version = _format_optional(skill.version)
+        typer.echo(f"{skill.slug}\t{skill.registered_name}\t{version}\t{skill.source}")
+
+
+def _print_registry_search_rows(rows: list[tuple[str, str]]) -> None:
+    typer.echo("REGISTRY")
+    for slug, description in rows:
+        typer.echo(f"{slug}\t{description}")
+
+
+def _print_local_detail(detail: LocalSkillDetail, include_body: bool) -> None:
     typer.echo(f"Slug: {detail.slug}")
+    typer.echo(f"Name: {detail.name}")
     typer.echo(f"Registered: {detail.registered_name}")
     typer.echo(f"Source: {detail.source}")
     typer.echo(f"Version: {_format_optional(detail.version)}")
     typer.echo(f"Registry: {_format_optional(detail.registry)}")
     typer.echo(f"Path: {detail.path}")
     typer.echo(f"Description: {_format_optional(detail.description)}")
+    typer.echo("Files:")
+    for relative_path in detail.files:
+        typer.echo(f"- {relative_path}")
+    if not include_body:
+        return
     typer.echo("")
     typer.echo("Instructions:")
     typer.echo(detail.body or "-")
@@ -116,11 +157,21 @@ def _print_local_detail(detail: LocalSkillDetail) -> None:
 def search(
     query: str = typer.Argument(..., help="Search query"),
     registry: str | None = typer.Option(None, "--registry", help="Registry base URL"),
+    source: SearchSource = typer.Option(
+        SearchSource.LOCAL,
+        "--source",
+        help="Search source: local, registry, or all",
+    ),
 ) -> None:
-    """Search the Skill registry."""
-    rows = _run_or_exit(lambda: search_registry(query, registry=registry))
-    for slug, description in rows:
-        typer.echo(f"{slug}\t{description}")
+    """Search local Skills by default, optionally querying the registry."""
+    if source in (SearchSource.LOCAL, SearchSource.ALL):
+        local_rows = _run_or_exit(lambda: _search_local(query))
+        _print_local_search_rows(local_rows)
+    if source in (SearchSource.REGISTRY, SearchSource.ALL):
+        if source is SearchSource.ALL:
+            typer.echo("")
+        registry_rows = _run_or_exit(lambda: search_registry(query, registry=registry))
+        _print_registry_search_rows(registry_rows)
 
 
 @app.command()
@@ -174,12 +225,29 @@ def list_command() -> None:
 @app.command()
 def show(
     identifier: str = typer.Argument(..., help="Local Skill slug or runtime name"),
+    body: bool = typer.Option(False, "--body", help="Print Skill instructions body"),
 ) -> None:
-    """Show local Skill metadata and instructions."""
+    """Show local Skill metadata."""
     detail = _run_or_exit(
         lambda: show_local_skill(identifier, settings.skills_extensions_dir)
     )
-    _print_local_detail(detail)
+    _print_local_detail(detail, include_body=body)
+
+
+@app.command()
+def read(
+    identifier: str = typer.Argument(..., help="Local Skill slug or runtime name"),
+    relative_path: str = typer.Argument(..., help="Path inside the local Skill"),
+) -> None:
+    """Read a file from a local Skill directory."""
+    content = _run_or_exit(
+        lambda: read_local_skill_file(
+            identifier,
+            relative_path,
+            settings.skills_extensions_dir,
+        )
+    )
+    typer.echo(content, nl=False)
 
 
 @app.command()

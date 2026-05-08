@@ -20,26 +20,222 @@ from sebastian.skills_registry.models import (
 runner = CliRunner()
 
 
-def test_search_prints_monkeypatched_registry_results(monkeypatch) -> None:
+def test_search_defaults_to_local_without_registry_call(monkeypatch, tmp_path: Path) -> None:
+    registry_calls: list[str] = []
     monkeypatch.setattr(
         skills,
-        "search_registry",
-        lambda query, registry=None: [("weather", "Weather helper")],
+        "RegistryClient",
+        lambda registry=None: registry_calls.append(registry or ""),
+    )
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="weather",
+                registered_name="skill__weather",
+                version="1.0.0",
+                registry="https://clawhub.ai",
+                managed=True,
+                path=tmp_path / "weather",
+                source="managed",
+            ),
+            InstalledSkill(
+                slug="flight",
+                registered_name="skill__flight",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "flight",
+                source="unmanaged",
+            ),
+        ],
     )
 
     result = runner.invoke(app, ["skills", "search", "weather"])
 
     assert result.exit_code == 0
+    assert registry_calls == []
+    assert "LOCAL" in result.output
+    assert "weather\tskill__weather\t1.0.0\tmanaged" in result.output
+    assert "flight" not in result.output
+
+
+def test_search_explicit_local_does_not_call_registry(monkeypatch, tmp_path: Path) -> None:
+    registry_calls: list[str] = []
+    monkeypatch.setattr(
+        skills,
+        "RegistryClient",
+        lambda registry=None: registry_calls.append(registry or ""),
+    )
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="weather",
+                registered_name="skill__weather",
+                version="1.0.0",
+                registry="https://clawhub.ai",
+                managed=True,
+                path=tmp_path / "weather",
+                source="managed",
+            )
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        ["skills", "search", "weather", "--source", "local"],
+    )
+
+    assert result.exit_code == 0
+    assert registry_calls == []
+    assert "LOCAL" in result.output
+    assert "REGISTRY" not in result.output
+
+
+def test_search_registry_source_calls_registry(monkeypatch) -> None:
+    calls: list[tuple[str, str | None]] = []
+
+    def fake_search(query: str, registry: str | None = None) -> list[tuple[str, str]]:
+        calls.append((query, registry))
+        return [("weather", "Weather helper")]
+
+    monkeypatch.setattr(skills, "search_registry", fake_search)
+
+    result = runner.invoke(
+        app,
+        ["skills", "search", "weather", "--source", "registry"],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("weather", None)]
+    assert "REGISTRY" in result.output
     assert "weather\tWeather helper" in result.output
 
 
-def test_search_http_error_prints_clean_cli_error(monkeypatch) -> None:
+def test_search_all_prints_local_and_registry(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="weather",
+                registered_name="skill__weather",
+                version="1.0.0",
+                registry="https://clawhub.ai",
+                managed=True,
+                path=tmp_path / "weather",
+                source="managed",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        skills,
+        "search_registry",
+        lambda query, registry=None: [("weather-pro", "Advanced weather")],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "weather", "--source", "all"])
+
+    assert result.exit_code == 0
+    assert "LOCAL" in result.output
+    assert "weather\tskill__weather\t1.0.0\tmanaged" in result.output
+    assert "REGISTRY" in result.output
+    assert "weather-pro\tAdvanced weather" in result.output
+
+
+def test_search_registry_option_does_not_imply_network_for_default_local(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    registry_calls: list[str] = []
+    monkeypatch.setattr(
+        skills,
+        "RegistryClient",
+        lambda registry=None: registry_calls.append(registry or ""),
+    )
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="weather",
+                registered_name="skill__weather",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "weather",
+                source="unmanaged",
+            )
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        ["skills", "search", "weather", "--registry", "https://mirror.example"],
+    )
+
+    assert result.exit_code == 0
+    assert registry_calls == []
+    assert "LOCAL" in result.output
+
+
+def test_search_registry_option_does_not_imply_network_for_explicit_local(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    registry_calls: list[str] = []
+    monkeypatch.setattr(
+        skills,
+        "RegistryClient",
+        lambda registry=None: registry_calls.append(registry or ""),
+    )
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="weather",
+                registered_name="skill__weather",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "weather",
+                source="unmanaged",
+            )
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "skills",
+            "search",
+            "weather",
+            "--source",
+            "local",
+            "--registry",
+            "https://mirror.example",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert registry_calls == []
+    assert "LOCAL" in result.output
+
+
+def test_search_registry_http_error_prints_clean_cli_error(monkeypatch) -> None:
     def fail_search(query: str, registry: str | None = None) -> list[tuple[str, str]]:
         raise httpx.ConnectError("network down")
 
     monkeypatch.setattr(skills, "search_registry", fail_search)
 
-    result = runner.invoke(app, ["skills", "search", "weather"])
+    result = runner.invoke(
+        app,
+        ["skills", "search", "weather", "--source", "registry"],
+    )
 
     assert result.exit_code == 1
     assert "❌ network down" in result.stderr
@@ -540,14 +736,19 @@ def test_list_prints_managed_and_unmanaged_rows(monkeypatch, tmp_path: Path) -> 
     assert "manual\tmanual_tool\t-\tunmanaged" in result.output
 
 
-def test_show_prints_local_skill_instructions(monkeypatch, tmp_path: Path) -> None:
+def test_show_prints_local_skill_metadata_without_body_by_default(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     def fake_show(identifier: str, root: Path) -> LocalSkillDetail:
         assert identifier == "weather"
         return LocalSkillDetail(
             slug="weather",
+            name="Weather",
             registered_name="skill__weather",
             description="Weather helper",
             body="Use this for weather.",
+            files=("SKILL.md", "examples/demo.md"),
             version="1.0.0",
             registry="https://clawhub.ai",
             managed=True,
@@ -562,8 +763,62 @@ def test_show_prints_local_skill_instructions(monkeypatch, tmp_path: Path) -> No
     assert result.exit_code == 0
     assert "Slug: weather" in result.output
     assert "Registered: skill__weather" in result.output
+    assert "Name: Weather" in result.output
     assert "Description: Weather helper" in result.output
+    assert f"Path: {tmp_path / 'weather'}" in result.output
+    assert "Source: managed" in result.output
+    assert "Files:" in result.output
+    assert "SKILL.md" in result.output
+    assert "examples/demo.md" in result.output
+    assert "Instructions:" not in result.output
+    assert "Use this for weather." not in result.output
+
+
+def test_show_with_body_prints_local_skill_instructions(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    def fake_show(identifier: str, root: Path) -> LocalSkillDetail:
+        assert identifier == "weather"
+        return LocalSkillDetail(
+            slug="weather",
+            name="Weather",
+            registered_name="skill__weather",
+            description="Weather helper",
+            body="Use this for weather.",
+            files=("SKILL.md",),
+            version="1.0.0",
+            registry="https://clawhub.ai",
+            managed=True,
+            source="managed",
+            path=tmp_path / "weather",
+        )
+
+    monkeypatch.setattr(skills, "show_local_skill", fake_show)
+
+    result = runner.invoke(app, ["skills", "show", "weather", "--body"])
+
+    assert result.exit_code == 0
+    assert "Instructions:" in result.output
     assert "Use this for weather." in result.output
+
+
+def test_read_prints_local_skill_file(monkeypatch) -> None:
+    calls: list[tuple[str, str, Path]] = []
+
+    def fake_read(identifier: str, relative_path: str, root: Path) -> str:
+        calls.append((identifier, relative_path, root))
+        return "# Example\nUse this sample.\n"
+
+    monkeypatch.setattr(skills, "read_local_skill_file", fake_read)
+
+    result = runner.invoke(app, ["skills", "read", "weather", "examples/demo.md"])
+
+    assert result.exit_code == 0
+    assert calls == [
+        ("weather", "examples/demo.md", skills.settings.skills_extensions_dir)
+    ]
+    assert result.output == "# Example\nUse this sample.\n"
 
 
 def test_list_lockfile_error_prints_clean_cli_error(monkeypatch) -> None:
