@@ -663,6 +663,52 @@ def test_lookup_normalizes_registered_name_input_to_frontmatter_name(
     assert [skill.slug for skill in matches] == ["weather"]
 
 
+def test_lookup_skill_prefix_input_does_not_match_slug_before_name(
+    tmp_path: Path,
+) -> None:
+    from sebastian.skills_registry.installer import _find_local_skill_matches
+    from sebastian.skills_registry.models import InstalledSkill
+
+    slug_only = tmp_path / "weather"
+    name_match = tmp_path / "weather-name"
+    _write_skill(slug_only, name="forecast")
+    _write_skill(name_match, name="weather")
+
+    matches = _find_local_skill_matches(
+        "skill__weather",
+        [
+            InstalledSkill("weather", "skill__forecast", None, None, False, slug_only),
+            InstalledSkill(
+                "weather-name",
+                "skill__weather_name",
+                None,
+                None,
+                False,
+                name_match,
+            ),
+        ],
+    )
+
+    assert [skill.slug for skill in matches] == ["weather-name"]
+
+
+def test_lookup_skill_prefix_input_can_match_registered_name(
+    tmp_path: Path,
+) -> None:
+    from sebastian.skills_registry.installer import _find_local_skill_matches
+    from sebastian.skills_registry.models import InstalledSkill
+
+    skill_root = tmp_path / "weather"
+    _write_skill(skill_root, name="forecast")
+
+    matches = _find_local_skill_matches(
+        "skill__weather",
+        [InstalledSkill("weather", "skill__weather", None, None, False, skill_root)],
+    )
+
+    assert [skill.slug for skill in matches] == ["weather"]
+
+
 def test_show_local_skill_ambiguous_lookup_reports_candidate_slugs(
     tmp_path: Path,
 ) -> None:

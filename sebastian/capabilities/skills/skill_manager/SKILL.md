@@ -10,9 +10,12 @@ shim paths directly:
 
 ```bash
 sebastian skills search "<query>"
+sebastian skills search "<query>" --source registry
 sebastian skills inspect <slug>
 sebastian skills list
 sebastian skills show <name-or-slug>
+sebastian skills show <name-or-slug> --body
+sebastian skills read <name-or-slug> <relative-path>
 sebastian skills install <slug>
 sebastian skills update <slug>
 sebastian skills update --all
@@ -22,8 +25,11 @@ sebastian skills remove <slug>
 Command reference:
 
 ```bash
-# Search the remote registry.
+# Search local installed Skills. This is the default.
 sebastian skills search "<query>"
+
+# Search the remote registry only when finding new Skills to install.
+sebastian skills search "<query>" --source registry
 
 # Inspect remote registry metadata before install or update.
 sebastian skills inspect <slug>
@@ -31,26 +37,35 @@ sebastian skills inspect <slug>
 # List local builtin, managed, and unmanaged Skills.
 sebastian skills list
 
-# Read local Skill metadata and SKILL.md instructions.
+# Read local Skill metadata, path, source, and visible file list.
 sebastian skills show <name-or-slug>
 
-# Install a registry Skill after inspection and user confirmation.
+# Read local SKILL.md body/instructions.
+sebastian skills show <name-or-slug> --body
+
+# Read a referenced visible file inside the local Skill directory.
+sebastian skills read <name-or-slug> <relative-path>
+
+# Install a registry Skill only after explicit user request and confirmation.
 sebastian skills install <slug>
 
-# Update one installed managed Skill after inspection and user confirmation.
+# Update one installed managed Skill only after explicit user request and confirmation.
 sebastian skills update <slug>
 
-# Update all package-managed Skills after user confirmation.
+# Update all package-managed Skills only after explicit user request and confirmation.
 sebastian skills update --all
 
-# Remove a managed local Skill after user confirmation.
+# Remove a managed local Skill only after explicit user request and confirmation.
 sebastian skills remove <slug>
 ```
 
 Rules:
 
-- For local Skill usage questions, run `sebastian skills list` first if the exact name is unclear, then `sebastian skills show <name-or-slug>`.
+- For local Skill usage questions, run `sebastian skills list` first if the exact name is unclear, then `sebastian skills show <name-or-slug> --body`.
+- Use plain `sebastian skills show <name-or-slug>` for metadata, path, source, and visible file names.
+- Use `sebastian skills read <name-or-slug> <relative-path>` to read files referenced by the Skill instructions.
 - Do not use registry `inspect` as a substitute for local `show`; installed local Skill content is authoritative for how to use it.
+- Use `sebastian skills search <query> --source registry` only when finding new Skills to install.
 - Always inspect registry metadata before install or update.
 - Before install or update, summarize registry-visible metadata: registry, slug/name, version, security/moderation status, download URL/SHA if shown, and warnings.
 - Do not require a bundle file summary; CLI inspect does not list files unless future registry metadata provides them.

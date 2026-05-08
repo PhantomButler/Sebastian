@@ -803,6 +803,35 @@ def test_show_with_body_prints_local_skill_instructions(
     assert "Use this for weather." in result.output
 
 
+def test_show_with_body_rejects_large_skill_body(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    def fake_show(identifier: str, root: Path) -> LocalSkillDetail:
+        assert identifier == "weather"
+        return LocalSkillDetail(
+            slug="weather",
+            name="Weather",
+            registered_name="skill__weather",
+            description="Weather helper",
+            body="x" * (skills.MAX_LOCAL_SKILL_READ_BYTES + 1),
+            files=("SKILL.md",),
+            version="1.0.0",
+            registry="https://clawhub.ai",
+            managed=True,
+            source="managed",
+            path=tmp_path / "weather",
+        )
+
+    monkeypatch.setattr(skills, "show_local_skill", fake_show)
+
+    result = runner.invoke(app, ["skills", "show", "weather", "--body"])
+
+    assert result.exit_code == 1
+    assert "too large" in result.stderr
+    assert "Instructions:" not in result.output
+
+
 def test_read_prints_local_skill_file(monkeypatch) -> None:
     calls: list[tuple[str, str, Path]] = []
 

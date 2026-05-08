@@ -13,6 +13,7 @@ from sebastian.skills_registry.client import (
     resolve_registry_url,
 )
 from sebastian.skills_registry.installer import (
+    MAX_LOCAL_SKILL_READ_BYTES,
     SkillInstallError,
     install_skill,
     read_local_skill_file,
@@ -112,7 +113,6 @@ def _matches_local_skill(skill: InstalledSkill, query: str) -> bool:
     fields = (
         skill.slug,
         skill.registered_name,
-        str(getattr(skill, "name", "")),
     )
     return any(normalized_query in field.casefold() for field in fields)
 
@@ -148,6 +148,8 @@ def _print_local_detail(detail: LocalSkillDetail, include_body: bool) -> None:
         typer.echo(f"- {relative_path}")
     if not include_body:
         return
+    if len(detail.body.encode("utf-8")) > MAX_LOCAL_SKILL_READ_BYTES:
+        raise SkillInstallError("Local Skill body is too large")
     typer.echo("")
     typer.echo("Instructions:")
     typer.echo(detail.body or "-")
@@ -231,7 +233,7 @@ def show(
     detail = _run_or_exit(
         lambda: show_local_skill(identifier, settings.skills_extensions_dir)
     )
-    _print_local_detail(detail, include_body=body)
+    _run_or_exit(lambda: _print_local_detail(detail, include_body=body))
 
 
 @app.command()

@@ -405,11 +405,11 @@ def _find_local_skill_matches(
     identifier: str,
     installed: list[InstalledSkill],
 ) -> list[InstalledSkill]:
-    normalized = identifier[7:] if identifier.startswith("skill__") else identifier
-    slug_matches = [skill for skill in installed if skill.slug == normalized]
+    slug_matches = [skill for skill in installed if skill.slug == identifier]
     if slug_matches:
         return slug_matches
-    name_matches = [skill for skill in installed if _skill_name(skill) == normalized]
+    name_identifier = identifier[7:] if identifier.startswith("skill__") else identifier
+    name_matches = [skill for skill in installed if _skill_name(skill) == name_identifier]
     if name_matches:
         return name_matches
     return [skill for skill in installed if skill.registered_name == identifier]
