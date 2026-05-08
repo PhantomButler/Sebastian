@@ -112,7 +112,7 @@ async def my_tool(param: str) -> ToolResult:
 
 **新增 Skill**：在 `capabilities/skills/<name>/SKILL.md` 或用户扩展目录下创建 `SKILL.md`。Gateway 启动时加载一次；服务运行中新增、删除或修改 `SKILL.md` 后，新会话首轮 turn 会在模型请求前刷新 Skill registry 与当前 Agent prompt/tool snapshot。`allowed_skills` 白名单使用完整注册名，例如 `skill__flight_search`。
 
-**安装第三方 Skill package**：使用 `sebastian skills search/inspect/install/list/update/remove` 从 ClawHub-compatible registry 管理 Skill。默认 registry 是 `https://clawhub.ai`，可用 `--registry` 或 `SEBASTIAN_SKILLS_REGISTRY_URL` 覆盖。安装目标为 `~/.sebastian/data/extensions/skills`，安装/更新/移除后的变化只影响新 Sebastian session；已有 session 保持启动时捕获的 prompt/tool snapshot。
+**安装第三方 Skill package**：使用 `sebastian skills search/inspect/install/list/update/remove` 从 ClawHub-compatible registry 管理 Skill。默认 registry 是 `https://clawhub.ai`；search/inspect/install 可用 `--registry` 或 `SEBASTIAN_SKILLS_REGISTRY_URL` 覆盖，update 默认沿用安装时记录的 registry，除非显式传入 `--registry`。install/update/remove 在有效 registry 非默认值时会要求确认，包括 update 使用的已存储 registry。安装目标为 `~/.sebastian/data/extensions/skills`，安装/更新/移除后的变化只影响新 Sebastian session；已有 session 保持启动时捕获的 prompt/tool snapshot。
 
 **Agent 辅助安装**：内置 `skill_installer` Skill 会指导 Sebastian 通过 `~/.sebastian/bin/sebastian` shim 搜索、检查候选 Skill，并在用户明确确认后执行 install/update/remove；它禁止运行第三方 bundle 中的脚本、禁止 `curl | bash`，也不会自动绕过 unsafe registry 状态。
 

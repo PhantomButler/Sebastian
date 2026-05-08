@@ -27,11 +27,16 @@ sebastian skills update flight-search
 sebastian skills remove flight-search
 ```
 
-默认 registry 为 `https://clawhub.ai`。网络命令按以下顺序解析 registry：
+默认 registry 为 `https://clawhub.ai`。`search`、`inspect`、`install` 按以下顺序解析
+registry：
 
 1. `--registry <url>`
 2. `SEBASTIAN_SKILLS_REGISTRY_URL`
 3. `https://clawhub.ai`
+
+`update` 是特例：若未传 `--registry`，它使用该 Skill 安装时写入 lockfile 的
+registry；显式传入 `--registry` 时才覆盖该记录。install/update/remove 等变更命令在
+有效 registry 非默认值时要求确认，包括 update 使用的已存储 registry。
 
 registry URL 必须是 HTTPS，且不能携带 query、fragment 或 credentials。CLI 使用
 Python HTTP client 直连 registry，不 shell out 到 `clawhub` CLI。当前实现是 consumer
@@ -113,7 +118,8 @@ Skill name 解析复用 runtime loader 的 `parse_skill_metadata()` /
 
 `update` 只作用于 package-managed Skill。它会先比对本地 fingerprint；如果用户有本地
 修改，默认拒绝，显式 `--force` 才会覆盖。若新版 `SKILL.md` 改变 runtime 注册名，默认拒绝，
-显式 `--allow-rename` 才允许。
+显式 `--allow-rename` 才允许。模型辅助调用 CLI 时不得传 `--allow-rename`，除非用户在当前
+对话中明确批准该 registered-name 变更。
 
 `remove` 只移除 package-managed Skill。交互式 CLI 默认要求确认；命令执行时删除目录并移除
 lockfile entry。已有 session 不受影响，新 session 不再看到该 Skill。
@@ -150,11 +156,12 @@ Sebastian 内置 `skill_installer` Skill，但没有新增 model-visible native
 
 - 先 search，再 inspect，安装或更新前必须检查候选 Skill。
 - 安装/更新确认前，向用户总结 registry inspect 可见信息：slug、name、version、
-  security status、download URL 与 SHA256。registered runtime name 需要下载并解析
-  `SKILL.md` 后才能确定，因此由 install/update 成功输出报告；update 若检测到 runtime
-  name 变化，会按 `--allow-rename` 确认语义处理。
+  security status、download URL 与 SHA256，以及 warnings。registered runtime name 需要下载并解析
+  `SKILL.md` 后才能确定，因此由 install/update 成功输出报告。CLI inspect 当前不列 bundle
+  文件，除非未来 registry metadata 提供，否则不要求文件列表摘要。
 - install/update/remove 前必须获得当前对话中的显式确认。
-- 不自动使用 `--yes`、`--force`、`--allow-rename` 或非默认 `--registry`。
+- 不自动使用 `--yes`、`--force`、`--allow-rename` 或非默认 `--registry`；只有用户在当前
+  对话中明确批准 registered-name 变更时，模型才可传 `--allow-rename`。
 - 不通过 `--force` 绕过 unsafe registry status。
 - 不运行下载包中的脚本，不使用 `curl | bash` 第三方安装流。
 - 完成后告知用户变更只对新的 Sebastian session 生效。

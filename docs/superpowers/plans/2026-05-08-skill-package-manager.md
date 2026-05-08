@@ -1893,9 +1893,12 @@ Use the installed Sebastian CLI shim explicitly:
 Rules:
 
 - Always inspect before install or update.
-- Summarize registry, slug, version, registered Skill name, files, security/moderation status, and warnings.
+- Before install or update, summarize registry-visible metadata: registry, slug/name, version, security/moderation status, download URL/SHA if shown, and warnings.
+- Do not require a bundle file summary; CLI inspect does not list files unless future registry metadata provides them.
+- After install or update, report the registered runtime Skill name from the CLI output.
 - Ask the user for explicit confirmation before `install`, `update`, or `remove`.
 - Do not pass `--yes` or `--force` unless the user explicitly requested that flag in the current conversation.
+- Do not pass `--allow-rename` unless the user explicitly approves the registered-name change in the current conversation.
 - Never use `--force` to bypass unsafe registry security/moderation status.
 - Do not auto-accept an update that changes the registered Skill name.
 - Do not use `--registry` unless the user names that registry.

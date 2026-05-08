@@ -154,10 +154,13 @@ Sub-Agent 插件目录。当前已有：
 - `mcp_client.py`：MCP client 接入
 
 用户安装的 Skill package 默认写入
-`~/.sebastian/data/extensions/skills`。`sebastian skills` 命令使用默认
-registry `https://clawhub.ai`，也可通过 `--registry` 或
-`SEBASTIAN_SKILLS_REGISTRY_URL` 指向兼容 registry。变更会在新 Sebastian
-session 首轮热加载时进入 prompt/tool snapshot；已有 session 保持原快照。
+`~/.sebastian/data/extensions/skills`。`sebastian skills search/inspect/install`
+使用显式 `--registry` → `SEBASTIAN_SKILLS_REGISTRY_URL` → 默认
+`https://clawhub.ai` 的顺序解析 registry；`update` 不传 `--registry` 时使用该
+Skill 安装时记录在 lockfile 中的 registry，显式传入 `--registry` 则覆盖该记录。
+install/update/remove 等变更命令在有效 registry 非默认值时会要求确认，包括使用已存储
+registry 的 update。变更会在新 Sebastian session 首轮热加载时进入 prompt/tool
+snapshot；已有 session 保持原快照。
 内置 `skill_installer` Skill 让 Sebastian 通过 CLI 搜索、检查并在用户确认后安装、
 更新或移除 Skill。
 

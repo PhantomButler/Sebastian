@@ -8,9 +8,11 @@
 
 用户通过 `sebastian skills install` 安装的 package-managed Skill 默认落在
 `~/.sebastian/data/extensions/skills`，与手工添加的用户 Skill 使用同一套
-新会话热加载生命周期。`sebastian skills search/inspect/install/list/update/remove`
-默认访问 `https://clawhub.ai`，也可通过 `--registry` 或
-`SEBASTIAN_SKILLS_REGISTRY_URL` 指向兼容 registry。
+新会话热加载生命周期。默认 registry 是 `https://clawhub.ai`。search/inspect/install
+使用显式 `--registry` → `SEBASTIAN_SKILLS_REGISTRY_URL` → 默认 registry 的顺序解析；
+update 不传 `--registry` 时使用安装 lockfile 记录的 registry，显式传入
+`--registry` 时覆盖该记录。install/update/remove 在有效 registry 非默认值时会确认，
+包括 update 使用的已存储 registry。
 
 ## 目录结构
 
@@ -35,10 +37,13 @@ skills/
   继续使用已有 prompt/tool snapshot。
 
 内置 `skill_installer` Skill 负责安全的 agent-assisted install flow：它会使用
-`~/.sebastian/bin/sebastian` shim 搜索和检查 Skill，向用户总结 registry、版本、
-注册名、安全状态和警告，并在用户确认后才执行 install/update/remove。该 Skill
-不会运行下载包中的脚本，不使用 `curl | bash`，也不会自动使用 `--force`、`--yes`
-或非默认 registry。
+`~/.sebastian/bin/sebastian` shim 搜索和检查 Skill，安装/更新确认前向用户总结
+inspect 可见的 registry metadata（registry、slug/name、version、安全/审核状态、
+download/SHA 信息和警告），并在用户确认后才执行 install/update/remove。runtime
+注册名只能在下载并解析 `SKILL.md` 后确定，因此由 install/update 成功后的 CLI 输出报告。
+CLI inspect 当前不列 bundle 文件，除非未来 registry metadata 提供，否则不要求总结文件列表。
+该 Skill 不会运行下载包中的脚本，不使用 `curl | bash`，也不会自动使用 `--force`、
+`--yes`、`--allow-rename` 或非默认 registry。
 
 ## Skill 定义格式
 

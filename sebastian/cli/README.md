@@ -83,11 +83,14 @@ Skill package manager 的 CLI 外壳，负责调用 registry client 与 installe
 
 - `search_registry()`：用 `RegistryClient.search()` 查询 registry，返回 CLI 行数据。
 - `inspect`：展示 registry 中 Skill 的 slug、name、version、security、download、sha256 等信息。
-- `install` / `update` / `remove`：安装、更新、移除 package-managed Skill，并在非默认 registry、强制覆盖、允许 runtime name 变更、移除等高影响操作前要求显式确认。
+- `install` / `update` / `remove`：安装、更新、移除 package-managed Skill，并在非默认有效 registry、强制覆盖、允许 runtime name 变更、移除等高影响操作前要求显式确认。
 - `list`：展示当前 runtime Skill extensions 目录下的 managed / unmanaged Skill。
 
-默认 registry 为 `https://clawhub.ai`。网络命令按 `--registry` →
-`SEBASTIAN_SKILLS_REGISTRY_URL` → 默认 registry 的顺序解析。安装目标是
+默认 registry 为 `https://clawhub.ai`。`search` / `inspect` / `install`
+按 `--registry` → `SEBASTIAN_SKILLS_REGISTRY_URL` → 默认 registry 的顺序解析。
+`update` 默认使用已安装 Skill lockfile 中记录的 registry，只有显式传入
+`--registry` 时才覆盖该记录。install/update/remove 等变更命令在有效 registry
+非默认值时要求确认，包括 update 使用的已存储 registry。安装目标是
 `~/.sebastian/data/extensions/skills`（即
 `settings.skills_extensions_dir`），写入 `.sebastian-skills.lock.json` 与
 每个 Skill 目录内的 `.sebastian-origin.json`。

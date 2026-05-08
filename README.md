@@ -190,9 +190,13 @@ sebastian skills update flight-search
 sebastian skills remove flight-search
 ```
 
-The default registry is `https://clawhub.ai`. Networked commands accept
-`--registry <url>`, and `SEBASTIAN_SKILLS_REGISTRY_URL` can set a default
-override. Installed packages live under
+The default registry is `https://clawhub.ai`. `search`, `inspect`, and
+`install` resolve the registry from explicit `--registry <url>`, then
+`SEBASTIAN_SKILLS_REGISTRY_URL`, then the default. `update` without
+`--registry` uses the registry recorded when the Skill was installed; passing
+`--registry` overrides that stored registry. Mutating commands ask for
+confirmation before using any non-default effective registry, including a
+stored registry. Installed packages live under
 `~/.sebastian/data/extensions/skills`; installs, updates, and removals apply to
 new Sebastian sessions because each new session refreshes the Skill snapshot
 before its first model request.
