@@ -43,9 +43,11 @@ class InstalledSkill:
 @dataclass(frozen=True)
 class LocalSkillDetail:
     slug: str
+    name: str
     registered_name: str
     description: str
     body: str
+    files: tuple[str, ...]
     version: str | None
     registry: str | None
     managed: bool

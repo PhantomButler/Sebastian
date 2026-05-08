@@ -39,6 +39,9 @@ from sebastian.skills_registry.safety import (
 ORIGIN_FILENAME = ".sebastian-origin.json"
 HTTP_TIMEOUT_SECONDS = 30
 MAX_DOWNLOAD_SIZE = 10 * 1_048_576
+MAX_LOCAL_SKILL_READ_BYTES = 128 * 1024
+MANAGER_OWNED_NAMES = {".sebastian-origin.json", ".sebastian-skills.lock.json"}
+MANAGER_OWNED_DIRS = {".sebastian"}
 UNSAFE_STATUSES = {"malicious", "quarantined", "hidden", "suspicious", "blocked"}
 logger = logging.getLogger(__name__)
 
@@ -106,19 +109,7 @@ def show_local_skill(
     *,
     builtin_dir: Path | None = None,
 ) -> LocalSkillDetail:
-    matches = _find_local_skill_matches(
-        identifier,
-        list_installed(root, builtin_dir=builtin_dir),
-    )
-    if not matches:
-        raise SkillInstallError(f"Local Skill {identifier!r} was not found")
-    if len(matches) > 1:
-        candidates = ", ".join(sorted(skill.slug for skill in matches))
-        raise SkillInstallError(
-            f"Local Skill {identifier!r} is ambiguous; matches: {candidates}"
-        )
-
-    skill = matches[0]
+    skill = _resolve_local_skill(identifier, root, builtin_dir=builtin_dir)
     skill_md = skill.path / "SKILL.md"
     try:
         content = skill_md.read_text(encoding="utf-8")
@@ -128,15 +119,53 @@ def show_local_skill(
 
     return LocalSkillDetail(
         slug=skill.slug,
+        name=metadata.name,
         registered_name=metadata.registered_name,
         description=metadata.description,
         body=metadata.body,
+        files=_list_skill_files(skill.path),
         version=skill.version,
         registry=skill.registry,
         managed=skill.managed,
         source=skill.source,
         path=skill.path,
     )
+
+
+def read_local_skill_file(
+    identifier: str,
+    relative_path: str,
+    root: Path,
+    *,
+    builtin_dir: Path | None = None,
+) -> str:
+    relative = Path(relative_path)
+    if (
+        not relative_path
+        or relative_path == "."
+        or relative.is_absolute()
+        or relative == Path("..")
+        or ".." in relative.parts
+        or _is_hidden_or_manager_owned(relative)
+    ):
+        raise SkillInstallError("Local Skill file path is not readable")
+
+    skill = _resolve_local_skill(identifier, root, builtin_dir=builtin_dir)
+    skill_root = skill.path.resolve()
+    target = (skill.path / relative).resolve()
+    try:
+        target.relative_to(skill_root)
+    except ValueError as exc:
+        raise SkillInstallError("Local Skill file path escapes the Skill directory") from exc
+
+    if not target.is_file():
+        raise SkillInstallError("Local Skill file path is not a file")
+    if target.stat().st_size > MAX_LOCAL_SKILL_READ_BYTES:
+        raise SkillInstallError("Local Skill file is too large")
+    try:
+        return target.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise SkillInstallError("Local Skill file is not valid UTF-8") from exc
 
 
 def install_skill(
@@ -377,25 +406,63 @@ def _find_local_skill_matches(
     installed: list[InstalledSkill],
 ) -> list[InstalledSkill]:
     normalized = identifier[7:] if identifier.startswith("skill__") else identifier
-    exact_slug = [skill for skill in installed if skill.slug == identifier]
-    if exact_slug:
-        return _prefer_local_override(exact_slug)
-    exact_registered = [skill for skill in installed if skill.registered_name == identifier]
-    if exact_registered:
-        return _prefer_local_override(exact_registered)
-    return [
-        skill
-        for skill in installed
-        if skill.registered_name == f"skill__{normalized}"
-    ]
+    slug_matches = [skill for skill in installed if skill.slug == normalized]
+    if slug_matches:
+        return slug_matches
+    name_matches = [skill for skill in installed if _skill_name(skill) == normalized]
+    if name_matches:
+        return name_matches
+    return [skill for skill in installed if skill.registered_name == identifier]
 
 
-def _prefer_local_override(matches: list[InstalledSkill]) -> list[InstalledSkill]:
-    for source in ("managed", "unmanaged", "builtin"):
-        preferred = [skill for skill in matches if skill.source == source]
-        if preferred:
-            return preferred
-    return matches
+def _resolve_local_skill(
+    identifier: str,
+    root: Path,
+    *,
+    builtin_dir: Path | None = None,
+) -> InstalledSkill:
+    matches = _find_local_skill_matches(
+        identifier,
+        list_installed(root, builtin_dir=builtin_dir),
+    )
+    if not matches:
+        raise SkillInstallError(f"Local Skill {identifier!r} was not found")
+    if len(matches) > 1:
+        candidates = ", ".join(sorted(skill.slug for skill in matches))
+        raise SkillInstallError(f"Local Skill {identifier!r} is ambiguous; matches: {candidates}")
+    return matches[0]
+
+
+def _skill_name(skill: InstalledSkill) -> str:
+    skill_md = skill.path / "SKILL.md"
+    try:
+        content = skill_md.read_text(encoding="utf-8")
+        metadata = parse_skill_metadata(content, fallback_name=skill.path.name)
+    except (OSError, UnicodeDecodeError, SkillMetadataError) as exc:
+        raise SkillInstallError(f"Invalid local Skill metadata at {skill_md}") from exc
+    return metadata.name
+
+
+def _is_hidden_or_manager_owned(relative: Path) -> bool:
+    parts = relative.parts
+    return any(part.startswith(".") for part in parts) or any(
+        part in MANAGER_OWNED_NAMES or part in MANAGER_OWNED_DIRS for part in parts
+    )
+
+
+def _list_skill_files(skill_dir: Path) -> tuple[str, ...]:
+    rows: list[str] = []
+    for path in sorted(skill_dir.rglob("*")):
+        relative = path.relative_to(skill_dir)
+        if _is_hidden_or_manager_owned(relative):
+            continue
+        if path.is_dir() and not path.is_symlink():
+            continue
+        label = relative.as_posix()
+        if path.is_symlink():
+            label = f"{label} -> symlink"
+        rows.append(label)
+    return tuple(rows)
 
 
 def _scan_registered_name_owners(

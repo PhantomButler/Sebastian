@@ -48,6 +48,22 @@ def _write_skill(root: Path, *, name: str, description: str = "Demo") -> None:
     )
 
 
+def _write_skill_with_local_files(root: Path, *, name: str = "weather") -> Path:
+    _write_skill(root, name=name, description="Weather skill")
+    (root / "references").mkdir()
+    (root / "references" / "notes.md").write_text("rain notes", encoding="utf-8")
+    (root / "scripts").mkdir()
+    (root / "scripts" / "helper.py").write_text("print('ok')\n", encoding="utf-8")
+    (root / ".sebastian-origin.json").write_text("{}", encoding="utf-8")
+    (root / ".hidden").write_text("secret", encoding="utf-8")
+    (root / ".sebastian").mkdir()
+    (root / ".sebastian" / "private.json").write_text("{}", encoding="utf-8")
+    outside = root.parent / "outside.txt"
+    outside.write_text("outside", encoding="utf-8")
+    (root / "link-out").symlink_to(outside)
+    return outside
+
+
 def test_registered_name_collision_rejects_different_managed_slug(
     tmp_path: Path,
 ) -> None:
@@ -540,13 +556,37 @@ def test_show_local_skill_reads_builtin_by_registered_name(tmp_path: Path) -> No
     assert detail.source == "builtin"
 
 
+def test_show_local_skill_returns_local_detail_shape_and_visible_files(
+    tmp_path: Path,
+) -> None:
+    from sebastian.skills_registry.installer import show_local_skill
+
+    builtin_root = tmp_path / "builtin"
+    skill_root = tmp_path / "weather"
+    _write_skill_with_local_files(skill_root)
+    SkillPackageLock(tmp_path).save(
+        {"weather": _entry("weather", fingerprint=compute_package_fingerprint(skill_root))}
+    )
+
+    detail = show_local_skill("weather", tmp_path, builtin_dir=builtin_root)
+
+    assert detail.slug == "weather"
+    assert detail.name == "weather"
+    assert detail.registered_name == "skill__weather"
+    assert "references/notes.md" in detail.files
+    assert "scripts/helper.py" in detail.files
+    assert ".sebastian-origin.json" not in detail.files
+    assert ".hidden" not in detail.files
+    assert ".sebastian/private.json" not in detail.files
+
+
 def test_show_local_skill_prefers_exact_slug_over_registered_name(
     tmp_path: Path,
 ) -> None:
     from sebastian.skills_registry.installer import show_local_skill
 
     builtin_root = tmp_path / "builtin"
-    _write_skill(builtin_root / "weather", name="other", description="Builtin")
+    _write_skill(builtin_root / "other", name="weather", description="Builtin")
     _write_skill(tmp_path / "weather", name="weather", description="Managed")
     SkillPackageLock(tmp_path).save({"weather": _entry("weather")})
 
@@ -555,6 +595,182 @@ def test_show_local_skill_prefers_exact_slug_over_registered_name(
     assert detail.slug == "weather"
     assert detail.registered_name == "skill__weather"
     assert detail.source == "managed"
+
+
+def test_lookup_prefers_slug_over_frontmatter_name(tmp_path: Path) -> None:
+    from sebastian.skills_registry.installer import _find_local_skill_matches
+    from sebastian.skills_registry.models import InstalledSkill
+
+    slug_match = tmp_path / "weather"
+    name_match = tmp_path / "storm"
+    _write_skill(slug_match, name="storm")
+    _write_skill(name_match, name="weather")
+
+    matches = _find_local_skill_matches(
+        "weather",
+        [
+            InstalledSkill("weather", "skill__storm", None, None, False, slug_match),
+            InstalledSkill("storm", "skill__weather", None, None, False, name_match),
+        ],
+    )
+
+    assert [skill.slug for skill in matches] == ["weather"]
+
+
+def test_lookup_prefers_frontmatter_name_over_registered_compatibility(
+    tmp_path: Path,
+) -> None:
+    from sebastian.skills_registry.installer import _find_local_skill_matches
+    from sebastian.skills_registry.models import InstalledSkill
+
+    name_match = tmp_path / "weather-pack"
+    registered_match = tmp_path / "legacy"
+    _write_skill(name_match, name="weather")
+    _write_skill(registered_match, name="legacy")
+
+    matches = _find_local_skill_matches(
+        "weather",
+        [
+            InstalledSkill("legacy", "skill__weather", None, None, True, registered_match),
+            InstalledSkill(
+                "weather-pack",
+                "skill__weather_pack",
+                None,
+                None,
+                False,
+                name_match,
+            ),
+        ],
+    )
+
+    assert [skill.slug for skill in matches] == ["weather-pack"]
+
+
+def test_lookup_normalizes_registered_name_input_to_frontmatter_name(
+    tmp_path: Path,
+) -> None:
+    from sebastian.skills_registry.installer import _find_local_skill_matches
+    from sebastian.skills_registry.models import InstalledSkill
+
+    skill_root = tmp_path / "weather"
+    _write_skill(skill_root, name="weather")
+
+    matches = _find_local_skill_matches(
+        "skill__weather",
+        [InstalledSkill("weather", "skill__legacy", None, None, False, skill_root)],
+    )
+
+    assert [skill.slug for skill in matches] == ["weather"]
+
+
+def test_show_local_skill_ambiguous_lookup_reports_candidate_slugs(
+    tmp_path: Path,
+) -> None:
+    from sebastian.skills_registry.installer import SkillInstallError, show_local_skill
+
+    builtin_root = tmp_path / "builtin"
+    _write_skill(builtin_root / "weather", name="builtin_weather")
+    _write_skill(tmp_path / "weather", name="weather")
+    SkillPackageLock(tmp_path).save({"weather": _entry("weather")})
+
+    with pytest.raises(SkillInstallError, match=r"ambiguous.*weather"):
+        show_local_skill("weather", tmp_path, builtin_dir=builtin_root)
+
+
+def test_read_local_skill_file_reads_visible_file(tmp_path: Path) -> None:
+    from sebastian.skills_registry.installer import read_local_skill_file
+
+    builtin_root = tmp_path / "builtin"
+    skill_root = tmp_path / "weather"
+    _write_skill_with_local_files(skill_root)
+    SkillPackageLock(tmp_path).save(
+        {"weather": _entry("weather", fingerprint=compute_package_fingerprint(skill_root))}
+    )
+
+    content = read_local_skill_file(
+        "weather",
+        "references/notes.md",
+        tmp_path,
+        builtin_dir=builtin_root,
+    )
+
+    assert content == "rain notes"
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "/absolute/path",
+        "..",
+        "../outside.txt",
+        "references/../SKILL.md",
+        ".sebastian-origin.json",
+        ".hidden",
+        ".sebastian/private.json",
+        "link-out",
+        "references",
+    ],
+)
+def test_read_local_skill_file_rejects_unsafe_or_non_file_paths(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    from sebastian.skills_registry.installer import SkillInstallError, read_local_skill_file
+
+    builtin_root = tmp_path / "builtin"
+    skill_root = tmp_path / "weather"
+    _write_skill_with_local_files(skill_root)
+    SkillPackageLock(tmp_path).save(
+        {"weather": _entry("weather", fingerprint=compute_package_fingerprint(skill_root))}
+    )
+
+    with pytest.raises(SkillInstallError):
+        read_local_skill_file(
+            "weather",
+            relative_path,
+            tmp_path,
+            builtin_dir=builtin_root,
+        )
+
+
+def test_read_local_skill_file_rejects_invalid_utf8(tmp_path: Path) -> None:
+    from sebastian.skills_registry.installer import SkillInstallError, read_local_skill_file
+
+    builtin_root = tmp_path / "builtin"
+    skill_root = tmp_path / "weather"
+    _write_skill_with_local_files(skill_root)
+    (skill_root / "references" / "bad.md").write_bytes(b"\xff")
+    SkillPackageLock(tmp_path).save(
+        {"weather": _entry("weather", fingerprint=compute_package_fingerprint(skill_root))}
+    )
+
+    with pytest.raises(SkillInstallError):
+        read_local_skill_file(
+            "weather",
+            "references/bad.md",
+            tmp_path,
+            builtin_dir=builtin_root,
+        )
+
+
+def test_read_local_skill_file_rejects_files_over_128_kib(tmp_path: Path) -> None:
+    from sebastian.skills_registry.installer import SkillInstallError, read_local_skill_file
+
+    builtin_root = tmp_path / "builtin"
+    skill_root = tmp_path / "weather"
+    _write_skill_with_local_files(skill_root)
+    (skill_root / "references" / "large.md").write_bytes(b"x" * (128 * 1024 + 1))
+    SkillPackageLock(tmp_path).save(
+        {"weather": _entry("weather", fingerprint=compute_package_fingerprint(skill_root))}
+    )
+
+    with pytest.raises(SkillInstallError):
+        read_local_skill_file(
+            "weather",
+            "references/large.md",
+            tmp_path,
+            builtin_dir=builtin_root,
+        )
 
 
 def test_install_transaction_holds_package_lock_across_all_steps(
