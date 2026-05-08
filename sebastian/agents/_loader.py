@@ -37,7 +37,6 @@ class AgentConfig:
     stalled_threshold_minutes: int  # stalled detection threshold in minutes
     agent_class: type[BaseAgent]
     allowed_tools: list[str] | AllToolsSentinel | None = None
-    allowed_skills: list[str] | None = None
 
 
 def load_agents(extra_dirs: list[Path] | None = None) -> list[AgentConfig]:
@@ -84,9 +83,14 @@ def load_agents(extra_dirs: list[Path] | None = None) -> list[AgentConfig]:
                 logging.getLogger(__name__).warning("Failed to load agent %r: %s", agent_type, exc)
                 continue
 
-            # allowed_tools / allowed_skills: missing tools mean protocol-only.
+            if "allowed_skills" in agent_section:
+                raise ValueError(
+                    f"{manifest_path}: allowed_skills is no longer supported; "
+                    "Skill access is via Bash + sebastian skills CLI"
+                )
+
+            # allowed_tools: missing tools mean protocol-only.
             raw_tools = agent_section.get("allowed_tools")
-            raw_skills = agent_section.get("allowed_skills")
 
             if raw_tools == "ALL":
                 effective_tools: list[str] | AllToolsSentinel = ALL_TOOLS
@@ -105,7 +109,6 @@ def load_agents(extra_dirs: list[Path] | None = None) -> list[AgentConfig]:
                 stalled_threshold_minutes=int(agent_section.get("stalled_threshold_minutes", 5)),
                 agent_class=agent_class,
                 allowed_tools=effective_tools,
-                allowed_skills=list(raw_skills) if raw_skills is not None else None,
             )
 
     return list(configs.values())

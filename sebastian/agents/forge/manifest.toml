@@ -4,4 +4,3 @@ description = "编写代码、调试问题、构建工具"
 max_children = 5
 stalled_threshold_minutes = 5
 allowed_tools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "todo_read", "send_file"]
-allowed_skills = []

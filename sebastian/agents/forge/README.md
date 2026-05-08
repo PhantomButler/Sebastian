@@ -29,7 +29,6 @@ description               = "编写代码、调试问题、构建工具"
 max_children              = 5                              # 最大并发 depth=3 子任务数
 stalled_threshold_minutes = 5                              # 多少分钟无活动判定为 stalled
 allowed_tools             = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "todo_read", "send_file"]
-allowed_skills            = []
 ```
 
 - `max_children`：允许同时运行的 depth=3 子任务上限
