@@ -33,6 +33,32 @@ async def test_seeded_reloader_unchanged_returns_current_version(tmp_path: Path)
 
 
 @pytest.mark.asyncio
+async def test_add_skill_to_empty_extra_dir_reloads_registry(tmp_path: Path) -> None:
+    builtin_dir = tmp_path / "builtin"
+    builtin_dir.mkdir()
+    extra_dir = tmp_path / "extra"
+    extra_dir.mkdir()
+    reg = CapabilityRegistry()
+    reg.replace_skill_specs(load_skills(builtin_dir=builtin_dir, extra_dirs=[extra_dir]))
+    reloader = SkillHotReloader.seeded(
+        registry=reg,
+        builtin_dir=builtin_dir,
+        extra_dirs=[extra_dir],
+    )
+
+    write_skill(
+        extra_dir,
+        "flight",
+        "---\nname: flight\ndescription: Flight search\n---\nFind flights.",
+    )
+    result = await reloader.maybe_reload()
+
+    assert result.changed is True
+    assert result.version == 1
+    assert {s["name"] for s in reg.get_skill_specs()} == {"skill__flight"}
+
+
+@pytest.mark.asyncio
 async def test_edit_skill_md_reloads_and_increments_version(tmp_path: Path) -> None:
     write_skill(tmp_path, "travel", "---\nname: travel\ndescription: Old\n---\nOld.")
     reg = CapabilityRegistry()

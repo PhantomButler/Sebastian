@@ -1,6 +1,16 @@
 from __future__ import annotations
 
+import pathlib
 from pathlib import Path
+
+
+def test_builtin_skill_installer_is_loaded() -> None:
+    from sebastian.capabilities import skills as skills_pkg
+    from sebastian.capabilities.skills._loader import load_skills
+
+    specs = load_skills(builtin_dir=pathlib.Path(skills_pkg.__file__).parent)
+    names = {spec["name"] for spec in specs}
+    assert "skill__skill_installer" in names
 
 
 def test_skill_loader_reads_skill_md(tmp_path: Path) -> None:
@@ -13,7 +23,9 @@ def test_skill_loader_reads_skill_md(tmp_path: Path) -> None:
 
     from sebastian.capabilities.skills._loader import load_skills
 
-    skills = load_skills(extra_dirs=[tmp_path])
+    builtin_dir = tmp_path / "builtin"
+    builtin_dir.mkdir()
+    skills = load_skills(builtin_dir=builtin_dir, extra_dirs=[tmp_path])
 
     assert len(skills) == 1
     assert skills[0]["name"] == "skill__my_skill"
@@ -27,7 +39,9 @@ def test_skill_loader_skips_dirs_without_skill_md(tmp_path: Path) -> None:
 
     from sebastian.capabilities.skills._loader import load_skills
 
-    skills = load_skills(extra_dirs=[tmp_path])
+    builtin_dir = tmp_path / "builtin"
+    builtin_dir.mkdir()
+    skills = load_skills(builtin_dir=builtin_dir, extra_dirs=[tmp_path])
     assert len(skills) == 0
 
 

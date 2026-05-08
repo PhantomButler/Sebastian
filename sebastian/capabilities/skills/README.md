@@ -13,7 +13,9 @@ skills/
 ├── __init__.py        # 包入口（空）
 ├── _loader.py         # 扫描 SKILL.md、生成工具 spec
 ├── metadata.py        # 解析 SKILL.md frontmatter、校验 Skill 注册名
-└── hot_reload.py      # 计算 SKILL.md 指纹，新会话首轮触发 Skill 热加载
+├── hot_reload.py      # 计算 SKILL.md 指纹，新会话首轮触发 Skill 热加载
+└── skill_installer/   # 内置 Skill：通过 Sebastian CLI 管理 Skill 包
+    └── SKILL.md
 ```
 
 ## Skill 定义格式
@@ -61,6 +63,7 @@ description: 这个 Skill 的简短描述
 | 如果要修改… | 看这里 |
 |------------|--------|
 | 新增 Skill | 在本目录下创建 `<name>/SKILL.md`（无需改代码） |
+| 修改内置 Skill 安装器说明 | [skill_installer/SKILL.md](skill_installer/SKILL.md) |
 | frontmatter 解析与 Skill 名校验规则 | [metadata.py](metadata.py) — `parse_skill_metadata()` / `validate_skill_name()` |
 | 扫描目录逻辑、工具 spec 生成 | [_loader.py](_loader.py) — `load_skills()` |
 | 修改新会话热加载逻辑 | [hot_reload.py](hot_reload.py) — `SkillHotReloader` |
