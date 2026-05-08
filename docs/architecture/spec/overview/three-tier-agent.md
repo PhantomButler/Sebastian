@@ -62,13 +62,12 @@ description = "编写代码、调试问题、构建工具"
 max_children = 5
 stalled_threshold_minutes = 5
 allowed_tools = ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-allowed_skills = []
 ```
 
 Agent 运行时属性：
 
 - `agent_type: str` — 系统唯一标识，等于目录名（如 `"forge"`）；UI 展示时前端做 capitalize
-- `persona / system_prompt / tools / skills` — 自有能力
+- `persona / system_prompt / tools` — 自有能力；Skill 通过 `Bash` + `sebastian skills` CLI 按需读取
 - `max_children: int` — 该组长可同时运行的组员 session 上限
 
 运行时维护 `state.agent_instances: dict[str, BaseAgent]`，每个 agent_type 一个实例。

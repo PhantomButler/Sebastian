@@ -171,6 +171,9 @@ Sub-agent manifest 省略 `allowed_tools` 时，应解析为「协议工具 only
 1. **LLM 可见性层**：`get_callable_specs()` 不应在 `allowed_tools=None` 时返回全量能力工具。
 2. **执行校验层**：`PolicyGate.call()` 应拒绝不在有效白名单内的工具名，即使模型或调用方直接传入工具名。
 
+Skill 读取依赖 `Bash` 调用 `sebastian skills show/read`。受限 Agent 如果没有 `Bash`
+就自然无法读取 Skill；不要给通用 `Read` 增加 Skill 目录白名单。
+
 ## 三档权限详解
 
 | 档位 | 常量 | 行为 | 适用场景 |

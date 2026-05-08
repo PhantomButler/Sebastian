@@ -14,7 +14,7 @@ cli/
 ├── path_setup.py     # 稳定 CLI shim 与 shell PATH 配置
 ├── service.py        # systemd/launchd 服务安装、状态、重启
 ├── service_templates.py # systemd unit / launchd plist 模板渲染
-├── skills.py         # Skill registry 搜索、安装、更新、移除命令
+├── skills.py         # Skill 本地 catalog 与 package registry 管理命令
 └── updater.py        # 自升级逻辑（sebastian update）
 ```
 
@@ -95,8 +95,8 @@ Skill package manager 的 CLI 外壳，负责调用 registry client 与 installe
 `settings.skills_extensions_dir`），写入 `.sebastian-skills.lock.json` 与
 每个 Skill 目录内的 `.sebastian-origin.json`。
 
-安装、更新或移除后不会刷新当前正在运行的 session；新 Sebastian session
-首轮 turn 会通过 Skill hot reload 生命周期读取新的 `SKILL.md` 快照。
+安装、更新或移除后，本地 Skill catalog 立即以磁盘当前文件为准；正在运行的模型 turn
+不会自动注入 Skill 正文，后续需要时通过 CLI 按需读取。
 `sebastian skills list` 会展示当前 runtime 可见的 builtin / managed / unmanaged Skill；
 `sebastian skills search <query>` 默认搜索本地 Skill；`sebastian skills show <name-or-slug>`
 读取本地 Skill metadata、path、source 与可见文件列表；`sebastian skills show <name-or-slug> --body`

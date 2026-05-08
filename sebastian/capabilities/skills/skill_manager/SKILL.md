@@ -61,6 +61,7 @@ sebastian skills remove <slug>
 
 Rules:
 
+- Do not treat registry search or inspect output as local installed Skill usage instructions.
 - For local Skill usage questions, run `sebastian skills list` first if the exact name is unclear, then `sebastian skills show <name-or-slug> --body`.
 - Use plain `sebastian skills show <name-or-slug>` for metadata, path, source, and visible file names.
 - Use `sebastian skills read <name-or-slug> <relative-path>` to read files referenced by the Skill instructions.

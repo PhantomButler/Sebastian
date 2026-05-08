@@ -69,7 +69,6 @@ Core principles:
 class_name = "ForgeAgent"
 description = "编写代码、调试问题、构建工具"
 allowed_tools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]
-allowed_skills = []
 ```
 
 manifest 不再声明 `name` 字段；`agent_type` 来自目录名（`forge`），UI 显示名由前端做 capitalize。

@@ -310,7 +310,6 @@ description = "编写代码、调试问题、构建工具"
 max_children = 5                        # 第三级组员并发上限，默认 5
 stalled_threshold_minutes = 5           # 卡住检测阈值，默认 5 分钟
 allowed_tools = ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-allowed_skills = []
 ```
 
 `agent_type` 由目录名决定，是系统唯一标识；manifest 不再有独立的 display_name，UI 展示时前端做 capitalize。

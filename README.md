@@ -141,11 +141,14 @@ sebastian status             # Check process/service status
 sebastian service status     # Check system service diagnostics
 sebastian update             # Update to latest release (auto-rollback on failure)
 sebastian update --check     # Check for updates without installing
-sebastian skills search flight     # Search the Skill registry
+sebastian skills search flight     # Search local installed Skills
+sebastian skills search flight --source registry
 sebastian skills inspect flight-search
 sebastian skills install flight-search
 sebastian skills list
 sebastian skills show flight-search
+sebastian skills show flight-search --body
+sebastian skills read flight-search references/usage.md
 sebastian skills update flight-search
 sebastian skills remove flight-search
 ```
@@ -183,28 +186,34 @@ source-tree development only.
 Sebastian can install third-party Skills from a ClawHub-compatible registry:
 
 ```bash
-sebastian skills search "flight"
+sebastian skills search "flight" --source registry
 sebastian skills inspect flight-search
 sebastian skills install flight-search
 sebastian skills list
+sebastian skills search "flight"
+sebastian skills show flight-search
+sebastian skills show flight-search --body
+sebastian skills read flight-search references/usage.md
 sebastian skills update flight-search
 sebastian skills remove flight-search
 ```
 
-The default registry is `https://clawhub.ai`. `search`, `inspect`, and
+`sebastian skills search <query>` searches local installed Skills by default.
+Use `--source registry` only when looking for new Skills to install. The
+default registry is `https://clawhub.ai`; remote `search`, `inspect`, and
 `install` resolve the registry from explicit `--registry <url>`, then
-`SEBASTIAN_SKILLS_REGISTRY_URL`, then the default. `update` without
-`--registry` uses the registry recorded when the Skill was installed; passing
-`--registry` overrides that stored registry. Mutating commands ask for
+`SEBASTIAN_SKILLS_REGISTRY_URL`, then the default. `update` without `--registry`
+uses the registry recorded when the Skill was installed; passing `--registry`
+overrides that stored registry. Mutating commands ask for
 confirmation before using any non-default effective registry, including a
 stored registry. Installed packages live under
-`~/.sebastian/data/extensions/skills`; installs, updates, and removals apply to
-new Sebastian sessions because each new session refreshes the Skill snapshot
-before its first model request.
+`~/.sebastian/data/extensions/skills`; local Skill content is read from disk on
+demand with `show --body` and `read`.
 
 The builtin `skill_manager` Skill lets Sebastian help with this flow safely:
 it lists local Skills, reads local `SKILL.md` instructions through
-`sebastian skills show`, searches and inspects registry candidates through the
+`sebastian skills show --body`, reads referenced local files through
+`sebastian skills read`, searches and inspects registry candidates through the
 public `sebastian skills ...` CLI found on `PATH`, asks for explicit
 confirmation before install/update/remove, and does not run third-party scripts
 or bypass unsafe registry status. The target data directory follows the runtime

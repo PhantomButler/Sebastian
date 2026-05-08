@@ -64,14 +64,14 @@ class BaseAgent(ABC):
             self._persona_section(),           # 角色人设
             self._guidelines_section(),        # 操作指南
             self._tools_section(gate),         # 可用工具
-            self._skills_section(gate),        # 可用技能
+            self._skill_management_section(),  # Skill CLI bootstrap
             self._agents_section(agent_registry),  # 下属 Agent
             self._knowledge_section(),         # 知识库
         ]
         return "\n\n".join(s for s in sections if s)
 ```
 
-**Section 组合顺序**：persona → guidelines → tools → skills → agents → knowledge（空 section 自动跳过）
+**Section 组合顺序**：persona → guidelines → tools → skill management → agents → knowledge（空 section 自动跳过）
 
 **调用时机**：`BaseAgent.__init__` 末尾调用一次，结果存入 `self.system_prompt`，运行期不变。
 
@@ -82,7 +82,7 @@ class BaseAgent(ABC):
 | `_persona_section()` | 角色人设段；Sebastian 覆盖此方法，拼接 `BASE_BUTLER_RULES` + soul 文件内容 |
 | `_guidelines_section()` | 操作指南（通用行为规范） |
 | `_tools_section(gate)` | 当前 Agent 可用工具摘要，按 allowed_tools 过滤 |
-| `_skills_section(gate)` | 当前 Agent 可用 Skill 摘要，按 allowed_skills 过滤 |
+| `_skill_management_section()` | 固定的 Skill CLI bootstrap，只列 `sebastian skills` 发现/读取入口 |
 | `_agents_section(registry)` | 可调度的 Sub-Agent 列表（默认返回空，仅 Sebastian 覆盖） |
 | `_knowledge_section()` | 知识库内容（默认返回空） |
 
@@ -97,22 +97,19 @@ class BaseAgent(ABC):
 class_name = "ForgeAgent"
 description = "编写代码、调试问题、构建工具"
 allowed_tools = ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-allowed_skills = []
 ```
 
 规则：
-- 不声明 `allowed_tools` → 继承全量（向后兼容）
-- 空列表 `[]` → 明确声明无该类能力
+- 不声明 `allowed_tools` → 仅自动注入协议工具
+- 空列表 `[]` → 明确声明无能力工具，仍自动注入协议工具
 - Sebastian 主体不经过 manifest，默认全量
+- Skill 白名单字段不再支持；Skill 读取依赖 `Bash` + `sebastian skills` CLI
 
 ### 4.2 CapabilityRegistry 过滤
 
 ```python
 def get_tool_specs(self, allowed: set[str] | None = None) -> list[dict]:
-    """返回工具 spec 列表。allowed=None 表示不过滤。"""
-
-def get_skill_specs(self, allowed: set[str] | None = None) -> list[dict]:
-    """返回 Skill spec 列表。allowed=None 表示不过滤。"""
+    """返回工具 spec 列表。allowed=None 表示不暴露能力工具。"""
 ```
 
 ---

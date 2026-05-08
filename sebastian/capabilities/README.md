@@ -42,10 +42,10 @@ capabilities/
 ├── mcps/                # MCP server 配置目录，每个子目录一个 config.toml，启动时自动连接
 │   ├── __init__.py
 │   └── _loader.py       # 扫描 mcps/ 子目录，自动连接各 MCP server
-└── skills/              # Skill 复合能力目录，启动加载 + 新会话首轮热刷新
+└── skills/              # Skill 本地 catalog 与 package-managed Skill 目录
     ├── __init__.py
-    ├── _loader.py       # 扫描 SKILL.md、解析 frontmatter、生成工具 spec
-    ├── hot_reload.py    # 新会话首轮检查 SKILL.md 指纹并刷新 Skill registry
+    ├── _loader.py       # 扫描 SKILL.md、解析 frontmatter、生成 catalog metadata
+    ├── hot_reload.py    # 记录 SKILL.md 指纹与 catalog 版本
     ├── metadata.py      # SKILL.md frontmatter 解析与 Skill 名校验
     └── skill_manager/ # 内置 Skill：通过 Sebastian CLI 管理 Skill
 ```
@@ -60,7 +60,7 @@ capabilities/
 | 修改工具自动加载逻辑 | [tools/_loader.py](tools/_loader.py) |
 | 新增 MCP Server 连接 | `mcps/<name>/config.toml`，重启自动连接 |
 | 修改 MCP 连接方式 | [mcp_client.py](mcp_client.py) |
-| 修改 Skill 加载 / 热加载逻辑 | [skills/](skills/README.md) 的 `_loader.py` / `hot_reload.py` |
+| 修改 Skill catalog / 指纹逻辑 | [skills/](skills/README.md) 的 `_loader.py` / `hot_reload.py` |
 | 查看所有已注册工具 | 运行时调用 `registry.get_all_tool_specs()`，或搜索 `@tool` 装饰器 |
 
 ## 公开接口
@@ -78,7 +78,7 @@ result = await registry.call("file_read", path="/foo/bar.txt")
 # result.ok, result.output, result.error
 
 # 按白名单获取工具；allowed_tools=None 表示不暴露能力工具，ALL_TOOLS 表示全量能力工具
-tool_specs = registry.get_callable_specs(allowed_tools={"Read"}, allowed_skills=None)
+tool_specs = registry.get_callable_specs(allowed_tools={"Read"})
 
 # 注入 MCP 工具（由 app.py lifespan 调用）
 await registry.register_mcp_tools(mcp_client)
@@ -110,9 +110,9 @@ async def my_tool(param: str) -> ToolResult:
 
 **新增 MCP Server**：在 `capabilities/mcps/<name>/` 下创建 `config.toml`，重启后自动连接。
 
-**新增 Skill**：在 `capabilities/skills/<name>/SKILL.md` 或用户扩展目录下创建 `SKILL.md`。Gateway 启动时加载一次；服务运行中新增、删除或修改 `SKILL.md` 后，新会话首轮 turn 会在模型请求前刷新 Skill registry 与当前 Agent prompt/tool snapshot。`allowed_skills` 白名单使用完整注册名，例如 `skill__flight_search`。
+**新增 Skill**：在 `capabilities/skills/<name>/SKILL.md` 或用户扩展目录下创建 `SKILL.md`。Skill 是本地 catalog package，不作为 provider tool 暴露，也不进入 `CapabilityRegistry`。模型通过 `Bash` 调用 `sebastian skills list/search/show/read` 按需读取本地 Skill 内容。
 
-**安装第三方 Skill package**：使用 `sebastian skills search/inspect/install/list/show/update/remove` 从 ClawHub-compatible registry 管理 Skill。默认 registry 是 `https://clawhub.ai`；search/inspect/install 可用 `--registry` 或 `SEBASTIAN_SKILLS_REGISTRY_URL` 覆盖，update 默认沿用安装时记录的 registry，除非显式传入 `--registry`。install/update/remove 在有效 registry 非默认值时会要求确认，包括 update 使用的已存储 registry。registry digest 存在时必须通过校验，缺失时记录本地 archive SHA256。安装目标为 `~/.sebastian/data/extensions/skills`，安装/更新/移除后的变化只影响新 Sebastian session；已有 session 保持启动时捕获的 prompt/tool snapshot。`list` 会展示本地 builtin/managed/unmanaged Skill，`show` 读取本地 Skill 的 `SKILL.md` instructions。
+**安装第三方 Skill package**：使用 `sebastian skills search/inspect/install/list/show/read/update/remove` 管理 Skill。`search` 默认只搜本地；只有 `--source registry` 或 `--source all` 才访问 ClawHub-compatible registry。默认 registry 是 `https://clawhub.ai`；remote search/inspect/install 可用 `--registry` 或 `SEBASTIAN_SKILLS_REGISTRY_URL` 覆盖，update 默认沿用安装时记录的 registry，除非显式传入 `--registry`。install/update/remove 在有效 registry 非默认值时会要求确认，包括 update 使用的已存储 registry。registry digest 存在时必须通过校验，缺失时记录本地 archive SHA256。安装目标为 `~/.sebastian/data/extensions/skills`；本地 Skill 内容以磁盘当前文件为准，通过 `show --body` 和 `read` 按需读取。
 
 **Agent 辅助管理**：内置 `skill_manager` Skill 会指导 Sebastian 通过 PATH 中的公共 `sebastian skills ...` CLI 列出、读取、搜索、检查候选 Skill，并在用户明确确认后执行 install/update/remove；它禁止运行第三方 bundle 中的脚本、禁止 `curl | bash`，也不会自动绕过 unsafe registry 状态。实际读写的数据目录由运行环境中的 `SEBASTIAN_DATA_DIR` 决定。
 

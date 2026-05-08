@@ -3,6 +3,10 @@
 > 上级：[sebastian/README.md](../README.md)
 
 三层权限审查与 workspace 边界强制执行系统，所有 Agent 通过 PolicyGate 访问工具。
+权限链路只覆盖可执行工具：`allowed_tools -> PolicyGate -> native/MCP tool execution`。
+Skill 不是执行单元，也不进入 PolicyGate；模型需要读取 Skill 时，必须在拥有 `Bash`
+工具权限的前提下调用受限的 `sebastian skills show/read` CLI，而不是用通用 `Read`
+直接读取 Skill 目录。
 
 ## 目录结构
 

@@ -313,8 +313,8 @@ SubAgent 实例化时也传入同一个 `policy_gate`。
 Sub-agent 的 `allowed_tools` 白名单在两层强制生效：
 
 1. **LLM 可见性层**（`AgentLoop.stream()`）
-   - `AgentLoop` 在 `__init__` 存储 `allowed_tools` / `allowed_skills`。
-   - 每轮调用 LLM 前通过 `PolicyGate.get_callable_specs(allowed_tools, allowed_skills)` 获取过滤后的 spec 列表。
+   - `AgentLoop` 在 `__init__` 存储 `allowed_tools`。
+   - 每轮调用 LLM 前通过 `PolicyGate.get_callable_specs(allowed_tools)` 获取过滤后的 spec 列表。
    - LLM 只"看到"白名单内的工具，避免误调用。
 
 2. **执行校验层**（`PolicyGate.call()` Stage 0）
@@ -327,6 +327,8 @@ Sub-agent 的 `allowed_tools` 白名单在两层强制生效：
 - 校验层提供硬保证（无论 LLM 怎么调用，身份边界不会被突破）。
 
 白名单取值语义参见 `sebastian/agents/README.md` 的 "`allowed_tools` 白名单语义" 一节。
+Skill 不属于权限 subject，不经过 `allowed_tools -> PolicyGate` 执行链路；模型读取 Skill
+依赖 `Bash` 调用 `sebastian skills show/read`，因此没有 `Bash` 的受限 Agent 自然不能读取 Skill。
 
 ---
 

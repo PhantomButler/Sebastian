@@ -52,8 +52,8 @@ LLM 三层架构（Catalog → Account → Binding）+ 多 Provider 抽象 + Thi
 Agent 结构化 Prompt 构建体系。涵盖：
 
 - Sebastian 角色人设提示词、`BASE_BUTLER_RULES` 与 soul 文件热切换
-- BaseAgent prompt 构造方法体系（persona / guidelines / tools / skills / agents / knowledge）
-- per-agent 工具与 Skill 白名单（manifest.toml allowed_tools / allowed_skills）
+- BaseAgent prompt 构造方法体系（persona / guidelines / tools / Skill management bootstrap / agents / knowledge）
+- per-agent 工具白名单（manifest.toml allowed_tools）
 - CapabilityRegistry 过滤查询扩展
 - Sebastian 特化（动态注入 Sub-Agent 列表）
 
