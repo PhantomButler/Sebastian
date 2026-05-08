@@ -1,6 +1,6 @@
 ---
-title: Skill Progressive Disclosure Runtime Redesign
-date: 2026-05-08
+version: "1.0"
+last_updated: 2026-05-08
 status: draft
 ---
 
@@ -62,6 +62,16 @@ The model reaches Skills through the existing `Bash` tool and the public
 `sebastian skills ...` CLI. `Bash` remains governed by `allowed_tools` and
 `PolicyGate`; the Skill CLI enforces its own read-only path safety rules.
 
+This means Skill CLI availability is conditional on `Bash` availability. An
+Agent that cannot use `Bash` cannot use `sebastian skills ...` either. That is
+an intentional consequence of keeping Skill access inside the normal executable
+tool policy instead of adding a second Skill permission chain.
+
+The current built-in default Agents include `Bash`, so they can use Skill
+progressive disclosure. A future restricted Agent profile may omit `Bash`; that
+Agent will also omit Skill CLI access unless the profile explicitly grants
+`Bash`.
+
 ## 4. Runtime Boundary
 
 ### Tools
@@ -94,6 +104,12 @@ Remove:
 - Skill snapshot propagation in `BaseAgent`, `AgentLoop`, and
   `stream_helpers`
 
+Manifest migration must be fail-fast. `allowed_skills` should be removed from
+built-in manifests and README examples. If the agent loader sees
+`allowed_skills` in any manifest after this redesign, it should raise a clear
+configuration error instead of silently ignoring it. Silent ignore would make
+operators think a Skill ACL still exists.
+
 The old `skill__<name>` registered-name convention may still appear in
 installer metadata for compatibility, but it must no longer mean "provider tool
 name". New documentation should prefer `name` or `slug` when discussing local
@@ -119,6 +135,18 @@ automatically inserted into the model prompt.
 
 Local Skill content is always read from disk at command time. `show` and `read`
 must not depend on a gateway runtime registry snapshot.
+
+Lookup by `<name-or-slug>` should be deterministic:
+
+1. Exact slug match.
+2. Exact frontmatter `name` match.
+3. Exact `registered_name` match only for compatibility with existing metadata
+   and user habits.
+4. Legacy `skill__<name>` input may be normalized to `<name>` for the name
+   lookup.
+
+If more than one local Skill matches, the command must fail and list candidate
+slugs. It must not guess.
 
 ## 6. CLI Semantics
 
@@ -177,6 +205,15 @@ Default output must not print the full `SKILL.md` body.
 
 `--body` prints the local `SKILL.md` body. The local disk file is authoritative.
 
+File listing rules:
+
+- List files relative to the Skill root.
+- Exclude manager-owned metadata such as `.sebastian-origin.json`,
+  `.sebastian/`, and `.sebastian-skills.lock.json`.
+- Exclude hidden files and hidden directories by default.
+- Mark symlinks as symlinks in the listing, but do not follow them for listing.
+- Sort paths lexicographically for stable output.
+
 ### Read
 
 ```bash
@@ -200,6 +237,9 @@ Safety rules:
 - Read only regular files.
 - Reject directories, sockets, devices, FIFOs, and other special files.
 - Decode as UTF-8 text. Binary or undecodable content fails closed.
+- Enforce a maximum output size. The initial limit should be 128 KiB for
+  `show --body` and `read`. If content exceeds the limit, fail with a message
+  telling the user to read a smaller file or add a future paged read design.
 - Never write or modify files.
 
 Install, update, and remove remain package-manager operations. Manual edits are
@@ -225,6 +265,9 @@ Local Skill content is authoritative for installed Skills. Registry
 inspect/search results are only remote metadata.
 `sebastian skills search <query>` searches local Skills by default. Use
 `--source registry` only when the user wants to find new Skills to install.
+Skill management is the exception to the general "prefer Read over Bash for
+file reads" rule. Do not use generic Read to access Skill directories; use the
+`sebastian skills` CLI instead.
 ```
 
 The bootstrap tells the model how to discover Skills without listing every
@@ -264,7 +307,14 @@ Update these docs to remove Skill-as-tool language:
 - `sebastian/capabilities/skills/README.md`
 - `sebastian/cli/README.md`
 - `sebastian/agents/README.md`
+- `sebastian/agents/*/manifest.toml`
+- `sebastian/agents/*/README.md`
 - `docs/architecture/spec/capabilities/skill-package-manager.md`
+- `docs/architecture/spec/core/system-prompt.md`
+- `docs/architecture/spec/agents/permission.md`
+- `docs/architecture/spec/overview/architecture.md`
+- `docs/architecture/spec/overview/three-tier-agent.md`
+- `docs/architecture/spec/agents/code-agent.md`
 - relevant spec index pages if references mention `allowed_skills` or
   `skill__<name>` as a callable tool
 
@@ -276,6 +326,8 @@ Required wording changes:
 - Registry search is opt-in for remote discovery.
 - The only default model context is the short Skill bootstrap.
 - Sebastian currently has no Skill ACL. Execution policy covers tools.
+- Skill CLI access requires `Bash`; Agents without `Bash` cannot use Skills
+  through the CLI.
 
 ## 10. Testing Plan
 
@@ -284,12 +336,17 @@ Required wording changes:
 - `show` prints metadata and files but not body by default.
 - `show --body` prints the `SKILL.md` body.
 - `show` reads the latest disk content, not a runtime snapshot.
+- `show` lists files with manager metadata and hidden files excluded.
+- `show --body` fails when body output exceeds the size limit.
 - `read` reads a normal UTF-8 file inside the Skill root.
 - `read` rejects absolute paths.
 - `read` rejects `..` traversal.
 - `read` rejects symlink escape.
 - `read` rejects directories and special files.
 - `read` rejects undecodable/binary content.
+- `read` fails when file output exceeds the size limit.
+- lookup prefers slug, then frontmatter name, then compatibility
+  `registered_name`; ambiguous matches fail with candidates.
 - `search` defaults to local and does not instantiate or call the registry
   client.
 - `search --source registry` calls the registry client.
@@ -308,6 +365,10 @@ Required wording changes:
 - `BaseAgent` prompt includes the Skill bootstrap.
 - `BaseAgent` prompt does not include installed Skill bodies.
 - `BaseAgent`, `AgentLoop`, and `stream_helpers` no longer pass Skill snapshots.
+- Agent manifest loading fails clearly if `allowed_skills` is present.
+- Built-in manifests no longer contain `allowed_skills`.
+- Built-in default Agents retain `Bash`, so they can use the Skill CLI.
+- An Agent without `Bash` cannot use Skill CLI access.
 
 ### Regression
 
