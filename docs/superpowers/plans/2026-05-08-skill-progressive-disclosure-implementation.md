@@ -716,6 +716,7 @@ Bootstrap text must include:
 ## Skill Management
 For Sebastian Skill-related requests, use Bash with:
 ...
+`install`, `update`, and `remove` are mutation commands. Use them only when the user explicitly asks to manage installed Skills.
 Skill management is the exception to the general "prefer Read over Bash for file reads" rule.
 ```
 
