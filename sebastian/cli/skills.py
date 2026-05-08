@@ -51,14 +51,27 @@ def _run_or_exit[T](action: Callable[[], T]) -> T:
 
 
 def _confirm_custom_registry(registry: str | None) -> None:
-    effective_registry = resolve_registry_url(registry)
-    default_registry = resolve_registry_url(DEFAULT_REGISTRY_URL)
-    if effective_registry == default_registry:
+    _confirm_registry_url(resolve_registry_url(registry))
+
+
+def _confirm_registry_url(registry_url: str) -> None:
+    if registry_url == resolve_registry_url(DEFAULT_REGISTRY_URL):
         return
     typer.confirm(
-        f"Use non-default registry {effective_registry!r}?",
+        f"Use non-default registry {registry_url!r}?",
         abort=True,
     )
+
+
+def _resolve_update_registry(slug: str, registry: str | None) -> str | None:
+    if registry is not None:
+        return resolve_registry_url(registry)
+    for skill in list_installed():
+        if skill.slug == slug and skill.managed:
+            if skill.registry is None:
+                return None
+            return resolve_registry_url(skill.registry)
+    return None
 
 
 def _format_optional(value: object) -> str:
@@ -155,7 +168,9 @@ def update(
     if slug is None:
         typer.echo("❌ Provide a Skill slug or use --all.", err=True)
         raise typer.Exit(code=1)
-    _run_or_exit(lambda: _confirm_custom_registry(registry))
+    effective_registry = _run_or_exit(lambda: _resolve_update_registry(slug, registry))
+    if effective_registry is not None:
+        _confirm_registry_url(effective_registry)
     if force:
         typer.confirm("Overwrite local changes if present?", abort=True)
     if allow_rename:

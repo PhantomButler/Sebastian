@@ -15,7 +15,10 @@ from sebastian.skills_registry.lockfile import (
     SkillPackageLock,
 )
 from sebastian.skills_registry.models import SkillDetail
-from sebastian.skills_registry.safety import compute_package_fingerprint
+from sebastian.skills_registry.safety import (
+    ArchiveSafetyError,
+    compute_package_fingerprint,
+)
 
 
 def _entry(
@@ -651,6 +654,32 @@ def test_install_skill_uses_registry_download_digest_and_transaction(
     assert result.path == tmp_path / "flight"
     assert (result.path / "SKILL.md").is_file()
     assert (result.path / ".sebastian-origin.json").is_file()
+
+
+def test_install_skill_wraps_archive_safety_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sebastian.skills_registry import installer
+
+    def fake_download_archive(url: str, dest: Path) -> None:
+        dest.write_bytes(b"zip")
+
+    def fake_extract(archive: Path, destination: Path) -> Path:
+        raise ArchiveSafetyError("path traversal")
+
+    monkeypatch.setattr(installer, "RegistryClient", _FakeClient)
+    monkeypatch.setattr(installer, "_download_archive", fake_download_archive)
+    monkeypatch.setattr(installer, "safe_extract_zip", fake_extract)
+
+    with pytest.raises(installer.SkillInstallError, match="path traversal"):
+        installer.install_skill(
+            "flight",
+            version=None,
+            registry="https://clawhub.ai",
+            force=False,
+            skills_root=tmp_path,
+        )
 
 
 @pytest.mark.parametrize("response_slug", ["../evil", "different"])

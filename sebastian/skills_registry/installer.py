@@ -24,7 +24,11 @@ from sebastian.skills_registry.lockfile import (
     with_package_lock,
 )
 from sebastian.skills_registry.models import InstalledSkill, InstallResult, RemoveResult
-from sebastian.skills_registry.safety import compute_package_fingerprint, safe_extract_zip
+from sebastian.skills_registry.safety import (
+    ArchiveSafetyError,
+    compute_package_fingerprint,
+    safe_extract_zip,
+)
 
 ORIGIN_FILENAME = ".sebastian-origin.json"
 HTTP_TIMEOUT_SECONDS = 30
@@ -200,7 +204,10 @@ def _install_from_detail(
 
         _download_archive(download_url, archive)
         _validate_archive_digest(archive, expected_sha256=detail_sha256)
-        safe_extract_zip(archive, staging_root)
+        try:
+            safe_extract_zip(archive, staging_root)
+        except ArchiveSafetyError as exc:
+            raise SkillInstallError(f"Skill archive failed safety validation: {exc}") from exc
         metadata = parse_skill_metadata(
             (staging_root / "SKILL.md").read_text(encoding="utf-8"),
             fallback_name=requested_slug,

@@ -248,6 +248,37 @@ def test_update_with_custom_registry_can_be_declined(monkeypatch) -> None:
     assert "Install" not in result.output
 
 
+def test_update_with_stored_custom_registry_can_be_declined(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="flight",
+                registered_name="skill__flight",
+                version="1.0.0",
+                registry="https://mirror.example",
+                managed=True,
+                path=tmp_path / "flight",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        skills,
+        "update_skill",
+        lambda slug, *, version, registry, force, allow_rename: calls.append(slug),
+    )
+
+    result = runner.invoke(app, ["skills", "update", "flight"], input="n\n")
+
+    assert result.exit_code != 0
+    assert calls == []
+
+
 def test_update_prints_registered_name_and_new_session_hint(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         skills,
