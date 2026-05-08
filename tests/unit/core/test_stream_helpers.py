@@ -238,7 +238,7 @@ async def test_dispatch_tool_call_publishes_artifact_on_tool_executed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_tool_call_passes_allowed_skills_to_tool_context() -> None:
+async def test_dispatch_tool_call_passes_allowed_tools_without_skill_attrs() -> None:
     from sebastian.core.stream_helpers import dispatch_tool_call
     from sebastian.permissions.types import ToolCallContext
     from sebastian.protocol.events.types import EventType
@@ -266,13 +266,6 @@ async def test_dispatch_tool_call_passes_allowed_skills_to_tool_context() -> Non
         return None
 
     blocks: list = []
-    skill_specs_snapshot = {
-        "skill__flight_search": {
-            "name": "skill__flight_search",
-            "description": "Flight search",
-            "input_schema": {},
-        }
-    }
     with patch("sebastian.core.stream_helpers.get_tool", return_value=None):
         await dispatch_tool_call(
             _make_event(),
@@ -288,15 +281,14 @@ async def test_dispatch_tool_call_passes_allowed_skills_to_tool_context() -> Non
             publish=publish,
             current_task_goals={},
             current_depth={},
-            allowed_tools=None,
-            allowed_skills=["skill__flight_search"],
-            skill_specs_snapshot=skill_specs_snapshot,
+            allowed_tools={"Read"},
             pending_blocks={},
         )
 
     assert captured_context is not None
-    assert captured_context.allowed_skills == frozenset({"skill__flight_search"})
-    assert captured_context.skill_specs_snapshot == skill_specs_snapshot
+    assert captured_context.allowed_tools == frozenset({"Read"})
+    assert not hasattr(captured_context, "allowed_skills")
+    assert not hasattr(captured_context, "skill_specs_snapshot")
 
 
 @pytest.mark.asyncio

@@ -132,13 +132,11 @@ class AgentLoop:
         model: str = "claude-opus-4-6",
         max_tokens: int | None = None,
         allowed_tools: ToolAllowlist = None,
-        allowed_skills: set[str] | None = None,
     ) -> None:
         self._provider = provider
         self._registry = tool_provider
         self._model = model
         self._allowed_tools = allowed_tools
-        self._allowed_skills = allowed_skills
         if max_tokens is not None:
             self._max_tokens = max_tokens
         else:
@@ -164,7 +162,6 @@ class AgentLoop:
             if tools_snapshot is not None
             else self._registry.get_callable_specs(
                 allowed_tools=self._allowed_tools,
-                allowed_skills=self._allowed_skills,
             )
         )
         full_text_parts: list[str] = []

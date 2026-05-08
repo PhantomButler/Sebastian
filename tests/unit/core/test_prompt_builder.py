@@ -9,7 +9,7 @@ from sebastian.capabilities.registry import CapabilityRegistry
 from sebastian.core.types import ToolResult
 
 
-def _make_registry_with_tools_and_skills() -> CapabilityRegistry:
+def _make_registry_with_tools() -> CapabilityRegistry:
     reg = CapabilityRegistry()
 
     async def fn(**kwargs):  # type: ignore[no-untyped-def]
@@ -19,15 +19,6 @@ def _make_registry_with_tools_and_skills() -> CapabilityRegistry:
         "file_read",
         {"name": "file_read", "description": "Read a file", "input_schema": {}},
         fn,
-    )
-    reg.register_skill_specs(
-        [
-            {
-                "name": "web_research",
-                "description": "Research the web",
-                "input_schema": {"type": "object", "properties": {}, "required": []},
-            }
-        ]
     )
     return reg
 
@@ -55,7 +46,7 @@ async def test_persona_section_appears_in_system_prompt(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_base_agent_rebuild_system_prompt_refreshes_skills(tmp_path: Path) -> None:
+async def test_system_prompt_includes_skill_management_bootstrap(tmp_path: Path) -> None:
     from sebastian.core.base_agent import BaseAgent
     from sebastian.store.session_store import SessionStore
 
@@ -63,7 +54,6 @@ async def test_base_agent_rebuild_system_prompt_refreshes_skills(tmp_path: Path)
         name = "test"
         persona = "I am your butler."
         allowed_tools: list[str] | None = []
-        allowed_skills: list[str] | None = None
 
     store = SessionStore(tmp_path / "sessions")
     reg = CapabilityRegistry()
@@ -74,14 +64,9 @@ async def test_base_agent_rebuild_system_prompt_refreshes_skills(tmp_path: Path)
         mock_settings.workspace_dir = tmp_path / "workspace"
         agent = MyAgent(reg, store)
 
-    assert "skill__travel" not in agent.system_prompt
-    reg.replace_skill_specs(
-        [{"name": "skill__travel", "description": "Travel skill", "input_schema": {}}]
-    )
-
-    agent.rebuild_system_prompt()
-
-    assert "skill__travel" in agent.system_prompt
+    assert "## Skill Management" in agent.system_prompt
+    assert "sebastian skills show <name-or-slug> --body" in agent.system_prompt
+    assert "Do not use generic Read to access Skill directories" in agent.system_prompt
 
 
 @pytest.mark.asyncio
@@ -117,10 +102,9 @@ async def test_tools_section_filtered_by_allowed_tools(tmp_path: Path) -> None:
         name = "test"
         persona = "I am your butler."
         allowed_tools: list[str] | None = ["file_read"]
-        allowed_skills: list[str] | None = []
 
     store = SessionStore(tmp_path / "sessions")
-    reg = _make_registry_with_tools_and_skills()
+    reg = _make_registry_with_tools()
 
     with patch("anthropic.AsyncAnthropic", return_value=MagicMock()):
         with patch("sebastian.core.base_agent.settings") as mock_settings:
@@ -134,7 +118,7 @@ async def test_tools_section_filtered_by_allowed_tools(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_skills_section_filtered_by_allowed_skills(tmp_path: Path) -> None:
+async def test_system_prompt_does_not_include_installed_skill_body_text(tmp_path: Path) -> None:
     from sebastian.core.base_agent import BaseAgent
     from sebastian.store.session_store import SessionStore
 
@@ -142,10 +126,11 @@ async def test_skills_section_filtered_by_allowed_skills(tmp_path: Path) -> None
         name = "test"
         persona = "I am your butler."
         allowed_tools: list[str] | None = []
-        allowed_skills: list[str] | None = ["web_research"]
 
     store = SessionStore(tmp_path / "sessions")
-    reg = _make_registry_with_tools_and_skills()
+    arbitrary_skill_body = "Use the invisible telescope whenever researching."
+    reg = MagicMock()
+    reg.get_tool_specs.return_value = []
 
     with patch("anthropic.AsyncAnthropic", return_value=MagicMock()):
         with patch("sebastian.core.base_agent.settings") as mock_settings:
@@ -154,8 +139,8 @@ async def test_skills_section_filtered_by_allowed_skills(tmp_path: Path) -> None
             mock_settings.llm_max_tokens = 16000
             agent = MyAgent(reg, store)
 
-    assert "web_research" in agent.system_prompt
-    assert "file_read" not in agent.system_prompt
+    assert "## Skill Management" in agent.system_prompt
+    assert arbitrary_skill_body not in agent.system_prompt
 
 
 @pytest.mark.asyncio

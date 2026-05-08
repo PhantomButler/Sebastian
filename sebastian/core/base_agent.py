@@ -89,7 +89,6 @@ class BaseAgent(ABC):
     name: str = "base_agent"
     persona: str = BASE_PERSONA
     allowed_tools: AgentAllowedTools = None
-    allowed_skills: list[str] | None = None
     system_prompt: str = ""  # populated by build_system_prompt in __init__
     _active_streams: dict[str, asyncio.Task[Any]]
 
@@ -101,7 +100,6 @@ class BaseAgent(ABC):
         provider: LLMProvider | None = None,
         model: str | None = None,
         allowed_tools: AgentAllowedTools = None,
-        allowed_skills: list[str] | None = None,
         llm_registry: LLMProviderRegistry | None = None,
         db_factory: async_sessionmaker[AsyncSession] | None = None,
         compaction_scheduler: CompactionScheduler | None = None,
@@ -131,16 +129,11 @@ class BaseAgent(ABC):
         self._pending_cancel_timers: dict[str, asyncio.TimerHandle] = {}
         self._partial_buffer: dict[str, str] = {}
         self._pending_blocks: dict[str, list[dict[str, Any]]] = {}
-        self._skill_prompt_version = 0
-        self._skill_reload_checked_sessions: set[tuple[str, str]] = set()
-        self._skill_reload_locks: dict[tuple[str, str], asyncio.Lock] = {}
         self._run_stream_locks: dict[str, asyncio.Lock] = {}
 
         # instance-level overrides class-level defaults
         if allowed_tools is not None:
             self.allowed_tools = allowed_tools
-        if allowed_skills is not None:
-            self.allowed_skills = allowed_skills
 
         resolved_model = model or settings.sebastian_model
         self._provider_injected = provider is not None
@@ -151,7 +144,6 @@ class BaseAgent(ABC):
             gate,
             resolved_model,
             allowed_tools=_normalize_allowed_tools(self.allowed_tools),
-            allowed_skills=(set(self.allowed_skills) if self.allowed_skills is not None else None),
         )
         self.system_prompt = self.build_system_prompt(gate)
 
@@ -183,15 +175,30 @@ class BaseAgent(ABC):
             lines.append(f"- **{spec['name']}**: {spec['description']}")
         return "\n".join(lines)
 
-    def _skills_section(self, gate: PolicyGate) -> str:
-        allowed = set(self.allowed_skills) if self.allowed_skills is not None else None
-        specs = gate.get_skill_specs(allowed)
-        if not specs:
-            return ""
-        lines = ["## Available Skills", ""]
-        for spec in specs:
-            lines.append(f"- **{spec['name']}**: {spec['description']}")
-        return "\n".join(lines)
+    def _skill_management_section(self) -> str:
+        return "\n".join(
+            [
+                "## Skill Management",
+                "",
+                "For Sebastian Skill-related requests, use Bash with:",
+                "- `sebastian skills list`",
+                "- `sebastian skills search <query>`",
+                "- `sebastian skills show <name-or-slug>`",
+                "- `sebastian skills show <name-or-slug> --body`",
+                "- `sebastian skills read <name-or-slug> <relative-path>`",
+                "- `sebastian skills inspect/install/update/remove ...`",
+                "",
+                "Local Skill content is authoritative for installed Skills. Registry "
+                "inspect/search results are only remote metadata.",
+                "`sebastian skills search <query>` searches local Skills by default. Use "
+                "`--source registry` only when the user wants to find new Skills to install.",
+                "`install`, `update`, and `remove` are mutation commands. Use them only when "
+                "the user explicitly asks to manage installed Skills.",
+                'Skill management is the exception to the general "prefer Read over Bash for '
+                'file reads" rule. Do not use generic Read to access Skill directories; use '
+                "the `sebastian skills` CLI instead.",
+            ]
+        )
 
     def _agents_section(self, agent_registry: Mapping[str, Any] | None = None) -> str:  # noqa: ARG002
         return ""
@@ -344,7 +351,7 @@ class BaseAgent(ABC):
             self._persona_section(),
             self._guidelines_section(),
             self._tools_section(gate),
-            self._skills_section(gate),
+            self._skill_management_section(),
             self._agents_section(agent_registry),
             self._knowledge_section(),
         ]
@@ -352,45 +359,6 @@ class BaseAgent(ABC):
 
     def rebuild_system_prompt(self) -> None:
         self.system_prompt = self.build_system_prompt(self._gate)
-
-    def mark_skill_prompt_version(self, version: int) -> None:
-        self._skill_prompt_version = version
-
-    async def _maybe_refresh_skills_for_new_session(
-        self,
-        session_id: str,
-        agent_context: str,
-    ) -> None:
-        key = (agent_context, session_id)
-        if key in self._skill_reload_checked_sessions:
-            return
-
-        lock = self._skill_reload_locks.setdefault(key, asyncio.Lock())
-        try:
-            async with lock:
-                if key in self._skill_reload_checked_sessions:
-                    return
-
-                try:
-                    import sebastian.gateway.state as state
-                except ImportError:
-                    self._skill_reload_checked_sessions.add(key)
-                    return
-
-                reloader = getattr(state, "skill_hot_reloader", None)
-                if reloader is None:
-                    self._skill_reload_checked_sessions.add(key)
-                    return
-
-                result = await reloader.maybe_reload()
-                if self._skill_prompt_version != result.version:
-                    self.rebuild_system_prompt()
-                    self.mark_skill_prompt_version(result.version)
-
-                if result.error is None:
-                    self._skill_reload_checked_sessions.add(key)
-        finally:
-            self._skill_reload_locks.pop(key, None)
 
     async def run(
         self,
@@ -461,18 +429,10 @@ class BaseAgent(ABC):
 
             self._current_depth[session_id] = worker_session.depth
 
-            await self._maybe_refresh_skills_for_new_session(session_id, agent_context)
             system_prompt_snapshot = self.system_prompt
-            allowed_skills_snapshot = (
-                set(self.allowed_skills) if self.allowed_skills is not None else None
-            )
             tool_specs_snapshot = self._gate.get_callable_specs(
                 _normalize_allowed_tools(self.allowed_tools),
-                allowed_skills_snapshot,
             )
-            skill_specs_snapshot = {
-                spec["name"]: spec for spec in self._gate.get_skill_specs(allowed_skills_snapshot)
-            }
 
             await self._publish(
                 session_id,
@@ -534,7 +494,6 @@ class BaseAgent(ABC):
                     exchange_index=exchange_index,
                     system_prompt_snapshot=system_prompt_snapshot,
                     tool_specs_snapshot=tool_specs_snapshot,
-                    skill_specs_snapshot=skill_specs_snapshot,
                 )
             )
             self._active_streams[session_id] = current_stream
@@ -612,29 +571,15 @@ class BaseAgent(ABC):
         exchange_index: int | None = None,
         system_prompt_snapshot: str | None = None,
         tool_specs_snapshot: list[dict[str, Any]] | None = None,
-        skill_specs_snapshot: dict[str, dict[str, Any]] | None = None,
     ) -> str:
         from sebastian.context.usage import TokenUsage
 
         if system_prompt_snapshot is None:
             system_prompt_snapshot = self.system_prompt
         if tool_specs_snapshot is None:
-            allowed_skills_snapshot = (
-                set(self.allowed_skills) if self.allowed_skills is not None else None
-            )
             tool_specs_snapshot = self._gate.get_callable_specs(
                 _normalize_allowed_tools(self.allowed_tools),
-                allowed_skills_snapshot,
             )
-            skill_specs_snapshot = {
-                spec["name"]: spec for spec in self._gate.get_skill_specs(allowed_skills_snapshot)
-            }
-        elif skill_specs_snapshot is None:
-            skill_specs_snapshot = {
-                spec["name"]: spec
-                for spec in tool_specs_snapshot
-                if spec["name"].startswith("skill__")
-            }
 
         full_text = ""
         assistant_blocks: list[dict[str, Any]] = []
@@ -755,8 +700,6 @@ class BaseAgent(ABC):
                         current_depth=self._current_depth,
                         allowed_tools=self.allowed_tools,
                         pending_blocks=self._pending_blocks,
-                        allowed_skills=self.allowed_skills,
-                        skill_specs_snapshot=skill_specs_snapshot,
                         supports_image_input=supports_image_input,
                     )
                     continue

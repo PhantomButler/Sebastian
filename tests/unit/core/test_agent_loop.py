@@ -447,11 +447,10 @@ async def test_agent_loop_passes_allowed_tools_to_provider() -> None:
         registry,
         model="test",
         allowed_tools={"Read"},
-        allowed_skills=None,
     )
     await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
 
-    registry.get_callable_specs.assert_called_once_with(allowed_tools={"Read"}, allowed_skills=None)
+    registry.get_callable_specs.assert_called_once_with(allowed_tools={"Read"})
     assert captured_tools == [[{"name": "Read", "description": "read", "input_schema": {}}]]
 
 
@@ -516,7 +515,7 @@ async def test_agent_loop_none_allowed_tools_means_no_capability_tools() -> None
     loop = AgentLoop(provider, registry, model="test")
     await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
 
-    registry.get_callable_specs.assert_called_once_with(allowed_tools=None, allowed_skills=None)
+    registry.get_callable_specs.assert_called_once_with(allowed_tools=None)
 
 
 @pytest.mark.asyncio
@@ -540,9 +539,7 @@ async def test_agent_loop_all_tools_sentinel_means_unrestricted() -> None:
     loop = AgentLoop(provider, registry, model="test", allowed_tools=ALL_TOOLS)
     await _collect(loop.stream(system_prompt="s", messages=[{"role": "user", "content": "hi"}]))
 
-    registry.get_callable_specs.assert_called_once_with(
-        allowed_tools=ALL_TOOLS, allowed_skills=None
-    )
+    registry.get_callable_specs.assert_called_once_with(allowed_tools=ALL_TOOLS)
 
 
 @pytest.mark.asyncio
