@@ -680,6 +680,33 @@ class _FakeClientWithoutDigest:
         return str(data["download_url"])
 
 
+@dataclass(frozen=True)
+class _FakeClientWithoutVersionEcho:
+    registry_url: str | None = None
+
+    def inspect(self, slug: str, *, version: str | None = None) -> SkillDetail:
+        return SkillDetail(
+            slug=slug,
+            name="Flight",
+            description="Flight skill",
+            version=None,
+            download_url=None,
+            sha256=hashlib.sha256(b"zip").hexdigest(),
+            security_status="safe",
+            raw={},
+        )
+
+    def resolve_download_url(
+        self,
+        data: dict[str, object],
+        *,
+        slug: str,
+        version: str | None,
+    ) -> str:
+        assert version == "1.2.3"
+        return f"https://clawhub.ai/api/v1/download?slug={slug}&version={version}"
+
+
 def test_install_skill_uses_registry_download_digest_and_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -715,6 +742,33 @@ def test_install_skill_uses_registry_download_digest_and_transaction(
     assert (result.path / ".sebastian-origin.json").is_file()
 
 
+def test_install_skill_requested_version_used_when_detail_omits_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sebastian.skills_registry import installer
+
+    def fake_download_archive(url: str, dest: Path) -> None:
+        assert url == "https://clawhub.ai/api/v1/download?slug=flight&version=1.2.3"
+        dest.write_bytes(b"zip")
+
+    def fake_extract(archive: Path, destination: Path) -> Path:
+        _write_skill(destination, name="flight")
+        return destination
+
+    monkeypatch.setattr(installer, "RegistryClient", _FakeClientWithoutVersionEcho)
+    monkeypatch.setattr(installer, "_download_archive", fake_download_archive)
+    monkeypatch.setattr(installer, "safe_extract_zip", fake_extract)
+
+    installer.install_skill(
+        "flight",
+        version="1.2.3",
+        registry="https://clawhub.ai",
+        force=False,
+        skills_root=tmp_path,
+    )
+
+
 def test_update_skill_current_version_noops_without_force(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -748,6 +802,32 @@ def test_update_skill_current_version_noops_without_force(
     assert result.path == destination
 
 
+def test_update_skill_current_version_still_rejects_local_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sebastian.skills_registry import installer
+
+    destination = tmp_path / "flight"
+    _write_skill(destination, name="flight")
+    SkillPackageLock(tmp_path).save(
+        {"flight": _entry("flight", fingerprint=compute_package_fingerprint(destination))}
+    )
+    (destination / "README.md").write_text("local edit", encoding="utf-8")
+
+    monkeypatch.setattr(installer, "RegistryClient", _FakeClient)
+
+    with pytest.raises(installer.SkillInstallError, match="local changes"):
+        installer.update_skill(
+            "flight",
+            version=None,
+            registry=None,
+            force=False,
+            allow_rename=False,
+            skills_root=tmp_path,
+        )
+
+
 def test_update_skill_current_version_force_still_replaces(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -766,6 +846,7 @@ def test_update_skill_current_version_force_still_replaces(
         client: object,
         detail: object,
         requested_slug: str,
+        requested_version: str | None,
         skills_root: Path,
         force: bool,
         allow_rename: bool,

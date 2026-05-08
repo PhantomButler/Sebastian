@@ -90,6 +90,7 @@ def install_skill(
         client=client,
         detail=detail,
         requested_slug=slug,
+        requested_version=version,
         skills_root=root,
         force=force,
         allow_rename=False,
@@ -115,6 +116,12 @@ def update_skill(
     client = RegistryClient(registry or existing.registry)
     detail = client.inspect(slug, version=version)
     detail_version = getattr(detail, "version", None)
+    if (root / slug).exists():
+        _validate_local_fingerprint(
+            existing,
+            current_fingerprint=compute_package_fingerprint(root / slug),
+            force=force,
+        )
     if not force and isinstance(detail_version, str) and detail_version == existing.version:
         return InstallResult(
             slug=slug,
@@ -126,6 +133,7 @@ def update_skill(
         client=client,
         detail=detail,
         requested_slug=slug,
+        requested_version=version,
         skills_root=root,
         force=force,
         allow_rename=allow_rename,
@@ -178,6 +186,7 @@ def _install_from_detail(
     client: RegistryClient,
     detail: object,
     requested_slug: str,
+    requested_version: str | None,
     skills_root: Path,
     force: bool,
     allow_rename: bool,
@@ -186,6 +195,7 @@ def _install_from_detail(
     detail_slug = str(getattr(detail, "slug"))
     detail_version = getattr(detail, "version", None)
     detail_version_text = detail_version if isinstance(detail_version, str) else None
+    resolved_version = detail_version_text or requested_version
     detail_sha256 = getattr(detail, "sha256", None)
     registry_sha256 = (
         detail_sha256.strip().lower()
@@ -201,7 +211,7 @@ def _install_from_detail(
     download_url = client.resolve_download_url(
         detail_raw,
         slug=requested_slug,
-        version=detail_version_text,
+        version=resolved_version,
     )
     skills_root.mkdir(parents=True, exist_ok=True)
 
@@ -236,7 +246,7 @@ def _install_from_detail(
             "slug": requested_slug,
             "registered_name": metadata.registered_name,
             "registry": client.registry_url,
-            "version": detail_version_text,
+            "version": resolved_version,
             "sha256": archive_sha256,
             "sha256_verified": registry_sha256 is not None,
             "download_url": download_url,
@@ -253,7 +263,7 @@ def _install_from_detail(
                 slug=requested_slug,
                 registered_name=metadata.registered_name,
                 registry=client.registry_url,
-                version=detail_version_text,
+                version=resolved_version,
                 tag=None,
                 sha256=archive_sha256,
                 fingerprint=fingerprint,
