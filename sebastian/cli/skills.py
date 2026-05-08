@@ -15,6 +15,7 @@ from sebastian.skills_registry.installer import (
     SkillInstallError,
     install_skill,
     remove_installed_skill,
+    show_local_skill,
     update_skill,
 )
 from sebastian.skills_registry.installer import (
@@ -23,13 +24,14 @@ from sebastian.skills_registry.installer import (
 from sebastian.skills_registry.lockfile import LockfileError
 from sebastian.skills_registry.models import (
     InstalledSkill,
+    LocalSkillDetail,
     SkillDetail,
     SkillRegistryError,
 )
 
 app = typer.Typer(
     name="skills",
-    help="Search, install, update, and remove Sebastian Skills",
+    help="Search, show, install, update, and remove Sebastian Skills",
 )
 
 
@@ -97,6 +99,19 @@ def _print_detail(detail: SkillDetail) -> None:
     typer.echo(f"SHA256: {_format_optional(detail.sha256)}")
 
 
+def _print_local_detail(detail: LocalSkillDetail) -> None:
+    typer.echo(f"Slug: {detail.slug}")
+    typer.echo(f"Registered: {detail.registered_name}")
+    typer.echo(f"Source: {detail.source}")
+    typer.echo(f"Version: {_format_optional(detail.version)}")
+    typer.echo(f"Registry: {_format_optional(detail.registry)}")
+    typer.echo(f"Path: {detail.path}")
+    typer.echo(f"Description: {_format_optional(detail.description)}")
+    typer.echo("")
+    typer.echo("Instructions:")
+    typer.echo(detail.body or "-")
+
+
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Search query"),
@@ -153,8 +168,18 @@ def list_command() -> None:
     rows = _run_or_exit(list_installed)
     for skill in rows:
         version = _format_optional(skill.version)
-        managed = "managed" if skill.managed else "unmanaged"
-        typer.echo(f"{skill.slug}\t{skill.registered_name}\t{version}\t{managed}")
+        typer.echo(f"{skill.slug}\t{skill.registered_name}\t{version}\t{skill.source}")
+
+
+@app.command()
+def show(
+    identifier: str = typer.Argument(..., help="Local Skill slug or runtime name"),
+) -> None:
+    """Show local Skill metadata and instructions."""
+    detail = _run_or_exit(
+        lambda: show_local_skill(identifier, settings.skills_extensions_dir)
+    )
+    _print_local_detail(detail)
 
 
 @app.command()

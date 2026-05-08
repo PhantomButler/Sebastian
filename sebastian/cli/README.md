@@ -97,7 +97,9 @@ Skill package manager 的 CLI 外壳，负责调用 registry client 与 installe
 
 安装、更新或移除后不会刷新当前正在运行的 session；新 Sebastian session
 首轮 turn 会通过 Skill hot reload 生命周期读取新的 `SKILL.md` 快照。
-`sebastian skills update --all` 会遍历 package-managed Skill，跳过 unmanaged Skill；
+`sebastian skills list` 会展示当前 runtime 可见的 builtin / managed / unmanaged Skill；
+`sebastian skills show <name-or-slug>` 读取本地 Skill metadata 与 `SKILL.md`
+instructions，不访问 registry。`sebastian skills update --all` 会遍历 package-managed Skill，跳过 unmanaged Skill；
 单个 Skill 更新失败会继续处理后续条目，最终用非零退出码报告失败汇总。
 
 ## CLI 命令一览
@@ -114,7 +116,8 @@ Skill package manager 的 CLI 外壳，负责调用 registry client 与 installe
 | `sebastian skills search <query>` | 搜索 registry Skill | `skills.search()` |
 | `sebastian skills inspect <slug>` | 查看 registry Skill 详情 | `skills.inspect()` |
 | `sebastian skills install <slug>` | 安装 Skill package | `skills.install()` |
-| `sebastian skills list` | 查看已安装 Skill | `skills.list_command()` |
+| `sebastian skills list` | 查看本地 Skill | `skills.list_command()` |
+| `sebastian skills show <name-or-slug>` | 读取本地 Skill 详情 | `skills.show()` |
 | `sebastian skills update <slug>` | 更新已安装 Skill | `skills.update()` |
 | `sebastian skills update --all` | 更新所有 package-managed Skill | `skills.update()` |
 | `sebastian skills remove <slug>` | 移除 package-managed Skill | `skills.remove()` |

@@ -24,7 +24,12 @@ from sebastian.skills_registry.lockfile import (
     SkillPackageLock,
     with_package_lock,
 )
-from sebastian.skills_registry.models import InstalledSkill, InstallResult, RemoveResult
+from sebastian.skills_registry.models import (
+    InstalledSkill,
+    InstallResult,
+    LocalSkillDetail,
+    RemoveResult,
+)
 from sebastian.skills_registry.safety import (
     ArchiveSafetyError,
     compute_package_fingerprint,
@@ -42,37 +47,96 @@ class SkillInstallError(RuntimeError):
     pass
 
 
-def list_installed(root: Path) -> list[InstalledSkill]:
+def list_installed(root: Path, *, builtin_dir: Path | None = None) -> list[InstalledSkill]:
     root = root.expanduser().resolve()
+    builtin_root = _default_builtin_skills_dir() if builtin_dir is None else builtin_dir
     entries = SkillPackageLock(root).load()
-    installed: dict[str, InstalledSkill] = {}
+    installed_by_registered_name: dict[str, InstalledSkill] = {}
     managed_paths: set[Path] = set()
 
-    for slug, entry in entries.items():
-        path = root / slug
-        managed_paths.add(path.resolve())
-        installed[slug] = InstalledSkill(
-            slug=slug,
-            registered_name=entry.registered_name,
-            version=entry.version,
-            registry=entry.registry,
-            managed=True,
-            path=path,
-        )
-
-    for registered_name, path in _scan_registered_name_owners(root).items():
-        if path.resolve() in managed_paths:
-            continue
-        installed[path.name] = InstalledSkill(
+    for registered_name, path in _scan_registered_name_owners(
+        builtin_root,
+        fail_closed=False,
+    ).items():
+        installed_by_registered_name[registered_name] = InstalledSkill(
             slug=path.name,
             registered_name=registered_name,
             version=None,
             registry=None,
             managed=False,
             path=path,
+            source="builtin",
         )
 
-    return [installed[slug] for slug in sorted(installed)]
+    for slug, entry in entries.items():
+        path = root / slug
+        managed_paths.add(path.resolve())
+        installed_by_registered_name[entry.registered_name] = InstalledSkill(
+            slug=slug,
+            registered_name=entry.registered_name,
+            version=entry.version,
+            registry=entry.registry,
+            managed=True,
+            path=path,
+            source="managed",
+        )
+
+    for registered_name, path in _scan_registered_name_owners(root).items():
+        if path.resolve() in managed_paths:
+            continue
+        installed_by_registered_name[registered_name] = InstalledSkill(
+            slug=path.name,
+            registered_name=registered_name,
+            version=None,
+            registry=None,
+            managed=False,
+            path=path,
+            source="unmanaged",
+        )
+
+    return sorted(
+        installed_by_registered_name.values(),
+        key=lambda skill: (skill.source != "builtin", skill.slug),
+    )
+
+
+def show_local_skill(
+    identifier: str,
+    root: Path,
+    *,
+    builtin_dir: Path | None = None,
+) -> LocalSkillDetail:
+    matches = _find_local_skill_matches(
+        identifier,
+        list_installed(root, builtin_dir=builtin_dir),
+    )
+    if not matches:
+        raise SkillInstallError(f"Local Skill {identifier!r} was not found")
+    if len(matches) > 1:
+        candidates = ", ".join(sorted(skill.slug for skill in matches))
+        raise SkillInstallError(
+            f"Local Skill {identifier!r} is ambiguous; matches: {candidates}"
+        )
+
+    skill = matches[0]
+    skill_md = skill.path / "SKILL.md"
+    try:
+        content = skill_md.read_text(encoding="utf-8")
+        metadata = parse_skill_metadata(content, fallback_name=skill.path.name)
+    except (OSError, UnicodeDecodeError, SkillMetadataError) as exc:
+        raise SkillInstallError(f"Invalid local Skill metadata at {skill_md}") from exc
+
+    return LocalSkillDetail(
+        slug=skill.slug,
+        registered_name=metadata.registered_name,
+        description=metadata.description,
+        body=metadata.body,
+        version=skill.version,
+        registry=skill.registry,
+        managed=skill.managed,
+        source=skill.source,
+        path=skill.path,
+    )
 
 
 def install_skill(
@@ -308,13 +372,43 @@ def _validate_registered_name_available(
     )
 
 
-def _scan_registered_name_owners(skills_root: Path) -> dict[str, Path]:
+def _find_local_skill_matches(
+    identifier: str,
+    installed: list[InstalledSkill],
+) -> list[InstalledSkill]:
+    normalized = identifier[7:] if identifier.startswith("skill__") else identifier
+    exact_slug = [skill for skill in installed if skill.slug == identifier]
+    if exact_slug:
+        return _prefer_local_override(exact_slug)
+    exact_registered = [skill for skill in installed if skill.registered_name == identifier]
+    if exact_registered:
+        return _prefer_local_override(exact_registered)
+    return [
+        skill
+        for skill in installed
+        if skill.registered_name == f"skill__{normalized}"
+    ]
+
+
+def _prefer_local_override(matches: list[InstalledSkill]) -> list[InstalledSkill]:
+    for source in ("managed", "unmanaged", "builtin"):
+        preferred = [skill for skill in matches if skill.source == source]
+        if preferred:
+            return preferred
+    return matches
+
+
+def _scan_registered_name_owners(
+    skills_root: Path,
+    *,
+    fail_closed: bool = True,
+) -> dict[str, Path]:
     owners: dict[str, Path] = {}
     if not skills_root.exists():
         return owners
 
     for child in sorted(skills_root.iterdir()):
-        if not child.is_dir() or child.name.startswith("."):
+        if not child.is_dir() or child.name.startswith((".", "_")):
             continue
         skill_md = child / "SKILL.md"
         if not skill_md.is_file():
@@ -325,7 +419,10 @@ def _scan_registered_name_owners(skills_root: Path) -> dict[str, Path]:
                 fallback_name=child.name,
             )
         except (OSError, UnicodeDecodeError, SkillMetadataError) as exc:
-            raise SkillInstallError(f"Invalid manual Skill metadata at {skill_md}") from exc
+            if fail_closed:
+                raise SkillInstallError(f"Invalid manual Skill metadata at {skill_md}") from exc
+            logger.warning("Skipping invalid Skill metadata at %s: %s", skill_md, exc)
+            continue
         owners[metadata.registered_name] = child
     return owners
 
@@ -525,6 +622,12 @@ def _download_archive(url: str, dest: Path) -> None:
 
 def _default_skills_root() -> Path:
     return settings.skills_extensions_dir
+
+
+def _default_builtin_skills_dir() -> Path:
+    from sebastian.capabilities import skills as skills_pkg
+
+    return Path(skills_pkg.__file__).parent
 
 
 def _backup_path(destination: Path) -> Path:

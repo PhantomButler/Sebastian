@@ -23,6 +23,7 @@ sebastian skills search "flight"
 sebastian skills inspect flight-search
 sebastian skills install flight-search
 sebastian skills list
+sebastian skills show flight-search
 sebastian skills update flight-search
 sebastian skills remove flight-search
 ```
@@ -154,16 +155,17 @@ export PATH="$HOME/.sebastian/bin:$PATH"
 跳过 PATH 设置只跳过 shell rc 写入，不跳过 shim 创建。`sebastian update` 成功后也刷新
 shim，保证旧版本升级后拥有稳定 CLI 入口。
 
-## Builtin skill_installer
+## Builtin skill_manager
 
-Sebastian 内置 `skill_installer` Skill，但没有新增 model-visible native
-`install_skill` 工具。Agent-assisted install 使用既有 Bash 工具调用
+Sebastian 内置 `skill_manager` Skill，但没有新增 model-visible native
+`install_skill` 或 `read_skill` 工具。Agent-assisted Skill 管理使用既有 Bash 工具调用
 PATH 中的公共 `sebastian skills ...` CLI，保持模型可见工具面最小。Skill
 不直接调用安装态 shim 路径；实际目标数据目录由运行环境中的 `SEBASTIAN_DATA_DIR` 决定。
 
-`skill_installer` 的安全流程：
+`skill_manager` 的安全流程：
 
-- 先 search，再 inspect，安装或更新前必须检查候选 Skill。
+- 本地 Skill 使用问题先 `list`，再 `show`；本地 `show` 内容是实际使用说明的权威来源。
+- 远端安装/更新先 search，再 inspect，安装或更新前必须检查候选 Skill。
 - 安装/更新确认前，向用户总结 registry inspect 可见信息：slug、name、version、
   security status、download URL 与 SHA256，以及 warnings。registered runtime name 需要下载并解析
   `SKILL.md` 后才能确定，因此由 install/update 成功输出报告。CLI inspect 当前不列 bundle

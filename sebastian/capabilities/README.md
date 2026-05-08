@@ -47,7 +47,7 @@ capabilities/
     ├── _loader.py       # 扫描 SKILL.md、解析 frontmatter、生成工具 spec
     ├── hot_reload.py    # 新会话首轮检查 SKILL.md 指纹并刷新 Skill registry
     ├── metadata.py      # SKILL.md frontmatter 解析与 Skill 名校验
-    └── skill_installer/ # 内置 Skill：通过 Sebastian CLI 管理 Skill package
+    └── skill_manager/ # 内置 Skill：通过 Sebastian CLI 管理 Skill
 ```
 
 ## 修改导航
@@ -112,9 +112,9 @@ async def my_tool(param: str) -> ToolResult:
 
 **新增 Skill**：在 `capabilities/skills/<name>/SKILL.md` 或用户扩展目录下创建 `SKILL.md`。Gateway 启动时加载一次；服务运行中新增、删除或修改 `SKILL.md` 后，新会话首轮 turn 会在模型请求前刷新 Skill registry 与当前 Agent prompt/tool snapshot。`allowed_skills` 白名单使用完整注册名，例如 `skill__flight_search`。
 
-**安装第三方 Skill package**：使用 `sebastian skills search/inspect/install/list/update/remove` 从 ClawHub-compatible registry 管理 Skill。默认 registry 是 `https://clawhub.ai`；search/inspect/install 可用 `--registry` 或 `SEBASTIAN_SKILLS_REGISTRY_URL` 覆盖，update 默认沿用安装时记录的 registry，除非显式传入 `--registry`。install/update/remove 在有效 registry 非默认值时会要求确认，包括 update 使用的已存储 registry。registry digest 存在时必须通过校验，缺失时记录本地 archive SHA256。安装目标为 `~/.sebastian/data/extensions/skills`，安装/更新/移除后的变化只影响新 Sebastian session；已有 session 保持启动时捕获的 prompt/tool snapshot。
+**安装第三方 Skill package**：使用 `sebastian skills search/inspect/install/list/show/update/remove` 从 ClawHub-compatible registry 管理 Skill。默认 registry 是 `https://clawhub.ai`；search/inspect/install 可用 `--registry` 或 `SEBASTIAN_SKILLS_REGISTRY_URL` 覆盖，update 默认沿用安装时记录的 registry，除非显式传入 `--registry`。install/update/remove 在有效 registry 非默认值时会要求确认，包括 update 使用的已存储 registry。registry digest 存在时必须通过校验，缺失时记录本地 archive SHA256。安装目标为 `~/.sebastian/data/extensions/skills`，安装/更新/移除后的变化只影响新 Sebastian session；已有 session 保持启动时捕获的 prompt/tool snapshot。`list` 会展示本地 builtin/managed/unmanaged Skill，`show` 读取本地 Skill 的 `SKILL.md` instructions。
 
-**Agent 辅助安装**：内置 `skill_installer` Skill 会指导 Sebastian 通过 PATH 中的公共 `sebastian skills ...` CLI 搜索、检查候选 Skill，并在用户明确确认后执行 install/update/remove；它禁止运行第三方 bundle 中的脚本、禁止 `curl | bash`，也不会自动绕过 unsafe registry 状态。实际读写的数据目录由运行环境中的 `SEBASTIAN_DATA_DIR` 决定。
+**Agent 辅助管理**：内置 `skill_manager` Skill 会指导 Sebastian 通过 PATH 中的公共 `sebastian skills ...` CLI 列出、读取、搜索、检查候选 Skill，并在用户明确确认后执行 install/update/remove；它禁止运行第三方 bundle 中的脚本、禁止 `curl | bash`，也不会自动绕过 unsafe registry 状态。实际读写的数据目录由运行环境中的 `SEBASTIAN_DATA_DIR` 决定。
 
 ## 子模块
 

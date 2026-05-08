@@ -4,16 +4,17 @@ import pathlib
 from pathlib import Path
 
 
-def test_builtin_skill_installer_is_loaded() -> None:
+def test_builtin_skill_manager_is_loaded() -> None:
     from sebastian.capabilities import skills as skills_pkg
     from sebastian.capabilities.skills._loader import load_skills
 
     specs = load_skills(builtin_dir=pathlib.Path(skills_pkg.__file__).parent)
     names = {spec["name"] for spec in specs}
-    assert "skill__skill_installer" in names
-    installer = next(spec for spec in specs if spec["name"] == "skill__skill_installer")
-    assert "sebastian skills list" in installer["description"]
-    assert "~/.sebastian/bin/sebastian" not in installer["description"]
+    assert "skill__skill_manager" in names
+    manager = next(spec for spec in specs if spec["name"] == "skill__skill_manager")
+    assert "sebastian skills list" in manager["description"]
+    assert "sebastian skills show <name-or-slug>" in manager["description"]
+    assert "~/.sebastian/bin/sebastian" not in manager["description"]
 
 
 def test_skill_loader_reads_skill_md(tmp_path: Path) -> None:

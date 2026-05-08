@@ -22,7 +22,7 @@ skills/
 ├── _loader.py         # 扫描 SKILL.md、生成工具 spec
 ├── metadata.py        # 解析 SKILL.md frontmatter、校验 Skill 注册名
 ├── hot_reload.py      # 计算 SKILL.md 指纹，新会话首轮触发 Skill 热加载
-└── skill_installer/   # 内置 Skill：通过 Sebastian CLI 管理 Skill 包
+└── skill_manager/     # 内置 Skill：通过 Sebastian CLI 管理 Skill
     └── SKILL.md
 ```
 
@@ -32,13 +32,15 @@ skills/
 - `install <slug>` / `update <slug>` 会下载 registry zip；有 registry sha256 时校验，
   无 digest 时记录本地 archive SHA256，然后安全解压、写入 lockfile/origin metadata，
   并把 Skill 放入用户扩展目录。
-- `list` 同时展示 package-managed 与本地 unmanaged Skill。
+- `list` 同时展示 builtin、package-managed 与本地 unmanaged Skill。
+- `show <name-or-slug>` 读取本地 Skill metadata 与 `SKILL.md` instructions，不访问 registry。
 - `remove <slug>` 只移除 package-managed Skill，并更新 lockfile。
 - 安装、更新、移除后，变化对新的 Sebastian session 生效；当前运行中的 session
   继续使用已有 prompt/tool snapshot。
 
-内置 `skill_installer` Skill 负责安全的 agent-assisted install flow：它会使用
-PATH 中的公共 `sebastian skills ...` CLI 搜索和检查 Skill，安装/更新确认前向用户总结
+内置 `skill_manager` Skill 负责安全的 agent-assisted Skill management flow：它会使用
+PATH 中的公共 `sebastian skills ...` CLI 列出和读取本地 Skill，也会搜索和检查 registry
+Skill，安装/更新确认前向用户总结
 inspect 可见的 registry metadata（registry、slug/name、version、安全/审核状态、
 download/SHA 信息和警告），并在用户确认后才执行 install/update/remove。runtime
 注册名只能在下载并解析 `SKILL.md` 后确定，因此由 install/update 成功后的 CLI 输出报告。
@@ -92,7 +94,7 @@ description: 这个 Skill 的简短描述
 | 如果要修改… | 看这里 |
 |------------|--------|
 | 新增 Skill | 在本目录下创建 `<name>/SKILL.md`（无需改代码） |
-| 修改内置 Skill 安装器说明 | [skill_installer/SKILL.md](skill_installer/SKILL.md) |
+| 修改内置 Skill 管理器说明 | [skill_manager/SKILL.md](skill_manager/SKILL.md) |
 | frontmatter 解析与 Skill 名校验规则 | [metadata.py](metadata.py) — `parse_skill_metadata()` / `validate_skill_name()` |
 | 扫描目录逻辑、工具 spec 生成 | [_loader.py](_loader.py) — `load_skills()` |
 | 修改新会话热加载逻辑 | [hot_reload.py](hot_reload.py) — `SkillHotReloader` |

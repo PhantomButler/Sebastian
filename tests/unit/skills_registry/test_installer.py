@@ -478,21 +478,30 @@ def test_remove_rejects_unmanaged_manual_skill(tmp_path: Path) -> None:
 def test_list_installed_merges_managed_and_unmanaged_skills(tmp_path: Path) -> None:
     from sebastian.skills_registry.installer import list_installed
 
+    builtin_root = tmp_path / "builtin"
+    _write_skill(builtin_root / "skill_manager", name="skill_manager", description="Builtin")
     managed = tmp_path / "flight"
     unmanaged = tmp_path / "manual"
     _write_skill(managed, name="flight", description="Flight search")
     _write_skill(unmanaged, name="manual", description="Manual")
     SkillPackageLock(tmp_path).save({"flight": _entry("flight", version="1.2.3")})
 
-    installed = list_installed(tmp_path)
+    installed = list_installed(tmp_path, builtin_dir=builtin_root)
 
-    assert len(installed) == 2
+    assert len(installed) == 3
+    assert any(
+        item.slug == "skill_manager"
+        and item.registered_name == "skill__skill_manager"
+        and item.source == "builtin"
+        for item in installed
+    )
     assert any(
         item.slug == "flight"
         and item.registered_name == "skill__flight"
         and item.version == "1.2.3"
         and item.registry == "https://clawhub.ai"
         and item.managed is True
+        and item.source == "managed"
         and item.path == managed
         for item in installed
     )
@@ -502,9 +511,50 @@ def test_list_installed_merges_managed_and_unmanaged_skills(tmp_path: Path) -> N
         and item.version is None
         and item.registry is None
         and item.managed is False
+        and item.source == "unmanaged"
         and item.path == unmanaged
         for item in installed
     )
+
+
+def test_show_local_skill_reads_builtin_by_registered_name(tmp_path: Path) -> None:
+    from sebastian.skills_registry.installer import show_local_skill
+
+    builtin_root = tmp_path / "builtin"
+    _write_skill(
+        builtin_root / "skill_manager",
+        name="skill_manager",
+        description="Skill management",
+    )
+
+    detail = show_local_skill(
+        "skill__skill_manager",
+        tmp_path / "extensions",
+        builtin_dir=builtin_root,
+    )
+
+    assert detail.slug == "skill_manager"
+    assert detail.registered_name == "skill__skill_manager"
+    assert detail.description == "Skill management"
+    assert detail.body == "Body"
+    assert detail.source == "builtin"
+
+
+def test_show_local_skill_prefers_exact_slug_over_registered_name(
+    tmp_path: Path,
+) -> None:
+    from sebastian.skills_registry.installer import show_local_skill
+
+    builtin_root = tmp_path / "builtin"
+    _write_skill(builtin_root / "weather", name="other", description="Builtin")
+    _write_skill(tmp_path / "weather", name="weather", description="Managed")
+    SkillPackageLock(tmp_path).save({"weather": _entry("weather")})
+
+    detail = show_local_skill("weather", tmp_path, builtin_dir=builtin_root)
+
+    assert detail.slug == "weather"
+    assert detail.registered_name == "skill__weather"
+    assert detail.source == "managed"
 
 
 def test_install_transaction_holds_package_lock_across_all_steps(

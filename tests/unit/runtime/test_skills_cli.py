@@ -12,6 +12,7 @@ from sebastian.skills_registry.lockfile import LockfileError
 from sebastian.skills_registry.models import (
     InstalledSkill,
     InstallResult,
+    LocalSkillDetail,
     RemoveResult,
     SkillDetail,
 )
@@ -518,6 +519,7 @@ def test_list_prints_managed_and_unmanaged_rows(monkeypatch, tmp_path: Path) -> 
                 registry="https://clawhub.ai",
                 managed=True,
                 path=tmp_path / "managed",
+                source="managed",
             ),
             InstalledSkill(
                 slug="manual",
@@ -526,6 +528,7 @@ def test_list_prints_managed_and_unmanaged_rows(monkeypatch, tmp_path: Path) -> 
                 registry=None,
                 managed=False,
                 path=tmp_path / "manual",
+                source="unmanaged",
             ),
         ],
     )
@@ -535,6 +538,32 @@ def test_list_prints_managed_and_unmanaged_rows(monkeypatch, tmp_path: Path) -> 
     assert result.exit_code == 0
     assert "managed\tmanaged_tool\t1.0.0\tmanaged" in result.output
     assert "manual\tmanual_tool\t-\tunmanaged" in result.output
+
+
+def test_show_prints_local_skill_instructions(monkeypatch, tmp_path: Path) -> None:
+    def fake_show(identifier: str, root: Path) -> LocalSkillDetail:
+        assert identifier == "weather"
+        return LocalSkillDetail(
+            slug="weather",
+            registered_name="skill__weather",
+            description="Weather helper",
+            body="Use this for weather.",
+            version="1.0.0",
+            registry="https://clawhub.ai",
+            managed=True,
+            source="managed",
+            path=tmp_path / "weather",
+        )
+
+    monkeypatch.setattr(skills, "show_local_skill", fake_show)
+
+    result = runner.invoke(app, ["skills", "show", "weather"])
+
+    assert result.exit_code == 0
+    assert "Slug: weather" in result.output
+    assert "Registered: skill__weather" in result.output
+    assert "Description: Weather helper" in result.output
+    assert "Use this for weather." in result.output
 
 
 def test_list_lockfile_error_prints_clean_cli_error(monkeypatch) -> None:

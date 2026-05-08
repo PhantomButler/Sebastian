@@ -37,6 +37,20 @@ class InstalledSkill:
     registry: str | None
     managed: bool
     path: Path
+    source: str = "managed"
+
+
+@dataclass(frozen=True)
+class LocalSkillDetail:
+    slug: str
+    registered_name: str
+    description: str
+    body: str
+    version: str | None
+    registry: str | None
+    managed: bool
+    source: str
+    path: Path
 
 
 @dataclass(frozen=True)

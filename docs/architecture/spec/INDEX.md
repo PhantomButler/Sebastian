@@ -51,7 +51,7 @@ Tools / MCPs / Skills 三层能力注册与实现。
 | [agent-file-send.md](capabilities/agent-file-send.md) | `todo_read` + `send_file`/`send_file_path`：Agent 向用户发送图片/文件、Tool Result Artifact 持久化、SSE 扩展、工具失败返回规范 |
 | [screenshot-send.md](capabilities/screenshot-send.md) | `capture_screenshot_and_send`：后端主机截图发送、HIGH_RISK 权限、macOS/Linux 平台后端、临时文件管理 |
 | [browser-tool.md](capabilities/browser-tool.md) | Sebastian 内置 Playwright browser_* 工具：headless persistent context、Sebastian-only 白名单、URL/DNS/filtering proxy 安全边界、文本观察与 `browser_look` 视觉观察 preflight、截图/下载 artifact 链路 |
-| [skill-package-manager.md](capabilities/skill-package-manager.md) | Sebastian Skill 包管理器：ClawHub-compatible registry consumer、CLI install/update/remove、lockfile、安全解压、PATH shim、builtin `skill_installer` |
+| [skill-package-manager.md](capabilities/skill-package-manager.md) | Sebastian Skill 包管理器：ClawHub-compatible registry consumer、CLI install/update/remove/show、lockfile、安全解压、PATH shim、builtin `skill_manager` |
 
 ### [infra/](infra/INDEX.md) — 基础设施
 
