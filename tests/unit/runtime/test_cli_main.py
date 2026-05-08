@@ -29,6 +29,14 @@ def test_global_version_option_prints_installed_version(monkeypatch) -> None:
     assert "9.8.7" in result.output
 
 
+def test_skills_help_is_mounted() -> None:
+    result = runner.invoke(app, ["skills", "--help"])
+
+    assert result.exit_code == 0
+    assert "search" in result.output
+    assert "install" in result.output
+
+
 def test_status_reports_active_service(monkeypatch) -> None:
     monkeypatch.setattr(
         "sebastian.cli.service.get_service_state",

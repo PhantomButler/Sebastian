@@ -14,6 +14,7 @@ cli/
 ├── path_setup.py     # 稳定 CLI shim 与 shell PATH 配置
 ├── service.py        # systemd/launchd 服务安装、状态、重启
 ├── service_templates.py # systemd unit / launchd plist 模板渲染
+├── skills.py         # Skill registry 搜索、安装、更新、移除命令
 └── updater.py        # 自升级逻辑（sebastian update）
 ```
 
@@ -68,6 +69,15 @@ shim 生成，确保服务和工具调用仍可使用稳定入口。
 - `MANAGED_ENTRIES`：更新时替换的顶层条目，`.venv`/`.env`/`secret.key` 等不会被触碰
 - `BACKUP_KEEP = 1`：只保留最近 1 个备份
 
+### `skills.py`
+
+Skill package manager 的 CLI 外壳，负责调用 registry client 与 installer：
+
+- `search_registry()`：用 `RegistryClient.search()` 查询 registry，返回 CLI 行数据。
+- `inspect`：展示 registry 中 Skill 的 slug、name、version、security、download、sha256 等信息。
+- `install` / `update` / `remove`：安装、更新、移除 package-managed Skill，并在非默认 registry、强制覆盖、允许 runtime name 变更、移除等高影响操作前要求显式确认。
+- `list`：展示当前 runtime Skill extensions 目录下的 managed / unmanaged Skill。
+
 ## CLI 命令一览
 
 | 命令 | 说明 | 入口 |
@@ -79,6 +89,12 @@ shim 生成，确保服务和工具调用仍可使用稳定入口。
 | `sebastian update` | 自升级到最新 release | `updater.run_update()` |
 | `sebastian version` | 输出当前 Sebastian 版本 | `main.py` |
 | `sebastian --version` | 输出当前 Sebastian 版本 | `main.py` |
+| `sebastian skills search <query>` | 搜索 registry Skill | `skills.search()` |
+| `sebastian skills inspect <slug>` | 查看 registry Skill 详情 | `skills.inspect()` |
+| `sebastian skills install <slug>` | 安装 Skill package | `skills.install()` |
+| `sebastian skills list` | 查看已安装 Skill | `skills.list_command()` |
+| `sebastian skills update <slug>` | 更新已安装 Skill | `skills.update()` |
+| `sebastian skills remove <slug>` | 移除 package-managed Skill | `skills.remove()` |
 | `sebastian service restart` | 重启 systemd/launchd 服务 | `service.restart()` |
 | `sebastian service status` | 查看 systemd/launchd 服务状态与日志提示 | `service.status()` |
 
@@ -87,6 +103,7 @@ shim 生成，确保服务和工具调用仍可使用稳定入口。
 | 修改场景 | 优先看 |
 |---------|--------|
 | 修改 CLI 命令注册或参数 | `main.py`（Typer app 定义） |
+| 修改 Skill package manager CLI | `skills.py` |
 | 修改进程守护/PID 逻辑 | `daemon.py` |
 | 修改无头初始化流程 | `init_wizard.py` |
 | 修改 CLI shim 或 PATH 写入逻辑 | `path_setup.py` |

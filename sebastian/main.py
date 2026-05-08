@@ -8,6 +8,7 @@ import uvicorn
 
 from sebastian.cli import service
 from sebastian.cli.service import app as service_app
+from sebastian.cli.skills import app as skills_app
 
 
 def _resolve_version() -> str:
@@ -31,6 +32,7 @@ def _version_callback(value: bool) -> None:
 
 app = typer.Typer(name="sebastian", help="Sebastian — Personal AI Butler")
 app.add_typer(service_app, name="service")
+app.add_typer(skills_app, name="skills")
 
 
 @app.callback()
