@@ -42,6 +42,7 @@ def test_safe_extract_zip_accepts_root_skill_md(tmp_path: Path) -> None:
     root = safe_extract_zip(archive, tmp_path / "extract")
 
     assert root == tmp_path / "extract"
+    assert (tmp_path / "extract" / "SKILL.md").is_file()
 
 
 def test_safe_extract_zip_accepts_single_root_skill_md(tmp_path: Path) -> None:
@@ -49,7 +50,29 @@ def test_safe_extract_zip_accepts_single_root_skill_md(tmp_path: Path) -> None:
 
     root = safe_extract_zip(archive, tmp_path / "extract")
 
-    assert root == tmp_path / "extract" / "demo"
+    assert root == tmp_path / "extract"
+    assert (tmp_path / "extract" / "SKILL.md").is_file()
+    assert not (tmp_path / "extract" / "demo").exists()
+
+
+def test_safe_extract_zip_single_root_is_visible_to_skill_loader(
+    tmp_path: Path,
+) -> None:
+    from sebastian.capabilities.skills._loader import load_skills
+
+    skills_root = tmp_path / "skills"
+    archive = _zip(
+        tmp_path,
+        {
+            "pkg/SKILL.md": (b"---\nname: flight\ndescription: Flight helper\n---\nBook a flight."),
+        },
+    )
+
+    root = safe_extract_zip(archive, skills_root / "flight")
+
+    assert root == skills_root / "flight"
+    assert (skills_root / "flight" / "SKILL.md").is_file()
+    assert "skill__flight" in {skill["name"] for skill in load_skills(builtin_dir=skills_root)}
 
 
 def test_safe_extract_zip_requires_root_level_or_single_root_skill_md(

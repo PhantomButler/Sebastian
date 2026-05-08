@@ -163,6 +163,45 @@ def test_load_rejects_malformed_entry(tmp_path: Path) -> None:
         SkillPackageLock(tmp_path).load()
 
 
+def test_load_rejects_non_object_entry(tmp_path: Path) -> None:
+    (tmp_path / ".sebastian-skills.lock.json").write_text(
+        json.dumps({"version": 1, "skills": {"flight": "broken"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(LockfileError):
+        SkillPackageLock(tmp_path).load()
+
+
+def test_load_rejects_non_string_slug(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".sebastian-skills.lock.json").write_text("{}", encoding="utf-8")
+
+    def fake_json_load(file: object) -> dict[str, object]:
+        return {
+            "version": 1,
+            "skills": {
+                123: {
+                    "slug": "flight",
+                    "registered_name": "skill__flight",
+                    "registry": "https://clawhub.ai",
+                    "version": None,
+                    "tag": None,
+                    "sha256": None,
+                    "fingerprint": "abc123",
+                    "installed_at": datetime(2026, 5, 8, tzinfo=UTC).isoformat(),
+                }
+            },
+        }
+
+    monkeypatch.setattr(lockfile_module.json, "load", fake_json_load)
+
+    with pytest.raises(LockfileError):
+        SkillPackageLock(tmp_path).load()
+
+
 def _hold_package_lock(
     root: Path,
     ready: multiprocessing.Event,

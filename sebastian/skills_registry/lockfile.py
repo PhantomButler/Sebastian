@@ -69,11 +69,14 @@ class SkillPackageLock:
             raise LockfileError("Skill package lockfile skills must be an object")
         entries: dict[str, LockfileEntry] = {}
         for slug, raw_entry in skills.items():
-            if isinstance(slug, str) and isinstance(raw_entry, dict):
-                try:
-                    entries[slug] = LockfileEntry(**raw_entry)
-                except TypeError as exc:
-                    raise LockfileError(f"Malformed lockfile entry for skill {slug!r}") from exc
+            if not isinstance(slug, str):
+                raise LockfileError("Skill package lockfile skill slugs must be strings")
+            if not isinstance(raw_entry, dict):
+                raise LockfileError(f"Malformed lockfile entry for skill {slug!r}")
+            try:
+                entries[slug] = LockfileEntry(**raw_entry)
+            except TypeError as exc:
+                raise LockfileError(f"Malformed lockfile entry for skill {slug!r}") from exc
         return entries
 
     def save(self, entries: dict[str, LockfileEntry]) -> None:

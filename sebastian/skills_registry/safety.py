@@ -37,13 +37,10 @@ def safe_extract_zip(archive: Path, destination: Path) -> Path:
             zf.extractall(temp_destination)
 
         root = _validate_extracted_skill_root(temp_destination)
-        relative_root = root.relative_to(temp_destination)
-        for child in temp_destination.iterdir():
+        for child in root.iterdir():
             shutil.move(str(child), destination / child.name)
 
-    if relative_root == Path("."):
-        return destination
-    return destination / relative_root
+    return destination
 
 
 def _validate_extracted_skill_root(destination: Path) -> Path:
