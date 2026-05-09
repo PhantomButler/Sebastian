@@ -211,7 +211,7 @@ App 有两条 SSE 连接：
 | 修改场景 | 优先看 |
 |---------|--------|
 | 改主对话三栏布局 | `ui/chat/ChatScreen.kt` |
-| 改消息渲染（文本/思考/工具块） | `ui/chat/StreamingMessage.kt`、`ThinkingCard.kt`、`ToolCallCard.kt` |
+| 改消息渲染（文本/思考/工具块/执行步骤折叠） | `ui/chat/StreamingMessage.kt`、`ui/chat/ExecutionRenderItems.kt`、`ui/chat/ExecutionGroupCard.kt`、`ui/chat/ThinkingCard.kt`、`ui/chat/ToolCallCard.kt` |
 | 改输入框（Composer） | `ui/composer/Composer.kt`、`SendButton.kt` |
 | 改附件选择与预览 | `ui/composer/AttachmentSlot.kt`、`ui/composer/AttachmentPreviewBar.kt` |
 | 改模型输入能力加载（支持图片/文本附件判断） | `viewmodel/ChatViewModel.refreshInputCapabilities(agentId)`，主对话从 default binding 读取，Sub-Agent 从各自 binding 读取 |

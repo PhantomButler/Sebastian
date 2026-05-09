@@ -13,6 +13,8 @@ chat/
 ├── AttachmentBlocks.kt       # 图片/文件附件卡片（用户上传与 Agent send_file artifact 共用）
 ├── ChatScreen.kt             # 主对话 Screen（三栏脚手架 + GlassSurface Composer）
 ├── CollapsibleContent.kt     # 工具调用展开区的二次折叠容器（≤5行直展，>5行折叠+最多30行）
+├── ExecutionGroupCard.kt     # 连续 thinking/tool blocks 的外层折叠容器（竖胶囊步骤条）
+├── ExecutionRenderItems.kt   # 消息 block → 渲染项 / 执行组的纯分组逻辑
 ├── MessageList.kt            # 消息列表（LazyColumn + 滚动跟随逻辑）
 ├── SessionGrouping.kt        # Session 按时间分桶逻辑（今天/昨天/7天内/30天内/年月）
 ├── SessionPanel.kt           # 左栏：Session 列表面板（List Pane）
@@ -69,6 +71,8 @@ UI 映射：FAB 显示 = `userAway`（绑意图而非事实 —— 流式中 `at
 | `SummaryBlock` | `SummaryCard`（折叠卡片，标题"Compressed summary"） |
 | `ImageBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` artifact） |
 | `FileBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` 的 `text_file` / `download` artifact） |
+
+连续的 `ThinkingBlock` / `ToolBlock` 在渲染前会先由 `ExecutionRenderItems` 聚合为外层执行组；折叠态显示单行横向滑动的竖胶囊步骤条，展开后复用 `ThinkingCard` / `ToolCallCard` 渲染原始明细。分组只发生在 UI 层，不改变 SSE、REST 或持久化模型。
 
 `SummaryCard` 是对话上下文被压缩的视觉标记，表示其之前的内容已被归档压缩；被归档的原始块仍正常显示，不做置灰或隐藏。
 
@@ -132,7 +136,7 @@ Session 按时间分桶的纯函数逻辑，不含 UI。提供：
 | 改三栏布局（脚手架结构） | `ChatScreen.kt` |
 | 改手机单栏手势滑动逻辑 | `SlidingThreePaneLayout.kt` |
 | 改消息列表滚动行为 | `MessageList.kt` |
-| 改消息渲染分发逻辑 | `StreamingMessage.kt` |
+| 改消息渲染分发逻辑 / 执行步骤外层折叠 | `StreamingMessage.kt`、`ExecutionRenderItems.kt`、`ExecutionGroupCard.kt` |
 | 改上下文压缩摘要卡片 | `StreamingMessage.kt`（`SummaryCard` 组件） |
 | 改思考块展开/折叠 | `ThinkingCard.kt` |
 | 改工具调用块样式/状态 | `ToolCallCard.kt` |

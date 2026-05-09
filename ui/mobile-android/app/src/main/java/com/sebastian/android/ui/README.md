@@ -36,7 +36,7 @@ ui/
 |---------|--------|
 | 改三栏布局（脚手架结构） | `chat/ChatScreen.kt` → [chat/README.md](chat/README.md) |
 | 改手机单栏手势滑动逻辑 | `chat/SlidingThreePaneLayout.kt` |
-| 改消息渲染（文本/思考/工具调用） | `chat/StreamingMessage.kt`、`ThinkingCard.kt`、`ToolCallCard.kt` |
+| 改消息渲染（文本/思考/工具调用/执行步骤折叠） | `chat/StreamingMessage.kt`、`chat/ExecutionRenderItems.kt`、`chat/ExecutionGroupCard.kt`、`chat/ThinkingCard.kt`、`chat/ToolCallCard.kt` |
 | 改消息列表滚动行为 | `chat/MessageList.kt` |
 | 改 Session 列表面板 | `chat/SessionPanel.kt` |
 | 改 Todo 面板 | `chat/TodoPanel.kt` |
