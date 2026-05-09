@@ -192,6 +192,21 @@ class BaseAgent(ABC):
                 "inspect/search results are only remote metadata.",
                 "`sebastian skills search <query>` searches local Skills by default. Use "
                 "`--source registry` only when the user wants to find new Skills to install.",
+                "When Bash is available, search local Skills before generic tools for "
+                "reusable domain tasks. This includes travel, flights, hotels, calendar, "
+                "meetings, email, documents, spreadsheets, code, repositories, browser "
+                "automation, and other repeatable workflows.",
+                "Use keyword-style search queries, not full user sentences. If the user uses "
+                "Chinese or other non-English terms, include the user's meaningful keywords "
+                "plus likely English synonyms, separated by spaces.",
+                "Examples:",
+                '- `sebastian skills search "机票 航班 飞机票 flight airfare airline ticket '
+                'travel booking"`',
+                '- `sebastian skills search "酒店 住宿 hotel lodging accommodation travel"`',
+                '- `sebastian skills search "日程 会议 calendar schedule meeting"`',
+                "If local search returns plausible candidates, read the chosen Skill body "
+                "with `sebastian skills show <name-or-slug> --body` before acting.",
+                "If no plausible Skill is found, continue with normal tools.",
                 "`install`, `update`, and `remove` are mutation commands. Use them only when "
                 "the user explicitly asks to manage installed Skills.",
                 'Skill management is the exception to the general "prefer Read over Bash for '
@@ -199,6 +214,14 @@ class BaseAgent(ABC):
                 "the `sebastian skills` CLI instead.",
             ]
         )
+
+    def _can_use_bash(self) -> bool:
+        allowed = _normalize_allowed_tools(self.allowed_tools)
+        if allowed is ALL_TOOLS:
+            return True
+        if allowed is None:
+            return False
+        return any(tool.lower() == "bash" for tool in allowed)
 
     def _agents_section(self, agent_registry: Mapping[str, Any] | None = None) -> str:  # noqa: ARG002
         return ""
@@ -351,7 +374,7 @@ class BaseAgent(ABC):
             self._persona_section(),
             self._guidelines_section(),
             self._tools_section(gate),
-            self._skill_management_section(),
+            self._skill_management_section() if self._can_use_bash() else "",
             self._agents_section(agent_registry),
             self._knowledge_section(),
         ]

@@ -101,7 +101,9 @@ Skill package manager 的 CLI 外壳，负责调用 registry client 与 installe
 `sebastian skills search <query>` 默认搜索本地 Skill；`sebastian skills show <name-or-slug>`
 读取本地 Skill metadata、path、source 与可见文件列表；`sebastian skills show <name-or-slug> --body`
 读取 `SKILL.md` instructions；`sebastian skills read <name-or-slug> <relative-path>`
-读取 Skill 目录内引用文件，均不访问 registry。`sebastian skills update --all` 会遍历 package-managed Skill，跳过 unmanaged Skill；
+读取 Skill 目录内引用文件，均不访问 registry。本地 `search <query>` 按空白分词，并用
+OR 语义匹配 slug、frontmatter name、registered name 和 description；Agent 处理中文或其他
+非英文请求时，应把可能的英文同义词一起放进 query。`sebastian skills update --all` 会遍历 package-managed Skill，跳过 unmanaged Skill；
 单个 Skill 更新失败会继续处理后续条目，最终用非零退出码报告失败汇总。
 
 ## CLI 命令一览

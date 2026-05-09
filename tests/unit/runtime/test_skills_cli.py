@@ -261,6 +261,289 @@ def test_search_local_matches_description(monkeypatch, tmp_path: Path) -> None:
     assert "weather\tunmanaged\tskill__weather\tRain forecast helper" in result.output
 
 
+def test_search_local_multi_token_query_matches_any_token(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="flight_search",
+                registered_name="skill__flight_search",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "flight_search",
+                source="unmanaged",
+                description="Find flight and airfare options",
+                name="flight_search",
+            )
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "机票 航班 flight airfare"])
+
+    assert result.exit_code == 0
+    assert (
+        "flight_search\tunmanaged\tskill__flight_search\tFind flight and airfare options"
+    ) in result.output
+
+
+def test_search_local_matches_frontmatter_name(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="travel-pack",
+                registered_name="skill__travel_pack",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "travel-pack",
+                source="unmanaged",
+                description="Travel helper",
+                name="airfare",
+            )
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "airfare"])
+
+    assert result.exit_code == 0
+    assert "travel-pack\tunmanaged\tskill__travel_pack\tTravel helper" in result.output
+
+
+def test_search_local_filters_ascii_stopwords(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="article_formatter",
+                registered_name="skill__article_formatter",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "article_formatter",
+                source="unmanaged",
+                description="Convert a note to a formatted article",
+                name="article_formatter",
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "book a flight to Tokyo"])
+
+    assert result.exit_code == 0
+    assert result.output == "LOCAL\n"
+
+
+def test_search_local_keeps_short_ascii_exact_slug(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="ci",
+                registered_name="skill__ci",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "ci",
+                source="unmanaged",
+                description="Continuous integration helper",
+                name="ci",
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "ci"])
+
+    assert result.exit_code == 0
+    assert "ci\tunmanaged\tskill__ci\tContinuous integration helper" in result.output
+
+
+def test_search_local_sorts_stronger_name_match_before_description_match(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="generic_travel",
+                registered_name="skill__generic_travel",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "generic_travel",
+                source="unmanaged",
+                description="airfare comparison helper",
+                name="generic_travel",
+            ),
+            InstalledSkill(
+                slug="flight_search",
+                registered_name="skill__flight_search",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "flight_search",
+                source="unmanaged",
+                description="travel helper",
+                name="airfare",
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "airfare"])
+
+    assert result.exit_code == 0
+    assert result.output.index("flight_search") < result.output.index("generic_travel")
+
+
+def test_search_local_exact_slug_and_name_match_beat_accumulated_weaker_fields(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="airfare-helper",
+                registered_name="skill__airfare_helper",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "airfare-helper",
+                source="unmanaged",
+                description="airfare planning helper",
+                name="travel_helper",
+            ),
+            InstalledSkill(
+                slug="airfare",
+                registered_name="skill__exact_slug",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "airfare",
+                source="unmanaged",
+                description="travel helper",
+                name="exact_slug",
+            ),
+            InstalledSkill(
+                slug="flight_search",
+                registered_name="skill__flight_search",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "flight_search",
+                source="unmanaged",
+                description="travel helper",
+                name="airfare",
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "airfare"])
+
+    assert result.exit_code == 0
+    assert result.output.index("airfare\t") < result.output.index("airfare-helper")
+    assert result.output.index("flight_search") < result.output.index("airfare-helper")
+
+
+def test_search_local_same_score_uses_source_priority_then_slug(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="zeta_travel",
+                registered_name="skill__zeta_travel",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "zeta_travel",
+                source="unmanaged",
+                description="travel planning",
+                name="zeta_travel",
+            ),
+            InstalledSkill(
+                slug="beta_travel",
+                registered_name="skill__beta_travel",
+                version=None,
+                registry=None,
+                managed=True,
+                path=tmp_path / "beta_travel",
+                source="managed",
+                description="travel planning",
+                name="beta_travel",
+            ),
+            InstalledSkill(
+                slug="alpha_travel",
+                registered_name="skill__alpha_travel",
+                version=None,
+                registry=None,
+                managed=True,
+                path=tmp_path / "alpha_travel",
+                source="managed",
+                description="travel planning",
+                name="alpha_travel",
+            ),
+            InstalledSkill(
+                slug="omega_travel",
+                registered_name="skill__omega_travel",
+                version=None,
+                registry=None,
+                managed=True,
+                path=tmp_path / "omega_travel",
+                source="builtin",
+                description="travel planning",
+                name="omega_travel",
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "planning"])
+
+    assert result.exit_code == 0
+    assert result.output.index("omega_travel") < result.output.index("alpha_travel")
+    assert result.output.index("alpha_travel") < result.output.index("beta_travel")
+    assert result.output.index("beta_travel") < result.output.index("zeta_travel")
+
+
+def test_search_local_whitespace_query_prints_empty_local_section(
+    monkeypatch,
+) -> None:
+    calls = 0
+
+    def fake_list_installed() -> list[InstalledSkill]:
+        nonlocal calls
+        calls += 1
+        return []
+
+    monkeypatch.setattr(skills, "list_installed", fake_list_installed)
+
+    result = runner.invoke(app, ["skills", "search", "   "])
+
+    assert result.exit_code == 0
+    assert result.output == "LOCAL\n"
+    assert calls == 0
+
+
 def test_search_registry_http_error_prints_clean_cli_error(monkeypatch) -> None:
     def fail_search(
         query: str,

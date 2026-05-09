@@ -154,7 +154,8 @@ Sub-Agent 插件目录。当前已有：
 - `mcp_client.py`：MCP client 接入
 
 用户安装的 Skill package 默认写入
-`~/.sebastian/data/extensions/skills`。`sebastian skills search` 默认只搜本地；
+`~/.sebastian/data/extensions/skills`。`sebastian skills search` 默认只搜本地，
+本地查询按空白分词并 OR 匹配 slug、frontmatter name、registered name 和 description；
 远端 registry 搜索需要显式 `--source registry` 或 `--source all`。remote
 search/inspect/install 使用显式 `--registry` → `SEBASTIAN_SKILLS_REGISTRY_URL` →
 默认 `https://clawhub.ai` 的顺序解析 registry；`update` 不传 `--registry` 时使用该
@@ -214,7 +215,8 @@ Typer CLI 子命令与进程守护工具。
 - `cli/service.py`：systemd/launchd 服务安装、状态、重启。
 - `updater.py`：自升级逻辑（`sebastian update`），含 SHA256 校验、原子替换、失败回滚
 - `skills.py`：`sebastian skills search/inspect/install/list/show/read/update/remove`，
-  从本地 catalog 和 ClawHub-compatible registry 管理用户 Skill 包。
+  从本地 catalog 和 ClawHub-compatible registry 管理用户 Skill 包；本地 search 使用
+  multi-token OR 匹配与确定性排序。
 - `path_setup.py`：安装/升级时刷新 `~/.sebastian/bin/sebastian` shim，并按需写入
   zsh/bash PATH block。
 

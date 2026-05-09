@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-last_updated: 2026-05-08
+version: "1.2"
+last_updated: 2026-05-09
 status: implemented
 ---
 
@@ -37,9 +37,15 @@ sebastian skills update flight-search
 sebastian skills remove flight-search
 ```
 
-`search` 默认只搜索本地已安装 Skill。只有 `--source registry` 或 `--source all`
-才访问远端 registry；单独传 `--registry` 不会触发网络访问。默认 registry 为
-`https://clawhub.ai`。远端 `search`、`inspect`、`install` 按以下顺序解析 registry：
+`search` 默认只搜索本地已安装 Skill。它把本地查询按空白分词，过滤 ASCII 停用词，
+再用 OR 语义匹配 slug、frontmatter `name`、兼容 `registered_name` 与 description。
+短的精确 Skill name/slug 会被保留，不会因为短词或停用词规则被丢弃。结果按确定性
+score 排序，并用 source、slug 等稳定字段打破并列。搜索不会生成或写入 Skill
+metadata；本阶段不新增检索词字段、别名字段或安装时包内容改写。
+
+只有 `--source registry` 或 `--source all` 才访问远端 registry；单独传 `--registry`
+不会触发网络访问。默认 registry 为 `https://clawhub.ai`。远端 `search`、`inspect`、
+`install` 按以下顺序解析 registry：
 
 1. `--registry <url>`
 2. `SEBASTIAN_SKILLS_REGISTRY_URL`

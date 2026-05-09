@@ -44,6 +44,28 @@ class SearchSource(StrEnum):
     ALL = "all"
 
 
+_ASCII_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "for",
+        "in",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "with",
+    }
+)
+_EXACT_SLUG_OR_NAME_SCORE = 120
+_SUBSTRING_SLUG_OR_NAME_SCORE = 60
+_DESCRIPTION_SCORE = 30
+_REGISTERED_NAME_SCORE = 15
+
+
 def search_registry(
     query: str,
     registry: str | None = None,
@@ -119,18 +141,62 @@ def _print_detail(detail: SkillDetail) -> None:
     typer.echo(f"SHA256: {_format_optional(detail.sha256)}")
 
 
-def _matches_local_skill(skill: InstalledSkill, query: str) -> bool:
-    normalized_query = query.casefold()
-    fields = (
-        skill.slug,
-        skill.registered_name,
-        skill.description,
-    )
-    return any(normalized_query in field.casefold() for field in fields)
+def _is_ascii_token(token: str) -> bool:
+    return token.isascii()
+
+
+def _search_tokens(query: str) -> tuple[str, ...]:
+    seen: set[str] = set()
+    tokens: list[str] = []
+    for raw in query.split():
+        token = raw.strip().casefold()
+        if not token:
+            continue
+        if _is_ascii_token(token) and token in _ASCII_STOPWORDS:
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    return tuple(tokens)
+
+
+def _score_local_skill(skill: InstalledSkill, tokens: tuple[str, ...]) -> int:
+    score = 0
+    slug = skill.slug.casefold()
+    name = skill.name.casefold()
+    registered_name = skill.registered_name.casefold()
+    description = skill.description.casefold()
+    for token in tokens:
+        if token == slug or (name and token == name):
+            score += _EXACT_SLUG_OR_NAME_SCORE
+        elif token in slug or (name and token in name):
+            score += _SUBSTRING_SLUG_OR_NAME_SCORE
+        if token in description:
+            score += _DESCRIPTION_SCORE
+        if token in registered_name:
+            score += _REGISTERED_NAME_SCORE
+    return score
+
+
+def _source_sort_rank(source: str) -> int:
+    return {"builtin": 0, "managed": 1, "unmanaged": 2}.get(source, 3)
 
 
 def _search_local(query: str) -> list[InstalledSkill]:
-    return [skill for skill in list_installed() if _matches_local_skill(skill, query)]
+    tokens = _search_tokens(query)
+    if not tokens:
+        return []
+    scored = [(_score_local_skill(skill, tokens), skill) for skill in list_installed()]
+    matches = [(score, skill) for score, skill in scored if score > 0]
+    matches.sort(
+        key=lambda item: (
+            -item[0],
+            _source_sort_rank(item[1].source),
+            item[1].slug,
+        )
+    )
+    return [skill for _score, skill in matches]
 
 
 def _print_local_search_rows(rows: list[InstalledSkill]) -> None:

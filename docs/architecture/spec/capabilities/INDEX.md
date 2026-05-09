@@ -12,7 +12,7 @@
 | [agent-file-send.md](agent-file-send.md) | `todo_read`（只读 todo 列表）、`send_file` + `send_file_path` helper（Agent 向用户发送图片/文件）、Tool Result Artifact 持久化链路、SSE `tool.executed` artifact 字段、工具失败返回规范 |
 | [screenshot-send.md](screenshot-send.md) | `capture_screenshot_and_send` 截图工具（`PermissionTier.HIGH_RISK`）、macOS/Linux 平台后端、临时文件管理、复用 `send_file_path` helper |
 | [browser-tool.md](browser-tool.md) | Sebastian 内置 Playwright browser_* 工具：headless persistent context、Sebastian-only 白名单、URL/DNS/filtering proxy 安全边界、观察 preflight、截图/下载 artifact 链路 |
-| [skill-package-manager.md](skill-package-manager.md) | Sebastian Skill 包管理器与 progressive disclosure runtime：Skill 是本地 catalog package、CLI list/search/show/read 按需读取、ClawHub-compatible registry consumer、lockfile、安全解压、PATH shim、builtin `skill_manager` |
+| [skill-package-manager.md](skill-package-manager.md) | Sebastian Skill 包管理器与 progressive disclosure runtime：Skill 是本地 catalog package、CLI list/search/show/read 按需读取，本地 search 支持 multi-token OR 匹配与确定性排序，ClawHub-compatible registry consumer、lockfile、安全解压、PATH shim、builtin `skill_manager` |
 
 ---
 

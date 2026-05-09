@@ -72,6 +72,7 @@ def list_installed(root: Path, *, builtin_dir: Path | None = None) -> list[Insta
                 path=path,
                 source="builtin",
                 description=metadata.description,
+                name=metadata.name,
             )
         )
 
@@ -89,6 +90,7 @@ def list_installed(root: Path, *, builtin_dir: Path | None = None) -> list[Insta
                 path=path,
                 source="managed",
                 description=metadata.description if metadata is not None else "",
+                name=metadata.name if metadata is not None else "",
             )
         )
 
@@ -105,6 +107,7 @@ def list_installed(root: Path, *, builtin_dir: Path | None = None) -> list[Insta
                 path=path,
                 source="unmanaged",
                 description=metadata.description,
+                name=metadata.name,
             )
         )
 

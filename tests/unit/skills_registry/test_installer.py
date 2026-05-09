@@ -509,12 +509,14 @@ def test_list_installed_merges_managed_and_unmanaged_skills(tmp_path: Path) -> N
     assert len(installed) == 3
     assert any(
         item.slug == "skill_manager"
+        and item.name == "skill_manager"
         and item.registered_name == "skill__skill_manager"
         and item.source == "builtin"
         for item in installed
     )
     assert any(
         item.slug == "flight"
+        and item.name == "flight"
         and item.registered_name == "skill__flight"
         and item.version == "1.2.3"
         and item.registry == "https://clawhub.ai"
@@ -525,6 +527,7 @@ def test_list_installed_merges_managed_and_unmanaged_skills(tmp_path: Path) -> N
     )
     assert any(
         item.slug == "manual"
+        and item.name == "manual"
         and item.registered_name == "skill__manual"
         and item.version is None
         and item.registry is None

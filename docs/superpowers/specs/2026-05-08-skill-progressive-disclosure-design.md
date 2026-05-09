@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-last_updated: 2026-05-08
+version: "1.1"
+last_updated: 2026-05-09
 status: draft
 integrated_to: capabilities/skill-package-manager.md
 integrated_at: 2026-05-08
@@ -272,6 +272,16 @@ Local Skill content is authoritative for installed Skills. Registry
 inspect/search results are only remote metadata.
 `sebastian skills search <query>` searches local Skills by default. Use
 `--source registry` only when the user wants to find new Skills to install.
+For reusable domain tasks, search local Skills before falling back to generic
+tools. Build concise search queries from the user's intent; for Chinese or
+other non-English requests, include the original meaningful terms plus likely
+English synonyms so local Skill metadata can match either language.
+
+Examples:
+- User asks: "帮我查机票和航班" -> `sebastian skills search "机票 航班 flight airfare travel"`
+- User asks: "整理发票报销" -> `sebastian skills search "发票 报销 invoice reimbursement expense"`
+- User asks: "resume polish" -> `sebastian skills search "resume polish CV"`
+
 `install`, `update`, and `remove` are mutation commands. Use them only when the
 user explicitly asks to manage installed Skills.
 Skill management is the exception to the general "prefer Read over Bash for
@@ -280,7 +290,8 @@ file reads" rule. Do not use generic Read to access Skill directories; use the
 ```
 
 The bootstrap tells the model how to discover Skills without listing every
-Skill. It is stable, small, and independent of the installed catalog.
+installed Skill name or injecting any Skill body. It is stable, small, and
+independent of the installed catalog.
 
 The builtin `skill_manager` Skill remains a local Skill package. Its full rules
 can be read through:

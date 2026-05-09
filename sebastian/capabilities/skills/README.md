@@ -8,7 +8,9 @@
 
 用户通过 `sebastian skills install` 安装的 package-managed Skill 默认落在
 `~/.sebastian/data/extensions/skills`，与手工添加的用户 Skill 一起组成本地 catalog。
-`sebastian skills search` 默认只搜本地；只有 `--source registry` 或 `--source all`
+`sebastian skills search` 默认只搜本地；`search <query>` 会按空白分词，并用 OR 语义匹配
+slug、frontmatter name、registered name 和 description。Agent 处理中文或其他非英文请求时，
+应把可能的英文同义词一起放进 query。只有 `--source registry` 或 `--source all`
 才访问远端 registry。默认 registry 是 `https://clawhub.ai`。remote search/inspect/install
 使用显式 `--registry` → `SEBASTIAN_SKILLS_REGISTRY_URL` → 默认 registry 的顺序解析；
 update 不传 `--registry` 时使用安装 lockfile 记录的 registry，显式传入
@@ -29,7 +31,8 @@ skills/
 
 ## Package Manager 生命周期
 
-- `sebastian skills search <query>` 默认只读取本地 catalog；`inspect <slug>` 读取 registry 元数据。
+- `sebastian skills search <query>` 默认只读取本地 catalog；本地 query 按空白分词，
+  并 OR 匹配 slug、frontmatter name、registered name 和 description。中文或其他非英文请求应同时加入可能的英文同义词。`inspect <slug>` 读取 registry 元数据。
 - `install <slug>` / `update <slug>` 会下载 registry zip；有 registry sha256 时校验，
   无 digest 时记录本地 archive SHA256，然后安全解压、写入 lockfile/origin metadata，
   并把 Skill 放入用户扩展目录。

@@ -7,6 +7,7 @@ import pytest
 
 from sebastian.capabilities.registry import CapabilityRegistry
 from sebastian.core.types import ToolResult
+from sebastian.permissions.types import ALL_TOOLS, AllToolsSentinel
 
 
 def _make_registry_with_tools() -> CapabilityRegistry:
@@ -21,6 +22,29 @@ def _make_registry_with_tools() -> CapabilityRegistry:
         fn,
     )
     return reg
+
+
+def _build_prompt(
+    tmp_path: Path,
+    allowed_tools: list[str] | AllToolsSentinel | None,
+) -> str:
+    from sebastian.core.base_agent import BaseAgent
+    from sebastian.store.session_store import SessionStore
+
+    class MyAgent(BaseAgent):
+        name = "test"
+        persona = "I am your butler."
+
+    store = SessionStore(tmp_path / "sessions")
+    reg = CapabilityRegistry()
+
+    with patch("sebastian.core.base_agent.settings") as mock_settings:
+        mock_settings.sebastian_model = "claude-opus-4-6"
+        mock_settings.llm_max_tokens = 16000
+        mock_settings.workspace_dir = tmp_path / "workspace"
+        agent = MyAgent(reg, store, allowed_tools=allowed_tools)
+
+    return agent.system_prompt
 
 
 @pytest.mark.asyncio
@@ -47,26 +71,42 @@ async def test_persona_section_appears_in_system_prompt(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_system_prompt_includes_skill_management_bootstrap(tmp_path: Path) -> None:
-    from sebastian.core.base_agent import BaseAgent
-    from sebastian.store.session_store import SessionStore
+    system_prompt = _build_prompt(tmp_path, ["Bash"])
 
-    class MyAgent(BaseAgent):
-        name = "test"
-        persona = "I am your butler."
-        allowed_tools: list[str] | None = []
+    assert "## Skill Management" in system_prompt
+    assert "When Bash is available" in system_prompt
+    assert "search local Skills before generic tools" in system_prompt
+    assert (
+        "机票 航班 飞机票 flight airfare airline ticket travel booking" in system_prompt
+    )
+    assert "sebastian skills show <name-or-slug> --body" in system_prompt
+    assert "Registry" in system_prompt
+    assert (
+        "only when the user wants to find new Skills to install" in system_prompt
+    )
+    assert "Do not use generic Read to access Skill directories" in system_prompt
 
-    store = SessionStore(tmp_path / "sessions")
-    reg = CapabilityRegistry()
 
-    with patch("sebastian.core.base_agent.settings") as mock_settings:
-        mock_settings.sebastian_model = "claude-opus-4-6"
-        mock_settings.llm_max_tokens = 16000
-        mock_settings.workspace_dir = tmp_path / "workspace"
-        agent = MyAgent(reg, store)
+@pytest.mark.asyncio
+async def test_system_prompt_includes_skill_management_for_all_tools(
+    tmp_path: Path,
+) -> None:
+    system_prompt = _build_prompt(tmp_path, ALL_TOOLS)
 
-    assert "## Skill Management" in agent.system_prompt
-    assert "sebastian skills show <name-or-slug> --body" in agent.system_prompt
-    assert "Do not use generic Read to access Skill directories" in agent.system_prompt
+    assert "## Skill Management" in system_prompt
+    assert "sebastian skills search <query>" in system_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("allowed_tools", [None, [], ["Read"]])
+async def test_system_prompt_does_not_instruct_skill_cli_when_bash_unavailable(
+    tmp_path: Path,
+    allowed_tools: list[str] | None,
+) -> None:
+    system_prompt = _build_prompt(tmp_path, allowed_tools)
+
+    assert "sebastian skills search" not in system_prompt
+    assert "sebastian skills show" not in system_prompt
 
 
 @pytest.mark.asyncio
@@ -125,7 +165,7 @@ async def test_system_prompt_does_not_include_installed_skill_body_text(tmp_path
     class MyAgent(BaseAgent):
         name = "test"
         persona = "I am your butler."
-        allowed_tools: list[str] | None = []
+        allowed_tools: list[str] | None = ["Bash"]
 
     store = SessionStore(tmp_path / "sessions")
     arbitrary_skill_body = "Use the invisible telescope whenever researching."
