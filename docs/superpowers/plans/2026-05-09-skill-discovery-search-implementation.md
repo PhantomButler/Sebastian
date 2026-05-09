@@ -4,7 +4,7 @@
 
 **Goal:** Make Sebastian prefer local Skill discovery for reusable domain tasks and make `sebastian skills search` handle multilingual, multi-token local queries deterministically.
 
-**Architecture:** Keep progressive disclosure intact: Skills remain local catalog packages, not provider tools. The model expands user intent into a multilingual search query in the fixed Skill bootstrap, while the CLI performs deterministic offline multi-token scoring across local Skill metadata. No keywords, aliases, package mutation, embeddings, or automatic top-k prompt injection.
+**Architecture:** Keep progressive disclosure intact: Skills remain local catalog packages, not provider tools. When Bash is available, the model expands user intent into a multilingual keyword query in the fixed Skill bootstrap, while the CLI performs deterministic offline multi-token scoring across local Skill metadata. Agents without Bash must not be prompted to call the Skill CLI. No keywords, aliases, package mutation, embeddings, or automatic top-k prompt injection.
 
 **Tech Stack:** Python 3.12, Typer CLI, pytest, Sebastian local Skill package manager.
 
@@ -28,19 +28,21 @@ Those files may already contain the separate "install/update available immediate
 - Modify `sebastian/skills_registry/installer.py`
   - Populate `InstalledSkill.name` from parsed local `SKILL.md` metadata for builtin, managed, and unmanaged Skills.
 - Modify `sebastian/cli/skills.py`
-  - Replace literal full-query substring search with tokenized OR matching and deterministic scoring.
+  - Replace literal full-query substring search with stopword-aware tokenized OR matching and deterministic scoring.
 - Modify `sebastian/core/base_agent.py`
-  - Strengthen the fixed `## Skill Management` bootstrap with local discovery policy and multilingual query examples.
+  - Strengthen the fixed `## Skill Management` bootstrap with Bash-gated local discovery policy and multilingual query examples.
 - Modify `tests/unit/runtime/test_skills_cli.py`
-  - Add CLI search tests for multi-token OR matching, name matching, scoring order, and whitespace query behavior.
+  - Add CLI search tests for multi-token OR matching, name matching, stopword filtering, score order, source/slug tie-breakers, and whitespace query behavior.
 - Modify `tests/unit/skills_registry/test_installer.py`
   - Assert `list_installed()` exposes frontmatter `name`.
 - Modify `tests/unit/core/test_prompt_builder.py`
-  - Assert the prompt includes domain-first Skill discovery and Chinese + English query examples.
+  - Assert Bash-capable prompts include domain-first Skill discovery and Chinese + English query examples, while no-Bash prompts do not instruct CLI usage.
 - Update docs:
   - `docs/superpowers/specs/2026-05-08-skill-progressive-disclosure-design.md`
   - `docs/architecture/spec/core/system-prompt.md`
   - `docs/architecture/spec/capabilities/skill-package-manager.md`
+  - `docs/architecture/spec/capabilities/INDEX.md`
+  - `sebastian/README.md`
   - `sebastian/capabilities/skills/README.md`
   - `sebastian/cli/README.md`
 
@@ -241,17 +243,43 @@ pytest tests/unit/runtime/test_skills_cli.py::test_search_local_multi_token_quer
 
 Expected: FAIL because current search treats the whole query as one substring and does not inspect `skill.name`.
 
-- [ ] **Step 3: Add tokenization and scoring helpers**
+- [ ] **Step 3: Add stopword-aware tokenization and scoring helpers**
 
-In `sebastian/cli/skills.py`, replace `_matches_local_skill()` and `_search_local()` with small helpers:
+In `sebastian/cli/skills.py`, replace `_matches_local_skill()` and `_search_local()` with small helpers. Search queries are keyword-style, but the CLI should still be robust when an agent passes a short natural-language phrase.
 
 ```python
+_ASCII_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "for",
+        "in",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "with",
+    }
+)
+
+
+def _is_ascii_token(token: str) -> bool:
+    return token.isascii()
+
+
 def _search_tokens(query: str) -> tuple[str, ...]:
     seen: set[str] = set()
     tokens: list[str] = []
     for raw in query.split():
         token = raw.strip().casefold()
-        if not token or token in seen:
+        if not token:
+            continue
+        if _is_ascii_token(token) and (len(token) < 3 or token in _ASCII_STOPWORDS):
+            continue
+        if token in seen:
             continue
         seen.add(token)
         tokens.append(token)
@@ -305,17 +333,52 @@ def _search_local(query: str) -> list[InstalledSkill]:
 
 Keep `_print_local_search_rows()` unchanged.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Add failing test for ASCII stopword filtering**
+
+Add:
+
+```python
+def test_search_local_filters_ascii_stopwords_and_short_tokens(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="article_formatter",
+                registered_name="skill__article_formatter",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "article_formatter",
+                source="unmanaged",
+                description="Convert a note to a formatted article",
+                name="article_formatter",
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "book a flight to Tokyo"])
+
+    assert result.exit_code == 0
+    assert result.output == "LOCAL\n"
+```
+
+Expected: FAIL before stopword filtering if `a` or `to` can match the unrelated description; PASS after `_search_tokens()` filters common ASCII stopwords and too-short ASCII tokens while preserving non-ASCII tokens.
+
+- [ ] **Step 5: Run tests to verify they pass**
 
 Run:
 
 ```bash
-pytest tests/unit/runtime/test_skills_cli.py::test_search_local_multi_token_query_matches_any_token tests/unit/runtime/test_skills_cli.py::test_search_local_matches_frontmatter_name -q
+pytest tests/unit/runtime/test_skills_cli.py::test_search_local_multi_token_query_matches_any_token tests/unit/runtime/test_skills_cli.py::test_search_local_matches_frontmatter_name tests/unit/runtime/test_skills_cli.py::test_search_local_filters_ascii_stopwords_and_short_tokens -q
 ```
 
 Expected: PASS.
 
-- [ ] **Step 5: Add failing test for deterministic ranking**
+- [ ] **Step 6: Add failing test for deterministic ranking**
 
 Add:
 
@@ -359,17 +422,87 @@ def test_search_local_sorts_stronger_name_match_before_description_match(
     assert result.output.index("flight_search") < result.output.index("generic_travel")
 ```
 
-- [ ] **Step 6: Run ranking test**
+- [ ] **Step 7: Add same-score source and slug tie-breaker test**
+
+Add:
+
+```python
+def test_search_local_same_score_uses_source_priority_then_slug(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="zeta_travel",
+                registered_name="skill__zeta_travel",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "zeta_travel",
+                source="unmanaged",
+                description="travel planning",
+                name="zeta_travel",
+            ),
+            InstalledSkill(
+                slug="beta_travel",
+                registered_name="skill__beta_travel",
+                version=None,
+                registry=None,
+                managed=True,
+                path=tmp_path / "beta_travel",
+                source="managed",
+                description="travel planning",
+                name="beta_travel",
+            ),
+            InstalledSkill(
+                slug="alpha_travel",
+                registered_name="skill__alpha_travel",
+                version=None,
+                registry=None,
+                managed=True,
+                path=tmp_path / "alpha_travel",
+                source="managed",
+                description="travel planning",
+                name="alpha_travel",
+            ),
+            InstalledSkill(
+                slug="omega_travel",
+                registered_name="skill__omega_travel",
+                version=None,
+                registry=None,
+                managed=True,
+                path=tmp_path / "omega_travel",
+                source="builtin",
+                description="travel planning",
+                name="omega_travel",
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "planning"])
+
+    assert result.exit_code == 0
+    assert result.output.index("omega_travel") < result.output.index("alpha_travel")
+    assert result.output.index("alpha_travel") < result.output.index("beta_travel")
+    assert result.output.index("beta_travel") < result.output.index("zeta_travel")
+```
+
+Expected: FAIL if sorting falls back to list or filesystem order; PASS when source priority and slug tie-breakers are explicit.
+
+- [ ] **Step 8: Run ranking tests**
 
 Run:
 
 ```bash
-pytest tests/unit/runtime/test_skills_cli.py::test_search_local_sorts_stronger_name_match_before_description_match -q
+pytest tests/unit/runtime/test_skills_cli.py::test_search_local_sorts_stronger_name_match_before_description_match tests/unit/runtime/test_skills_cli.py::test_search_local_same_score_uses_source_priority_then_slug -q
 ```
 
 Expected: PASS after scoring implementation.
 
-- [ ] **Step 7: Add and run whitespace query test**
+- [ ] **Step 9: Add and run whitespace query test**
 
 Add:
 
@@ -401,7 +534,7 @@ pytest tests/unit/runtime/test_skills_cli.py::test_search_local_whitespace_query
 
 Expected: PASS. If Typer rejects a whitespace argument in this exact form, adapt the test to call `skills._search_local("   ")` and `_print_local_search_rows(...)` directly.
 
-- [ ] **Step 8: Run CLI search regression slice**
+- [ ] **Step 10: Run CLI search regression slice**
 
 Run:
 
@@ -417,12 +550,13 @@ Expected: PASS.
 - Modify: `sebastian/core/base_agent.py`
 - Test: `tests/unit/core/test_prompt_builder.py`
 
-- [ ] **Step 1: Write failing prompt assertions**
+- [ ] **Step 1: Write failing prompt assertions for Bash-capable agents**
 
 Update `test_system_prompt_includes_skill_management_bootstrap()`:
 
 ```python
-assert "search local Skills before using generic tools" in agent.system_prompt
+assert "When Bash is available" in agent.system_prompt
+assert "search local Skills before generic tools" in agent.system_prompt
 assert "机票 航班 飞机票 flight airfare airline ticket travel booking" in agent.system_prompt
 assert "sebastian skills show <name-or-slug> --body" in agent.system_prompt
 assert "Registry" in agent.system_prompt
@@ -430,6 +564,18 @@ assert "only when the user wants to find new Skills to install" in agent.system_
 ```
 
 Keep existing assertions that the prompt says not to use generic `Read` for Skill directories.
+
+Add a separate test for a restricted agent with no Bash, using the existing `allowed_tools=[]` or no-Bash fixture pattern:
+
+```python
+def test_system_prompt_does_not_instruct_skill_cli_when_bash_unavailable() -> None:
+    agent = _TestAgent(allowed_tools=[])
+
+    assert "sebastian skills search" not in agent.system_prompt
+    assert "sebastian skills show" not in agent.system_prompt
+```
+
+If the implementation chooses to retain a non-actionable Skill Management note for restricted agents, assert that it says Skill CLI discovery requires Bash and still does not include runnable CLI commands.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -439,18 +585,21 @@ Run:
 pytest tests/unit/core/test_prompt_builder.py::test_system_prompt_includes_skill_management_bootstrap -q
 ```
 
-Expected: FAIL because current prompt does not include domain-first discovery guidance or multilingual examples.
+Expected: FAIL because current prompt does not include Bash-gated domain-first discovery guidance, multilingual examples, or no-Bash protection.
 
-- [ ] **Step 3: Update `_skill_management_section()`**
+- [ ] **Step 3: Gate `_skill_management_section()` on Bash availability**
 
-In `sebastian/core/base_agent.py`, extend the returned lines after the CLI command list and before mutation command guidance:
+In `sebastian/core/base_agent.py`, make the actionable Skill CLI bootstrap conditional on Bash availability. The cleanest implementation is to let `build_system_prompt()` decide whether the normalized tool set includes `Bash` or the unrestricted all-tools mode, then either include the full `_skill_management_section()` or omit it for restricted agents.
+
+Then extend the Bash-capable returned lines after the CLI command list and before mutation command guidance:
 
 ```python
-"For reusable domain tasks, search local Skills before using generic tools. "
+"When Bash is available, search local Skills before generic tools for reusable domain tasks. "
 "This includes travel, flights, hotels, calendar, meetings, email, documents, "
 "spreadsheets, code, repositories, browser automation, and other repeatable workflows.",
-"If the user uses Chinese or other non-English terms, include the user's "
-"keywords plus likely English synonyms in the search query, separated by spaces.",
+"Use keyword-style search queries, not full user sentences. If the user uses "
+"Chinese or other non-English terms, include the user's meaningful keywords plus "
+"likely English synonyms, separated by spaces.",
 "Examples:",
 '- `sebastian skills search "机票 航班 飞机票 flight airfare airline ticket travel booking"`',
 '- `sebastian skills search "酒店 住宿 hotel lodging accommodation travel"`',
@@ -460,12 +609,14 @@ In `sebastian/core/base_agent.py`, extend the returned lines after the CLI comma
 "If no plausible Skill is found, continue with normal tools.",
 ```
 
-Keep the existing lines:
+Keep the existing lines for Bash-capable agents:
 
 - local search default is local
 - registry search only for new install discovery
 - install/update/remove are explicit user management operations
 - Skill management uses CLI instead of generic Read
+
+For agents without Bash, do not include runnable `sebastian skills ...` commands. If a short note is retained, it must say the Skill CLI requires Bash and is unavailable for that restricted agent.
 
 - [ ] **Step 4: Run prompt tests**
 
@@ -483,6 +634,8 @@ Expected: PASS.
 - Modify: `docs/superpowers/specs/2026-05-08-skill-progressive-disclosure-design.md`
 - Modify: `docs/architecture/spec/core/system-prompt.md`
 - Modify: `docs/architecture/spec/capabilities/skill-package-manager.md`
+- Modify: `docs/architecture/spec/capabilities/INDEX.md`
+- Modify: `sebastian/README.md`
 - Modify: `sebastian/capabilities/skills/README.md`
 - Modify: `sebastian/cli/README.md`
 
@@ -492,7 +645,7 @@ In `docs/superpowers/specs/2026-05-08-skill-progressive-disclosure-design.md`, u
 
 - [ ] **Step 2: Update architecture spec docs**
 
-In `docs/architecture/spec/core/system-prompt.md`, add that `BASE` prompt includes a fixed Skill Management bootstrap telling agents to search local Skills before generic tools for reusable domain tasks, and to include English synonyms for non-English user requests.
+In `docs/architecture/spec/core/system-prompt.md`, add that Bash-capable `BaseAgent` prompts include a fixed Skill Management bootstrap telling agents to search local Skills before generic tools for reusable domain tasks, and to include English synonyms for non-English user requests. Also remove stale target wording that says the system supports a Skill whitelist; the current progressive disclosure model has no Skill whitelist.
 
 In `docs/architecture/spec/capabilities/skill-package-manager.md`, update CLI search semantics:
 
@@ -500,6 +653,7 @@ In `docs/architecture/spec/capabilities/skill-package-manager.md`, update CLI se
 - multi-token OR matching
 - fields: slug, frontmatter name, registered_name, description
 - deterministic score sort
+- stopword / short ASCII-token filtering
 - no keywords/aliases/package mutation
 
 - [ ] **Step 3: Update module READMEs**
@@ -514,6 +668,10 @@ likely English synonyms when the user asks in Chinese or another language.
 
 In `sebastian/cli/README.md`, update the `skills.py` section with the same local search behavior.
 
+In `sebastian/README.md`, update the top-level `skills_registry/` or CLI summary if needed so parent navigation stays consistent with the changed search behavior.
+
+In `docs/architecture/spec/capabilities/INDEX.md`, update the `skill-package-manager.md` summary to mention multi-token local search.
+
 - [ ] **Step 4: Search for stale wording**
 
 Use PyCharm MCP search first, or fallback to:
@@ -525,12 +683,12 @@ for path in Path('.').rglob('*.md'):
     if '.git' in path.parts or 'graphify-out' in path.parts:
         continue
     text = path.read_text(encoding='utf-8', errors='ignore')
-    if 'keywords' in text and 'Skill' in text:
+    if ('keywords' in text or 'Skill whitelist' in text) and 'Skill' in text:
         print(path)
 PY
 ```
 
-Expected: No new docs imply `keywords` or aliases are part of this phase.
+Expected: No new docs imply `keywords`, aliases, or Skill whitelists are part of this phase.
 
 ## Task 5: Final Verification
 
@@ -573,13 +731,29 @@ Run:
 
 ```bash
 git status --short
-git diff -- sebastian/cli/skills.py sebastian/skills_registry/models.py sebastian/skills_registry/installer.py sebastian/core/base_agent.py tests/unit/runtime/test_skills_cli.py tests/unit/skills_registry/test_installer.py tests/unit/core/test_prompt_builder.py
+git diff -- \
+  sebastian/cli/skills.py \
+  sebastian/skills_registry/models.py \
+  sebastian/skills_registry/installer.py \
+  sebastian/core/base_agent.py \
+  tests/unit/runtime/test_skills_cli.py \
+  tests/unit/skills_registry/test_installer.py \
+  tests/unit/core/test_prompt_builder.py \
+  docs/superpowers/specs/2026-05-08-skill-progressive-disclosure-design.md \
+  docs/architecture/spec/core/system-prompt.md \
+  docs/architecture/spec/capabilities/skill-package-manager.md \
+  docs/architecture/spec/capabilities/INDEX.md \
+  sebastian/README.md \
+  sebastian/capabilities/skills/README.md \
+  sebastian/cli/README.md
 ```
 
 Expected:
 
 - No Skill-as-provider-tool reintroduction.
 - No `keywords`, aliases, or install-time mutation.
+- No Skill whitelist wording remains in implemented architecture docs.
+- Agents without Bash are not prompted to run Skill CLI commands.
 - Existing immediate-availability wording changes are preserved.
 - Search still defaults to local and does not call registry unless requested.
 
@@ -603,6 +777,8 @@ git add sebastian/skills_registry/models.py \
   docs/superpowers/specs/2026-05-08-skill-progressive-disclosure-design.md \
   docs/architecture/spec/core/system-prompt.md \
   docs/architecture/spec/capabilities/skill-package-manager.md \
+  docs/architecture/spec/capabilities/INDEX.md \
+  sebastian/README.md \
   sebastian/capabilities/skills/README.md \
   sebastian/cli/README.md
 ```

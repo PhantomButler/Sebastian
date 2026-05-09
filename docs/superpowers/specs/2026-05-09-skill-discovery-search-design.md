@@ -72,12 +72,18 @@ sebastian skills show <slug> --body
 Then Sebastian can follow the Skill instructions and use generic tools such as
 Browser only when the Skill calls for them or when no useful Skill exists.
 
+This policy is actionable only for agents that can run Bash. Agents without Bash
+must not be instructed to call `sebastian skills ...`; their prompt may omit the
+Skill Management bootstrap or state that Skill CLI discovery is unavailable in
+that restricted runtime.
+
 ## 4. Prompt Policy
 
 Update the fixed `## Skill Management` bootstrap in `BaseAgent` with a concise
 discovery policy:
 
-- For reusable domain tasks, search local Skills before using generic tools.
+- When Bash is available, search local Skills before generic tools for reusable
+  domain tasks.
 - Domain tasks include travel, flights, hotels, calendar, meetings, email,
   documents, spreadsheets, code, repository, browser automation, and other
   repeatable workflows.
@@ -85,6 +91,9 @@ discovery policy:
   original keywords and likely English synonyms in the search query, separated
   by spaces.
 - Use registry search only when the user wants to find new Skills to install.
+- The search query should be keyword-style rather than the user's full sentence:
+  include the user's meaningful terms plus likely English synonyms, separated by
+  spaces.
 - If local search returns plausible candidates, read the chosen Skill body with
   `sebastian skills show <name-or-slug> --body` before acting.
 - If no plausible Skill is found, continue with normal tools.
@@ -109,14 +118,18 @@ For local search:
 
 1. Split `<query>` on whitespace into tokens.
 2. Ignore empty tokens.
-3. Match tokens using OR semantics. A Skill is included if any token matches any
+3. Ignore common ASCII stopwords and ASCII tokens shorter than 3 characters so
+   natural-language searches such as `"book a flight to Tokyo"` do not match
+   unrelated descriptions through `a` or `to`. Preserve non-ASCII tokens,
+   including short Chinese terms.
+4. Match tokens using OR semantics. A Skill is included if any token matches any
    searchable field.
-4. Search these fields:
+5. Search these fields:
    - `slug`
    - frontmatter `name`
    - `registered_name`
    - `description`
-5. Sort results by descending score, then stable tie-breakers.
+6. Sort results by descending score, then stable tie-breakers.
 
 The implementation must make frontmatter `name` available to the local search
 scoring path. If the existing installed Skill row shape does not expose it
@@ -160,7 +173,7 @@ search.
 
 ```text
 User request
-  -> BaseAgent Skill Management bootstrap nudges local Skill discovery
+  -> Bash-capable BaseAgent Skill Management bootstrap nudges local Skill discovery
   -> Model calls Bash: sebastian skills search "<original terms + synonyms>"
   -> CLI tokenizes query and scores local catalog entries
   -> Model sees local candidates
@@ -188,17 +201,21 @@ Update documentation that explains Skill discovery:
 - `docs/superpowers/specs/2026-05-08-skill-progressive-disclosure-design.md`
 - `docs/architecture/spec/core/system-prompt.md`
 - `docs/architecture/spec/capabilities/skill-package-manager.md`
+- `docs/architecture/spec/capabilities/INDEX.md`
+- `sebastian/README.md`
 - `sebastian/capabilities/skills/README.md`
 - `sebastian/cli/README.md`
 
 Required wording:
 
-- Local Skill discovery should happen before generic tools for reusable domain
-  tasks.
+- When Bash is available, local Skill discovery should happen before generic
+  tools for reusable domain tasks.
 - For multilingual user requests, Sebastian should include likely English
   synonyms in the local search query.
 - `skills search` uses multi-token local OR matching across slug, name,
   registered name, and description.
+- Search queries should be keyword-style and the CLI filters common ASCII
+  stopwords / too-short ASCII tokens while preserving Chinese terms.
 - No `keywords`, aliases, package mutation, embeddings, or automatic candidate
   injection are part of this phase.
 
@@ -207,7 +224,9 @@ Required wording:
 ### Prompt
 
 - `BaseAgent` system prompt includes guidance to search local Skills before
-  generic tools for reusable domain tasks.
+  generic tools for reusable domain tasks when Bash is available.
+- Agents without Bash are not prompted to call `sebastian skills search` or
+  `sebastian skills show`.
 - The prompt includes a Chinese + English Skill search example.
 - The prompt still states registry search is only for finding new Skills to
   install.
@@ -219,10 +238,14 @@ Required wording:
   description contains `"flight"`.
 - A multi-token query matches if any token hits, not only if the full query is a
   substring.
+- A natural-language query such as `"book a flight to Tokyo"` does not return an
+  unrelated Skill merely because `a` or `to` appears in its description.
 - Search includes frontmatter `name` in addition to slug, registered name, and
   description.
 - Results are sorted by score so stronger name/slug matches appear before weaker
   description-only matches.
+- Same-score results are sorted by source priority and slug, not filesystem or
+  list order.
 - Empty or whitespace-only local search prints `LOCAL` and no rows.
 - Default local search does not instantiate or call the registry client.
 - `--registry` without `--source registry` or `--source all` still does not
