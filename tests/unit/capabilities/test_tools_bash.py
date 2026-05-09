@@ -51,6 +51,24 @@ async def test_bash_description_logged() -> None:
     assert "build the project" not in (r.display or "")
 
 
+async def test_bash_prepends_sebastian_shim_dir_to_path(tmp_path, monkeypatch) -> None:
+    """非交互服务环境下 Bash 也应能找到稳定 sebastian shim。"""
+    home = tmp_path / "home"
+    shim_dir = home / ".sebastian" / "bin"
+    shim_dir.mkdir(parents=True)
+    shim = shim_dir / "sebastian"
+    shim.write_text("#!/bin/sh\n", encoding="utf-8")
+    shim.chmod(0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    r = await bash(command="command -v sebastian")
+
+    assert r.ok
+    assert r.output["returncode"] == 0
+    assert r.output["stdout"].strip() == str(shim)
+
+
 # ── noOutputExpected ──────────────────────────────────────────────────────────
 
 

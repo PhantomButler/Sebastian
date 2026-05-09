@@ -104,6 +104,9 @@ tools/
 | 创建 depth=3 子代理 | [spawn_sub_agent/\_\_init\_\_.py](spawn_sub_agent/__init__.py) |
 | 暂停子代理 | [stop_agent/\_\_init\_\_.py](stop_agent/__init__.py) |
 
+`Bash` 子进程会在继承服务环境的基础上，把 `~/.sebastian/bin` 注入到 PATH 最前面，
+确保 systemd/launchd 等非交互环境也能找到稳定 `sebastian` CLI shim。
+
 ## ToolResult 规范
 
 所有 tool 函数必须返回 `ToolResult`：

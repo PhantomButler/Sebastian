@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 from sebastian.config import settings
@@ -61,6 +63,17 @@ def _interpret_exit_code(command: str, returncode: int) -> str | None:
     return _EXIT_CODE_SEMANTICS.get(base, {}).get(returncode)
 
 
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    home = Path(env.get("HOME", str(Path.home()))).expanduser()
+    shim_dir = str(home / ".sebastian" / "bin")
+    path_entries = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+    if shim_dir not in path_entries:
+        path_entries.insert(0, shim_dir)
+    env["PATH"] = os.pathsep.join(path_entries)
+    return env
+
+
 async def _heartbeat(
     progress_cb: Callable[[dict[str, Any]], Awaitable[None]],
     stop_event: asyncio.Event,
@@ -105,6 +118,7 @@ async def bash(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=str(workspace),
+        env=_subprocess_env(),
     )
 
     # 进度心跳：仅当 ToolCallContext 有 progress_cb 时启动
