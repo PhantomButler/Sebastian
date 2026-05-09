@@ -525,6 +525,46 @@ def test_search_local_same_score_uses_source_priority_then_slug(
     assert result.output.index("beta_travel") < result.output.index("zeta_travel")
 
 
+def test_search_local_hides_builtin_when_user_skill_overrides_same_name(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        skills,
+        "list_installed",
+        lambda: [
+            InstalledSkill(
+                slug="weather",
+                registered_name="skill__weather",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "builtin" / "weather",
+                source="builtin",
+                description="Builtin weather helper",
+                name="weather",
+            ),
+            InstalledSkill(
+                slug="weather-custom",
+                registered_name="skill__weather",
+                version=None,
+                registry=None,
+                managed=False,
+                path=tmp_path / "weather-custom",
+                source="unmanaged",
+                description="User weather helper",
+                name="weather",
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["skills", "search", "weather"])
+
+    assert result.exit_code == 0
+    assert "weather-custom\tunmanaged\tskill__weather\tUser weather helper" in result.output
+    assert "weather\tbuiltin\tskill__weather\tBuiltin weather helper" not in result.output
+
+
 def test_search_local_whitespace_query_prints_empty_local_section(
     monkeypatch,
 ) -> None:

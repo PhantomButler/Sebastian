@@ -183,11 +183,29 @@ def _source_sort_rank(source: str) -> int:
     return {"builtin": 0, "managed": 1, "unmanaged": 2}.get(source, 3)
 
 
+def _dedupe_overridden_local_skills(skills: list[InstalledSkill]) -> list[InstalledSkill]:
+    has_user_override: set[str] = set()
+    for skill in skills:
+        key = skill.registered_name or f"skill__{skill.name or skill.slug}"
+        if skill.source != "builtin":
+            has_user_override.add(key)
+    return [
+        skill
+        for skill in skills
+        if not (
+            skill.source == "builtin"
+            and (skill.registered_name or f"skill__{skill.name or skill.slug}")
+            in has_user_override
+        )
+    ]
+
+
 def _search_local(query: str) -> list[InstalledSkill]:
     tokens = _search_tokens(query)
     if not tokens:
         return []
-    scored = [(_score_local_skill(skill, tokens), skill) for skill in list_installed()]
+    candidates = _dedupe_overridden_local_skills(list_installed())
+    scored = [(_score_local_skill(skill, tokens), skill) for skill in candidates]
     matches = [(score, skill) for score, skill in scored if score > 0]
     matches.sort(
         key=lambda item: (
