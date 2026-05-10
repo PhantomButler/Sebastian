@@ -72,7 +72,7 @@ UI 映射：FAB 显示 = `userAway`（绑意图而非事实 —— 流式中 `at
 | `ImageBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` artifact） |
 | `FileBlock` | `AttachmentBlocks`（来源：用户附件上传 或 Agent `send_file` 的 `text_file` / `download` artifact） |
 
-连续的 `ThinkingBlock` / `ToolBlock` 在渲染前会先由 `ExecutionRenderItems` 聚合为外层执行组；折叠态显示单行横向滑动的竖胶囊步骤条，展开后复用 `ThinkingCard` / `ToolCallCard` 渲染原始明细。分组只发生在 UI 层，不改变 SSE、REST 或持久化模型。
+连续的 `ThinkingBlock` / `ToolBlock` 在渲染前会先由 `ExecutionRenderItems` 聚合为外层执行组；折叠态显示单行横向滑动的竖胶囊步骤条，并在有运行中步骤时于胶囊下方显示一行当前步骤摘要（thinking 显示 `Thinking`，tool call 显示工具名 + inputs 摘要）；展开后复用 `ThinkingCard` / `ToolCallCard` 渲染原始明细且隐藏折叠态摘要。分组与摘要只发生在 UI 层，不改变 SSE、REST 或持久化模型。
 
 `SummaryCard` 是对话上下文被压缩的视觉标记，表示其之前的内容已被归档压缩；被归档的原始块仍正常显示，不做置灰或隐藏。
 

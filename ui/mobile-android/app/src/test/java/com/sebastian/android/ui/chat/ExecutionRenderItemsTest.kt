@@ -158,4 +158,90 @@ class ExecutionRenderItemsTest {
         assertEquals(ExecutionStepState.DONE, executionStepState(tool(ToolStatus.DONE)))
         assertEquals(ExecutionStepState.FAILED, executionStepState(tool(ToolStatus.FAILED)))
     }
+
+    @Test
+    fun `activeExecutionSummary returns Thinking for running thinking block`() {
+        val summary = activeExecutionSummary(
+            listOf(
+                ContentBlock.ThinkingBlock(blockId = "think-running", text = "plan"),
+            ),
+        )
+
+        assertEquals("think-running", summary?.id)
+        assertEquals("Thinking", summary?.text)
+    }
+
+    @Test
+    fun `activeExecutionSummary returns running tool display name and input summary`() {
+        val summary = activeExecutionSummary(
+            listOf(
+                ContentBlock.ToolBlock(
+                    blockId = "tool-running",
+                    toolId = "call-running",
+                    name = "Bash",
+                    displayName = "Shell",
+                    inputs = """{"command":"sebastian skills search weather"}""",
+                    status = ToolStatus.RUNNING,
+                ),
+            ),
+        )
+
+        assertEquals("tool-running", summary?.id)
+        assertEquals("Shell sebastian skills search weather", summary?.text)
+    }
+
+    @Test
+    fun `activeExecutionSummary falls back to tool name without input summary`() {
+        val summary = activeExecutionSummary(
+            listOf(
+                ContentBlock.ToolBlock(
+                    blockId = "tool-running",
+                    toolId = "call-running",
+                    name = "Bash",
+                    displayName = "",
+                    inputs = "{}",
+                    status = ToolStatus.PENDING,
+                ),
+            ),
+        )
+
+        assertEquals("Bash", summary?.text)
+    }
+
+    @Test
+    fun `activeExecutionSummary ignores completed and failed blocks`() {
+        val summary = activeExecutionSummary(
+            listOf(
+                ContentBlock.ThinkingBlock(blockId = "think-done", text = "plan", done = true),
+                ContentBlock.ToolBlock(
+                    blockId = "tool-failed",
+                    toolId = "call-failed",
+                    name = "Bash",
+                    inputs = "{}",
+                    status = ToolStatus.FAILED,
+                ),
+            ),
+        )
+
+        assertEquals(null, summary)
+    }
+
+    @Test
+    fun `activeExecutionSummary uses the last running block`() {
+        val summary = activeExecutionSummary(
+            listOf(
+                ContentBlock.ThinkingBlock(blockId = "think-running", text = "plan"),
+                ContentBlock.ToolBlock(
+                    blockId = "tool-running",
+                    toolId = "call-running",
+                    name = "Bash",
+                    inputs = """{"command":"date"}""",
+                    status = ToolStatus.RUNNING,
+                ),
+            ),
+        )
+
+        assertEquals("tool-running", summary?.id)
+        assertEquals("Bash date", summary?.text)
+    }
 }

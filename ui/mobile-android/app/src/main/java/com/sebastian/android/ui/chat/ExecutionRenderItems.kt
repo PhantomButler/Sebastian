@@ -18,6 +18,11 @@ enum class ExecutionStepState {
     FAILED,
 }
 
+data class ActiveExecutionSummary(
+    val id: String,
+    val text: String,
+)
+
 fun buildMessageRenderItems(blocks: List<ContentBlock>): List<MessageRenderItem> {
     val items = mutableListOf<MessageRenderItem>()
     val pendingExecutionBlocks = mutableListOf<ContentBlock>()
@@ -63,4 +68,27 @@ fun executionStepState(block: ContentBlock): ExecutionStepState = when (block) {
         ToolStatus.PENDING, ToolStatus.RUNNING -> ExecutionStepState.RUNNING
     }
     else -> error("Non-execution block has no execution step state: ${block::class.simpleName}")
+}
+
+fun activeExecutionSummary(blocks: List<ContentBlock>): ActiveExecutionSummary? {
+    val activeBlock = blocks.lastOrNull { block ->
+        block.isExecutionBlock() && executionStepState(block) == ExecutionStepState.RUNNING
+    } ?: return null
+
+    val text = when (activeBlock) {
+        is ContentBlock.ThinkingBlock -> "Thinking"
+        is ContentBlock.ToolBlock -> activeBlock.activeToolSummaryText()
+        else -> return null
+    }
+
+    return ActiveExecutionSummary(
+        id = activeBlock.blockId,
+        text = text,
+    )
+}
+
+private fun ContentBlock.ToolBlock.activeToolSummaryText(): String {
+    val title = displayName.ifBlank { name }
+    val inputSummary = ToolCallInputExtractor.extractInputSummary(name, inputs)
+    return if (inputSummary.isBlank()) title else "$title $inputSummary"
 }

@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Android App 折叠执行步骤在有运行中 thinking 或 tool call 时显示当前步骤摘要，避免长任务折叠后只能看到胶囊动画、看不到正在执行的具体动作。
+
 ## [0.5.13] - 2026-05-09
 
 ### Fixed

@@ -1,6 +1,7 @@
 package com.sebastian.android.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -10,6 +11,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -30,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sebastian.android.data.model.ContentBlock
 
@@ -54,12 +60,17 @@ fun ExecutionGroupCard(
 ) {
     val stateKey = group.blocks.firstOrNull()?.blockId ?: group.id
     var expanded by rememberSaveable(stateKey) { mutableStateOf(false) }
+    val activeSummary = remember(group.blocks) { activeExecutionSummary(group.blocks) }
 
     Column(modifier = modifier.fillMaxWidth()) {
         ExecutionGroupHeader(
             blocks = group.blocks,
             expanded = expanded,
             onToggle = { expanded = !expanded },
+        )
+
+        FoldedActiveExecutionSummary(
+            summary = if (expanded) null else activeSummary,
         )
 
         AnimatedVisibility(
@@ -73,6 +84,35 @@ fun ExecutionGroupCard(
                 blocks = group.blocks,
                 onToggleThinking = onToggleThinking,
                 onToggleTool = onToggleTool,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FoldedActiveExecutionSummary(
+    summary: ActiveExecutionSummary?,
+) {
+    AnimatedContent(
+        targetState = summary,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(durationMillis = 180)) +
+                slideInVertically(animationSpec = tween(durationMillis = 220)) { fullHeight -> fullHeight }) togetherWith
+                (fadeOut(animationSpec = tween(durationMillis = 140)) +
+                    slideOutVertically(animationSpec = tween(durationMillis = 180)) { fullHeight -> -fullHeight })
+        },
+        label = "active-execution-summary",
+    ) { targetSummary ->
+        if (targetSummary != null) {
+            Text(
+                text = targetSummary.text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.66f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 28.dp, top = 1.dp, bottom = 3.dp),
             )
         }
     }
